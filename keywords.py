@@ -1,7 +1,12 @@
 KEYWORD_RULES: list[dict] = [
     {
         "keywords": ["こんにちは", "おはよう", "hello", "hi"],
-        "reply": "こんにちは！何かご用件はありますか？",
+        "reply": "こんにちは！ご用件をお選びください",
+        "buttons": [
+            {"label": "🕐 営業時間", "text": "営業時間"},
+            {"label": "📅 予約する", "text": "予約"},
+            {"label": "💰 料金プラン", "text": "料金"},
+        ],
     },
     {
         "keywords": ["ありがとう", "thanks", "thank you"],
@@ -20,22 +25,27 @@ KEYWORD_RULES: list[dict] = [
         "reply": "料金プランはこちらをご確認ください：https://example.com/pricing",
     },
     {
-        "keywords": ["ヘルプ", "help", "使い方"],
-        "reply": (
-            "以下のキーワードで話しかけてください：\n"
-            "・「営業時間」→ 営業時間を案内\n"
-            "・「予約」→ 予約フォームを案内\n"
-            "・「料金」→ 料金プランを案内"
-        ),
+        "keywords": ["ヘルプ", "help", "使い方", "メニュー"],
+        "reply": "ご用件をお選びください",
+        "buttons": [
+            {"label": "🕐 営業時間", "text": "営業時間"},
+            {"label": "📅 予約する", "text": "予約"},
+            {"label": "💰 料金プラン", "text": "料金"},
+        ],
+    },
+    {
+        "keywords": ["写真", "画像", "フォト"],
+        "reply": "こちらをご覧ください",
+        "image_url": "https://placehold.co/1024x768.png",
     },
 ]
 
 DEFAULT_REPLY = "申し訳ございません、よく理解できませんでした。「ヘルプ」と送ると使い方をご案内します。"
 
 
-def get_reply(text: str) -> str:
+def get_rule(text: str) -> dict | None:
     normalized = text.lower()
     for rule in KEYWORD_RULES:
         if any(kw.lower() in normalized for kw in rule["keywords"]):
-            return rule["reply"]
-    return DEFAULT_REPLY
+            return rule
+    return None
