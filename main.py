@@ -12,13 +12,20 @@ from linebot.v3.messaging import (
     Configuration,
     ReplyMessageRequest,
     TextMessage,
+    ImageMessage,
+    FlexMessage,
+    FlexBubble,
+    FlexBox,
+    FlexButton,
+    FlexText,
+    MessageAction,
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
 from models import MessageLog
-from keywords import get_reply
+from keywords import get_rule, DEFAULT_REPLY
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -45,6 +52,52 @@ def verify_signature(body: bytes, signature: str) -> bool:
     ).digest()
     expected = base64.b64encode(hash_value).decode("utf-8")
     return hmac.compare_digest(expected, signature)
+
+
+def build_messages(rule: dict | None) -> list:
+    if rule is None:
+        return [TextMessage(text=DEFAULT_REPLY)]
+
+    messages = []
+
+    if rule.get("buttons"):
+        body_contents = []
+        if rule.get("reply"):
+            body_contents.append(
+                FlexText(text=rule["reply"], weight="bold", wrap=True)
+            )
+        body_contents.extend([
+            FlexButton(
+                action=MessageAction(label=btn["label"], text=btn["text"]),
+                height="sm",
+                margin="sm",
+            )
+            for btn in rule["buttons"]
+        ])
+        messages.append(
+            FlexMessage(
+                alt_text=rule.get("reply", "メニュー"),
+                contents=FlexBubble(
+                    body=FlexBox(
+                        layout="vertical",
+                        contents=body_contents,
+                        spacing="sm",
+                    )
+                ),
+            )
+        )
+    elif rule.get("reply"):
+        messages.append(TextMessage(text=rule["reply"]))
+
+    if rule.get("image_url"):
+        messages.append(
+            ImageMessage(
+                original_content_url=rule["image_url"],
+                preview_image_url=rule["image_url"],
+            )
+        )
+
+    return messages if messages else [TextMessage(text=DEFAULT_REPLY)]
 
 
 async def save_log(session: AsyncSession, user_id: str, direction: str, message: str):
@@ -78,7 +131,9 @@ async def callback(request: Request):
 
                 user_id = event.source.user_id
                 user_text = event.message.text
-                reply_text = get_reply(user_text)
+                rule = get_rule(user_text)
+                messages = build_messages(rule)
+                reply_text = rule["reply"] if rule and rule.get("reply") else DEFAULT_REPLY
 
                 await save_log(session, user_id, "in", user_text)
                 await save_log(session, user_id, "out", reply_text)
@@ -86,7 +141,7 @@ async def callback(request: Request):
                 await line_api.reply_message(
                     ReplyMessageRequest(
                         reply_token=event.reply_token,
-                        messages=[TextMessage(text=reply_text)],
+                        messages=messages,
                     )
                 )
 
