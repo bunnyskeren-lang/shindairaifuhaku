@@ -20,6 +20,7 @@ from linebot.v3.messaging import (
     FlexText,
     FlexSeparator,
     MessageAction,
+    URIAction,
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,37 +57,42 @@ def verify_signature(body: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
-EASE_COLORS = {
-    "SS": "#C8A000", "S": "#C8A000",
-    "A": "#2196F3", "B": "#4CAF50", "C": "#FF9800",
+EASE_TO_STARS = {
+    "SS": "★★★★★",
+    "S": "★★★★☆",
+    "A": "★★★☆☆",
+    "B": "★★☆☆☆",
+    "C": "★☆☆☆☆",
 }
 
 
 def build_course_card(name: str, course: dict) -> FlexMessage:
-    stars = "★" * course["rating"] + "☆" * (5 - course["rating"])
-    ease_color = EASE_COLORS.get(course["ease_rating"], "#555555")
+    rakutan_stars = "★" * course["rating"] + "☆" * (5 - course["rating"])
+    manabi_stars = EASE_TO_STARS.get(course["ease_rating"], "─────")
+
+    footer_contents = []
+    if course.get("syllabus_url"):
+        footer_contents.append(
+            FlexButton(
+                action=URIAction(label="📖 シラバスを見る", uri=course["syllabus_url"]),
+                style="primary",
+                color="#5C6BC0",
+                height="sm",
+            )
+        )
 
     return FlexMessage(
         alt_text=name,
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
-                background_color="#2B2B2B",
+                background_color="#5C6BC0",
                 padding_all="lg",
                 contents=[
-                    FlexBox(
-                        layout="horizontal",
-                        contents=[
-                            FlexText(text=stars, size="sm", color="#FFD700", flex=4),
-                            FlexText(
-                                text=course["ease_rating"],
-                                size="sm",
-                                weight="bold",
-                                color=ease_color,
-                                flex=1,
-                                align="end",
-                            ),
-                        ],
+                    FlexText(
+                        text=course["classification"],
+                        size="xs",
+                        color="#C5CAE9",
                     ),
                     FlexText(
                         text=name,
@@ -97,11 +103,10 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
                         margin="sm",
                     ),
                     FlexText(
-                        text=f"担当: {course['instructor']}　{course['format']}　{course['classification']}",
+                        text=f"担当: {course['instructor']}　{course['format']}",
                         size="xs",
-                        color="#AAAAAA",
+                        color="#C5CAE9",
                         margin="xs",
-                        wrap=True,
                     ),
                 ],
             ),
@@ -109,14 +114,43 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
                 layout="vertical",
                 spacing="sm",
                 contents=[
-                    FlexText(text="📋 授業内容", size="sm", weight="bold", color="#555555"),
+                    FlexBox(
+                        layout="horizontal",
+                        margin="sm",
+                        contents=[
+                            FlexBox(
+                                layout="vertical",
+                                flex=1,
+                                contents=[
+                                    FlexText(text="楽単度", size="xs", color="#888888", align="center"),
+                                    FlexText(text=rakutan_stars, size="sm", color="#FFB300", align="center", margin="xs"),
+                                ],
+                            ),
+                            FlexBox(
+                                layout="vertical",
+                                flex=1,
+                                contents=[
+                                    FlexText(text="学びになる度", size="xs", color="#888888", align="center"),
+                                    FlexText(text=manabi_stars, size="sm", color="#26C6DA", align="center", margin="xs"),
+                                ],
+                            ),
+                        ],
+                    ),
+                    FlexSeparator(margin="md"),
+                    FlexText(text="📋 授業内容", size="sm", weight="bold", color="#5C6BC0", margin="md"),
                     FlexText(text=course["content"], size="sm", wrap=True, color="#333333"),
                     FlexSeparator(margin="md"),
-                    FlexText(text="📝 評価方法", size="sm", weight="bold", color="#555555", margin="md"),
+                    FlexText(text="📝 評価方法", size="sm", weight="bold", color="#5C6BC0", margin="md"),
                     FlexText(text=course["evaluation"], size="sm", wrap=True, color="#333333"),
                     FlexSeparator(margin="md"),
-                    FlexText(text="💬 先輩コメント", size="sm", weight="bold", color="#555555", margin="md"),
+                    FlexText(text="💬 先輩コメント", size="sm", weight="bold", color="#5C6BC0", margin="md"),
                     FlexText(text=course["comment"], size="sm", wrap=True, color="#333333"),
+                ],
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=footer_contents if footer_contents else [
+                    FlexText(text="シラバスURL未設定", size="xs", color="#AAAAAA", align="center"),
                 ],
             ),
         ),
@@ -129,6 +163,7 @@ def build_course_list() -> FlexMessage:
             action=MessageAction(label=name[:20], text=name),
             height="sm",
             margin="sm",
+            style="secondary",
         )
         for name in COURSES
     ]
@@ -138,10 +173,11 @@ def build_course_list() -> FlexMessage:
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
-                background_color="#2B2B2B",
+                background_color="#5C6BC0",
                 padding_all="lg",
                 contents=[
                     FlexText(text="📚 科目一覧", weight="bold", color="#FFFFFF", size="lg"),
+                    FlexText(text=f"全{len(COURSES)}科目", size="xs", color="#C5CAE9", margin="xs"),
                 ],
             ),
             body=FlexBox(
