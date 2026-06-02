@@ -15,8 +15,6 @@ from linebot.v3.messaging import (
     ImageMessage,
     FlexMessage,
     FlexBubble,
-    FlexBubbleStyles,
-    FlexBlockStyle,
     FlexBox,
     FlexButton,
     FlexText,
@@ -87,12 +85,9 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
     return FlexMessage(
         alt_text=name,
         contents=FlexBubble(
-            styles=FlexBubbleStyles(
-                header=FlexBlockStyle(background_color="#2B2B2B"),
-                footer=FlexBlockStyle(background_color="#F5F5F5"),
-            ),
             header=FlexBox(
                 layout="vertical",
+                background_color="#2B2B2B",
                 padding_all="lg",
                 contents=[
                     FlexText(
@@ -139,6 +134,7 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
             ),
             footer=FlexBox(
                 layout="vertical",
+                background_color="#F5F5F5",
                 contents=[
                     FlexBox(
                         layout="horizontal",
@@ -173,11 +169,9 @@ def build_course_list() -> FlexMessage:
     return FlexMessage(
         alt_text="科目一覧",
         contents=FlexBubble(
-            styles=FlexBubbleStyles(
-                header=FlexBlockStyle(background_color="#2B2B2B"),
-            ),
             header=FlexBox(
                 layout="vertical",
+                background_color="#2B2B2B",
                 padding_all="lg",
                 contents=[
                     FlexText(text="📚 科目一覧", weight="bold", color="#FFFFFF", size="lg"),
