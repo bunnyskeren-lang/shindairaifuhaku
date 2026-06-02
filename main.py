@@ -63,23 +63,7 @@ EASE_COLORS = {
 
 
 def build_course_card(name: str, course: dict) -> FlexMessage:
-    pass_rate_rows = [
-        FlexBox(
-            layout="horizontal",
-            contents=[
-                FlexText(text=f"{year}年度", size="sm", color="#555555", flex=3),
-                FlexText(
-                    text=f"{rate} ({fraction})",
-                    size="sm",
-                    color="#111111",
-                    flex=4,
-                    align="end",
-                ),
-            ],
-        )
-        for year, rate, fraction in course["pass_rates"]
-    ]
-
+    stars = "★" * course["rating"] + "☆" * (5 - course["rating"])
     ease_color = EASE_COLORS.get(course["ease_rating"], "#555555")
 
     return FlexMessage(
@@ -90,56 +74,10 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
                 background_color="#2B2B2B",
                 padding_all="lg",
                 contents=[
-                    FlexText(
-                        text=f"Search ID:{course['search_id']}",
-                        size="xs",
-                        color="#4CAF50",
-                    ),
-                    FlexText(
-                        text=name,
-                        size="xl",
-                        weight="bold",
-                        color="#FFFFFF",
-                        wrap=True,
-                        margin="sm",
-                    ),
-                    FlexSeparator(margin="md", color="#555555"),
-                    FlexBox(
-                        layout="horizontal",
-                        margin="md",
-                        contents=[
-                            FlexText(text="開講部局", size="xs", color="#AAAAAA", flex=2),
-                            FlexText(text=course["department"], size="xs", color="#FFFFFF", flex=3),
-                        ],
-                    ),
-                    FlexBox(
-                        layout="horizontal",
-                        margin="xs",
-                        contents=[
-                            FlexText(text="群", size="xs", color="#AAAAAA", flex=1),
-                            FlexText(text=course["group"], size="xs", color="#FFFFFF", flex=2),
-                            FlexText(text="単位数", size="xs", color="#AAAAAA", flex=1),
-                            FlexText(text=course["credits"], size="xs", color="#FFFFFF", flex=2),
-                        ],
-                    ),
-                ],
-            ),
-            body=FlexBox(
-                layout="vertical",
-                spacing="sm",
-                contents=[
-                    FlexText(text="単位取得率", size="xs", color="#888888"),
-                    *pass_rate_rows,
-                ],
-            ),
-            footer=FlexBox(
-                layout="vertical",
-                background_color="#F5F5F5",
-                contents=[
                     FlexBox(
                         layout="horizontal",
                         contents=[
-                            FlexText(text="らくたん判定", size="sm", flex=3),
+                            FlexText(text=stars, size="sm", color="#FFD700", flex=4),
                             FlexText(
                                 text=course["ease_rating"],
                                 size="sm",
@@ -150,6 +88,35 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
                             ),
                         ],
                     ),
+                    FlexText(
+                        text=name,
+                        size="xl",
+                        weight="bold",
+                        color="#FFFFFF",
+                        wrap=True,
+                        margin="sm",
+                    ),
+                    FlexText(
+                        text=f"担当: {course['instructor']}　{course['format']}　{course['classification']}",
+                        size="xs",
+                        color="#AAAAAA",
+                        margin="xs",
+                        wrap=True,
+                    ),
+                ],
+            ),
+            body=FlexBox(
+                layout="vertical",
+                spacing="sm",
+                contents=[
+                    FlexText(text="📋 授業内容", size="sm", weight="bold", color="#555555"),
+                    FlexText(text=course["content"], size="sm", wrap=True, color="#333333"),
+                    FlexSeparator(margin="md"),
+                    FlexText(text="📝 評価方法", size="sm", weight="bold", color="#555555", margin="md"),
+                    FlexText(text=course["evaluation"], size="sm", wrap=True, color="#333333"),
+                    FlexSeparator(margin="md"),
+                    FlexText(text="💬 先輩コメント", size="sm", weight="bold", color="#555555", margin="md"),
+                    FlexText(text=course["comment"], size="sm", wrap=True, color="#333333"),
                 ],
             ),
         ),
