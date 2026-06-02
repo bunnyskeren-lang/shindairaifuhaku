@@ -15,6 +15,7 @@ from linebot.v3.messaging import (
     ImageMessage,
     FlexMessage,
     FlexBubble,
+    FlexCarousel,
     FlexBox,
     FlexButton,
     FlexText,
@@ -65,6 +66,12 @@ EASE_TO_STARS = {
     "C": "★☆☆☆☆",
 }
 
+CATEGORY_GROUPS = {
+    "📚 教養科目": ["教養", "教養言語", "外国語"],
+    "🔬 共通専門科目": ["共通専門科目"],
+    "⚙️ 学科専門科目": ["専門必修", "専門選択"],
+}
+
 
 def build_course_card(name: str, course: dict) -> FlexMessage:
     rakutan_stars = "★" * course["rating"] + "☆" * (5 - course["rating"])
@@ -89,24 +96,14 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
                 background_color="#5C6BC0",
                 padding_all="lg",
                 contents=[
+                    FlexText(text=course["classification"], size="xs", color="#C5CAE9"),
                     FlexText(
-                        text=course["classification"],
-                        size="xs",
-                        color="#C5CAE9",
-                    ),
-                    FlexText(
-                        text=name,
-                        size="xl",
-                        weight="bold",
-                        color="#FFFFFF",
-                        wrap=True,
-                        margin="sm",
+                        text=name, size="xl", weight="bold", color="#FFFFFF",
+                        wrap=True, margin="sm",
                     ),
                     FlexText(
                         text=f"担当: {course['instructor']}　{course['format']}",
-                        size="xs",
-                        color="#C5CAE9",
-                        margin="xs",
+                        size="xs", color="#C5CAE9", margin="xs",
                     ),
                 ],
             ),
@@ -119,16 +116,14 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
                         margin="sm",
                         contents=[
                             FlexBox(
-                                layout="vertical",
-                                flex=1,
+                                layout="vertical", flex=1,
                                 contents=[
                                     FlexText(text="楽単度", size="xs", color="#888888", align="center"),
                                     FlexText(text=rakutan_stars, size="sm", color="#FFB300", align="center", margin="xs"),
                                 ],
                             ),
                             FlexBox(
-                                layout="vertical",
-                                flex=1,
+                                layout="vertical", flex=1,
                                 contents=[
                                     FlexText(text="学びになる度", size="xs", color="#888888", align="center"),
                                     FlexText(text=manabi_stars, size="sm", color="#26C6DA", align="center", margin="xs"),
@@ -158,34 +153,45 @@ def build_course_card(name: str, course: dict) -> FlexMessage:
 
 
 def build_course_list() -> FlexMessage:
-    buttons = [
-        FlexButton(
-            action=MessageAction(label=name[:20], text=name),
-            height="sm",
-            margin="sm",
-            style="secondary",
+    bubbles = []
+    for category, classifications in CATEGORY_GROUPS.items():
+        names = [
+            name for name, c in COURSES.items()
+            if c["classification"] in classifications
+        ]
+        if not names:
+            continue
+        buttons = [
+            FlexButton(
+                action=MessageAction(label=name[:20], text=name),
+                height="sm",
+                margin="sm",
+                style="secondary",
+            )
+            for name in names
+        ]
+        bubbles.append(
+            FlexBubble(
+                header=FlexBox(
+                    layout="vertical",
+                    background_color="#5C6BC0",
+                    padding_all="lg",
+                    contents=[
+                        FlexText(text=category, weight="bold", color="#FFFFFF", size="md"),
+                        FlexText(text=f"{len(names)}科目", size="xs", color="#C5CAE9", margin="xs"),
+                    ],
+                ),
+                body=FlexBox(
+                    layout="vertical",
+                    contents=buttons,
+                    spacing="sm",
+                ),
+            )
         )
-        for name in COURSES
-    ]
 
     return FlexMessage(
         alt_text="科目一覧",
-        contents=FlexBubble(
-            header=FlexBox(
-                layout="vertical",
-                background_color="#5C6BC0",
-                padding_all="lg",
-                contents=[
-                    FlexText(text="📚 科目一覧", weight="bold", color="#FFFFFF", size="lg"),
-                    FlexText(text=f"全{len(COURSES)}科目", size="xs", color="#C5CAE9", margin="xs"),
-                ],
-            ),
-            body=FlexBox(
-                layout="vertical",
-                contents=buttons,
-                spacing="sm",
-            ),
-        ),
+        contents=FlexCarousel(contents=bubbles),
     )
 
 
@@ -207,9 +213,7 @@ def build_messages(rule: dict | None) -> list:
     if rule.get("buttons"):
         body_contents = []
         if rule.get("reply"):
-            body_contents.append(
-                FlexText(text=rule["reply"], weight="bold", wrap=True)
-            )
+            body_contents.append(FlexText(text=rule["reply"], weight="bold", wrap=True))
         body_contents.extend([
             FlexButton(
                 action=MessageAction(label=btn["label"], text=btn["text"]),
@@ -222,11 +226,7 @@ def build_messages(rule: dict | None) -> list:
             FlexMessage(
                 alt_text=rule.get("reply", "メニュー"),
                 contents=FlexBubble(
-                    body=FlexBox(
-                        layout="vertical",
-                        contents=body_contents,
-                        spacing="sm",
-                    )
+                    body=FlexBox(layout="vertical", contents=body_contents, spacing="sm")
                 ),
             )
         )
