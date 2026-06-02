@@ -186,7 +186,7 @@ COURSES: dict[str, dict] = {
         "comment": "考えるのが好きなら面白い。",
         "syllabus_url": "",
     },
-    "データサイエンス基礎": {
+    "データサイエンス基礎学": {
         "instructor": "松本教授",
         "format": "リアルタイム配信",
         "classification": "教養",
@@ -195,7 +195,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "S",
         "comment": "今後の時代に役立つ。",
-        "syllabus_url": "",
+        "syllabus_url": "https://kym22-web.ofc.kobe-u.ac.jp/campusweb/campussquare.do?_flowExecutionKey=_c59222843-F954-7D74-B7C4-29AE6CD8FB5C_k6D37F1EE-7F54-A7C1-8637-308EFF746F32",
     },
     "生物学概論": {
         "instructor": "山本教授",
