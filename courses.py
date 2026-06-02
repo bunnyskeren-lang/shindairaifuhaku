@@ -8,6 +8,7 @@ COURSES: dict[str, dict] = {
         "rating": 4,
         "ease_rating": "A",
         "comment": "ｗｗｗｗｗｗｗｗｗっうぇうぇえええええええええええうぇうぇうぇうぇうぇうぇうぇうぇっうぇえっうぇえｗ",
+        "syllabus_url": "",
     },
     "微分積分学Ⅰ": {
         "instructor": "山田教授",
@@ -18,6 +19,7 @@ COURSES: dict[str, dict] = {
         "rating": 4,
         "ease_rating": "A",
         "comment": "過去問がかなり重要。",
+        "syllabus_url": "",
     },
     "線形代数学Ⅰ": {
         "instructor": "佐藤教授",
@@ -28,6 +30,7 @@ COURSES: dict[str, dict] = {
         "rating": 3,
         "ease_rating": "B",
         "comment": "毎週復習しないと後半で詰む。",
+        "syllabus_url": "",
     },
     "英語コミュニケーションA": {
         "instructor": "Smith先生",
@@ -38,6 +41,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "S",
         "comment": "楽しく単位が取れる。",
+        "syllabus_url": "",
     },
     "情報リテラシー": {
         "instructor": "中村准教授",
@@ -48,6 +52,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "SS",
         "comment": "かなり楽。",
+        "syllabus_url": "",
     },
     "力学基礎": {
         "instructor": "田中教授",
@@ -58,6 +63,7 @@ COURSES: dict[str, dict] = {
         "rating": 3,
         "ease_rating": "B",
         "comment": "演習問題を解くこと。",
+        "syllabus_url": "",
     },
     "日本文化論": {
         "instructor": "高橋教授",
@@ -68,6 +74,7 @@ COURSES: dict[str, dict] = {
         "rating": 4,
         "ease_rating": "S",
         "comment": "レポートは早めに。",
+        "syllabus_url": "",
     },
     "プログラミング入門": {
         "instructor": "伊藤准教授",
@@ -78,6 +85,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "A",
         "comment": "初心者にも優しい。",
+        "syllabus_url": "",
     },
     "経済学概論": {
         "instructor": "小林教授",
@@ -88,6 +96,7 @@ COURSES: dict[str, dict] = {
         "rating": 3,
         "ease_rating": "B",
         "comment": "用語暗記が大事。",
+        "syllabus_url": "",
     },
     "物理学実験": {
         "instructor": "木村教授",
@@ -98,6 +107,7 @@ COURSES: dict[str, dict] = {
         "rating": 2,
         "ease_rating": "C",
         "comment": "レポートが重い。",
+        "syllabus_url": "",
     },
     "心理学入門": {
         "instructor": "橋本教授",
@@ -108,6 +118,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "S",
         "comment": "内容が面白い。",
+        "syllabus_url": "",
     },
     "化学基礎": {
         "instructor": "森教授",
@@ -118,6 +129,7 @@ COURSES: dict[str, dict] = {
         "rating": 3,
         "ease_rating": "B",
         "comment": "計算問題対策必須。",
+        "syllabus_url": "",
     },
     "統計学入門": {
         "instructor": "石井教授",
@@ -128,6 +140,7 @@ COURSES: dict[str, dict] = {
         "rating": 4,
         "ease_rating": "A",
         "comment": "実生活にも役立つ。",
+        "syllabus_url": "",
     },
     "フランス語Ⅰ": {
         "instructor": "Dubois先生",
@@ -138,6 +151,7 @@ COURSES: dict[str, dict] = {
         "rating": 4,
         "ease_rating": "A",
         "comment": "発音練習が楽しい。",
+        "syllabus_url": "",
     },
     "環境科学概論": {
         "instructor": "岡田教授",
@@ -148,6 +162,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "SS",
         "comment": "楽単として有名。",
+        "syllabus_url": "",
     },
     "機械設計基礎": {
         "instructor": "吉田教授",
@@ -158,6 +173,7 @@ COURSES: dict[str, dict] = {
         "rating": 4,
         "ease_rating": "A",
         "comment": "将来役立つ。",
+        "syllabus_url": "",
     },
     "哲学入門": {
         "instructor": "西村教授",
@@ -168,6 +184,7 @@ COURSES: dict[str, dict] = {
         "rating": 3,
         "ease_rating": "A",
         "comment": "考えるのが好きなら面白い。",
+        "syllabus_url": "",
     },
     "データサイエンス基礎": {
         "instructor": "松本教授",
@@ -178,6 +195,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "S",
         "comment": "今後の時代に役立つ。",
+        "syllabus_url": "",
     },
     "生物学概論": {
         "instructor": "山本教授",
@@ -188,6 +206,7 @@ COURSES: dict[str, dict] = {
         "rating": 3,
         "ease_rating": "B",
         "comment": "暗記量が多め。",
+        "syllabus_url": "",
     },
     "キャリアデザイン": {
         "instructor": "外部講師",
@@ -198,6 +217,7 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "SS",
         "comment": "出席感覚で取れる。",
+        "syllabus_url": "",
     },
     "AIと社会": {
         "instructor": "藤井教授",
@@ -208,5 +228,6 @@ COURSES: dict[str, dict] = {
         "rating": 5,
         "ease_rating": "S",
         "comment": "内容が新しくて面白い。",
+        "syllabus_url": "",
     },
 }
