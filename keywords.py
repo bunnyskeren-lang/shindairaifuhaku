@@ -1,5 +1,3 @@
-from courses import COURSES
-
 KEYWORD_RULES: list[dict] = [
     {
         "keywords": ["科目一覧", "科目", "授業一覧"],
@@ -52,8 +50,6 @@ DEFAULT_REPLY = "申し訳ございません、よく理解できませんでし
 
 
 def get_rule(text: str) -> dict | None:
-    if text in COURSES:
-        return {"action": "course_detail", "course_name": text}
     normalized = text.lower()
     for rule in KEYWORD_RULES:
         if any(kw.lower() in normalized for kw in rule["keywords"]):
