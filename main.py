@@ -15,9 +15,12 @@ from linebot.v3.messaging import (
     ImageMessage,
     FlexMessage,
     FlexBubble,
+    FlexBubbleStyles,
+    FlexBlockStyle,
     FlexBox,
     FlexButton,
     FlexText,
+    FlexSeparator,
     MessageAction,
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -26,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import init_db, AsyncSessionLocal
 from models import MessageLog
 from keywords import get_rule, DEFAULT_REPLY
+from courses import COURSES
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -54,9 +58,152 @@ def verify_signature(body: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+EASE_COLORS = {
+    "SS": "#C8A000", "S": "#C8A000",
+    "A": "#2196F3", "B": "#4CAF50", "C": "#FF9800",
+}
+
+
+def build_course_card(name: str, course: dict) -> FlexMessage:
+    pass_rate_rows = [
+        FlexBox(
+            layout="horizontal",
+            contents=[
+                FlexText(text=f"{year}年度", size="sm", color="#555555", flex=3),
+                FlexText(
+                    text=f"{rate} ({fraction})",
+                    size="sm",
+                    color="#111111",
+                    flex=4,
+                    align="end",
+                ),
+            ],
+        )
+        for year, rate, fraction in course["pass_rates"]
+    ]
+
+    ease_color = EASE_COLORS.get(course["ease_rating"], "#555555")
+
+    return FlexMessage(
+        alt_text=name,
+        contents=FlexBubble(
+            styles=FlexBubbleStyles(
+                header=FlexBlockStyle(background_color="#2B2B2B"),
+                footer=FlexBlockStyle(background_color="#F5F5F5"),
+            ),
+            header=FlexBox(
+                layout="vertical",
+                padding_all="lg",
+                contents=[
+                    FlexText(
+                        text=f"Search ID:{course['search_id']}",
+                        size="xs",
+                        color="#4CAF50",
+                    ),
+                    FlexText(
+                        text=name,
+                        size="xl",
+                        weight="bold",
+                        color="#FFFFFF",
+                        wrap=True,
+                        margin="sm",
+                    ),
+                    FlexSeparator(margin="md", color="#555555"),
+                    FlexBox(
+                        layout="horizontal",
+                        margin="md",
+                        contents=[
+                            FlexText(text="開講部局", size="xs", color="#AAAAAA", flex=2),
+                            FlexText(text=course["department"], size="xs", color="#FFFFFF", flex=3),
+                        ],
+                    ),
+                    FlexBox(
+                        layout="horizontal",
+                        margin="xs",
+                        contents=[
+                            FlexText(text="群", size="xs", color="#AAAAAA", flex=1),
+                            FlexText(text=course["group"], size="xs", color="#FFFFFF", flex=2),
+                            FlexText(text="単位数", size="xs", color="#AAAAAA", flex=1),
+                            FlexText(text=course["credits"], size="xs", color="#FFFFFF", flex=2),
+                        ],
+                    ),
+                ],
+            ),
+            body=FlexBox(
+                layout="vertical",
+                spacing="sm",
+                contents=[
+                    FlexText(text="単位取得率", size="xs", color="#888888"),
+                    *pass_rate_rows,
+                ],
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexBox(
+                        layout="horizontal",
+                        contents=[
+                            FlexText(text="らくたん判定", size="sm", flex=3),
+                            FlexText(
+                                text=course["ease_rating"],
+                                size="sm",
+                                weight="bold",
+                                color=ease_color,
+                                flex=1,
+                                align="end",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ),
+    )
+
+
+def build_course_list() -> FlexMessage:
+    buttons = [
+        FlexButton(
+            action=MessageAction(label=name[:20], text=name),
+            height="sm",
+            margin="sm",
+        )
+        for name in COURSES
+    ]
+
+    return FlexMessage(
+        alt_text="科目一覧",
+        contents=FlexBubble(
+            styles=FlexBubbleStyles(
+                header=FlexBlockStyle(background_color="#2B2B2B"),
+            ),
+            header=FlexBox(
+                layout="vertical",
+                padding_all="lg",
+                contents=[
+                    FlexText(text="📚 科目一覧", weight="bold", color="#FFFFFF", size="lg"),
+                ],
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=buttons,
+                spacing="sm",
+            ),
+        ),
+    )
+
+
 def build_messages(rule: dict | None) -> list:
     if rule is None:
         return [TextMessage(text=DEFAULT_REPLY)]
+
+    action = rule.get("action")
+
+    if action == "course_list":
+        return [build_course_list()]
+
+    if action == "course_detail":
+        name = rule["course_name"]
+        return [build_course_card(name, COURSES[name])]
 
     messages = []
 
@@ -133,10 +280,10 @@ async def callback(request: Request):
                 user_text = event.message.text
                 rule = get_rule(user_text)
                 messages = build_messages(rule)
-                reply_text = rule["reply"] if rule and rule.get("reply") else DEFAULT_REPLY
+                log_text = rule.get("reply") or rule.get("action", "response") if rule else DEFAULT_REPLY
 
                 await save_log(session, user_id, "in", user_text)
-                await save_log(session, user_id, "out", reply_text)
+                await save_log(session, user_id, "out", log_text)
 
                 await line_api.reply_message(
                     ReplyMessageRequest(
