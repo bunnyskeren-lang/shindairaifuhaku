@@ -199,7 +199,8 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
 HELP_TEXT = """📖 神大授業ナビ の使い方
 
 ▼ リッチメニューのボタン
-・科目一覧 → 登録科目リスト
+・教養 → 教養科目一覧
+・専門科目 → 専門科目一覧
 ・レビュー投稿 → 投稿フォームへ
 ・人気の授業 → 学び度 TOP5
 ・楽単ランキング → 楽単 TOP5
@@ -221,14 +222,16 @@ CONTACT_TEXT = (
 
 # ── Course list carousel ────────────────────────────────────────
 
-async def handle_course_list(session: AsyncSession) -> list:
+async def handle_course_list(session: AsyncSession, category: str = "") -> list:
     from collections import defaultdict
-    rows = (await session.execute(
-        select(Course).order_by(Course.classification, Course.name)
-    )).scalars().all()
+    stmt = select(Course).order_by(Course.classification, Course.name)
+    if category:
+        stmt = stmt.where(Course.category == category)
+    rows = (await session.execute(stmt)).scalars().all()
 
     if not rows:
-        return [TextMessage(text="まだ科目が登録されていません。")]
+        label = f"{category}の" if category else ""
+        return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
 
     groups: dict[str, list] = defaultdict(list)
     for course in rows:
@@ -262,9 +265,10 @@ async def handle_course_list(session: AsyncSession) -> list:
             ),
         ))
 
+    alt = f"📚 {category}一覧" if category else "📚 科目一覧"
     if len(bubbles) == 1:
-        return [FlexMessage(alt_text="📚 科目一覧", contents=bubbles[0])]
-    return [FlexMessage(alt_text="📚 科目一覧", contents=FlexCarousel(contents=bubbles))]
+        return [FlexMessage(alt_text=alt, contents=bubbles[0])]
+    return [FlexMessage(alt_text=alt, contents=FlexCarousel(contents=bubbles))]
 
 
 # ── Message handler ─────────────────────────────────────────────
@@ -274,6 +278,12 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
 
     if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
         return await handle_course_list(session)
+
+    if t in ["教養", "教養科目", "教養一覧"]:
+        return await handle_course_list(session, category="教養")
+
+    if t in ["専門科目", "専門", "専門一覧"]:
+        return await handle_course_list(session, category="専門")
 
     if t in ["レビュー投稿", "レビュー", "投稿"]:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
@@ -320,7 +330,6 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [TextMessage(text=CONTACT_TEXT)]
 
-    # Course keyword search
     courses = (await session.execute(
         select(Course).where(Course.name.ilike(f"%{t}%")).limit(3)
     )).scalars().all()
@@ -328,7 +337,7 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         return [await get_course_flex(session, c, user_id) for c in courses]
 
     return [TextMessage(
-        text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
+        text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「教養」「専門科目」で科目一覧を確認するか、「ヘルプ」で使い方をご確認ください。"
     )]
 
 
@@ -421,7 +430,7 @@ async def admin_page(_: str = Depends(check_admin)):
 async def admin_courses(_: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         courses = (await session.execute(
-            select(Course).order_by(Course.classification, Course.name)
+            select(Course).order_by(Course.category, Course.classification, Course.name)
         )).scalars().all()
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
@@ -434,6 +443,7 @@ async def admin_courses(_: str = Depends(check_admin)):
 
     rows_html = "".join(
         f"<tr><td>{c.name}</td><td>{c.instructor or '―'}</td><td>{c.classification or '―'}</td>"
+        f"<td><span style='background:{'#6366f1' if c.category=='教養' else '#10b981'};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px'>{c.category}</span></td>"
         f"<td><form method='post' action='/admin/courses/delete/{c.id}' style='margin:0'>"
         f"<button type='submit' class='btn btn-danger' style='padding:4px 10px'>削除</button></form></td></tr>"
         for c in courses
@@ -454,6 +464,14 @@ async def admin_courses(_: str = Depends(check_admin)):
     <div style="margin-bottom:10px">
       <label>担当教員<input type="text" name="instructor" maxlength="100" placeholder="例：山田教授"></label>
     </div>
+    <div style="margin-bottom:10px">
+      <label>カテゴリ *
+        <select name="category" style="margin-top:4px">
+          <option value="専門">専門科目</option>
+          <option value="教養">教養科目</option>
+        </select>
+      </label>
+    </div>
     <div style="margin-bottom:14px">
       <label>分類
         <select id="classSelect" style="margin-top:4px" onchange="onClassChange(this)">
@@ -468,8 +486,8 @@ async def admin_courses(_: str = Depends(check_admin)):
 </div>
 
 <h2>登録済み科目（{len(courses)}件）</h2>
-<table><tr><th>科目名</th><th>教員</th><th>分類</th><th></th></tr>
-{rows_html or '<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>'}
+<table><tr><th>科目名</th><th>教員</th><th>分類</th><th>カテゴリ</th><th></th></tr>
+{rows_html or '<tr><td colspan="5" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>'}
 </table>
 <script>
 function onClassChange(sel) {{
@@ -501,9 +519,10 @@ async def admin_courses_add(
     name: str = Form(...),
     instructor: str = Form(""),
     classification: str = Form(""),
+    category: str = Form("専門"),
 ):
     async with AsyncSessionLocal() as session:
-        session.add(Course(name=name.strip(), instructor=instructor.strip(), classification=classification.strip()))
+        session.add(Course(name=name.strip(), instructor=instructor.strip(), classification=classification.strip(), category=category))
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
