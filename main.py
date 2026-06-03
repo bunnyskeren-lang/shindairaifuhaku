@@ -23,6 +23,9 @@ from linebot.v3.messaging import (
     FlexText,
     FlexButton,
     FlexSeparator,
+    FlexCarousel,
+    URIAction,
+    MessageAction,
     URIAction,
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -201,20 +204,59 @@ CONTACT_TEXT = (
     "✉️ bunnyskeren@gmail.com"
 )
 
+# ── Course list carousel ────────────────────────────────────────
 
+async def handle_course_list(session: AsyncSession) -> list:
+    from collections import defaultdict
+    rows = (await session.execute(
+        select(Course).order_by(Course.classification, Course.name)
+    )).scalars().all()
+
+    if not rows:
+        return [TextMessage(text="まだ科目が登録されていません。")]
+
+    groups: dict[str, list] = defaultdict(list)
+    for course in rows:
+        groups[course.classification or "その他"].append(course)
+
+    bubbles = []
+    for classification, courses in list(groups.items())[:10]:
+        btn_contents = []
+        for course in courses[:8]:
+            label = course.name if len(course.name) <= 20 else course.name[:19] + "…"
+            btn_contents.append(
+                FlexButton(
+                    action=MessageAction(label=label, text=course.name),
+                    style="link",
+                    height="sm",
+                )
+            )
+        bubbles.append(FlexBubble(
+            size="kilo",
+            header=FlexBox(
+                layout="vertical",
+                contents=[FlexText(text=classification, weight="bold", color="#ffffff", size="sm")],
+                background_color="#6366f1",
+                padding_all="md",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=btn_contents,
+                spacing="xs",
+                padding_all="md",
+            ),
+        ))
+
+    if len(bubbles) == 1:
+        return [FlexMessage(alt_text="📚 科目一覧", contents=bubbles[0])]
+    return [FlexMessage(alt_text="📚 科目一覧", contents=FlexCarousel(contents=bubbles))]
 # ── Message handler ─────────────────────────────────────────────
 
 async def handle_message(session: AsyncSession, text: str) -> list:
     t = text.strip()
 
     if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
-        names = (await session.execute(
-            select(Course.name).order_by(Course.name).limit(20)
-        )).scalars().all()
-        if not names:
-            return [TextMessage(text="まだ科目が登録されていません。")]
-        body = "\n".join(f"・{n}" for n in names)
-        return [TextMessage(text=f"📚 登録されている科目\n\n{body}\n\n科目名を送ると詳細が見られます！")]
+        return await handle_course_list(session)
 
     if t in ["レビュー投稿", "レビュー", "投稿"]:
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{REVIEW_FORM_URL}")]
