@@ -66,16 +66,16 @@ async def search_courses(q: str = ""):
     async with AsyncSessionLocal() as session:
         if q.strip():
             stmt = (
-                select(Course.name)
+                select(Course.name, Course.instructor)
                 .where(Course.name.ilike(f"%{q}%"))
                 .order_by(Course.name)
                 .limit(10)
             )
         else:
-            stmt = select(Course.name).order_by(Course.name).limit(30)
+            stmt = select(Course.name, Course.instructor).order_by(Course.name).limit(30)
         result = await session.execute(stmt)
-        courses = result.scalars().all()
-    return {"courses": list(courses)}
+        courses = result.all()
+    return {"courses": [{"name": c[0], "instructor": c[1] or ""} for c in courses]}
 
 
 @app.post("/submit")
@@ -85,6 +85,7 @@ async def submit(
     course_name: str = Form(...),
     rating: int = Form(...),
     ease_rating: str = Form(...),
+    grading_method: str = Form(default=""),
     comment: str = Form(...),
     line_user_id: str = Form(default=""),
     reg_name: str = Form(default=""),
@@ -120,6 +121,7 @@ async def submit(
             course_name=course_name.strip()[:200],
             rating=rating,
             ease_rating=ease_rating,
+            grading_method=grading_method.strip()[:500] or None,
             comment=comment.strip()[:500],
             is_approved=False,
         )
@@ -167,6 +169,7 @@ async def admin_page(username: str = Depends(verify_admin)):
                 "<button style='background:#ef4444;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer'>🗑 却下</button></form>"
             )
         ts = r.created_at.strftime("%m/%d %H:%M") if r.created_at else ""
+        grading = r.grading_method or "―"
         return (
             f"<tr>"
             f"<td style='padding:10px 8px'>{badge}</td>"
@@ -175,16 +178,17 @@ async def admin_page(username: str = Depends(verify_admin)):
             f"<td style='padding:10px 8px'>{r.submitter_name}</td>"
             f"<td style='padding:10px 8px'>{'★'*r.rating}{'☆'*(5-r.rating)}</td>"
             f"<td style='padding:10px 8px'>{r.ease_rating}</td>"
+            f"<td style='padding:10px 8px;font-size:12px;color:#555;max-width:160px;word-break:break-word'>{grading}</td>"
             f"<td style='padding:10px 8px;max-width:200px;word-break:break-word'>{r.comment}</td>"
             f"<td style='padding:10px 8px'>{actions}</td>"
             f"</tr>"
         )
 
     pending_rows = "".join(row(r, True) for r in pending) or (
-        "<tr><td colspan='8' style='text-align:center;color:#9ca3af;padding:20px'>未承認のレビューはありません</td></tr>"
+        "<tr><td colspan='9' style='text-align:center;color:#9ca3af;padding:20px'>未承認のレビューはありません</td></tr>"
     )
     approved_rows = "".join(row(r, False) for r in approved) or (
-        "<tr><td colspan='8' style='text-align:center;color:#9ca3af;padding:20px'>承認済みレビューはありません</td></tr>"
+        "<tr><td colspan='9' style='text-align:center;color:#9ca3af;padding:20px'>承認済みレビューはありません</td></tr>"
     )
 
     table_style = (
@@ -223,6 +227,7 @@ async def admin_page(username: str = Depends(verify_admin)):
   <th style="{th_style}">投稿者</th>
   <th style="{th_style}">評価</th>
   <th style="{th_style}">楽単</th>
+  <th style="{th_style}">評価方法</th>
   <th style="{th_style}">コメント</th>
   <th style="{th_style}">操作</th>
 </tr>
@@ -240,6 +245,7 @@ async def admin_page(username: str = Depends(verify_admin)):
   <th style="{th_style}">投稿者</th>
   <th style="{th_style}">評価</th>
   <th style="{th_style}">楽単</th>
+  <th style="{th_style}">評価方法</th>
   <th style="{th_style}">コメント</th>
   <th style="{th_style}"></th>
 </tr>
