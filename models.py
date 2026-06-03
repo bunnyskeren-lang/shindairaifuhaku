@@ -36,6 +36,7 @@ class PendingReview(Base):
     course_name: Mapped[str] = mapped_column(String(200), nullable=False)
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     ease_rating: Mapped[str] = mapped_column(String(10), nullable=False)
+    grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     comment: Mapped[str] = mapped_column(Text, nullable=False)
     is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
