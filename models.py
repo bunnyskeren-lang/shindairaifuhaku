@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, Integer, func
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -20,16 +20,21 @@ class Course(Base):
     __tablename__ = "courses"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
-    instructor: Mapped[str] = mapped_column(String(100), nullable=False)
-    format: Mapped[str] = mapped_column(String(50), nullable=False)
-    classification: Mapped[str] = mapped_column(String(100), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    evaluation: Mapped[str] = mapped_column(Text, nullable=False)
-    rating: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
-    ease_rating: Mapped[str] = mapped_column(String(10), nullable=False, default="B")
-    comment: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    syllabus_url: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    instructor: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    classification: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+
+
+class PendingReview(Base):
+    __tablename__ = "pending_reviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    submitter_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    course_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    ease_rating: Mapped[str] = mapped_column(String(10), nullable=False)
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
