@@ -97,6 +97,7 @@ def make_course_bubble(
     avg_rating: Optional[float],
     top_ease: Optional[str],
     comments: list[str],
+    review_url: str = "",
 ) -> FlexBubble:
     body_contents = [
         FlexText(text=name, weight="bold", size="lg", wrap=True),
@@ -140,7 +141,7 @@ def make_course_bubble(
 
     footer_contents = [
         FlexButton(
-            action=URIAction(label="レビューを投稿", uri=REVIEW_FORM_URL),
+            action=URIAction(label="レビューを投稿", uri=review_url or REVIEW_FORM_URL),
             style="primary",
             color="#6366f1",
             height="sm",
@@ -184,9 +185,11 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         .limit(limit)
     )).scalars().all()
 
+    url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
     bubble = make_course_bubble(
         course.name, course.instructor, course.classification,
         avg_rating, top_ease, list(comments),
+        review_url=url,
     )
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
 
@@ -273,7 +276,8 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         return await handle_course_list(session)
 
     if t in ["レビュー投稿", "レビュー", "投稿"]:
-        return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{REVIEW_FORM_URL}")]
+        url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
+        return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 
     if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
         rows = (await session.execute(
