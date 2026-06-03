@@ -34,7 +34,6 @@
 
     <form id="reviewForm" action="/submit" method="post" novalidate class="space-y-4">
 
-      <!-- ── 初回登録セクション ── -->
       {% if is_new_user and uid %}
       <div class="bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 mb-1 text-sm text-purple-700 flex items-start gap-2">
         <span class="text-lg leading-none mt-0.5">🎓</span>
@@ -321,4 +320,176 @@
             dropdown.innerHTML =
               `<div class="px-4 py-3 text-sm text-gray-500">
                 一致する科目なし ―
-                <span class="text-indigo-600 cursor-pointer underline" id="useAsIs">「${q}」で入力する
+                <span class="text-indigo-600 cursor-pointer underline" id="useAsIs">「${q}」で入力する</span>
+              </div>`;
+            dropdown.classList.remove('hidden');
+            document.getElementById('useAsIs')?.addEventListener('click', () => selectCourse(q, ''));
+            return;
+          }
+
+          dropdown.innerHTML = items.map(c =>
+            `<div class="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-50 last:border-none" data-name="${c.name}" data-instructor="${c.instructor}">
+              <div class="text-sm font-medium">${c.name}</div>
+              ${c.instructor ? `<div class="text-xs text-gray-400 mt-0.5">👨‍🏫 ${c.instructor}</div>` : ''}
+            </div>`
+          ).join('');
+          dropdown.classList.remove('hidden');
+
+          dropdown.querySelectorAll('[data-name]').forEach(el => {
+            el.addEventListener('click', () => selectCourse(el.dataset.name, el.dataset.instructor));
+          });
+        } catch (_) {}
+      }, 300);
+    });
+
+    function selectCourse(name, instructor) {
+      document.getElementById('courseNameHidden').value = name;
+      document.getElementById('selectedCourseName').textContent = name;
+      document.getElementById('selectedCourse').classList.remove('hidden');
+      searchInput.classList.add('hidden');
+      dropdown.classList.add('hidden');
+      document.getElementById('courseError').classList.add('hidden');
+      if (instructor) {
+        document.getElementById('instructorDisplay').textContent = instructor;
+        document.getElementById('instructorRow').classList.remove('hidden');
+      } else {
+        document.getElementById('instructorRow').classList.add('hidden');
+      }
+      saveData();
+    }
+
+    document.getElementById('clearCourse').addEventListener('click', () => {
+      document.getElementById('courseNameHidden').value = '';
+      document.getElementById('selectedCourse').classList.add('hidden');
+      document.getElementById('instructorRow').classList.add('hidden');
+      searchInput.classList.remove('hidden');
+      searchInput.value = '';
+      searchInput.focus();
+    });
+
+    document.addEventListener('click', e => {
+      if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+
+    document.getElementById('comment').addEventListener('input', () => {
+      document.getElementById('charCount').textContent = document.getElementById('comment').value.length;
+      saveData();
+    });
+    document.getElementById('submitter_name').addEventListener('input', saveData);
+
+    const studentIdInput = document.getElementById('student_id');
+    const studentIdError = document.getElementById('studentIdError');
+    const STUDENT_ID_RE = /^\d{7}[A-Za-z]$/;
+    if (studentIdInput) {
+      studentIdInput.addEventListener('input', () => {
+        const v = studentIdInput.value.trim();
+        studentIdError.classList.toggle('hidden', !v || STUDENT_ID_RE.test(v));
+      });
+    }
+
+    let saveTimer;
+    function saveData() {
+      document.getElementById('saveStatus').textContent = '保存中...';
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          name: document.getElementById('submitter_name').value,
+          course: document.getElementById('courseNameHidden').value,
+          rating: currentRating,
+          ease: currentEase,
+          attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
+          homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
+          evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
+          gradingExtra: document.getElementById('gradingExtra').value,
+          comment: document.getElementById('comment').value,
+        }));
+        document.getElementById('saveStatus').textContent = '自動保存済み ✓';
+      }, 500);
+    }
+
+    function loadData() {
+      try {
+        const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (!d) return;
+        if (d.name) document.getElementById('submitter_name').value = d.name;
+        if (d.course) selectCourse(d.course, '');
+        if (d.rating) {
+          currentRating = d.rating;
+          document.getElementById('ratingHidden').value = d.rating;
+          document.getElementById('ratingLabel').textContent = RATING_LABELS[d.rating];
+          buildStars();
+        }
+        if (d.ease) {
+          currentEase = d.ease;
+          document.getElementById('easeHidden').value = EASE_VALS[d.ease];
+          document.getElementById('easeLabel').textContent = EASE_LABELS[d.ease];
+          buildEaseStars();
+        }
+        if (d.attendance) {
+          document.querySelectorAll('[data-group="attendance"]').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === d.attendance);
+          });
+        }
+        if (d.homework) {
+          document.querySelectorAll('[data-group="homework"]').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === d.homework);
+          });
+        }
+        if (d.evals?.length) {
+          document.querySelectorAll('[data-group="eval"]').forEach(b => {
+            b.classList.toggle('active', d.evals.includes(b.dataset.value));
+          });
+        }
+        if (d.gradingExtra) document.getElementById('gradingExtra').value = d.gradingExtra;
+        if (d.comment) {
+          document.getElementById('comment').value = d.comment;
+          document.getElementById('charCount').textContent = d.comment.length;
+        }
+        updateGradingMethod();
+      } catch (_) {}
+    }
+
+    document.getElementById('reviewForm').addEventListener('submit', e => {
+      let valid = true;
+
+      if (studentIdInput) {
+        if (!STUDENT_ID_RE.test(studentIdInput.value.trim())) {
+          studentIdError.classList.remove('hidden');
+          valid = false;
+        }
+      }
+
+      if (!document.getElementById('courseNameHidden').value.trim()) {
+        const typed = document.getElementById('courseSearchInput').value.trim();
+        if (typed) {
+          document.getElementById('courseNameHidden').value = typed;
+        } else {
+          document.getElementById('courseError').classList.remove('hidden');
+          valid = false;
+        }
+      }
+      if (!document.getElementById('ratingHidden').value) {
+        document.getElementById('ratingError').classList.remove('hidden');
+        valid = false;
+      }
+      if (!document.getElementById('easeHidden').value) {
+        document.getElementById('easeError').classList.remove('hidden');
+        valid = false;
+      }
+      if (!valid) { e.preventDefault(); window.scrollTo(0, 0); return; }
+
+      updateGradingMethod();
+      localStorage.removeItem(STORAGE_KEY);
+      const btn = document.getElementById('submitBtn');
+      btn.textContent = '送信中...';
+      btn.disabled = true;
+    });
+
+    buildStars();
+    buildEaseStars();
+    loadData();
+  </script>
+</body>
+</html>
