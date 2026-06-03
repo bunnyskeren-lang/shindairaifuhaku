@@ -42,6 +42,7 @@ CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku-1.onrender.com")
+MAX_REVIEWS = int(os.environ.get("MAX_REVIEWS", "3"))
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
@@ -95,7 +96,7 @@ def make_course_bubble(
     classification: str,
     avg_rating: Optional[float],
     top_ease: Optional[str],
-    latest_comment: Optional[str],
+    comments: list[str],
 ) -> FlexBubble:
     body_contents = [
         FlexText(text=name, weight="bold", size="lg", wrap=True),
@@ -126,13 +127,16 @@ def make_course_bubble(
             )
         )
 
-    if latest_comment:
-        preview = latest_comment[:80] + ("..." if len(latest_comment) > 80 else "")
-        body_contents += [
-            FlexSeparator(margin="md"),
-            FlexText(text="💬 最新レビュー", size="xs", color="#888888", margin="md"),
-            FlexText(text=preview, size="sm", wrap=True, color="#444444", margin="xs"),
-        ]
+    if comments:
+        body_contents.append(FlexSeparator(margin="md"))
+        body_contents.append(
+            FlexText(text=f"💬 レビュー（{len(comments)}件）", size="xs", color="#888888", margin="md")
+        )
+        for comment in comments:
+            preview = comment[:80] + ("..." if len(comment) > 80 else "")
+            body_contents.append(
+                FlexText(text=preview, size="sm", wrap=True, color="#444444", margin="sm")
+            )
 
     footer_contents = [
         FlexButton(
@@ -165,16 +169,16 @@ async def get_course_flex(session: AsyncSession, course: Course) -> FlexMessage:
     if ease_rows:
         top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
 
-    latest = (await session.execute(
+    comments = (await session.execute(
         select(PendingReview.comment)
         .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
         .order_by(PendingReview.created_at.desc())
-        .limit(1)
-    )).scalar_one_or_none()
+        .limit(MAX_REVIEWS)
+    )).scalars().all()
 
     bubble = make_course_bubble(
         course.name, course.instructor, course.classification,
-        avg_rating, top_ease, latest,
+        avg_rating, top_ease, list(comments),
     )
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
 
