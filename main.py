@@ -92,6 +92,9 @@ async def save_log(session: AsyncSession, user_id: str, direction: str, message:
 
 # ── FlexMessage builder ─────────────────────────────────────────
 
+EASE_COLOR = {"SS": "#10b981", "S": "#3b82f6", "A": "#f59e0b", "B": "#f97316", "C": "#ef4444"}
+
+
 def make_course_bubble(
     name: str,
     instructor: str,
@@ -102,58 +105,96 @@ def make_course_bubble(
     review_url: str = "",
     syllabus_url: str = "",
 ) -> FlexBubble:
-    body_contents = [
-        FlexText(text=name, weight="bold", size="lg", wrap=True),
-        FlexText(
-            text=f"👨‍🏫 {instructor or '未設定'}  📂 {classification or '未分類'}",
-            size="sm", color="#888888", wrap=True, margin="sm",
-        ),
-        FlexSeparator(margin="md"),
-    ]
+    body_contents = []
 
+    # 分類タグ
+    if classification:
+        body_contents.append(
+            FlexBox(
+                layout="horizontal",
+                contents=[
+                    FlexBox(
+                        layout="vertical",
+                        contents=[FlexText(text=f"📂 {classification}", size="xs", color="#6366f1")],
+                        background_color="#eef2ff",
+                        corner_radius="20px",
+                        padding_all="sm",
+                    )
+                ],
+                margin="sm",
+            )
+        )
+
+    # 学び度（星評価）
     if avg_rating is not None:
         body_contents.append(
-            FlexText(
-                text=f"⭐ {stars(round(avg_rating))}  {avg_rating:.1f}/5.0",
-                size="sm", margin="md",
+            FlexBox(
+                layout="horizontal",
+                contents=[
+                    FlexText(text=stars(round(avg_rating)), size="sm", color="#f59e0b"),
+                    FlexText(text=f"  {avg_rating:.1f}/5.0", size="sm", color="#475569", margin="sm"),
+                ],
+                margin="md",
             )
         )
     else:
         body_contents.append(
-            FlexText(text="⭐ まだレビューなし", size="sm", color="#aaaaaa", margin="md")
+            FlexText(text="⭐ まだレビューなし", size="sm", color="#94a3b8", margin="md")
         )
 
+    # 楽単度バッジ
     if top_ease:
+        ease_color = EASE_COLOR.get(top_ease, "#6b7280")
+        ease_label = EASE_LABEL.get(top_ease, top_ease)
         body_contents.append(
-            FlexText(
-                text=f"楽単度: {EASE_LABEL.get(top_ease, top_ease)}",
-                size="sm", margin="xs",
+            FlexBox(
+                layout="horizontal",
+                contents=[
+                    FlexText(text="楽単度", size="xs", color="#64748b"),
+                    FlexBox(
+                        layout="vertical",
+                        contents=[FlexText(text=f"  {ease_label}  ", size="xs", color="#ffffff")],
+                        background_color=ease_color,
+                        corner_radius="20px",
+                        padding_all="xs",
+                    ),
+                ],
+                spacing="sm",
+                margin="xs",
             )
         )
 
+    # コメント
     if comments:
-        body_contents.append(FlexSeparator(margin="md"))
+        body_contents.append(FlexSeparator(margin="lg"))
         body_contents.append(
-            FlexText(text=f"💬 レビュー（{len(comments)}件）", size="xs", color="#888888", margin="md")
+            FlexText(text="💬 コメント", size="xs", color="#64748b", weight="bold", margin="sm")
         )
         for comment in comments:
             preview = comment[:80] + ("..." if len(comment) > 80 else "")
             body_contents.append(
-                FlexText(text=preview, size="sm", wrap=True, color="#444444", margin="sm")
+                FlexBox(
+                    layout="vertical",
+                    contents=[FlexText(text=f"「{preview}」", size="sm", wrap=True, color="#334155")],
+                    background_color="#f8fafc",
+                    corner_radius="8px",
+                    padding_all="sm",
+                    margin="sm",
+                )
             )
 
     footer_contents = []
     if syllabus_url:
         footer_contents.append(
             FlexButton(
-                action=URIAction(label="シラバスを見る", uri=syllabus_url),
+                action=URIAction(label="📄 シラバス", uri=syllabus_url),
                 style="secondary",
                 height="sm",
             )
         )
     footer_contents.append(
         FlexButton(
-            action=URIAction(label="レビューを投稿", uri=review_url or REVIEW_FORM_URL),
+            action=URIAction(label="✏️ レビューを投稿", uri=review_url or REVIEW_FORM_URL),
             style="primary",
             color="#6366f1",
             height="sm",
@@ -161,8 +202,17 @@ def make_course_bubble(
     )
 
     return FlexBubble(
+        header=FlexBox(
+            layout="vertical",
+            contents=[
+                FlexText(text=name, weight="bold", size="lg", color="#ffffff", wrap=True),
+                FlexText(text=f"👨‍🏫 {instructor or '未設定'}", size="sm", color="#c7d2fe", margin="xs"),
+            ],
+            background_color="#6366f1",
+            padding_all="lg",
+        ),
         body=FlexBox(layout="vertical", contents=body_contents, padding_all="lg"),
-        footer=FlexBox(layout="vertical", contents=footer_contents, padding_all="md"),
+        footer=FlexBox(layout="vertical", contents=footer_contents, padding_all="md", spacing="sm"),
     )
 
 
