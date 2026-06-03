@@ -17,6 +17,15 @@
       <p class="text-gray-500 text-sm mt-1">みんなの声が後輩の授業選びをサポート！</p>
     </div>
 
+    <!-- Auto-save banner (prominent) -->
+    <div class="bg-green-50 border-2 border-green-300 rounded-2xl px-4 py-3 mb-4 flex items-center gap-3">
+      <span class="text-2xl">💾</span>
+      <div>
+        <p class="text-sm font-bold text-green-700">入力内容は自動保存されます</p>
+        <p class="text-xs text-green-600 mt-0.5">ページを閉じても次に開いたとき続きから入力できます</p>
+      </div>
+    </div>
+
     <!-- Notice -->
     <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 flex items-start gap-2">
       <span class="text-lg leading-none mt-0.5">✋</span>
@@ -32,110 +41,150 @@
         <span>初めての投稿です。プロフィールを登録してください（管理者のみ確認できます）。</span>
       </div>
 
-      <!-- 漢字名前 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           🪪 お名前（漢字） <span class="text-red-500">*</span>
         </label>
-        <input
-          type="text" name="reg_name" id="reg_name"
+        <input type="text" name="reg_name" id="reg_name"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
           placeholder="例：神戸 太郎" required maxlength="50">
       </div>
 
-      <!-- 学籍番号 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           🎓 学籍番号 <span class="text-red-500">*</span>
         </label>
         <p class="text-xs text-gray-400 mb-3">数字7桁＋アルファベット1文字（例：1234567A）</p>
-        <input
-          type="text" name="student_id" id="student_id"
+        <input type="text" name="student_id" id="student_id"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          placeholder="例：1234567A" required maxlength="8" inputmode="text">
+          placeholder="例：1234567A" required maxlength="8">
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">数字7桁＋アルファベット1文字で入力してください（例：1234567A）</p>
       </div>
       {% endif %}
 
       <input type="hidden" name="line_user_id" value="{{ uid }}">
 
-      <!-- 1. Name -->
+      <!-- 1. ニックネーム -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           👤 ニックネーム <span class="text-red-500">*</span>
         </label>
-        <input
-          type="text" name="submitter_name" id="submitter_name"
+        <input type="text" name="submitter_name" id="submitter_name"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
           placeholder="例：神大太郎" required maxlength="50">
       </div>
 
-      <!-- 2. Course Search -->
+      <!-- 2. 科目名 + 担当教員 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           📖 科目名 <span class="text-red-500">*</span>
         </label>
-        <div class="relative" id="searchWrapper">
-          <input
-            type="text" id="courseSearchInput"
+        <div class="relative">
+          <input type="text" id="courseSearchInput"
             class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
             placeholder="科目名を入力して検索..." autocomplete="off">
           <input type="hidden" name="course_name" id="courseNameHidden">
-          <!-- Dropdown -->
           <div id="courseDropdown"
             class="hidden absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden max-h-56 overflow-y-auto">
           </div>
         </div>
-        <!-- Selected state -->
         <div id="selectedCourse" class="hidden mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2 flex items-center gap-2 text-sm text-green-700">
           <span>✅</span>
           <span id="selectedCourseName" class="flex-1 font-medium"></span>
           <button type="button" id="clearCourse" class="text-xs text-gray-400 hover:text-gray-600 underline">変更</button>
         </div>
         <p id="courseError" class="hidden mt-1 text-red-500 text-xs">科目を選択または入力してください</p>
+        <div id="instructorRow" class="hidden mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+          <span class="text-sm">👨‍🏫</span>
+          <span class="text-xs text-gray-500">担当教員：</span>
+          <span id="instructorDisplay" class="text-sm text-gray-700 font-medium"></span>
+        </div>
       </div>
 
-      <!-- 3. Star Rating -->
+      <!-- 3. 学びになった度 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           ⭐ 学びになった度 <span class="text-red-500">*</span>
         </label>
-        <p class="text-xs text-gray-400 mb-4">1 = あまり学べなかった　　5 = めちゃくちゃ学べた</p>
+        <p class="text-xs text-gray-400 mb-4">1 = あまり学びにならなかった　　5 = 大変学びになった</p>
         <div class="flex justify-center gap-2" id="starContainer"></div>
         <input type="hidden" name="rating" id="ratingHidden">
         <p id="ratingLabel" class="text-center text-sm text-gray-500 mt-3 min-h-5 font-medium"></p>
         <p id="ratingError" class="hidden mt-1 text-red-500 text-xs text-center">評価を選んでください</p>
       </div>
 
-      <!-- 4. Ease Rating -->
+      <!-- 4. 楽単度（星形式） -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           😴 楽単度 <span class="text-red-500">*</span>
         </label>
-        <p class="text-xs text-gray-400 mb-3">SS = 超楽　S = 楽　A = 普通　B = きつめ　C = 激ムズ</p>
-        <div class="grid grid-cols-5 gap-2">
-          <button type="button" class="ease-btn" data-value="SS">SS</button>
-          <button type="button" class="ease-btn" data-value="S">S</button>
-          <button type="button" class="ease-btn" data-value="A">A</button>
-          <button type="button" class="ease-btn" data-value="B">B</button>
-          <button type="button" class="ease-btn" data-value="C">C</button>
-        </div>
+        <p class="text-xs text-gray-400 mb-4">1 = 激ムズ　　5 = 超楽</p>
+        <div class="flex justify-center gap-2" id="easeStarContainer"></div>
         <input type="hidden" name="ease_rating" id="easeHidden">
-        <p id="easeError" class="hidden mt-2 text-red-500 text-xs">楽単度を選んでください</p>
+        <p id="easeLabel" class="text-center text-sm text-gray-500 mt-3 min-h-5 font-medium"></p>
+        <p id="easeError" class="hidden mt-1 text-red-500 text-xs text-center">楽単度を選んでください</p>
       </div>
 
-      <!-- 5. Comment -->
+      <!-- 5. 成績評価方法 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <label class="block text-sm font-semibold text-gray-700">
+          📋 成績評価方法
+        </label>
+        <input type="hidden" name="grading_method" id="gradingMethodHidden">
+
+        <div>
+          <p class="text-xs font-semibold text-gray-500 mb-2">出席確認</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="chip-btn single" data-group="attendance" data-value="毎回あり">毎回あり</button>
+            <button type="button" class="chip-btn single" data-group="attendance" data-value="たまにあり">たまにあり</button>
+            <button type="button" class="chip-btn single" data-group="attendance" data-value="なし">なし</button>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-xs font-semibold text-gray-500 mb-2">課題の量</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="chip-btn single" data-group="homework" data-value="多め">多め</button>
+            <button type="button" class="chip-btn single" data-group="homework" data-value="普通">普通</button>
+            <button type="button" class="chip-btn single" data-group="homework" data-value="少なめ">少なめ</button>
+            <button type="button" class="chip-btn single" data-group="homework" data-value="なし">なし</button>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-xs font-semibold text-gray-500 mb-2">評価方法（複数選択可）</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="期末テスト">期末テスト</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="中間テスト">中間テスト</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="レポート">レポート</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="小テスト">小テスト</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="発表・プレゼン">発表・プレゼン</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="出席点">出席点</button>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-xs font-semibold text-gray-500 mb-2">補足・その他</p>
+          <input type="text" id="gradingExtra"
+            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+            placeholder="例：持ち込み可、グループワークあり など" maxlength="100">
+        </div>
+      </div>
+
+      <!-- 6. コメント -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           💬 コメント <span class="text-red-500">*</span>
         </label>
-        <textarea
-          name="comment" id="comment" rows="5"
+        <textarea name="comment" id="comment" rows="5"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
           placeholder="授業の雰囲気、テストの傾向、おすすめポイントなど自由に書いてください！"
           required maxlength="500"></textarea>
-        <div class="flex justify-between items-center mt-1">
-          <p class="text-xs text-gray-400">💾 入力内容は自動保存されます</p>
+        <div class="flex justify-between items-center mt-2">
+          <div class="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+            <span>💾</span>
+            <span id="saveStatus">自動保存済み ✓</span>
+          </div>
           <p class="text-xs text-gray-400"><span id="charCount">0</span>/500文字</p>
         </div>
       </div>
@@ -150,19 +199,20 @@
   </div>
 
   <style>
-    .ease-btn {
-      padding: 10px 0;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 700;
+    .chip-btn {
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
       border: 2px solid #e5e7eb;
       color: #6b7280;
       background: white;
       cursor: pointer;
       transition: all 0.15s;
+      white-space: nowrap;
     }
-    .ease-btn:active { transform: scale(0.95); }
-    .ease-btn.active {
+    .chip-btn:active { transform: scale(0.95); }
+    .chip-btn.active {
       border-color: #6366f1;
       color: #6366f1;
       background: #eef2ff;
@@ -170,11 +220,13 @@
   </style>
 
   <script>
-    const STORAGE_KEY = 'kobe_review_v1';
-    const RATING_LABELS = ['', 'あまり学べなかった 😔', '少し学べた 🙂', '普通 😊', '学べた！😄', 'めちゃ学べた！🤩'];
+    const STORAGE_KEY = 'kobe_review_v2';
+    const RATING_LABELS = ['', 'あまり学びにならなかった 😔', '少し学びになった 🙂', '普通 😊', '学びになった 😄', '大変学びになった 🤩'];
+    const EASE_VALS   = ['', 'C', 'B', 'A', 'S', 'SS'];
+    const EASE_LABELS = ['', '激ムズ 😰', 'きつめ 😤', '普通 😊', '楽 😴', '超楽 😴😴'];
     let currentRating = 0;
+    let currentEase = 0;
 
-    // ── Stars ──────────────────────────────────────────────────
     function buildStars() {
       const c = document.getElementById('starContainer');
       c.innerHTML = '';
@@ -196,18 +248,59 @@
       }
     }
 
-    // ── Ease buttons ───────────────────────────────────────────
-    document.querySelectorAll('.ease-btn').forEach(btn => {
+    function buildEaseStars() {
+      const c = document.getElementById('easeStarContainer');
+      c.innerHTML = '';
+      for (let i = 1; i <= 5; i++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = i <= currentEase ? '★' : '☆';
+        btn.className = 'text-5xl transition-all hover:scale-110 active:scale-95 ' +
+          (i <= currentEase ? 'text-indigo-400' : 'text-gray-200');
+        btn.onclick = () => {
+          currentEase = i;
+          document.getElementById('easeHidden').value = EASE_VALS[i];
+          document.getElementById('easeLabel').textContent = EASE_LABELS[i];
+          document.getElementById('easeError').classList.add('hidden');
+          buildEaseStars();
+          saveData();
+        };
+        c.appendChild(btn);
+      }
+    }
+
+    document.querySelectorAll('.chip-btn').forEach(btn => {
       btn.onclick = () => {
-        document.querySelectorAll('.ease-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('easeHidden').value = btn.dataset.value;
-        document.getElementById('easeError').classList.add('hidden');
+        if (btn.classList.contains('single')) {
+          const wasActive = btn.classList.contains('active');
+          document.querySelectorAll(`[data-group="${btn.dataset.group}"]`).forEach(b => b.classList.remove('active'));
+          if (!wasActive) btn.classList.add('active');
+        } else {
+          btn.classList.toggle('active');
+        }
+        updateGradingMethod();
         saveData();
       };
     });
 
-    // ── Course search ──────────────────────────────────────────
+    document.getElementById('gradingExtra').addEventListener('input', () => {
+      updateGradingMethod();
+      saveData();
+    });
+
+    function updateGradingMethod() {
+      const parts = [];
+      const att = document.querySelector('[data-group="attendance"].active');
+      if (att) parts.push(`出席:${att.dataset.value}`);
+      const hw = document.querySelector('[data-group="homework"].active');
+      if (hw) parts.push(`課題:${hw.dataset.value}`);
+      const evals = [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value);
+      if (evals.length) parts.push(`評価:${evals.join('・')}`);
+      const extra = document.getElementById('gradingExtra').value.trim();
+      if (extra) parts.push(`補足:${extra}`);
+      document.getElementById('gradingMethodHidden').value = parts.join(' / ');
+    }
+
     const searchInput = document.getElementById('courseSearchInput');
     const dropdown = document.getElementById('courseDropdown');
     let debounceTimer;
@@ -228,147 +321,4 @@
             dropdown.innerHTML =
               `<div class="px-4 py-3 text-sm text-gray-500">
                 一致する科目なし ―
-                <span class="text-indigo-600 cursor-pointer underline" id="useAsIs">「${q}」で入力する</span>
-              </div>`;
-            dropdown.classList.remove('hidden');
-            document.getElementById('useAsIs')?.addEventListener('click', () => selectCourse(q));
-            return;
-          }
-
-          dropdown.innerHTML = items.map(name =>
-            `<div class="px-4 py-3 text-sm hover:bg-indigo-50 cursor-pointer border-b border-gray-50 last:border-none font-medium" data-name="${name}">${name}</div>`
-          ).join('');
-          dropdown.classList.remove('hidden');
-
-          dropdown.querySelectorAll('[data-name]').forEach(el => {
-            el.addEventListener('click', () => selectCourse(el.dataset.name));
-          });
-        } catch (_) {}
-      }, 300);
-    });
-
-    function selectCourse(name) {
-      document.getElementById('courseNameHidden').value = name;
-      document.getElementById('selectedCourseName').textContent = name;
-      document.getElementById('selectedCourse').classList.remove('hidden');
-      searchInput.classList.add('hidden');
-      dropdown.classList.add('hidden');
-      document.getElementById('courseError').classList.add('hidden');
-      saveData();
-    }
-
-    document.getElementById('clearCourse').addEventListener('click', () => {
-      document.getElementById('courseNameHidden').value = '';
-      document.getElementById('selectedCourse').classList.add('hidden');
-      searchInput.classList.remove('hidden');
-      searchInput.value = '';
-      searchInput.focus();
-    });
-
-    document.addEventListener('click', e => {
-      if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.add('hidden');
-      }
-    });
-
-    // ── Comment counter ────────────────────────────────────────
-    document.getElementById('comment').addEventListener('input', () => {
-      document.getElementById('charCount').textContent = document.getElementById('comment').value.length;
-      saveData();
-    });
-    document.getElementById('submitter_name').addEventListener('input', saveData);
-
-    // ── Student ID validation ──────────────────────────────────
-    const studentIdInput = document.getElementById('student_id');
-    const studentIdError = document.getElementById('studentIdError');
-    const STUDENT_ID_RE = /^\d{7}[A-Za-z]$/;
-    if (studentIdInput) {
-      studentIdInput.addEventListener('input', () => {
-        const v = studentIdInput.value.trim();
-        if (v && !STUDENT_ID_RE.test(v)) {
-          studentIdError.classList.remove('hidden');
-        } else {
-          studentIdError.classList.add('hidden');
-        }
-      });
-    }
-
-    // ── localStorage ───────────────────────────────────────────
-    function saveData() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        name: document.getElementById('submitter_name').value,
-        course: document.getElementById('courseNameHidden').value,
-        rating: currentRating,
-        ease: document.getElementById('easeHidden').value,
-        comment: document.getElementById('comment').value,
-      }));
-    }
-
-    function loadData() {
-      try {
-        const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-        if (!d) return;
-        if (d.name) document.getElementById('submitter_name').value = d.name;
-        if (d.course) selectCourse(d.course);
-        if (d.rating) {
-          currentRating = d.rating;
-          document.getElementById('ratingHidden').value = d.rating;
-          document.getElementById('ratingLabel').textContent = RATING_LABELS[d.rating];
-          buildStars();
-        }
-        if (d.ease) {
-          document.getElementById('easeHidden').value = d.ease;
-          document.querySelectorAll('.ease-btn').forEach(b => {
-            b.classList.toggle('active', b.dataset.value === d.ease);
-          });
-        }
-        if (d.comment) {
-          document.getElementById('comment').value = d.comment;
-          document.getElementById('charCount').textContent = d.comment.length;
-        }
-      } catch (_) {}
-    }
-
-    // ── Validation & submit ────────────────────────────────────
-    document.getElementById('reviewForm').addEventListener('submit', e => {
-      let valid = true;
-
-      if (studentIdInput) {
-        const v = studentIdInput.value.trim();
-        if (!STUDENT_ID_RE.test(v)) {
-          studentIdError.classList.remove('hidden');
-          valid = false;
-        }
-      }
-
-      if (!document.getElementById('courseNameHidden').value.trim()) {
-        const typed = document.getElementById('courseSearchInput').value.trim();
-        if (typed) {
-          document.getElementById('courseNameHidden').value = typed;
-        } else {
-          document.getElementById('courseError').classList.remove('hidden');
-          valid = false;
-        }
-      }
-      if (!document.getElementById('ratingHidden').value) {
-        document.getElementById('ratingError').classList.remove('hidden');
-        valid = false;
-      }
-      if (!document.getElementById('easeHidden').value) {
-        document.getElementById('easeError').classList.remove('hidden');
-        valid = false;
-      }
-      if (!valid) { e.preventDefault(); window.scrollTo(0,0); return; }
-
-      localStorage.removeItem(STORAGE_KEY);
-      const btn = document.getElementById('submitBtn');
-      btn.textContent = '送信中...';
-      btn.disabled = true;
-    });
-
-    // Init
-    buildStars();
-    loadData();
-  </script>
-</body>
-</html>
+                <span class="text-indigo-600 cursor-pointer underline" id="useAsIs">「${q}」で入力する
