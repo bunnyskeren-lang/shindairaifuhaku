@@ -38,3 +38,10 @@ class PendingReview(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    max_reviews: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
