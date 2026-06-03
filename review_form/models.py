@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, Text, DateTime, Integer, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
@@ -32,6 +33,7 @@ class PendingReview(Base):
     course_name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     ease_rating: Mapped[str] = mapped_column(String(10), nullable=False)
+    grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     comment: Mapped[str] = mapped_column(Text, nullable=False)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
