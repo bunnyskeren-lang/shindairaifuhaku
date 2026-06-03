@@ -21,9 +21,14 @@ security = HTTPBasic()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    try:
+        await init_db()
+        print("DB OK", flush=True)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"DB ERROR: {e}", flush=True)
     yield
-
 
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
