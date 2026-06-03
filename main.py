@@ -126,7 +126,7 @@ def make_course_bubble(
             )
         )
 
-    # 学びになった度（星のみ）
+    # 学びになった度（星評価）
     if avg_rating is not None:
         body_contents.append(
             FlexBox(
@@ -298,6 +298,62 @@ CONTACT_TEXT = (
 )
 
 
+# ── Ranking bubble ──────────────────────────────────────────────
+
+RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def make_ranking_bubble(title: str, items: list[dict]) -> FlexBubble:
+    # items: [{"rank": int, "name": str, "stars": str}]
+    body_contents = []
+    for i, item in enumerate(items):
+        if i > 0:
+            body_contents.append(FlexSeparator(margin="sm"))
+        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
+        body_contents.append(
+            FlexBox(
+                layout="horizontal",
+                contents=[
+                    FlexText(text=medal, size="sm", flex=1, align="center", gravity="center"),
+                    FlexBox(
+                        layout="vertical",
+                        contents=[
+                            FlexText(
+                                text=item["name"],
+                                size="sm",
+                                wrap=True,
+                                weight="bold",
+                                color="#1e293b",
+                                action=MessageAction(
+                                    label=item["name"][:20],
+                                    text=item["name"],
+                                ),
+                            ),
+                            FlexText(text=item["stars"], size="xs", color="#f59e0b", margin="xs"),
+                        ],
+                        flex=5,
+                    ),
+                ],
+                spacing="md",
+                margin="sm",
+            )
+        )
+    return FlexBubble(
+        header=FlexBox(
+            layout="vertical",
+            contents=[FlexText(text=title, weight="bold", color="#ffffff", size="md")],
+            background_color="#6366f1",
+            padding_all="lg",
+        ),
+        body=FlexBox(layout="vertical", contents=body_contents, padding_all="lg"),
+        footer=FlexBox(
+            layout="vertical",
+            contents=[FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center")],
+            padding_all="md",
+        ),
+    )
+
+
 # ── Course list carousel ────────────────────────────────────────
 
 async def handle_course_list(session: AsyncSession, category: str = "") -> list:
@@ -377,11 +433,14 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         )).all()
         if not rows:
             return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-        body = "🏆 人気の授業（学び度 TOP5）\n\n"
-        for i, (name, avg) in enumerate(rows, 1):
-            body += f"{i}. {name}\n   {stars(round(float(avg)))} {float(avg):.1f}\n"
-        body += "\n科目名を送ると詳細が見られます！"
-        return [TextMessage(text=body)]
+        items = [
+            {"rank": i, "name": name, "stars": stars(round(float(avg)))}
+            for i, (name, avg) in enumerate(rows, 1)
+        ]
+        return [FlexMessage(
+            alt_text="🏆 人気の授業 TOP5",
+            contents=make_ranking_bubble("🏆 人気の授業 TOP5", items),
+        )]
 
     if t in ["楽単ランキング", "楽単", "楽"]:
         rows = (await session.execute(
@@ -396,11 +455,14 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
             if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
                 course_ease[name] = ease
         top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
-        body = "😴 楽単ランキング TOP5\n\n"
-        for i, (name, ease) in enumerate(top5, 1):
-            body += f"{i}. {name}\n   {EASE_LABEL.get(ease, ease)}\n"
-        body += "\n科目名を送ると詳細が見られます！"
-        return [TextMessage(text=body)]
+        items = [
+            {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
+            for i, (name, ease) in enumerate(top5, 1)
+        ]
+        return [FlexMessage(
+            alt_text="😴 楽単ランキング TOP5",
+            contents=make_ranking_bubble("😴 楽単ランキング TOP5", items),
+        )]
 
     if t in ["ヘルプ", "help", "使い方", "？", "?"]:
         return [TextMessage(text=HELP_TEXT)]
