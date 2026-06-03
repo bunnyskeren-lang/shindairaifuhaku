@@ -1,4 +1,6 @@
 import os
+import html as _html
+import json
 import hashlib
 import hmac
 import base64
@@ -199,8 +201,7 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
 HELP_TEXT = """📖 神大授業ナビ の使い方
 
 ▼ リッチメニューのボタン
-・教養 → 教養科目一覧
-・専門科目 → 専門科目一覧
+・科目一覧 → 登録科目リスト
 ・レビュー投稿 → 投稿フォームへ
 ・人気の授業 → 学び度 TOP5
 ・楽単ランキング → 楽単 TOP5
@@ -330,6 +331,7 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [TextMessage(text=CONTACT_TEXT)]
 
+    # Course keyword search
     courses = (await session.execute(
         select(Course).where(Course.name.ilike(f"%{t}%")).limit(3)
     )).scalars().all()
@@ -337,7 +339,7 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         return [await get_course_flex(session, c, user_id) for c in courses]
 
     return [TextMessage(
-        text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「教養」「専門科目」で科目一覧を確認するか、「ヘルプ」で使い方をご確認ください。"
+        text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
     )]
 
 
@@ -430,7 +432,7 @@ async def admin_page(_: str = Depends(check_admin)):
 async def admin_courses(_: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         courses = (await session.execute(
-            select(Course).order_by(Course.category, Course.classification, Course.name)
+            select(Course).order_by(Course.classification, Course.name)
         )).scalars().all()
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
@@ -441,17 +443,42 @@ async def admin_courses(_: str = Depends(check_admin)):
         f"<option value='{c}'>{c}</option>" for c in existing
     ) + "<option value='__new__'>＋ 新しい分類を入力...</option>"
 
-    rows_html = "".join(
-        f"<tr><td>{c.name}</td><td>{c.instructor or '―'}</td><td>{c.classification or '―'}</td>"
-        f"<td><span style='background:{'#6366f1' if c.category=='教養' else '#10b981'};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px'>{c.category}</span></td>"
-        f"<td><form method='post' action='/admin/courses/delete/{c.id}' style='margin:0'>"
-        f"<button type='submit' class='btn btn-danger' style='padding:4px 10px'>削除</button></form></td></tr>"
+    courses_data = json.dumps({
+        c.id: {
+            "name": c.name,
+            "instructor": c.instructor or "",
+            "classification": c.classification or "",
+            "category": c.category,
+        }
         for c in courses
-    )
+    }, ensure_ascii=False)
+
+    def course_row(c):
+        badge_color = '#6366f1' if c.category == '教養' else '#10b981'
+        e = _html.escape
+        return (
+            f"<tr>"
+            f"<td>{e(c.name)}</td>"
+            f"<td>{e(c.instructor or '―')}</td>"
+            f"<td>{e(c.classification or '―')}</td>"
+            f"<td><span style='background:{badge_color};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px'>{e(c.category)}</span></td>"
+            f"<td style='white-space:nowrap'>"
+            f"<button type='button' class='btn btn-primary' style='padding:4px 10px;margin-right:4px' onclick='openEdit({c.id})'>編集</button>"
+            f"<form method='post' action='/admin/courses/delete/{c.id}' style='display:inline;margin:0' onsubmit='return confirm(\"削除しますか？\")'>"
+            f"<button type='submit' class='btn btn-danger' style='padding:4px 10px'>削除</button></form>"
+            f"</td></tr>"
+        )
+
+    rows_html = "".join(course_row(c) for c in courses)
+
     return f"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8"><title>科目管理</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<style>{ADMIN_STYLE}</style></head><body>
+<style>{ADMIN_STYLE}
+#editModal{{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:center;justify-content:center}}
+#editModal.open{{display:flex}}
+#editBox{{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:480px}}
+</style></head><body>
 <h1>📚 科目管理</h1>
 <nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a><a href="/admin/users">👤 ユーザー設定</a></nav>
 
@@ -489,7 +516,54 @@ async def admin_courses(_: str = Depends(check_admin)):
 <table><tr><th>科目名</th><th>教員</th><th>分類</th><th>カテゴリ</th><th></th></tr>
 {rows_html or '<tr><td colspan="5" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>'}
 </table>
+
+<!-- 編集モーダル -->
+<div id="editModal">
+  <div id="editBox">
+    <h2 style="margin-top:0">✏️ 科目を編集</h2>
+    <form id="editForm" method="post">
+      <div style="margin-bottom:10px">
+        <label>科目名 *<input type="text" id="editName" name="name" required maxlength="200"></label>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>担当教員<input type="text" id="editInstructor" name="instructor" maxlength="100"></label>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>カテゴリ *
+          <select id="editCategory" name="category">
+            <option value="専門">専門科目</option>
+            <option value="教養">教養科目</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-bottom:14px">
+        <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">💾 保存</button>
+        <button type="button" class="btn" style="background:#e5e7eb;color:#374151" onclick="closeModal()">キャンセル</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
+const COURSES = {courses_data};
+function openEdit(id) {{
+  const c = COURSES[id];
+  document.getElementById('editName').value = c.name;
+  document.getElementById('editInstructor').value = c.instructor;
+  document.getElementById('editClassification').value = c.classification;
+  document.getElementById('editCategory').value = c.category;
+  document.getElementById('editForm').action = '/admin/courses/update/' + id;
+  document.getElementById('editModal').classList.add('open');
+}}
+function closeModal() {{
+  document.getElementById('editModal').classList.remove('open');
+}}
+document.getElementById('editModal').addEventListener('click', function(e) {{
+  if (e.target === this) closeModal();
+}});
 function onClassChange(sel) {{
   const inp = document.getElementById('classInput');
   if (sel.value === '__new__') {{
@@ -580,6 +654,26 @@ async def admin_users_set(
             session.add(UserPreference(user_id=user_id, max_reviews=max(1, min(10, max_reviews))))
         await session.commit()
     return RedirectResponse(url="/admin/users", status_code=303)
+
+
+@app.post("/admin/courses/update/{course_id}")
+async def admin_courses_update(
+    course_id: int,
+    _: str = Depends(check_admin),
+    name: str = Form(...),
+    instructor: str = Form(""),
+    classification: str = Form(""),
+    category: str = Form("専門"),
+):
+    async with AsyncSessionLocal() as session:
+        course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
+        if course:
+            course.name = name.strip()
+            course.instructor = instructor.strip()
+            course.classification = classification.strip()
+            course.category = category
+            await session.commit()
+    return RedirectResponse(url="/admin/courses", status_code=303)
 
 
 @app.post("/admin/courses/delete/{course_id}")
