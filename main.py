@@ -33,7 +33,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview
+from models import MessageLog, Course, PendingReview, UserPreference
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -153,7 +153,14 @@ def make_course_bubble(
     )
 
 
-async def get_course_flex(session: AsyncSession, course: Course) -> FlexMessage:
+async def get_user_max_reviews(session: AsyncSession, user_id: str) -> int:
+    pref = (await session.execute(
+        select(UserPreference).where(UserPreference.user_id == user_id)
+    )).scalar_one_or_none()
+    return pref.max_reviews if pref else MAX_REVIEWS
+
+
+async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -> FlexMessage:
     agg = (await session.execute(
         select(func.avg(PendingReview.rating), func.count(PendingReview.id))
         .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
@@ -169,11 +176,12 @@ async def get_course_flex(session: AsyncSession, course: Course) -> FlexMessage:
     if ease_rows:
         top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
 
+    limit = await get_user_max_reviews(session, user_id)
     comments = (await session.execute(
         select(PendingReview.comment)
         .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
         .order_by(PendingReview.created_at.desc())
-        .limit(MAX_REVIEWS)
+        .limit(limit)
     )).scalars().all()
 
     bubble = make_course_bubble(
@@ -258,7 +266,7 @@ async def handle_course_list(session: AsyncSession) -> list:
 
 # ── Message handler ─────────────────────────────────────────────
 
-async def handle_message(session: AsyncSession, text: str) -> list:
+async def handle_message(session: AsyncSession, text: str, user_id: str = "") -> list:
     t = text.strip()
 
     if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
@@ -313,7 +321,7 @@ async def handle_message(session: AsyncSession, text: str) -> list:
         select(Course).where(Course.name.ilike(f"%{t}%")).limit(3)
     )).scalars().all()
     if courses:
-        return [await get_course_flex(session, c) for c in courses]
+        return [await get_course_flex(session, c, user_id) for c in courses]
 
     return [TextMessage(
         text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
@@ -348,7 +356,7 @@ async def callback(request: Request):
                 user_text = event.message.text
 
                 await save_log(session, user_id, "in", user_text)
-                messages = await handle_message(session, user_text)
+                messages = await handle_message(session, user_text, user_id)
                 await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
 
                 await line_api.reply_message(
@@ -398,7 +406,7 @@ async def admin_page(_: str = Depends(check_admin)):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>{ADMIN_STYLE}</style></head><body>
 <h1>🛡️ 管理画面</h1>
-<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a></nav>
+<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a><a href="/admin/users">👤 ユーザー設定</a></nav>
 <h2>メッセージログ（最新50件）</h2>
 <table><tr><th>ユーザー</th><th>方向</th><th>メッセージ</th><th>日時</th></tr>
 {rows_html or '<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">ログなし</td></tr>'}
@@ -423,7 +431,7 @@ async def admin_courses(_: str = Depends(check_admin)):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>{ADMIN_STYLE}</style></head><body>
 <h1>📚 科目管理</h1>
-<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a></nav>
+<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a><a href="/admin/users">👤 ユーザー設定</a></nav>
 
 <div class="card">
   <h2 style="margin-top:0">科目を追加</h2>
@@ -458,6 +466,61 @@ async def admin_courses_add(
         session.add(Course(name=name.strip(), instructor=instructor.strip(), classification=classification.strip()))
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users(_: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        users = (await session.execute(
+            select(MessageLog.user_id, func.max(MessageLog.created_at).label("last_seen"))
+            .where(MessageLog.direction == "in")
+            .group_by(MessageLog.user_id)
+            .order_by(func.max(MessageLog.created_at).desc())
+        )).all()
+
+        prefs = {p.user_id: p.max_reviews for p in (await session.execute(
+            select(UserPreference)
+        )).scalars().all()}
+
+    rows_html = "".join(
+        f"<tr><td style='font-size:11px'>{u.user_id}</td>"
+        f"<td>{u.last_seen.strftime('%m/%d %H:%M')}</td>"
+        f"<td>"
+        f"<form method='post' action='/admin/users/set' style='margin:0;display:flex;gap:6px;align-items:center'>"
+        f"<input type='hidden' name='user_id' value='{u.user_id}'>"
+        f"<input type='number' name='max_reviews' value='{prefs.get(u.user_id, MAX_REVIEWS)}' min='1' max='10' style='width:60px'>"
+        f"<button type='submit' class='btn btn-primary' style='padding:4px 10px'>保存</button>"
+        f"</form></td></tr>"
+        for u in users
+    )
+    return f"""<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>ユーザー設定</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>{ADMIN_STYLE}</style></head><body>
+<h1>👤 ユーザー設定</h1>
+<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a><a href="/admin/users">👤 ユーザー設定</a></nav>
+<p style="font-size:13px;color:#666">デフォルトのコメント表示件数：<b>{MAX_REVIEWS}件</b>（MAX_REVIEWS環境変数）</p>
+<table><tr><th>ユーザーID</th><th>最終アクセス</th><th>コメント表示件数</th></tr>
+{rows_html or '<tr><td colspan="3" style="color:#999;text-align:center;padding:16px">ユーザーなし</td></tr>'}
+</table></body></html>"""
+
+
+@app.post("/admin/users/set")
+async def admin_users_set(
+    _: str = Depends(check_admin),
+    user_id: str = Form(...),
+    max_reviews: int = Form(...),
+):
+    async with AsyncSessionLocal() as session:
+        pref = (await session.execute(
+            select(UserPreference).where(UserPreference.user_id == user_id)
+        )).scalar_one_or_none()
+        if pref:
+            pref.max_reviews = max(1, min(10, max_reviews))
+        else:
+            session.add(UserPreference(user_id=user_id, max_reviews=max(1, min(10, max_reviews))))
+        await session.commit()
+    return RedirectResponse(url="/admin/users", status_code=303)
 
 
 @app.post("/admin/courses/delete/{course_id}")
