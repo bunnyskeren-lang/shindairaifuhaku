@@ -100,6 +100,7 @@ def make_course_bubble(
     top_ease: Optional[str],
     comments: list[str],
     review_url: str = "",
+    syllabus_url: str = "",
 ) -> FlexBubble:
     body_contents = [
         FlexText(text=name, weight="bold", size="lg", wrap=True),
@@ -141,14 +142,23 @@ def make_course_bubble(
                 FlexText(text=preview, size="sm", wrap=True, color="#444444", margin="sm")
             )
 
-    footer_contents = [
+    footer_contents = []
+    if syllabus_url:
+        footer_contents.append(
+            FlexButton(
+                action=URIAction(label="シラバスを見る", uri=syllabus_url),
+                style="secondary",
+                height="sm",
+            )
+        )
+    footer_contents.append(
         FlexButton(
             action=URIAction(label="レビューを投稿", uri=review_url or REVIEW_FORM_URL),
             style="primary",
             color="#6366f1",
             height="sm",
         )
-    ]
+    )
 
     return FlexBubble(
         body=FlexBox(layout="vertical", contents=body_contents, padding_all="lg"),
@@ -192,6 +202,7 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         course.name, course.instructor, course.classification,
         avg_rating, top_ease, list(comments),
         review_url=url,
+        syllabus_url=course.syllabus_url or "",
     )
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
 
@@ -443,12 +454,28 @@ async def admin_courses(_: str = Depends(check_admin)):
         f"<option value='{c}'>{c}</option>" for c in existing
     ) + "<option value='__new__'>＋ 新しい分類を入力...</option>"
 
+    class_counts: dict[str, int] = {}
+    for c in courses:
+        cl = c.classification or ""
+        if cl:
+            class_counts[cl] = class_counts.get(cl, 0) + 1
+
+    e = _html.escape
+    classification_rows = "".join(
+        f"<tr><td>{e(cl)}</td><td style='color:#666'>{cnt}科目</td>"
+        f"<td><form method='post' action='/admin/courses/classification/delete' style='margin:0' onsubmit='return confirm(\"削除しますか？\")'>"
+        f"<input type='hidden' name='classification' value=\"{e(cl)}\">"
+        f"<button type='submit' class='btn btn-danger' style='padding:4px 10px'>削除</button></form></td></tr>"
+        for cl, cnt in sorted(class_counts.items())
+    ) or "<tr><td colspan='3' style='color:#999;text-align:center;padding:12px'>分類なし</td></tr>"
+
     courses_data = json.dumps({
         c.id: {
             "name": c.name,
             "instructor": c.instructor or "",
             "classification": c.classification or "",
             "category": c.category,
+            "syllabus_url": c.syllabus_url or "",
         }
         for c in courses
     }, ensure_ascii=False)
@@ -508,8 +535,19 @@ async def admin_courses(_: str = Depends(check_admin)):
                placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
       </label>
     </div>
+    <div style="margin-bottom:14px">
+      <label>シラバスURL<input type="url" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
+    </div>
     <button type="submit" class="btn btn-primary">➕ 追加する</button>
   </form>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">分類一覧</h2>
+  <table style="margin-top:0">
+    <tr><th>分類名</th><th>科目数</th><th></th></tr>
+    {classification_rows}
+  </table>
 </div>
 
 <h2>登録済み科目（{len(courses)}件）</h2>
@@ -536,8 +574,11 @@ async def admin_courses(_: str = Depends(check_admin)):
           </select>
         </label>
       </div>
-      <div style="margin-bottom:14px">
+      <div style="margin-bottom:10px">
         <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
+      </div>
+      <div style="margin-bottom:14px">
+        <label>シラバスURL<input type="url" id="editSyllabusUrl" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
       </div>
       <div style="display:flex;gap:8px">
         <button type="submit" class="btn btn-primary">💾 保存</button>
@@ -555,6 +596,7 @@ function openEdit(id) {{
   document.getElementById('editInstructor').value = c.instructor;
   document.getElementById('editClassification').value = c.classification;
   document.getElementById('editCategory').value = c.category;
+  document.getElementById('editSyllabusUrl').value = c.syllabus_url;
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
   document.getElementById('editModal').classList.add('open');
 }}
@@ -594,9 +636,14 @@ async def admin_courses_add(
     instructor: str = Form(""),
     classification: str = Form(""),
     category: str = Form("専門"),
+    syllabus_url: str = Form(""),
 ):
     async with AsyncSessionLocal() as session:
-        session.add(Course(name=name.strip(), instructor=instructor.strip(), classification=classification.strip(), category=category))
+        session.add(Course(
+            name=name.strip(), instructor=instructor.strip(),
+            classification=classification.strip(), category=category,
+            syllabus_url=syllabus_url.strip() or None,
+        ))
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
@@ -656,6 +703,21 @@ async def admin_users_set(
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
+@app.post("/admin/courses/classification/delete")
+async def delete_classification(
+    _: str = Depends(check_admin),
+    classification: str = Form(...),
+):
+    async with AsyncSessionLocal() as session:
+        courses_in_class = (await session.execute(
+            select(Course).where(Course.classification == classification)
+        )).scalars().all()
+        for course in courses_in_class:
+            course.classification = ""
+        await session.commit()
+    return RedirectResponse(url="/admin/courses", status_code=303)
+
+
 @app.post("/admin/courses/update/{course_id}")
 async def admin_courses_update(
     course_id: int,
@@ -664,6 +726,7 @@ async def admin_courses_update(
     instructor: str = Form(""),
     classification: str = Form(""),
     category: str = Form("専門"),
+    syllabus_url: str = Form(""),
 ):
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
@@ -672,6 +735,7 @@ async def admin_courses_update(
             course.instructor = instructor.strip()
             course.classification = classification.strip()
             course.category = category
+            course.syllabus_url = syllabus_url.strip() or None
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
