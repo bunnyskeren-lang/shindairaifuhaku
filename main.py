@@ -6,8 +6,8 @@ import secrets as py_secrets
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, Request, HTTPException, Depends
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, HTTPException, Depends, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from linebot.v3 import WebhookParser
@@ -26,7 +26,6 @@ from linebot.v3.messaging import (
     FlexCarousel,
     URIAction,
     MessageAction,
-    URIAction,
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
@@ -204,6 +203,7 @@ CONTACT_TEXT = (
     "✉️ bunnyskeren@gmail.com"
 )
 
+
 # ── Course list carousel ────────────────────────────────────────
 
 async def handle_course_list(session: AsyncSession) -> list:
@@ -250,6 +250,8 @@ async def handle_course_list(session: AsyncSession) -> list:
     if len(bubbles) == 1:
         return [FlexMessage(alt_text="📚 科目一覧", contents=bubbles[0])]
     return [FlexMessage(alt_text="📚 科目一覧", contents=FlexCarousel(contents=bubbles))]
+
+
 # ── Message handler ─────────────────────────────────────────────
 
 async def handle_message(session: AsyncSession, text: str) -> list:
@@ -355,6 +357,24 @@ async def callback(request: Request):
     return {"status": "ok"}
 
 
+ADMIN_STYLE = """
+body{font-family:sans-serif;padding:16px;background:#f3f4f6;max-width:700px;margin:auto}
+h1{font-size:18px;font-weight:bold;margin-bottom:4px}
+h2{font-size:15px;font-weight:bold;margin:20px 0 8px}
+nav{margin-bottom:16px;font-size:13px}
+nav a{color:#6366f1;text-decoration:none;margin-right:12px}
+table{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;font-size:13px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb}
+th{background:#6366f1;color:white}
+.card{background:white;border-radius:8px;padding:16px;margin-bottom:12px}
+input,select{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;margin-top:4px}
+label{font-size:13px;font-weight:600;color:#374151}
+.btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold}
+.btn-primary{background:#6366f1;color:white}
+.btn-danger{background:#ef4444;color:white}
+"""
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(_: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
@@ -370,20 +390,81 @@ async def admin_page(_: str = Depends(check_admin)):
         for l in logs
     )
     return f"""<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8"><title>管理画面 | 神大授業ナビ</title>
+<html lang="ja"><head><meta charset="UTF-8"><title>管理画面</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-body{{font-family:sans-serif;padding:16px;background:#f3f4f6;max-width:700px;margin:auto}}
-h1{{font-size:18px;font-weight:bold;margin-bottom:12px}}
-table{{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;font-size:13px}}
-th,td{{padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb}}
-th{{background:#6366f1;color:white}}
-</style></head><body>
-<h1>📊 メッセージログ（最新50件）</h1>
-<table>
-<tr><th>ユーザー</th><th>方向</th><th>メッセージ</th><th>日時</th></tr>
+<style>{ADMIN_STYLE}</style></head><body>
+<h1>🛡️ 管理画面</h1>
+<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a></nav>
+<h2>メッセージログ（最新50件）</h2>
+<table><tr><th>ユーザー</th><th>方向</th><th>メッセージ</th><th>日時</th></tr>
 {rows_html or '<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">ログなし</td></tr>'}
 </table></body></html>"""
+
+
+@app.get("/admin/courses", response_class=HTMLResponse)
+async def admin_courses(_: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        courses = (await session.execute(
+            select(Course).order_by(Course.classification, Course.name)
+        )).scalars().all()
+
+    rows_html = "".join(
+        f"<tr><td>{c.name}</td><td>{c.instructor or '―'}</td><td>{c.classification or '―'}</td>"
+        f"<td><form method='post' action='/admin/courses/delete/{c.id}' style='margin:0'>"
+        f"<button type='submit' class='btn btn-danger' style='padding:4px 10px'>削除</button></form></td></tr>"
+        for c in courses
+    )
+    return f"""<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>科目管理</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>{ADMIN_STYLE}</style></head><body>
+<h1>📚 科目管理</h1>
+<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a></nav>
+
+<div class="card">
+  <h2 style="margin-top:0">科目を追加</h2>
+  <form method="post" action="/admin/courses/add">
+    <div style="margin-bottom:10px">
+      <label>科目名 *<input type="text" name="name" required maxlength="200" placeholder="例：データサイエンス基礎学"></label>
+    </div>
+    <div style="margin-bottom:10px">
+      <label>担当教員<input type="text" name="instructor" maxlength="100" placeholder="例：山田教授"></label>
+    </div>
+    <div style="margin-bottom:14px">
+      <label>分類<input type="text" name="classification" maxlength="50" placeholder="例：専門科目・教養科目・外国語科目"></label>
+    </div>
+    <button type="submit" class="btn btn-primary">➕ 追加する</button>
+  </form>
+</div>
+
+<h2>登録済み科目（{len(courses)}件）</h2>
+<table><tr><th>科目名</th><th>教員</th><th>分類</th><th></th></tr>
+{rows_html or '<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>'}
+</table></body></html>"""
+
+
+@app.post("/admin/courses/add")
+async def admin_courses_add(
+    _: str = Depends(check_admin),
+    name: str = Form(...),
+    instructor: str = Form(""),
+    classification: str = Form(""),
+):
+    async with AsyncSessionLocal() as session:
+        session.add(Course(name=name.strip(), instructor=instructor.strip(), classification=classification.strip()))
+        await session.commit()
+    return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@app.post("/admin/courses/delete/{course_id}")
+async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Course).where(Course.id == course_id))
+        course = result.scalar_one_or_none()
+        if course:
+            await session.delete(course)
+            await session.commit()
+    return RedirectResponse(url="/admin/courses", status_code=303)
 
 
 @app.get("/health")
