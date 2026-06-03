@@ -419,6 +419,14 @@ async def admin_courses(_: str = Depends(check_admin)):
         courses = (await session.execute(
             select(Course).order_by(Course.classification, Course.name)
         )).scalars().all()
+        classifications = (await session.execute(
+            select(Course.classification).distinct().order_by(Course.classification)
+        )).scalars().all()
+
+    existing = [c for c in classifications if c]
+    options_html = "<option value=''>（未分類）</option>" + "".join(
+        f"<option value='{c}'>{c}</option>" for c in existing
+    ) + "<option value='__new__'>＋ 新しい分類を入力...</option>"
 
     rows_html = "".join(
         f"<tr><td>{c.name}</td><td>{c.instructor or '―'}</td><td>{c.classification or '―'}</td>"
@@ -443,7 +451,13 @@ async def admin_courses(_: str = Depends(check_admin)):
       <label>担当教員<input type="text" name="instructor" maxlength="100" placeholder="例：山田教授"></label>
     </div>
     <div style="margin-bottom:14px">
-      <label>分類<input type="text" name="classification" maxlength="50" placeholder="例：専門科目・教養科目・外国語科目"></label>
+      <label>分類
+        <select id="classSelect" style="margin-top:4px" onchange="onClassChange(this)">
+          {options_html}
+        </select>
+        <input type="text" name="classification" id="classInput" maxlength="50"
+               placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
+      </label>
     </div>
     <button type="submit" class="btn btn-primary">➕ 追加する</button>
   </form>
@@ -452,7 +466,29 @@ async def admin_courses(_: str = Depends(check_admin)):
 <h2>登録済み科目（{len(courses)}件）</h2>
 <table><tr><th>科目名</th><th>教員</th><th>分類</th><th></th></tr>
 {rows_html or '<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>'}
-</table></body></html>"""
+</table>
+<script>
+function onClassChange(sel) {{
+  const inp = document.getElementById('classInput');
+  if (sel.value === '__new__') {{
+    inp.style.display = 'block';
+    inp.required = true;
+    inp.value = '';
+    inp.focus();
+  }} else {{
+    inp.style.display = 'none';
+    inp.required = false;
+    inp.value = sel.value;
+  }}
+}}
+document.getElementById('classSelect').dispatchEvent(new Event('change'));
+document.querySelector('form').addEventListener('submit', function() {{
+  const sel = document.getElementById('classSelect');
+  const inp = document.getElementById('classInput');
+  if (sel.value !== '__new__') inp.value = sel.value;
+}});
+</script>
+</body></html>"""
 
 
 @app.post("/admin/courses/add")
