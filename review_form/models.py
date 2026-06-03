@@ -23,6 +23,7 @@ class Course(Base):
     name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
     instructor: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     classification: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    category: Mapped[str] = mapped_column(String(20), nullable=False, server_default="専門")
 
 
 class PendingReview(Base):
