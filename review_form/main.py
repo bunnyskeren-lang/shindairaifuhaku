@@ -17,6 +17,34 @@ load_dotenv()
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
 STUDENT_ID_RE = re.compile(r'^\d{7}[A-Za-z]$')
+ADMIN_LINE_USER_ID = os.environ.get("ADMIN_LINE_USER_ID", "")
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+
+
+async def notify_admin(course_name: str, rating: int, ease_rating: str, comment: str):
+    if not ADMIN_LINE_USER_ID or not LINE_CHANNEL_ACCESS_TOKEN:
+        return
+    import urllib.request, json
+    stars = "★" * rating + "☆" * (5 - rating)
+    text = f"📝 新着レビュー\n科目: {course_name}\n評価: {stars}\n楽単度: {ease_rating}\n\n{comment[:100]}"
+    body = json.dumps({
+        "to": ADMIN_LINE_USER_ID,
+        "messages": [{"type": "text", "text": text}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.line.me/v2/bot/message/push",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req):
+            pass
+    except Exception:
+        pass
 
 security = HTTPBasic()
 
@@ -127,6 +155,13 @@ async def submit(
         )
         session.add(review)
         await session.commit()
+
+    await notify_admin(
+        course_name=course_name.strip(),
+        rating=rating,
+        ease_rating=ease_rating,
+        comment=comment.strip(),
+    )
 
     return templates.TemplateResponse(
         "success.html", {"request": request, "course_name": course_name}
