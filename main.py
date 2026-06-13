@@ -34,7 +34,7 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -630,12 +630,27 @@ async def admin_page(request: Request, _: str = Depends(check_admin), page: int 
 
 
 @app.get("/admin/courses", response_class=HTMLResponse)
-async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", page: int = Query(default=1, ge=1)):
+async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", page: int = Query(default=1, ge=1), q: str = Query(default="")):
     per_page = 25
+    q = q.strip()
+
+    def _search_filter(q: str):
+        q_safe = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        return or_(
+            Course.name.ilike(f"%{q_safe}%", escape="\\"),
+            Course.instructor.ilike(f"%{q_safe}%", escape="\\"),
+        )
+
     async with AsyncSessionLocal() as session:
-        total = (await session.execute(select(func.count(Course.id)))).scalar_one()
+        base_stmt = select(Course)
+        if q:
+            base_stmt = base_stmt.where(_search_filter(q))
+
+        total = (await session.execute(
+            select(func.count()).select_from(base_stmt.subquery())
+        )).scalar_one()
         courses = (await session.execute(
-            select(Course).order_by(Course.classification, Course.name)
+            base_stmt.order_by(Course.classification, Course.name)
             .offset((page - 1) * per_page).limit(per_page)
         )).scalars().all()
         classifications = (await session.execute(
@@ -650,6 +665,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
 
     existing = [c for c in classifications if c]
     total_pages = max(1, (total + per_page - 1) // per_page)
+    url_prefix = f"/admin/courses?q={q}&page=" if q else "/admin/courses?page="
     courses_data = (
         json.dumps({
             c.id: {
@@ -676,7 +692,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "url_prefix": "/admin/courses?page=",
+        "q": q,
+        "url_prefix": url_prefix,
     })
 
 
