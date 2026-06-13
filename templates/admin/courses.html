@@ -9,6 +9,11 @@
 {% endblock %}
 
 {% block content %}
+{% if error == "duplicate" %}
+<div style="background:#fef2f2;border:1px solid #fca5a5;color:#b91c1c;padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px">
+  同じ科目名・教員名の科目がすでに登録されています。
+</div>
+{% endif %}
 <div class="card">
   <h2 style="margin-top:0">科目を追加</h2>
   <form method="post" action="/admin/courses/add">

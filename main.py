@@ -565,7 +565,7 @@ async def admin_page(request: Request, _: str = Depends(check_admin)):
 
 
 @app.get("/admin/courses", response_class=HTMLResponse)
-async def admin_courses(_: str = Depends(check_admin)):
+async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = ""):
     async with AsyncSessionLocal() as session:
         courses = (await session.execute(
             select(Course).order_by(Course.classification, Course.name)
@@ -603,6 +603,7 @@ async def admin_courses(_: str = Depends(check_admin)):
         "classifications": existing,
         "class_counts": class_counts,
         "courses_data": courses_data,
+        "error": msg,
     })
 
 
@@ -615,9 +616,22 @@ async def admin_courses_add(
     category: str = Form("専門"),
     syllabus_url: str = Form(""),
 ):
+    name_s = name.strip()
+    instructor_s = instructor.strip()
     async with AsyncSessionLocal() as session:
+        existing = (await session.execute(
+            select(Course).where(
+                Course.name == name_s,
+                Course.instructor == instructor_s,
+            )
+        )).scalar_one_or_none()
+        if existing:
+            return RedirectResponse(
+                url=f"/admin/courses?error={py_secrets.token_urlsafe(4)}&msg=duplicate",
+                status_code=303,
+            )
         session.add(Course(
-            name=name.strip(), instructor=instructor.strip(),
+            name=name_s, instructor=instructor_s,
             classification=classification.strip(), category=category,
             syllabus_url=syllabus_url.strip() or None,
         ))
