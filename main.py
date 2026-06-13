@@ -413,8 +413,13 @@ async def handle_course_list(session: AsyncSession, category: str = "") -> list:
     for course in rows:
         groups[course.classification or "その他"].append(course)
 
+    CAROUSEL_MAX = 12
+    all_groups = list(groups.items())
+    visible_groups = all_groups[:CAROUSEL_MAX]
+    overflow_groups = all_groups[CAROUSEL_MAX:]
+
     bubbles = []
-    for classification, courses in list(groups.items())[:10]:
+    for classification, courses in visible_groups:
         btn_contents = []
         for course in courses[:8]:
             label = course.name if len(course.name) <= 20 else course.name[:19] + "…"
@@ -442,9 +447,19 @@ async def handle_course_list(session: AsyncSession, category: str = "") -> list:
         ))
 
     alt = f"📚 {category}一覧" if category else "📚 科目一覧"
+    result = []
     if len(bubbles) == 1:
-        return [FlexMessage(alt_text=alt, contents=bubbles[0])]
-    return [FlexMessage(alt_text=alt, contents=FlexCarousel(contents=bubbles))]
+        result.append(FlexMessage(alt_text=alt, contents=bubbles[0]))
+    else:
+        result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=bubbles)))
+
+    if overflow_groups:
+        names = "、".join(cl for cl, _ in overflow_groups)
+        result.append(TextMessage(
+            text=f"他 {len(overflow_groups)} 分類（{names}）は科目名で直接検索できます。\n例：「微分積分学」と送ってください。"
+        ))
+
+    return result
 
 
 # ── Message handler ─────────────────────────────────────────────
