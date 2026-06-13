@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}管理画面{% endblock %}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+body{font-family:sans-serif;padding:16px;background:#f3f4f6;max-width:700px;margin:auto}
+h1{font-size:18px;font-weight:bold;margin-bottom:4px}
+h2{font-size:15px;font-weight:bold;margin:20px 0 8px}
+nav{margin-bottom:16px;font-size:13px}
+nav a{color:#6366f1;text-decoration:none;margin-right:12px}
+table{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;font-size:13px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb}
+th{background:#6366f1;color:white}
+.card{background:white;border-radius:8px;padding:16px;margin-bottom:12px}
+input,select{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;margin-top:4px}
+label{font-size:13px;font-weight:600;color:#374151}
+.btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold}
+.btn-primary{background:#6366f1;color:white}
+.btn-danger{background:#ef4444;color:white}
+{% block extra_style %}{% endblock %}
+  </style>
+</head>
+<body>
+<h1>{% block heading %}{% endblock %}</h1>
+<nav>
+  <a href="/admin">📊 ログ</a>
+  <a href="/admin/courses">📚 科目管理</a>
+  <a href="/admin/users">👤 ユーザー設定</a>
+</nav>
+{% block content %}{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

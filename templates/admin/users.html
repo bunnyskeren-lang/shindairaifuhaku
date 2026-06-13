@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% block title %}ユーザー設定{% endblock %}
+{% block heading %}👤 ユーザー設定{% endblock %}
+
+{% block content %}
+<p style="font-size:13px;color:#666">デフォルトのコメント表示件数：<b>{{ max_reviews }}件</b>（MAX_REVIEWS環境変数）</p>
+<table>
+  <tr><th>ユーザーID</th><th>最終アクセス</th><th>コメント表示件数</th></tr>
+  {% for u in users %}
+  <tr>
+    <td style="font-size:11px">{{ u.user_id }}</td>
+    <td>{{ u.last_seen.strftime("%m/%d %H:%M") }}</td>
+    <td>
+      <form method="post" action="/admin/users/set" style="margin:0;display:flex;gap:6px;align-items:center">
+        <input type="hidden" name="user_id" value="{{ u.user_id }}">
+        <input type="number" name="max_reviews" value="{{ prefs.get(u.user_id, max_reviews) }}" min="1" max="10" style="width:60px">
+        <button type="submit" class="btn btn-primary" style="padding:4px 10px">保存</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="3" style="color:#999;text-align:center;padding:16px">ユーザーなし</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "admin/base.html" %}
+{% block title %}管理画面{% endblock %}
+{% block heading %}🛡️ 管理画面{% endblock %}
+
+{% block content %}
+<h2>メッセージログ（最新50件）</h2>
+<table>
+  <tr><th>ユーザー</th><th>方向</th><th>メッセージ</th><th>日時</th></tr>
+  {% for l in logs %}
+  <tr>
+    <td>{{ l.user_id[:10] }}…</td>
+    <td>{{ "→" if l.direction == "in" else "←" }}</td>
+    <td>{{ l.message[:60] }}</td>
+    <td>{{ l.created_at.strftime("%m/%d %H:%M") }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" style="color:#999;text-align:center;padding:16px">ログなし</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

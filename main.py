@@ -1,5 +1,4 @@
 import os
-import html as _html
 import json
 import hashlib
 import hmac
@@ -11,6 +10,7 @@ from typing import Optional
 from fastapi import FastAPI, Request, HTTPException, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.templating import Jinja2Templates
 
 from linebot.v3 import WebhookParser
 from linebot.v3.messaging import (
@@ -49,6 +49,7 @@ MAX_REVIEWS = int(os.environ.get("MAX_REVIEWS", "3"))
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
 security = HTTPBasic()
+templates = Jinja2Templates(directory="templates")
 
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}
@@ -524,48 +525,13 @@ async def callback(request: Request):
     return {"status": "ok"}
 
 
-ADMIN_STYLE = """
-body{font-family:sans-serif;padding:16px;background:#f3f4f6;max-width:700px;margin:auto}
-h1{font-size:18px;font-weight:bold;margin-bottom:4px}
-h2{font-size:15px;font-weight:bold;margin:20px 0 8px}
-nav{margin-bottom:16px;font-size:13px}
-nav a{color:#6366f1;text-decoration:none;margin-right:12px}
-table{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;font-size:13px}
-th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb}
-th{background:#6366f1;color:white}
-.card{background:white;border-radius:8px;padding:16px;margin-bottom:12px}
-input,select{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;margin-top:4px}
-label{font-size:13px;font-weight:600;color:#374151}
-.btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold}
-.btn-primary{background:#6366f1;color:white}
-.btn-danger{background:#ef4444;color:white}
-"""
-
-
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_page(_: str = Depends(check_admin)):
+async def admin_page(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         logs = (await session.execute(
             select(MessageLog).order_by(MessageLog.created_at.desc()).limit(50)
         )).scalars().all()
-
-    rows_html = "".join(
-        f"<tr><td>{_html.escape(l.user_id[:10])}…</td>"
-        f"<td>{'→' if l.direction == 'in' else '←'}</td>"
-        f"<td>{_html.escape(l.message[:60])}</td>"
-        f"<td>{l.created_at.strftime('%m/%d %H:%M')}</td></tr>"
-        for l in logs
-    )
-    return f"""<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8"><title>管理画面</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>{ADMIN_STYLE}</style></head><body>
-<h1>🛡️ 管理画面</h1>
-<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a><a href="/admin/users">👤 ユーザー設定</a></nav>
-<h2>メッセージログ（最新50件）</h2>
-<table><tr><th>ユーザー</th><th>方向</th><th>メッセージ</th><th>日時</th></tr>
-{rows_html or '<tr><td colspan="4" style="color:#999;text-align:center;padding:16px">ログなし</td></tr>'}
-</table></body></html>"""
+    return templates.TemplateResponse("admin/logs.html", {"request": request, "logs": logs})
 
 
 @app.get("/admin/courses", response_class=HTMLResponse)
@@ -579,24 +545,11 @@ async def admin_courses(_: str = Depends(check_admin)):
         )).scalars().all()
 
     existing = [c for c in classifications if c]
-    options_html = "<option value=''>（未分類）</option>" + "".join(
-        f"<option value='{_html.escape(c, quote=True)}'>{_html.escape(c)}</option>" for c in existing
-    ) + "<option value='__new__'>＋ 新しい分類を入力...</option>"
-
     class_counts: dict[str, int] = {}
     for c in courses:
         cl = c.classification or ""
         if cl:
             class_counts[cl] = class_counts.get(cl, 0) + 1
-
-    e = _html.escape
-    classification_rows = "".join(
-        f"<tr><td>{e(cl)}</td><td style='color:#666'>{cnt}科目</td>"
-        f"<td><form method='post' action='/admin/courses/classification/delete' style='margin:0' onsubmit='return confirm(\"削除しますか？\")'>"
-        f"<input type='hidden' name='classification' value=\"{e(cl)}\">"
-        f"<button type='submit' class='btn btn-danger' style='padding:4px 10px'>削除</button></form></td></tr>"
-        for cl, cnt in sorted(class_counts.items())
-    ) or "<tr><td colspan='3' style='color:#999;text-align:center;padding:12px'>分類なし</td></tr>"
 
     courses_data = json.dumps({
         c.id: {
@@ -609,153 +562,13 @@ async def admin_courses(_: str = Depends(check_admin)):
         for c in courses
     }, ensure_ascii=False)
 
-    def course_row(c):
-        badge_color = '#6366f1' if c.category == '教養' else '#10b981'
-        e = _html.escape
-        return (
-            f"<tr>"
-            f"<td>{e(c.name)}</td>"
-            f"<td>{e(c.instructor or '―')}</td>"
-            f"<td>{e(c.classification or '―')}</td>"
-            f"<td><span style='background:{badge_color};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px'>{e(c.category)}</span></td>"
-            f"<td style='white-space:nowrap'>"
-            f"<button type='button' class='btn btn-primary' style='padding:4px 10px;margin-right:4px' onclick='openEdit({c.id})'>編集</button>"
-            f"<form method='post' action='/admin/courses/delete/{c.id}' style='display:inline;margin:0' onsubmit='return confirm(\"削除しますか？\")'>"
-            f"<button type='submit' class='btn btn-danger' style='padding:4px 10px'>削除</button></form>"
-            f"</td></tr>"
-        )
-
-    rows_html = "".join(course_row(c) for c in courses)
-
-    return f"""<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8"><title>科目管理</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>{ADMIN_STYLE}
-#editModal{{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:center;justify-content:center}}
-#editModal.open{{display:flex}}
-#editBox{{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:480px}}
-</style></head><body>
-<h1>📚 科目管理</h1>
-<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a><a href="/admin/users">👤 ユーザー設定</a></nav>
-
-<div class="card">
-  <h2 style="margin-top:0">科目を追加</h2>
-  <form method="post" action="/admin/courses/add">
-    <div style="margin-bottom:10px">
-      <label>科目名 *<input type="text" name="name" required maxlength="200" placeholder="例：データサイエンス基礎学"></label>
-    </div>
-    <div style="margin-bottom:10px">
-      <label>担当教員<input type="text" name="instructor" maxlength="100" placeholder="例：山田教授"></label>
-    </div>
-    <div style="margin-bottom:10px">
-      <label>カテゴリ *
-        <select name="category" style="margin-top:4px">
-          <option value="専門">専門科目</option>
-          <option value="教養">教養科目</option>
-        </select>
-      </label>
-    </div>
-    <div style="margin-bottom:14px">
-      <label>分類
-        <select id="classSelect" style="margin-top:4px" onchange="onClassChange(this)">
-          {options_html}
-        </select>
-        <input type="text" name="classification" id="classInput" maxlength="50"
-               placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
-      </label>
-    </div>
-    <div style="margin-bottom:14px">
-      <label>シラバスURL<input type="url" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
-    </div>
-    <button type="submit" class="btn btn-primary">➕ 追加する</button>
-  </form>
-</div>
-
-<div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">分類一覧</h2>
-  <table style="margin-top:0">
-    <tr><th>分類名</th><th>科目数</th><th></th></tr>
-    {classification_rows}
-  </table>
-</div>
-
-<h2>登録済み科目（{len(courses)}件）</h2>
-<table><tr><th>科目名</th><th>教員</th><th>分類</th><th>カテゴリ</th><th></th></tr>
-{rows_html or '<tr><td colspan="5" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>'}
-</table>
-
-<!-- 編集モーダル -->
-<div id="editModal">
-  <div id="editBox">
-    <h2 style="margin-top:0">✏️ 科目を編集</h2>
-    <form id="editForm" method="post">
-      <div style="margin-bottom:10px">
-        <label>科目名 *<input type="text" id="editName" name="name" required maxlength="200"></label>
-      </div>
-      <div style="margin-bottom:10px">
-        <label>担当教員<input type="text" id="editInstructor" name="instructor" maxlength="100"></label>
-      </div>
-      <div style="margin-bottom:10px">
-        <label>カテゴリ *
-          <select id="editCategory" name="category">
-            <option value="専門">専門科目</option>
-            <option value="教養">教養科目</option>
-          </select>
-        </label>
-      </div>
-      <div style="margin-bottom:10px">
-        <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
-      </div>
-      <div style="margin-bottom:14px">
-        <label>シラバスURL<input type="url" id="editSyllabusUrl" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button type="submit" class="btn btn-primary">💾 保存</button>
-        <button type="button" class="btn" style="background:#e5e7eb;color:#374151" onclick="closeModal()">キャンセル</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<script>
-const COURSES = {courses_data};
-function openEdit(id) {{
-  const c = COURSES[id];
-  document.getElementById('editName').value = c.name;
-  document.getElementById('editInstructor').value = c.instructor;
-  document.getElementById('editClassification').value = c.classification;
-  document.getElementById('editCategory').value = c.category;
-  document.getElementById('editSyllabusUrl').value = c.syllabus_url;
-  document.getElementById('editForm').action = '/admin/courses/update/' + id;
-  document.getElementById('editModal').classList.add('open');
-}}
-function closeModal() {{
-  document.getElementById('editModal').classList.remove('open');
-}}
-document.getElementById('editModal').addEventListener('click', function(e) {{
-  if (e.target === this) closeModal();
-}});
-function onClassChange(sel) {{
-  const inp = document.getElementById('classInput');
-  if (sel.value === '__new__') {{
-    inp.style.display = 'block';
-    inp.required = true;
-    inp.value = '';
-    inp.focus();
-  }} else {{
-    inp.style.display = 'none';
-    inp.required = false;
-    inp.value = sel.value;
-  }}
-}}
-document.getElementById('classSelect').dispatchEvent(new Event('change'));
-document.querySelector('form').addEventListener('submit', function() {{
-  const sel = document.getElementById('classSelect');
-  const inp = document.getElementById('classInput');
-  if (sel.value !== '__new__') inp.value = sel.value;
-}});
-</script>
-</body></html>"""
+    return templates.TemplateResponse("admin/courses.html", {
+        "request": request,
+        "courses": courses,
+        "classifications": existing,
+        "class_counts": class_counts,
+        "courses_data": courses_data,
+    })
 
 
 @app.post("/admin/courses/add")
@@ -778,7 +591,7 @@ async def admin_courses_add(
 
 
 @app.get("/admin/users", response_class=HTMLResponse)
-async def admin_users(_: str = Depends(check_admin)):
+async def admin_users(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         users = (await session.execute(
             select(MessageLog.user_id, func.max(MessageLog.created_at).label("last_seen"))
@@ -791,27 +604,12 @@ async def admin_users(_: str = Depends(check_admin)):
             select(UserPreference)
         )).scalars().all()}
 
-    rows_html = "".join(
-        f"<tr><td style='font-size:11px'>{u.user_id}</td>"
-        f"<td>{u.last_seen.strftime('%m/%d %H:%M')}</td>"
-        f"<td>"
-        f"<form method='post' action='/admin/users/set' style='margin:0;display:flex;gap:6px;align-items:center'>"
-        f"<input type='hidden' name='user_id' value='{u.user_id}'>"
-        f"<input type='number' name='max_reviews' value='{prefs.get(u.user_id, MAX_REVIEWS)}' min='1' max='10' style='width:60px'>"
-        f"<button type='submit' class='btn btn-primary' style='padding:4px 10px'>保存</button>"
-        f"</form></td></tr>"
-        for u in users
-    )
-    return f"""<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8"><title>ユーザー設定</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>{ADMIN_STYLE}</style></head><body>
-<h1>👤 ユーザー設定</h1>
-<nav><a href="/admin">📊 ログ</a><a href="/admin/courses">📚 科目管理</a><a href="/admin/users">👤 ユーザー設定</a></nav>
-<p style="font-size:13px;color:#666">デフォルトのコメント表示件数：<b>{MAX_REVIEWS}件</b>（MAX_REVIEWS環境変数）</p>
-<table><tr><th>ユーザーID</th><th>最終アクセス</th><th>コメント表示件数</th></tr>
-{rows_html or '<tr><td colspan="3" style="color:#999;text-align:center;padding:16px">ユーザーなし</td></tr>'}
-</table></body></html>"""
+    return templates.TemplateResponse("admin/users.html", {
+        "request": request,
+        "users": users,
+        "prefs": prefs,
+        "max_reviews": MAX_REVIEWS,
+    })
 
 
 @app.post("/admin/users/set")

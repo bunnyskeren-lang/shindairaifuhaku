@@ -1,0 +1,173 @@
+{% extends "admin/base.html" %}
+{% block title %}科目管理{% endblock %}
+{% block heading %}📚 科目管理{% endblock %}
+
+{% block extra_style %}
+#editModal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:center;justify-content:center}
+#editModal.open{display:flex}
+#editBox{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:480px}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 style="margin-top:0">科目を追加</h2>
+  <form method="post" action="/admin/courses/add">
+    <div style="margin-bottom:10px">
+      <label>科目名 *<input type="text" name="name" required maxlength="200" placeholder="例：データサイエンス基礎学"></label>
+    </div>
+    <div style="margin-bottom:10px">
+      <label>担当教員<input type="text" name="instructor" maxlength="100" placeholder="例：山田教授"></label>
+    </div>
+    <div style="margin-bottom:10px">
+      <label>カテゴリ *
+        <select name="category" style="margin-top:4px">
+          <option value="専門">専門科目</option>
+          <option value="教養">教養科目</option>
+        </select>
+      </label>
+    </div>
+    <div style="margin-bottom:14px">
+      <label>分類
+        <select id="classSelect" style="margin-top:4px" onchange="onClassChange(this)">
+          <option value="">（未分類）</option>
+          {% for c in classifications %}
+          <option value="{{ c }}">{{ c }}</option>
+          {% endfor %}
+          <option value="__new__">＋ 新しい分類を入力...</option>
+        </select>
+        <input type="text" name="classification" id="classInput" maxlength="50"
+               placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
+      </label>
+    </div>
+    <div style="margin-bottom:14px">
+      <label>シラバスURL<input type="url" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
+    </div>
+    <button type="submit" class="btn btn-primary">➕ 追加する</button>
+  </form>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">分類一覧</h2>
+  <table style="margin-top:0">
+    <tr><th>分類名</th><th>科目数</th><th></th></tr>
+    {% for cl, cnt in class_counts | dictsort %}
+    <tr>
+      <td>{{ cl }}</td>
+      <td style="color:#666">{{ cnt }}科目</td>
+      <td>
+        <form method="post" action="/admin/courses/classification/delete" style="margin:0"
+              onsubmit="return confirm('削除しますか？')">
+          <input type="hidden" name="classification" value="{{ cl }}">
+          <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" style="color:#999;text-align:center;padding:12px">分類なし</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<h2>登録済み科目（{{ courses | length }}件）</h2>
+<table>
+  <tr><th>科目名</th><th>教員</th><th>分類</th><th>カテゴリ</th><th></th></tr>
+  {% for c in courses %}
+  <tr>
+    <td>{{ c.name }}</td>
+    <td>{{ c.instructor or "―" }}</td>
+    <td>{{ c.classification or "―" }}</td>
+    <td>
+      <span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">
+        {{ c.category }}
+      </span>
+    </td>
+    <td style="white-space:nowrap">
+      <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
+              onclick="openEdit({{ c.id }})">編集</button>
+      <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
+            onsubmit="return confirm('削除しますか？')">
+        <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>
+  {% endfor %}
+</table>
+
+<!-- 編集モーダル -->
+<div id="editModal">
+  <div id="editBox">
+    <h2 style="margin-top:0">✏️ 科目を編集</h2>
+    <form id="editForm" method="post">
+      <div style="margin-bottom:10px">
+        <label>科目名 *<input type="text" id="editName" name="name" required maxlength="200"></label>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>担当教員<input type="text" id="editInstructor" name="instructor" maxlength="100"></label>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>カテゴリ *
+          <select id="editCategory" name="category">
+            <option value="専門">専門科目</option>
+            <option value="教養">教養科目</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
+      </div>
+      <div style="margin-bottom:14px">
+        <label>シラバスURL<input type="url" id="editSyllabusUrl" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">💾 保存</button>
+        <button type="button" class="btn" style="background:#e5e7eb;color:#374151" onclick="closeModal()">キャンセル</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COURSES = {{ courses_data | safe }};
+{% raw %}
+function openEdit(id) {
+  const c = COURSES[id];
+  document.getElementById('editName').value = c.name;
+  document.getElementById('editInstructor').value = c.instructor;
+  document.getElementById('editClassification').value = c.classification;
+  document.getElementById('editCategory').value = c.category;
+  document.getElementById('editSyllabusUrl').value = c.syllabus_url;
+  document.getElementById('editForm').action = '/admin/courses/update/' + id;
+  document.getElementById('editModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+function onClassChange(sel) {
+  const inp = document.getElementById('classInput');
+  if (sel.value === '__new__') {
+    inp.style.display = 'block';
+    inp.required = true;
+    inp.value = '';
+    inp.focus();
+  } else {
+    inp.style.display = 'none';
+    inp.required = false;
+    inp.value = sel.value;
+  }
+}
+document.getElementById('classSelect').dispatchEvent(new Event('change'));
+document.querySelector('form').addEventListener('submit', function() {
+  const sel = document.getElementById('classSelect');
+  const inp = document.getElementById('classInput');
+  if (sel.value !== '__new__') inp.value = sel.value;
+});
+{% endraw %}
+</script>
+{% endblock %}
