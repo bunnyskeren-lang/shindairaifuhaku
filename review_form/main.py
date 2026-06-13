@@ -123,9 +123,14 @@ async def search_courses(q: str = ""):
             tokens = [tok for tok in re.split(r'[\s　]+', q.strip()) if tok]
             def _escape(tok: str) -> str:
                 return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+            from sqlalchemy import or_
             stmt = select(Course.name, Course.instructor)
             for tok in tokens:
-                stmt = stmt.where(Course.name.ilike(f"%{_escape(tok)}%", escape="\\"))
+                t = _escape(tok)
+                stmt = stmt.where(or_(
+                    Course.name.ilike(f"%{t}%", escape="\\"),
+                    Course.reading.ilike(f"%{t}%", escape="\\"),
+                ))
             stmt = (
                 stmt
                 .order_by(Course.name)

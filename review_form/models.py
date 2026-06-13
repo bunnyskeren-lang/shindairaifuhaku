@@ -25,6 +25,7 @@ class Course(Base):
     classification: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     category: Mapped[str] = mapped_column(String(20), nullable=False, server_default="専門")
     syllabus_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    reading: Mapped[str] = mapped_column(String(400), nullable=False, server_default="", default="")
 
 
 class PendingReview(Base):

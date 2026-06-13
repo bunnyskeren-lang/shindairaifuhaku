@@ -23,5 +23,9 @@ class Base(DeclarativeBase):
 
 async def init_db():
     from models import Course, PendingReview, UserProfile, PushSubscription  # noqa: F401
+    from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text(
+            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS reading VARCHAR(400) NOT NULL DEFAULT ''"
+        ))

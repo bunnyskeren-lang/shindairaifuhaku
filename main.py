@@ -75,6 +75,18 @@ def _to_jst(dt) -> str:
 templates.env.filters["jst"] = _to_jst
 templates.env.globals["VAPID_PUBLIC_KEY"] = VAPID_PUBLIC_KEY
 
+try:
+    import pykakasi as _pykakasi
+    _kks = _pykakasi.kakasi()
+    def _reading(text: str) -> str:
+        result = _kks.convert(text)
+        hira = ''.join(item.get('hira', '') for item in result)
+        roma = ''.join(item.get('hepburn', '') for item in result)
+        return f"{hira} {roma}".lower().strip()
+except Exception:
+    def _reading(text: str) -> str:
+        return ""
+
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}
 
@@ -677,6 +689,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         return or_(
             Course.name.ilike(f"%{q_safe}%", escape="\\"),
             Course.instructor.ilike(f"%{q_safe}%", escape="\\"),
+            Course.reading.ilike(f"%{q_safe}%", escape="\\"),
         )
 
     async with AsyncSessionLocal() as session:
@@ -789,6 +802,7 @@ async def admin_courses_add(
             name=name_s, instructor=instructor_s,
             classification=classification.strip(), category=category,
             syllabus_url=syllabus_url.strip() or None,
+            reading=_reading(name_s),
         ))
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
@@ -927,6 +941,7 @@ async def admin_courses_update(
             course.classification = classification.strip()
             course.category = category
             course.syllabus_url = syllabus_url.strip() or None
+            course.reading = _reading(name.strip())
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
