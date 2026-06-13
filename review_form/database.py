@@ -1,4 +1,5 @@
 import os
+import ssl
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -8,7 +9,11 @@ if _url.startswith("postgres://"):
 elif _url.startswith("postgresql://") and "+asyncpg" not in _url:
     _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(_url, echo=False)
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+
+engine = create_async_engine(_url, echo=False, connect_args={"ssl": ssl_ctx})
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
