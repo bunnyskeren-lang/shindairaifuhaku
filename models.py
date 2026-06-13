@@ -49,3 +49,14 @@ class UserPreference(Base):
 
     user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     max_reviews: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    student_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

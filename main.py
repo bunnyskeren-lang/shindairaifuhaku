@@ -35,7 +35,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference
+from models import MessageLog, Course, PendingReview, UserPreference, UserProfile
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -594,9 +594,15 @@ async def admin_courses_add(
 async def admin_users(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         users = (await session.execute(
-            select(MessageLog.user_id, func.max(MessageLog.created_at).label("last_seen"))
+            select(
+                MessageLog.user_id,
+                func.max(MessageLog.created_at).label("last_seen"),
+                UserProfile.name,
+                UserProfile.student_id,
+            )
+            .outerjoin(UserProfile, UserProfile.line_user_id == MessageLog.user_id)
             .where(MessageLog.direction == "in")
-            .group_by(MessageLog.user_id)
+            .group_by(MessageLog.user_id, UserProfile.name, UserProfile.student_id)
             .order_by(func.max(MessageLog.created_at).desc())
         )).all()
 
