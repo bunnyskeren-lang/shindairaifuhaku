@@ -48,7 +48,14 @@ CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku-1.onrender.com")
-MAX_REVIEWS = int(os.environ.get("MAX_REVIEWS", "3"))
+def _parse_max_reviews(val: str, default: int = 3, lo: int = 1, hi: int = 10) -> int:
+    try:
+        n = int(val)
+    except (ValueError, TypeError):
+        return default
+    return max(lo, min(hi, n))
+
+MAX_REVIEWS = _parse_max_reviews(os.environ.get("MAX_REVIEWS", "3"))
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
