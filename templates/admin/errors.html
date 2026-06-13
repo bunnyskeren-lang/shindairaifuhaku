@@ -7,8 +7,9 @@ details > summary { cursor:pointer; font-weight:bold; color:#991b1b; }
 pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin:6px 0 0; }
 {% endblock %}
 
+{% from "admin/base.html" import pager %}
 {% block content %}
-<p style="font-size:13px;color:#666;margin-bottom:16px">直近100件。トレースバックは行をクリックで展開。</p>
+<p style="font-size:13px;color:#666;margin-bottom:16px">トレースバックは行をクリックで展開。</p>
 <table>
   <tr>
     <th>日時</th>
@@ -37,4 +38,5 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
   <tr><td colspan="5" style="color:#9ca3af;text-align:center;padding:24px">エラーなし</td></tr>
   {% endfor %}
 </table>
+{{ pager(page, total_pages, total, url_prefix) }}
 {% endblock %}

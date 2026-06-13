@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import FastAPI, Request, HTTPException, Depends, Form
+from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
@@ -603,31 +603,46 @@ async def callback(request: Request):
 
 
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_page(request: Request, _: str = Depends(check_admin)):
+async def admin_page(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
+    per_page = 50
     async with AsyncSessionLocal() as session:
+        total = (await session.execute(select(func.count(MessageLog.id)))).scalar_one()
         logs = (await session.execute(
-            select(MessageLog).order_by(MessageLog.created_at.desc()).limit(50)
+            select(MessageLog).order_by(MessageLog.created_at.desc())
+            .offset((page - 1) * per_page).limit(per_page)
         )).scalars().all()
-    return templates.TemplateResponse("admin/logs.html", {"request": request, "logs": logs})
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return templates.TemplateResponse("admin/logs.html", {
+        "request": request,
+        "logs": logs,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "url_prefix": "/admin?page=",
+    })
 
 
 @app.get("/admin/courses", response_class=HTMLResponse)
-async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = ""):
+async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", page: int = Query(default=1, ge=1)):
+    per_page = 25
     async with AsyncSessionLocal() as session:
+        total = (await session.execute(select(func.count(Course.id)))).scalar_one()
         courses = (await session.execute(
             select(Course).order_by(Course.classification, Course.name)
+            .offset((page - 1) * per_page).limit(per_page)
         )).scalars().all()
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
         )).scalars().all()
+        class_counts = dict((await session.execute(
+            select(Course.classification, func.count(Course.id))
+            .where(Course.classification != "")
+            .group_by(Course.classification)
+            .order_by(Course.classification)
+        )).all())
 
     existing = [c for c in classifications if c]
-    class_counts: dict[str, int] = {}
-    for c in courses:
-        cl = c.classification or ""
-        if cl:
-            class_counts[cl] = class_counts.get(cl, 0) + 1
-
+    total_pages = max(1, (total + per_page - 1) // per_page)
     courses_data = (
         json.dumps({
             c.id: {
@@ -651,6 +666,10 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "class_counts": class_counts,
         "courses_data": courses_data,
         "error": msg,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "url_prefix": "/admin/courses?page=",
     })
 
 
@@ -715,8 +734,10 @@ async def admin_users(request: Request, _: str = Depends(check_admin)):
 
 
 @app.get("/admin/errors", response_class=HTMLResponse)
-async def admin_errors(request: Request, _: str = Depends(check_admin)):
+async def admin_errors(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
+    per_page = 50
     async with AsyncSessionLocal() as session:
+        total = (await session.execute(select(func.count(ErrorLog.id)))).scalar_one()
         errors = (await session.execute(
             select(
                 ErrorLog.id,
@@ -731,11 +752,16 @@ async def admin_errors(request: Request, _: str = Depends(check_admin)):
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == ErrorLog.user_id)
             .order_by(ErrorLog.created_at.desc())
-            .limit(100)
+            .offset((page - 1) * per_page).limit(per_page)
         )).all()
+    total_pages = max(1, (total + per_page - 1) // per_page)
     return templates.TemplateResponse("admin/errors.html", {
         "request": request,
         "errors": errors,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "url_prefix": "/admin/errors?page=",
     })
 
 

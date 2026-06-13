@@ -8,6 +8,7 @@
 #editBox{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:480px}
 {% endblock %}
 
+{% from "admin/base.html" import pager %}
 {% block content %}
 {% if error == "duplicate" %}
 <div style="background:#fef2f2;border:1px solid #fca5a5;color:#b91c1c;padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px">
@@ -73,7 +74,7 @@
   </table>
 </div>
 
-<h2>登録済み科目（{{ courses | length }}件）</h2>
+<h2>登録済み科目（全{{ total }}件）</h2>
 <table>
   <tr><th>科目名</th><th>教員</th><th>分類</th><th>カテゴリ</th><th></th></tr>
   {% for c in courses %}
@@ -99,6 +100,7 @@
   <tr><td colspan="5" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>
   {% endfor %}
 </table>
+{{ pager(page, total_pages, total, url_prefix) }}
 
 <!-- 編集モーダル -->
 <div id="editModal">
