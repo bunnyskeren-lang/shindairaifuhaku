@@ -2,6 +2,7 @@ import html as _html
 import os
 import re
 import secrets
+from datetime import timezone, timedelta
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, Query
@@ -17,6 +18,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
+JST = timezone(timedelta(hours=9))
+
+
+def _fmt_jst(dt, fmt="%m/%d %H:%M") -> str:
+    if not dt:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST).strftime(fmt)
 STUDENT_ID_RE = re.compile(r'^\d{7}[A-Za-z]$')
 ADMIN_LINE_USER_ID = os.environ.get("ADMIN_LINE_USER_ID", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
@@ -204,7 +214,7 @@ async def admin_page(username: str = Depends(verify_admin)):
                 " onsubmit='return confirm(\"削除しますか？\")'>"
                 "<button style='background:#ef4444;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer'>🗑 却下</button></form>"
             )
-        ts = r.created_at.strftime("%m/%d %H:%M") if r.created_at else ""
+        ts = _fmt_jst(r.created_at)
         grading = _html.escape(r.grading_method or "―")
         return (
             f"<tr>"
@@ -331,7 +341,7 @@ async def admin_users(username: str = Depends(verify_admin)):
         f"<td style='padding:10px 8px;font-size:11px;word-break:break-all'>{_html.escape(p.line_user_id)}</td>"
         f"<td style='padding:10px 8px'>{_html.escape(p.name)}</td>"
         f"<td style='padding:10px 8px'>{_html.escape(p.student_id)}</td>"
-        f"<td style='padding:10px 8px'>{p.created_at.strftime('%Y/%m/%d %H:%M') if p.created_at else ''}</td>"
+        f"<td style='padding:10px 8px'>{_fmt_jst(p.created_at, '%Y/%m/%d %H:%M')}</td>"
         f"</tr>"
         for p in profiles
     ) or (

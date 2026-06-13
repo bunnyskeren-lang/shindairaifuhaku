@@ -10,7 +10,7 @@
   <tr>
     <td>{{ u.name or "―" }}</td>
     <td style="font-size:12px">{{ u.student_id or "―" }}</td>
-    <td>{{ u.last_seen.strftime("%m/%d %H:%M") }}</td>
+    <td>{{ u.last_seen | jst }}</td>
     <td>
       <form method="post" action="/admin/users/set" style="margin:0;display:flex;gap:6px;align-items:center">
         <input type="hidden" name="user_id" value="{{ u.user_id }}">

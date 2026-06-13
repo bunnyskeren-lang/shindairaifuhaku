@@ -52,7 +52,18 @@ MAX_REVIEWS = int(os.environ.get("MAX_REVIEWS", "3"))
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
 security = HTTPBasic()
+JST = timezone(timedelta(hours=9))
+
 templates = Jinja2Templates(directory="templates")
+
+def _to_jst(dt) -> str:
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(JST).strftime("%m/%d %H:%M")
+
+templates.env.filters["jst"] = _to_jst
 
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}

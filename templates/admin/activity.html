@@ -36,7 +36,7 @@
       <span class="count-badge">{{ r.count }}回</span>
     </td>
     <td style="color:#9ca3af;font-size:11px;width:110px;text-align:right">
-      {{ r.last_at.strftime("%m/%d %H:%M") }}
+      {{ r.last_at | jst }}
     </td>
   </tr>
 {% endfor %}
