@@ -5,3 +5,4 @@ sqlalchemy==2.0.30
 asyncpg==0.29.0
 python-dotenv==1.0.1
 pydantic==2.7.1
+pillow==10.4.0
