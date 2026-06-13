@@ -22,6 +22,6 @@ class Base(DeclarativeBase):
 
 
 async def init_db():
-    from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog  # noqa: F401
+    from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -39,7 +39,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog
+from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -48,6 +48,7 @@ CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku-1.onrender.com")
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 def _parse_max_reviews(val: str, default: int = 3, lo: int = 1, hi: int = 10) -> int:
     try:
         n = int(val)
@@ -72,6 +73,7 @@ def _to_jst(dt) -> str:
     return dt.astimezone(JST).strftime("%m/%d %H:%M")
 
 templates.env.filters["jst"] = _to_jst
+templates.env.globals["VAPID_PUBLIC_KEY"] = VAPID_PUBLIC_KEY
 
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}
@@ -609,6 +611,43 @@ async def callback(request: Request):
     return {"status": "ok"}
 
 
+@app.get("/sw.js")
+async def service_worker():
+    from fastapi.responses import Response
+    js = """
+self.addEventListener('push', function(e) {
+  const d = e.data ? e.data.json() : {};
+  e.waitUntil(self.registration.showNotification(d.title || '新着レビュー', {
+    body: d.body || '',
+    icon: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
+    badge: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
+  }));
+});
+self.addEventListener('notificationclick', function(e) {
+  e.notification.close();
+  e.waitUntil(clients.openWindow('/admin/courses'));
+});
+""".strip()
+    return Response(content=js, media_type="application/javascript")
+
+
+@app.post("/admin/push/subscribe")
+async def admin_push_subscribe(request: Request, _: str = Depends(check_admin)):
+    data = await request.json()
+    async with AsyncSessionLocal() as session:
+        stmt = pg_insert(PushSubscription).values(
+            endpoint=data["endpoint"],
+            p256dh=data["keys"]["p256dh"],
+            auth=data["keys"]["auth"],
+        ).on_conflict_do_update(
+            index_elements=["endpoint"],
+            set_={"p256dh": data["keys"]["p256dh"], "auth": data["keys"]["auth"]},
+        )
+        await session.execute(stmt)
+        await session.commit()
+    return {"ok": True}
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
     per_page = 50
@@ -630,8 +669,7 @@ async def admin_page(request: Request, _: str = Depends(check_admin), page: int 
 
 
 @app.get("/admin/courses", response_class=HTMLResponse)
-async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", page: int = Query(default=1, ge=1), q: str = Query(default="")):
-    per_page = 25
+async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", q: str = Query(default="")):
     q = q.strip()
 
     def _search_filter(q: str):
@@ -646,13 +684,10 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         if q:
             base_stmt = base_stmt.where(_search_filter(q))
 
-        total = (await session.execute(
-            select(func.count()).select_from(base_stmt.subquery())
-        )).scalar_one()
         courses = (await session.execute(
             base_stmt.order_by(Course.classification, Course.name)
-            .offset((page - 1) * per_page).limit(per_page)
         )).scalars().all()
+        total = len(courses)
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
         )).scalars().all()
@@ -664,8 +699,6 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         )).all())
 
     existing = [c for c in classifications if c]
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    url_prefix = f"/admin/courses?q={q}&page=" if q else "/admin/courses?page="
     courses_data = (
         json.dumps({
             c.id: {
@@ -704,11 +737,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "courses_data": courses_data,
         "reviews_by_course": reviews_by_course,
         "error": msg,
-        "page": page,
-        "total_pages": total_pages,
         "total": total,
         "q": q,
-        "url_prefix": url_prefix,
     })
 
 

@@ -85,3 +85,13 @@ class UserActivity(Base):
     action: Mapped[str] = mapped_column(String(200), nullable=False)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
+    auth: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

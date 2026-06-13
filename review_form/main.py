@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
 from database import init_db, AsyncSessionLocal
-from models import Course, PendingReview, UserProfile
+from models import Course, PendingReview, UserProfile, PushSubscription
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -28,34 +28,50 @@ def _fmt_jst(dt, fmt="%m/%d %H:%M") -> str:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(JST).strftime(fmt)
 STUDENT_ID_RE = re.compile(r'^\d{7}[A-Za-z]$')
-ADMIN_LINE_USER_ID = os.environ.get("ADMIN_LINE_USER_ID", "")
-LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 
 
-async def notify_admin(course_name: str, rating: int, ease_rating: str, comment: str):
-    if not ADMIN_LINE_USER_ID or not LINE_CHANNEL_ACCESS_TOKEN:
+async def send_push_notification(course_name: str, rating: int, ease_rating: str, comment: str):
+    if not VAPID_PRIVATE_KEY:
         return
-    import urllib.request, json
+    import asyncio, json as _json
+    from pywebpush import webpush, WebPushException
+    from sqlalchemy import delete as sa_delete
+
+    async with AsyncSessionLocal() as session:
+        subs = (await session.execute(select(PushSubscription))).scalars().all()
+    if not subs:
+        return
+
     stars = "★" * rating + "☆" * (5 - rating)
-    text = f"📝 新着レビュー\n科目: {course_name}\n評価: {stars}\n楽単度: {ease_rating}\n\n{comment[:100]}"
-    body = json.dumps({
-        "to": ADMIN_LINE_USER_ID,
-        "messages": [{"type": "text", "text": text}],
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.line.me/v2/bot/message/push",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req):
+    payload = _json.dumps({
+        "title": f"📝 新着レビュー: {course_name}",
+        "body": f"{stars}  楽単: {ease_rating}\n{comment[:80]}",
+    })
+
+    expired_ids = []
+    for sub in subs:
+        try:
+            await asyncio.to_thread(
+                webpush,
+                subscription_info={"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}},
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": f"mailto:{VAPID_EMAIL}"},
+            )
+        except WebPushException as e:
+            if e.response is not None and e.response.status_code == 410:
+                expired_ids.append(sub.id)
+        except Exception:
             pass
-    except Exception:
-        pass
+
+    if expired_ids:
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                sa_delete(PushSubscription).where(PushSubscription.id.in_(expired_ids))
+            )
+            await session.commit()
 
 security = HTTPBasic()
 
@@ -172,7 +188,7 @@ async def submit(
         session.add(review)
         await session.commit()
 
-    await notify_admin(
+    await send_push_notification(
         course_name=course_name.strip(),
         rating=rating,
         ease_rating=ease_rating,
