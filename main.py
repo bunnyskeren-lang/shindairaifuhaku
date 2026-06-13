@@ -1,10 +1,12 @@
 import os
 import json
+import random
 import hashlib
 import hmac
 import base64
 import secrets as py_secrets
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Form
@@ -31,11 +33,12 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference, UserProfile
+from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -88,6 +91,17 @@ def check_admin(creds: HTTPBasicCredentials = Depends(security)):
 
 async def save_log(session: AsyncSession, user_id: str, direction: str, message: str):
     session.add(MessageLog(user_id=user_id, direction=direction, message=message))
+    if direction == "in":
+        now = datetime.now(timezone.utc)
+        stmt = (
+            pg_insert(UserActivity)
+            .values(user_id=user_id, action=message[:200], count=1, last_at=now)
+            .on_conflict_do_update(
+                index_elements=["user_id", "action"],
+                set_={"count": UserActivity.count + 1, "last_at": now},
+            )
+        )
+        await session.execute(stmt)
     await session.commit()
 
 
@@ -499,6 +513,12 @@ async def callback(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook payload")
 
+    if random.random() < 0.02:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
+            await session.commit()
+
     async with AsyncSessionLocal() as session:
         async with AsyncApiClient(configuration) as api_client:
             line_api = AsyncMessagingApi(api_client)
@@ -630,6 +650,28 @@ async def admin_users(request: Request, _: str = Depends(check_admin)):
         "users": users,
         "prefs": prefs,
         "max_reviews": MAX_REVIEWS,
+    })
+
+
+@app.get("/admin/activity", response_class=HTMLResponse)
+async def admin_activity(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(
+                UserActivity.user_id,
+                UserProfile.name,
+                UserProfile.student_id,
+                UserActivity.action,
+                UserActivity.count,
+                UserActivity.last_at,
+            )
+            .outerjoin(UserProfile, UserProfile.line_user_id == UserActivity.user_id)
+            .order_by(UserActivity.user_id, UserActivity.count.desc())
+        )).all()
+
+    return templates.TemplateResponse("admin/activity.html", {
+        "request": request,
+        "rows": rows,
     })
 
 

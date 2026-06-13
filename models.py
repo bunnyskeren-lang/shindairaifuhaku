@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, func
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -60,3 +60,14 @@ class UserProfile(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class UserActivity(Base):
+    __tablename__ = "user_activity"
+    __table_args__ = (UniqueConstraint("user_id", "action"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    action: Mapped[str] = mapped_column(String(200), nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

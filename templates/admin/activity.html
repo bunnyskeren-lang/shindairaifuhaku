@@ -1,0 +1,50 @@
+{% extends "admin/base.html" %}
+{% block title %}ボタン利用履歴{% endblock %}
+{% block heading %}📊 ボタン利用履歴{% endblock %}
+
+{% block extra_style %}
+.user-block { background:#fff; border-radius:8px; margin-bottom:12px; overflow:hidden; }
+.user-header { background:#6366f1; color:#fff; padding:8px 14px; font-size:13px; font-weight:bold; }
+.user-header span { font-weight:normal; font-size:11px; opacity:.8; margin-left:8px; }
+.action-table { width:100%; border-collapse:collapse; font-size:13px; }
+.action-table td { padding:6px 14px; border-bottom:1px solid #e5e7eb; }
+.action-table tr:last-child td { border-bottom:none; }
+.count-badge { background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:bold; }
+{% endblock %}
+
+{% block content %}
+<p style="font-size:13px;color:#666;margin-bottom:16px">
+  ユーザーごとの操作回数です。ログは30日で自動削除されますが、この集計は永続保存されます。
+</p>
+
+{% set ns = namespace(current_user=None) %}
+{% for r in rows %}
+  {% if r.user_id != ns.current_user %}
+    {% if ns.current_user is not none %}</div></div>{% endif %}
+    {% set ns.current_user = r.user_id %}
+    <div class="user-block">
+      <div class="user-header">
+        {{ r.name or "未登録" }}
+        {% if r.student_id %}<span>{{ r.student_id }}</span>{% endif %}
+      </div>
+      <div>
+      <table class="action-table">
+  {% endif %}
+  <tr>
+    <td>{{ r.action }}</td>
+    <td style="text-align:right;width:80px">
+      <span class="count-badge">{{ r.count }}回</span>
+    </td>
+    <td style="color:#9ca3af;font-size:11px;width:110px;text-align:right">
+      {{ r.last_at.strftime("%m/%d %H:%M") }}
+    </td>
+  </tr>
+{% endfor %}
+{% if ns.current_user is not none %}
+      </table></div></div>
+{% endif %}
+
+{% if not rows %}
+<p style="color:#9ca3af;text-align:center;padding:32px">データなし</p>
+{% endif %}
+{% endblock %}
