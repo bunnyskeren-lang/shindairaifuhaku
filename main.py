@@ -527,11 +527,15 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [TextMessage(text=CONTACT_TEXT)]
 
-    # Course keyword search (% and _ escaped to prevent wildcard-only matches)
-    t_safe = t.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-    courses = (await session.execute(
-        select(Course).where(Course.name.ilike(f"%{t_safe}%", escape="\\")).limit(3)
-    )).scalars().all()
+    # Course keyword search — split on spaces (half-width and full-width) for multi-token AND match
+    import re as _re
+    tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
+    def _escape(tok: str) -> str:
+        return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+    stmt = select(Course)
+    for tok in tokens:
+        stmt = stmt.where(Course.name.ilike(f"%{_escape(tok)}%", escape="\\"))
+    courses = (await session.execute(stmt.limit(3))).scalars().all()
     if courses:
         return [await get_course_flex(session, c, user_id) for c in courses]
 

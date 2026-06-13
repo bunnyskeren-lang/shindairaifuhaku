@@ -104,9 +104,14 @@ async def index(request: Request, uid: str = Query(default="")):
 async def search_courses(q: str = ""):
     async with AsyncSessionLocal() as session:
         if q.strip():
+            tokens = [tok for tok in re.split(r'[\s　]+', q.strip()) if tok]
+            def _escape(tok: str) -> str:
+                return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+            stmt = select(Course.name, Course.instructor)
+            for tok in tokens:
+                stmt = stmt.where(Course.name.ilike(f"%{_escape(tok)}%", escape="\\"))
             stmt = (
-                select(Course.name, Course.instructor)
-                .where(Course.name.ilike(f"%{q}%"))
+                stmt
                 .order_by(Course.name)
                 .limit(10)
             )
