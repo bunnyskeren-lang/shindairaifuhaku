@@ -1,0 +1,40 @@
+{% extends "admin/base.html" %}
+{% block title %}エラーログ{% endblock %}
+{% block heading %}🚨 エラーログ{% endblock %}
+
+{% block extra_style %}
+details > summary { cursor:pointer; font-weight:bold; color:#991b1b; }
+pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin:6px 0 0; }
+{% endblock %}
+
+{% block content %}
+<p style="font-size:13px;color:#666;margin-bottom:16px">直近100件。トレースバックは行をクリックで展開。</p>
+<table>
+  <tr>
+    <th>日時</th>
+    <th>ユーザー</th>
+    <th>操作</th>
+    <th>エラー種別</th>
+    <th>メッセージ</th>
+  </tr>
+  {% for e in errors %}
+  <tr style="vertical-align:top">
+    <td style="white-space:nowrap;font-size:11px">{{ e.created_at | jst }}</td>
+    <td style="font-size:12px">
+      {{ e.name or "―" }}
+      {% if e.student_id %}<br><span style="color:#9ca3af;font-size:11px">{{ e.student_id }}</span>{% endif %}
+    </td>
+    <td style="font-size:12px;max-width:140px;word-break:break-word">{{ e.action or "―" }}</td>
+    <td><span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold">{{ e.error_type }}</span></td>
+    <td style="font-size:12px">
+      <details>
+        <summary>{{ e.error_message[:80] }}{% if e.error_message | length > 80 %}…{% endif %}</summary>
+        <pre>{{ e.traceback }}</pre>
+      </details>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" style="color:#9ca3af;text-align:center;padding:24px">エラーなし</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

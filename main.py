@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import traceback as _traceback
 import hashlib
 import hmac
 import base64
@@ -38,7 +39,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity
+from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -114,6 +115,21 @@ async def save_log(session: AsyncSession, user_id: str, direction: str, message:
         )
         await session.execute(stmt)
     await session.commit()
+
+
+async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None):
+    try:
+        async with AsyncSessionLocal() as session:
+            session.add(ErrorLog(
+                user_id=user_id,
+                action=action[:200] if action else None,
+                error_type=type(exc).__name__,
+                error_message=str(exc)[:500],
+                traceback=_traceback.format_exc()[:4000],
+            ))
+            await session.commit()
+    except Exception:
+        pass
 
 
 # ── FlexMessage builder ─────────────────────────────────────────
@@ -552,7 +568,8 @@ async def callback(request: Request):
                             messages=messages[:5],
                         )
                     )
-                except Exception:
+                except Exception as exc:
+                    await save_error_log(exc, user_id=user_id, action=user_text)
                     try:
                         await line_api.reply_message(
                             ReplyMessageRequest(
@@ -675,6 +692,31 @@ async def admin_users(request: Request, _: str = Depends(check_admin)):
         "users": users,
         "prefs": prefs,
         "max_reviews": MAX_REVIEWS,
+    })
+
+
+@app.get("/admin/errors", response_class=HTMLResponse)
+async def admin_errors(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        errors = (await session.execute(
+            select(
+                ErrorLog.id,
+                ErrorLog.created_at,
+                ErrorLog.user_id,
+                UserProfile.name,
+                UserProfile.student_id,
+                ErrorLog.action,
+                ErrorLog.error_type,
+                ErrorLog.error_message,
+                ErrorLog.traceback,
+            )
+            .outerjoin(UserProfile, UserProfile.line_user_id == ErrorLog.user_id)
+            .order_by(ErrorLog.created_at.desc())
+            .limit(100)
+        )).all()
+    return templates.TemplateResponse("admin/errors.html", {
+        "request": request,
+        "errors": errors,
     })
 
 

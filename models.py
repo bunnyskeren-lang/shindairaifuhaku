@@ -62,6 +62,20 @@ class UserProfile(Base):
     )
 
 
+class ErrorLog(Base):
+    __tablename__ = "error_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    action: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    error_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    error_message: Mapped[str] = mapped_column(Text, nullable=False)
+    traceback: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class UserActivity(Base):
     __tablename__ = "user_activity"
     __table_args__ = (UniqueConstraint("user_id", "action"),)
