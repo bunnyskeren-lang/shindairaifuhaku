@@ -682,12 +682,27 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         .replace(">", "\\u003e")
     )
 
+    course_names = [c.name for c in courses]
+    if course_names:
+        reviews_raw = (await session.execute(
+            select(PendingReview)
+            .where(PendingReview.course_name.in_(course_names))
+            .order_by(PendingReview.is_approved, PendingReview.created_at.desc())
+        )).scalars().all()
+    else:
+        reviews_raw = []
+    from collections import defaultdict
+    reviews_by_course: dict = defaultdict(list)
+    for r in reviews_raw:
+        reviews_by_course[r.course_name].append(r)
+
     return templates.TemplateResponse("admin/courses.html", {
         "request": request,
         "courses": courses,
         "classifications": existing,
         "class_counts": class_counts,
         "courses_data": courses_data,
+        "reviews_by_course": reviews_by_course,
         "error": msg,
         "page": page,
         "total_pages": total_pages,
@@ -695,6 +710,26 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "q": q,
         "url_prefix": url_prefix,
     })
+
+
+@app.post("/admin/reviews/approve/{review_id}")
+async def admin_review_approve(review_id: int, request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        review = await session.get(PendingReview, review_id)
+        if review:
+            review.is_approved = True
+            await session.commit()
+    return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
+
+
+@app.post("/admin/reviews/reject/{review_id}")
+async def admin_review_reject(review_id: int, request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        review = await session.get(PendingReview, review_id)
+        if review:
+            await session.delete(review)
+            await session.commit()
+    return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
 
 
 @app.post("/admin/courses/add")

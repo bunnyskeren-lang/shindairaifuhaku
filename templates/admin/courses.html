@@ -88,6 +88,8 @@
 <table>
   <tr><th>科目名</th><th>教員</th><th>分類</th><th>カテゴリ</th><th></th></tr>
   {% for c in courses %}
+  {% set reviews = reviews_by_course[c.name] %}
+  {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
   <tr>
     <td>{{ c.name }}</td>
     <td>{{ c.instructor or "―" }}</td>
@@ -98,12 +100,62 @@
       </span>
     </td>
     <td style="white-space:nowrap">
+      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#f3f4f6;color:#374151"
+              onclick="toggleReviews('rv-{{ c.id }}')">
+        レビュー {{ reviews | length }}件{% if pending_count %} <span style="background:#f59e0b;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px">未承認{{ pending_count }}</span>{% endif %}
+      </button>
       <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
               onclick="openEdit({{ c.id }})">編集</button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
             onsubmit="return confirm('削除しますか？')">
         <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
       </form>
+    </td>
+  </tr>
+  <tr id="rv-{{ c.id }}" style="display:none">
+    <td colspan="5" style="padding:0;background:#f9fafb">
+      {% if reviews %}
+      <table style="margin:0;border-radius:0;font-size:12px">
+        <tr style="background:#e5e7eb">
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
+        </tr>
+        {% for r in reviews %}
+        <tr style="background:{{ '#fffbeb' if not r.is_approved else '#fff' }}">
+          <td style="padding:6px 12px">
+            {% if r.is_approved %}
+            <span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
+            {% else %}
+            <span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">未承認</span>
+            {% endif %}
+          </td>
+          <td style="padding:6px 12px">{{ r.submitter_name }}</td>
+          <td style="padding:6px 12px;white-space:nowrap">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
+          <td style="padding:6px 12px">{{ r.ease_rating }}</td>
+          <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
+          <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
+          <td style="padding:6px 12px;white-space:nowrap">
+            {% if not r.is_approved %}
+            <form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0">
+              <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0"
+                  onsubmit="return confirm('削除しますか？')">
+              <button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">削除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
+      {% endif %}
     </td>
   </tr>
   {% else %}
@@ -150,6 +202,10 @@
 <script>
 const COURSES = {{ courses_data | safe }};
 {% raw %}
+function toggleReviews(id) {
+  const tr = document.getElementById(id);
+  tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+}
 function openEdit(id) {
   const c = COURSES[id];
   document.getElementById('editName').value = c.name;
