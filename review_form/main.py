@@ -328,9 +328,9 @@ async def admin_users(username: str = Depends(verify_admin)):
 
     rows_html = "".join(
         f"<tr>"
-        f"<td style='padding:10px 8px;font-size:11px;word-break:break-all'>{p.line_user_id}</td>"
-        f"<td style='padding:10px 8px'>{p.name}</td>"
-        f"<td style='padding:10px 8px'>{p.student_id}</td>"
+        f"<td style='padding:10px 8px;font-size:11px;word-break:break-all'>{_html.escape(p.line_user_id)}</td>"
+        f"<td style='padding:10px 8px'>{_html.escape(p.name)}</td>"
+        f"<td style='padding:10px 8px'>{_html.escape(p.student_id)}</td>"
         f"<td style='padding:10px 8px'>{p.created_at.strftime('%Y/%m/%d %H:%M') if p.created_at else ''}</td>"
         f"</tr>"
         for p in profiles

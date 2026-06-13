@@ -551,16 +551,21 @@ async def admin_courses(_: str = Depends(check_admin)):
         if cl:
             class_counts[cl] = class_counts.get(cl, 0) + 1
 
-    courses_data = json.dumps({
-        c.id: {
-            "name": c.name,
-            "instructor": c.instructor or "",
-            "classification": c.classification or "",
-            "category": c.category,
-            "syllabus_url": c.syllabus_url or "",
-        }
-        for c in courses
-    }, ensure_ascii=False)
+    courses_data = (
+        json.dumps({
+            c.id: {
+                "name": c.name,
+                "instructor": c.instructor or "",
+                "classification": c.classification or "",
+                "category": c.category,
+                "syllabus_url": c.syllabus_url or "",
+            }
+            for c in courses
+        }, ensure_ascii=False)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
 
     return templates.TemplateResponse("admin/courses.html", {
         "request": request,
