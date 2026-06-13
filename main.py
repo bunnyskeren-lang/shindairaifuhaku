@@ -880,5 +880,6 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
 
 
 @app.get("/health")
+@app.head("/health")
 async def health():
     return {"status": "healthy"}
