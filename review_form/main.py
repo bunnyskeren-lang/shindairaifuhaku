@@ -1,3 +1,4 @@
+import html as _html
 import os
 import re
 import secrets
@@ -204,17 +205,17 @@ async def admin_page(username: str = Depends(verify_admin)):
                 "<button style='background:#ef4444;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer'>🗑 却下</button></form>"
             )
         ts = r.created_at.strftime("%m/%d %H:%M") if r.created_at else ""
-        grading = r.grading_method or "―"
+        grading = _html.escape(r.grading_method or "―")
         return (
             f"<tr>"
             f"<td style='padding:10px 8px'>{badge}</td>"
             f"<td style='padding:10px 8px'>{ts}</td>"
-            f"<td style='padding:10px 8px;font-weight:bold'>{r.course_name}</td>"
-            f"<td style='padding:10px 8px'>{r.submitter_name}</td>"
+            f"<td style='padding:10px 8px;font-weight:bold'>{_html.escape(r.course_name)}</td>"
+            f"<td style='padding:10px 8px'>{_html.escape(r.submitter_name)}</td>"
             f"<td style='padding:10px 8px'>{'★'*r.rating}{'☆'*(5-r.rating)}</td>"
-            f"<td style='padding:10px 8px'>{r.ease_rating}</td>"
+            f"<td style='padding:10px 8px'>{_html.escape(r.ease_rating)}</td>"
             f"<td style='padding:10px 8px;font-size:12px;color:#555;max-width:160px;word-break:break-word'>{grading}</td>"
-            f"<td style='padding:10px 8px;max-width:200px;word-break:break-word'>{r.comment}</td>"
+            f"<td style='padding:10px 8px;max-width:200px;word-break:break-word'>{_html.escape(r.comment)}</td>"
             f"<td style='padding:10px 8px'>{actions}</td>"
             f"</tr>"
         )

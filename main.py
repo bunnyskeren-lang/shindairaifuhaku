@@ -470,9 +470,10 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [TextMessage(text=CONTACT_TEXT)]
 
-    # Course keyword search
+    # Course keyword search (% and _ escaped to prevent wildcard-only matches)
+    t_safe = t.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     courses = (await session.execute(
-        select(Course).where(Course.name.ilike(f"%{t}%")).limit(3)
+        select(Course).where(Course.name.ilike(f"%{t_safe}%", escape="\\")).limit(3)
     )).scalars().all()
     if courses:
         return [await get_course_flex(session, c, user_id) for c in courses]
@@ -549,9 +550,9 @@ async def admin_page(_: str = Depends(check_admin)):
         )).scalars().all()
 
     rows_html = "".join(
-        f"<tr><td>{l.user_id[:10]}…</td>"
+        f"<tr><td>{_html.escape(l.user_id[:10])}…</td>"
         f"<td>{'→' if l.direction == 'in' else '←'}</td>"
-        f"<td>{l.message[:60]}</td>"
+        f"<td>{_html.escape(l.message[:60])}</td>"
         f"<td>{l.created_at.strftime('%m/%d %H:%M')}</td></tr>"
         for l in logs
     )
@@ -579,7 +580,7 @@ async def admin_courses(_: str = Depends(check_admin)):
 
     existing = [c for c in classifications if c]
     options_html = "<option value=''>（未分類）</option>" + "".join(
-        f"<option value='{c}'>{c}</option>" for c in existing
+        f"<option value='{_html.escape(c, quote=True)}'>{_html.escape(c)}</option>" for c in existing
     ) + "<option value='__new__'>＋ 新しい分類を入力...</option>"
 
     class_counts: dict[str, int] = {}

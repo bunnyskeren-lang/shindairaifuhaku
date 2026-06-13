@@ -20,9 +20,9 @@ class Course(Base):
     __tablename__ = "courses"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     instructor: Mapped[str] = mapped_column(String(100), nullable=False, default="")
-    classification: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    classification: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     category: Mapped[str] = mapped_column(String(20), nullable=False, server_default="専門")
     syllabus_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
