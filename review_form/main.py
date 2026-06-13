@@ -161,7 +161,7 @@ async def submit(
                 ))
 
         review = PendingReview(
-            submitter_name=submitter_name.strip()[:50],
+            submitter_name=submitter_name.strip()[:20],
             course_name=course_name.strip()[:200],
             rating=rating,
             ease_rating=ease_rating,
