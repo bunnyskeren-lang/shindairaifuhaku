@@ -58,7 +58,15 @@
     <tr><th>分類名</th><th>科目数</th><th></th></tr>
     {% for cl, cnt in class_counts | dictsort %}
     <tr>
-      <td>{{ cl }}</td>
+      <td>
+        <form method="post" action="/admin/courses/classification/rename"
+              style="display:flex;gap:6px;align-items:center;margin:0">
+          <input type="hidden" name="old_name" value="{{ cl }}">
+          <input type="text" name="new_name" value="{{ cl }}"
+                 style="width:140px;padding:4px 8px;font-size:13px;margin-top:0">
+          <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:12px;white-space:nowrap">保存</button>
+        </form>
+      </td>
       <td style="color:#666">{{ cnt }}科目</td>
       <td>
         <form method="post" action="/admin/courses/classification/delete" style="margin:0"

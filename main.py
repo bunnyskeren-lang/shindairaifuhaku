@@ -908,6 +908,25 @@ async def admin_users_set(
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
+@app.post("/admin/courses/classification/rename")
+async def rename_classification(
+    _: str = Depends(check_admin),
+    old_name: str = Form(...),
+    new_name: str = Form(...),
+):
+    new_name = new_name.strip()
+    if not new_name or new_name == old_name:
+        return RedirectResponse(url="/admin/courses", status_code=303)
+    async with AsyncSessionLocal() as session:
+        courses = (await session.execute(
+            select(Course).where(Course.classification == old_name)
+        )).scalars().all()
+        for course in courses:
+            course.classification = new_name
+        await session.commit()
+    return RedirectResponse(url="/admin/courses", status_code=303)
+
+
 @app.post("/admin/courses/classification/delete")
 async def delete_classification(
     _: str = Depends(check_admin),
