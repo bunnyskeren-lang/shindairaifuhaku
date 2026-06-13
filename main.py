@@ -511,16 +511,26 @@ async def callback(request: Request):
                 user_id = event.source.user_id
                 user_text = event.message.text
 
-                await save_log(session, user_id, "in", user_text)
-                messages = await handle_message(session, user_text, user_id)
-                await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
-
-                await line_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=messages[:5],
+                try:
+                    await save_log(session, user_id, "in", user_text)
+                    messages = await handle_message(session, user_text, user_id)
+                    await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
+                    await line_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=messages[:5],
+                        )
                     )
-                )
+                except Exception:
+                    try:
+                        await line_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")],
+                            )
+                        )
+                    except Exception:
+                        pass
 
     return {"status": "ok"}
 
