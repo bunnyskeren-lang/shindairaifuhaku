@@ -86,14 +86,25 @@
   </form>
 </div>
 <table>
-  <tr><th>科目名</th><th>教員</th><th>分類</th><th>カテゴリ</th><th></th></tr>
-  {% for c in courses %}
+  <tr><th>科目名</th><th>教員</th><th>カテゴリ</th><th></th></tr>
+  {% if courses %}
+  {% for classification, group_courses in courses | groupby("classification") %}
+  {% set gid = "grp-" ~ loop.index %}
+  {% set group_list = group_courses | list %}
+  <tr onclick="toggleGroup('{{ gid }}', this)"
+      style="background:#e0e7ff;cursor:pointer;user-select:none">
+    <td colspan="4" style="font-weight:bold;padding:10px 14px;color:#4338ca">
+      <span class="grp-arrow">▶</span>
+      {{ classification or "（未分類）" }}
+      <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ group_list | length }}科目）</span>
+    </td>
+  </tr>
+  {% for c in group_list %}
   {% set reviews = reviews_by_course[c.name] %}
   {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
-  <tr>
+  <tr class="{{ gid }}" style="display:none">
     <td>{{ c.name }}</td>
     <td>{{ c.instructor or "―" }}</td>
-    <td>{{ c.classification or "―" }}</td>
     <td>
       <span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">
         {{ c.category }}
@@ -101,19 +112,19 @@
     </td>
     <td style="white-space:nowrap">
       <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#f3f4f6;color:#374151"
-              onclick="toggleReviews('rv-{{ c.id }}')">
+              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
         レビュー {{ reviews | length }}件{% if pending_count %} <span style="background:#f59e0b;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px">未承認{{ pending_count }}</span>{% endif %}
       </button>
       <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
-              onclick="openEdit({{ c.id }})">編集</button>
+              onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
             onsubmit="return confirm('削除しますか？')">
         <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
       </form>
     </td>
   </tr>
-  <tr id="rv-{{ c.id }}" style="display:none">
-    <td colspan="5" style="padding:0;background:#f9fafb">
+  <tr id="rv-{{ c.id }}" class="{{ gid }} review-row" style="display:none">
+    <td colspan="4" style="padding:0;background:#f9fafb">
       {% if reviews %}
       <table style="margin:0;border-radius:0;font-size:12px">
         <tr style="background:#e5e7eb">
@@ -158,9 +169,11 @@
       {% endif %}
     </td>
   </tr>
-  {% else %}
-  <tr><td colspan="5" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>
   {% endfor %}
+  {% endfor %}
+  {% else %}
+  <tr><td colspan="4" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>
+  {% endif %}
 </table>
 {{ pager(page, total_pages, total, url_prefix) }}
 
@@ -202,6 +215,16 @@
 <script>
 const COURSES = {{ courses_data | safe }};
 {% raw %}
+function toggleGroup(id, headerTr) {
+  var allRows = document.querySelectorAll('tr.' + id);
+  var courseRows = document.querySelectorAll('tr.' + id + ':not(.review-row)');
+  var isExpanded = courseRows.length > 0 && courseRows[0].style.display !== 'none';
+  allRows.forEach(function(tr) {
+    tr.style.display = (!isExpanded && !tr.classList.contains('review-row')) ? 'table-row' : 'none';
+  });
+  var arrow = headerTr.querySelector('.grp-arrow');
+  if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
+}
 function toggleReviews(id) {
   const tr = document.getElementById(id);
   tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
