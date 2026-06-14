@@ -13,7 +13,13 @@ ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
 
-engine = create_async_engine(_url, echo=False, connect_args={"ssl": ssl_ctx})
+engine = create_async_engine(
+    _url,
+    echo=False,
+    connect_args={"ssl": ssl_ctx, "command_timeout": 30},
+    pool_pre_ping=True,
+    pool_recycle=270,
+)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
