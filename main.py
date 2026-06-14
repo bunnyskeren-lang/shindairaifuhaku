@@ -32,7 +32,7 @@ from linebot.v3.messaging import (
     URIAction,
     MessageAction,
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
 from sqlalchemy import select, func, delete, or_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -407,6 +407,54 @@ def make_help_flex() -> FlexMessage:
     )
 
 
+def make_welcome_flex() -> FlexMessage:
+    return FlexMessage(
+        alt_text="🎓 神大授業ナビへようこそ！",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="🎓 神大授業ナビへ", weight="bold", color="#ffffff", size="xl"),
+                    FlexText(text="ようこそ！", color="#c7d2fe", size="lg", weight="bold"),
+                ],
+                background_color="#6366f1",
+                padding_all="xl",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(
+                        text="先輩のリアルなレビューで\n授業選びをサポートします📖",
+                        wrap=True,
+                        size="sm",
+                        color="#374151",
+                    ),
+                    FlexSeparator(margin="lg"),
+                    FlexText(text="できること", weight="bold", size="xs", color="#9ca3af", margin="lg"),
+                    FlexText(text="🔍  科目名を送って検索", size="sm", color="#4b5563", margin="sm"),
+                    FlexText(text="📚  「科目一覧」で全科目を表示", size="sm", color="#4b5563", margin="sm"),
+                    FlexText(text="✏️  「レビュー投稿」で口コミを投稿", size="sm", color="#4b5563", margin="sm"),
+                    FlexText(text="🏆  「人気」「楽単」でランキング表示", size="sm", color="#4b5563", margin="sm"),
+                    FlexText(text="❓  「ヘルプ」で使い方を確認", size="sm", color="#4b5563", margin="sm"),
+                ],
+                padding_all="lg",
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexButton(
+                        action=MessageAction(label="📚 科目一覧を見る", text="科目一覧"),
+                        style="primary",
+                        color="#6366f1",
+                        height="sm",
+                    ),
+                ],
+                padding_all="md",
+            ),
+        ),
+    )
+
+
 # ── Ranking bubble ──────────────────────────────────────────────
 
 RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
@@ -636,6 +684,18 @@ async def callback(request: Request):
         async with AsyncApiClient(configuration) as api_client:
             line_api = AsyncMessagingApi(api_client)
             for event in events:
+                if isinstance(event, FollowEvent):
+                    try:
+                        await line_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[make_welcome_flex()],
+                            )
+                        )
+                    except Exception as exc:
+                        await save_error_log(exc, action="follow")
+                    continue
+
                 if not isinstance(event, MessageEvent):
                     continue
                 if not isinstance(event.message, TextMessageContent):
