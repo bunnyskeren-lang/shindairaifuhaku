@@ -338,27 +338,73 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
 
 # ── Static reply texts ──────────────────────────────────────────
 
-HELP_TEXT = """📖 神大授業ナビ の使い方
+PRIVACY_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com") + "/privacy"
+CONTACT_EMAIL = "bunnyskeren@gmail.com"
 
-▼ リッチメニューのボタン
-・科目一覧 → 登録科目リスト
-・レビュー投稿 → 投稿フォームへ
-・人気の授業 → 学び度 TOP5
-・楽単ランキング → 楽単 TOP5
-・ヘルプ → この画面
-・問い合わせ → 管理者への連絡先
+def make_help_flex() -> FlexMessage:
+    def row(icon: str, title: str, desc: str) -> FlexBox:
+        return FlexBox(
+            layout="horizontal",
+            contents=[
+                FlexText(text=icon, size="lg", flex=0),
+                FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexText(text=title, weight="bold", size="sm", color="#1f2937"),
+                        FlexText(text=desc, size="xs", color="#6b7280", wrap=True),
+                    ],
+                    flex=1,
+                    margin="md",
+                ),
+            ],
+            margin="lg",
+        )
 
-▼ 科目名で検索
-科目名をそのまま送ってください！
-例：「英語」「情報処理」など
-
-投稿したレビューは確認後に公開されます✨"""
-
-CONTACT_TEXT = (
-    "📬 お問い合わせ\n\n"
-    "ご意見・ご要望は管理者までどうぞ。\n"
-    "✉️ bunnyskeren@gmail.com"
-)
+    return FlexMessage(
+        alt_text="📖 神大授業ナビ 使い方ガイド",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="神大授業ナビ", weight="bold", color="#ffffff", size="xl"),
+                    FlexText(text="使い方ガイド", color="#c7d2fe", size="sm"),
+                ],
+                background_color="#6366f1",
+                padding_all="xl",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    row("🔍", "科目を検索", '科目名をそのまま送ってください\n例：「英語」「データサイエンス」'),
+                    FlexSeparator(margin="lg"),
+                    row("📚", "科目一覧", '「科目一覧」と送ると\n全科目を分類別に表示'),
+                    FlexSeparator(margin="lg"),
+                    row("✏️", "レビュー投稿", '「レビュー投稿」と送ると\n投稿フォームのURLが届きます'),
+                    FlexSeparator(margin="lg"),
+                    row("🏆", "ランキング", '「人気」→ 高評価 TOP5\n「楽単」→ 楽単 TOP5'),
+                ],
+                padding_all="lg",
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexButton(
+                        action=URIAction(label="📬 問い合わせ", uri=f"mailto:{CONTACT_EMAIL}"),
+                        style="secondary",
+                        height="sm",
+                        color="#f3f4f6",
+                    ),
+                    FlexButton(
+                        action=URIAction(label="📋 プライバシーポリシー", uri=PRIVACY_URL),
+                        style="link",
+                        height="sm",
+                    ),
+                ],
+                padding_all="md",
+                spacing="sm",
+            ),
+        ),
+    )
 
 
 # ── Ranking bubble ──────────────────────────────────────────────
@@ -543,10 +589,10 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         )]
 
     if t in ["ヘルプ", "help", "使い方", "？", "?"]:
-        return [TextMessage(text=HELP_TEXT)]
+        return [make_help_flex()]
 
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
-        return [TextMessage(text=CONTACT_TEXT)]
+        return [make_help_flex()]
 
     # Course keyword search — split on spaces (half-width and full-width) for multi-token AND match
     import re as _re
@@ -974,6 +1020,11 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
             await session.delete(course)
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy(request: Request):
+    return templates.TemplateResponse("privacy.html", {"request": request})
 
 
 @app.get("/health")
