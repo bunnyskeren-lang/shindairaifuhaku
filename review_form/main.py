@@ -76,9 +76,27 @@ async def send_push_notification(course_name: str, rating: int, ease_rating: str
 security = HTTPBasic()
 
 
+async def _self_ping():
+    import asyncio
+    import httpx
+    url = os.environ.get("SELF_URL", "").rstrip("/")
+    if not url:
+        return
+    await asyncio.sleep(30)
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.get(f"{url}/health")
+        except Exception:
+            pass
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    import asyncio
+    asyncio.create_task(_self_ping())
     yield
 
 
