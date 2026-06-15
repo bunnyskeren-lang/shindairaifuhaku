@@ -700,6 +700,17 @@ async def handle_course_list(category: str = "") -> list:
         course_name_set = {c.name for c in rows}
         seen_base: set[str] = set()
 
+        # Pre-compute numeric variant groups
+        _num_bases: dict[str, list] = defaultdict(list)
+        for _c in rows:
+            _m = _re.match(r'^(.*?)[\s　]*(\d+)$', _c.name)
+            if _m:
+                _b = _m.group(1).strip()
+                _num_bases[_b].append((_c.name, int(_m.group(2))))
+        _num_variant_names = {n for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
+        _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
+        seen_num_base: set[str] = set()
+
         groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
         for course in rows:
             name = course.name
@@ -713,6 +724,14 @@ async def handle_course_list(category: str = "") -> list:
                         suffix = "/".join(variants)
                         groups[classification].append((base, f"variant:{suffix}"))
                     continue
+            if name in _num_variant_names:
+                base = _num_base_for[name]
+                if base not in seen_num_base:
+                    seen_num_base.add(base)
+                    nums_sorted = sorted(_num_bases[base], key=lambda x: x[1])
+                    suffix = "/".join(str(n) for _, n in nums_sorted)
+                    groups[classification].append((base, f"numvariant:{suffix}"))
+                continue
             groups[classification].append((name, "single"))
 
         CAROUSEL_MAX = 12
@@ -724,7 +743,7 @@ async def handle_course_list(category: str = "") -> list:
         for classification, entries in visible_groups:
             btn_contents = []
             for name, kind in entries:
-                if kind.startswith("variant:"):
+                if kind.startswith("variant:") or kind.startswith("numvariant:"):
                     suffix = kind.split(":", 1)[1]
                     display = f"{name} ({suffix})"
                 else:
@@ -866,6 +885,15 @@ async def handle_message(text: str, user_id: str = "") -> list:
         if len(variant_courses) >= 2:
             return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
 
+        # Numeric variant group (e.g. 「英語1」「英語2」)
+        _num_candidates = (await session.execute(
+            select(Course).where(Course.name.like(f"{t}%")).order_by(Course.name)
+        )).scalars().all()
+        _num_pat = _re.compile(r'^' + _re.escape(t) + r'[\s　]*\d+$')
+        _num_variants = [c for c in _num_candidates if _num_pat.match(c.name)]
+        if len(_num_variants) >= 2:
+            return [make_variant_selection_bubble(t, [c.name for c in _num_variants])]
+
         # Keyword search
         tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
         def _escape(tok: str) -> str:
@@ -879,6 +907,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             ))
         courses = (await session.execute(stmt.limit(6))).scalars().all()
         if courses:
+            # Letter variants (A/B/C/D)
             potential_bases = {
                 c.name[:-1] for c in courses
                 if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
@@ -892,7 +921,15 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 for vname in variant_rows:
                     base_variants[vname[:-1]].append(vname)
 
+            # Numeric variants
+            _kw_num_bases: dict[str, list[str]] = defaultdict(list)
+            for c in courses:
+                _m = _re.match(r'^(.*?)[\s　]*(\d+)$', c.name)
+                if _m:
+                    _kw_num_bases[_m.group(1).strip()].append(c.name)
+
             seen_base: set[str] = set()
+            seen_num_base: set[str] = set()
             result = []
             for c in courses:
                 name = c.name
@@ -904,6 +941,16 @@ async def handle_message(text: str, user_id: str = "") -> list:
                     if len(variants) >= 2:
                         seen_base.add(base)
                         result.append(make_variant_selection_bubble(base, variants))
+                        continue
+                _m2 = _re.match(r'^(.*?)[\s　]*\d+$', name)
+                if _m2:
+                    base = _m2.group(1).strip()
+                    if base in seen_num_base:
+                        continue
+                    num_vs = _kw_num_bases.get(base, [])
+                    if len(num_vs) >= 2:
+                        seen_num_base.add(base)
+                        result.append(make_variant_selection_bubble(base, sorted(num_vs)))
                         continue
                 result.append(await get_course_flex(session, c, user_id))
             return result[:5]
