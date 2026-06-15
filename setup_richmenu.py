@@ -165,7 +165,7 @@ def main():
             RichMenuRequest(
                 size=RichMenuSize(width=W, height=H),
                 selected=True,
-                name="神大授業ナビ",
+                name="神大ライフハック",
                 chat_bar_text="メニュー",
                 areas=areas,
             )
