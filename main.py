@@ -90,6 +90,14 @@ except Exception:
     def _reading(text: str) -> str:
         return ""
 
+_CLS_ORDER_KEYS = ["基盤", "人文", "社会", "自然", "総合", "健康", "外国語"]
+
+def _cls_order(name: str) -> int:
+    for i, kw in enumerate(_CLS_ORDER_KEYS):
+        if kw in (name or ""):
+            return i
+    return len(_CLS_ORDER_KEYS)
+
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}
 
@@ -561,10 +569,11 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
 
 async def handle_course_list(session: AsyncSession, category: str = "") -> list:
     from collections import defaultdict
-    stmt = select(Course).order_by(Course.classification, Course.name)
+    stmt = select(Course).order_by(Course.name)
     if category:
         stmt = stmt.where(Course.category == category)
     rows = (await session.execute(stmt)).scalars().all()
+    rows = sorted(rows, key=lambda c: (_cls_order(c.classification or ""), c.name or ""))
 
     if not rows:
         label = f"{category}の" if category else ""
@@ -590,7 +599,7 @@ async def handle_course_list(session: AsyncSession, category: str = "") -> list:
         groups[classification].append((name, "single"))
 
     CAROUSEL_MAX = 12
-    all_groups = list(groups.items())
+    all_groups = sorted(groups.items(), key=lambda x: _cls_order(x[0]))
     visible_groups = all_groups[:CAROUSEL_MAX]
     overflow_groups = all_groups[CAROUSEL_MAX:]
 
@@ -941,8 +950,9 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             base_stmt = base_stmt.where(_search_filter(q))
 
         courses = (await session.execute(
-            base_stmt.order_by(Course.classification, Course.name)
+            base_stmt.order_by(Course.name)
         )).scalars().all()
+        courses = sorted(courses, key=lambda c: (_cls_order(c.classification or ""), c.name or ""))
         total = len(courses)
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
@@ -954,7 +964,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             .order_by(Course.classification)
         )).all())
 
-    existing = [c for c in classifications if c]
+    existing = sorted([c for c in classifications if c], key=_cls_order)
     courses_data = (
         json.dumps({
             c.id: {
