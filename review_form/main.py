@@ -27,7 +27,7 @@ def _fmt_jst(dt, fmt="%m/%d %H:%M") -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(JST).strftime(fmt)
-STUDENT_ID_RE = re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZ])$', re.IGNORECASE)
+STUDENT_ID_RE = re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZ])$')
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 
