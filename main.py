@@ -661,7 +661,7 @@ async def handle_course_list(category: str = "") -> list:
         bubbles = []
         for classification, entries in visible_groups:
             btn_contents = []
-            for name, kind in entries[:8]:
+            for name, kind in entries:
                 if kind.startswith("variant:"):
                     suffix = kind.split(":", 1)[1]
                     display = f"{name} ({suffix})"
