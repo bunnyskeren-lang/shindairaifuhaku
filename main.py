@@ -41,7 +41,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor
+from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -123,6 +123,21 @@ def _cls_order(name: str) -> int:
         if kw in (name or ""):
             return i
     return len(_CLS_ORDER_KEYS)
+
+
+async def _get_cls_order_map(session) -> dict:
+    rows = (await session.execute(
+        select(ClassificationOrder).order_by(ClassificationOrder.sort_order)
+    )).scalars().all()
+    return {r.name: r.sort_order for r in rows}
+
+
+def _make_cls_sort(cls_map: dict):
+    def key(name: str) -> int:
+        if name in cls_map:
+            return cls_map[name]
+        return _cls_order(name) + 100000
+    return key
 
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}
@@ -727,11 +742,13 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
 async def handle_course_list(category: str = "") -> list:
     from collections import defaultdict
     async with AsyncSessionLocal() as session:
-        stmt = select(Course).order_by(Course.name)
+        stmt = select(Course).order_by(Course.sort_order, Course.name)
         if category:
             stmt = stmt.where(Course.category == category)
         rows = (await session.execute(stmt)).scalars().all()
-        rows = sorted(rows, key=lambda c: (_cls_order(c.classification or ""), c.name or ""))
+        cls_map = await _get_cls_order_map(session)
+        _cls_sort = _make_cls_sort(cls_map)
+        rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
 
         if not rows:
             label = f"{category}の" if category else ""
@@ -777,7 +794,7 @@ async def handle_course_list(category: str = "") -> list:
             groups[classification].append((name, "single"))
 
         CAROUSEL_MAX = 12
-        all_groups = sorted(groups.items(), key=lambda x: _cls_order(x[0]))
+        all_groups = sorted(groups.items(), key=lambda x: _cls_sort(x[0]))
         visible_groups = all_groups[:CAROUSEL_MAX]
         overflow_groups = all_groups[CAROUSEL_MAX:]
 
@@ -1283,9 +1300,11 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             base_stmt = base_stmt.where(_search_filter(q))
 
         courses = (await session.execute(
-            base_stmt.order_by(Course.name)
+            base_stmt.order_by(Course.sort_order, Course.name)
         )).scalars().all()
-        courses = sorted(courses, key=lambda c: (_cls_order(c.classification or ""), c.name or ""))
+        cls_map = await _get_cls_order_map(session)
+        _cls_sort = _make_cls_sort(cls_map)
+        courses = sorted(courses, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
         total = len(courses)
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
@@ -1296,9 +1315,9 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             .group_by(Course.classification)
             .order_by(Course.classification)
         )).all())
-        class_counts = {k: class_counts_raw[k] for k in sorted(class_counts_raw, key=_cls_order)}
+        class_counts = {k: class_counts_raw[k] for k in sorted(class_counts_raw, key=_cls_sort)}
 
-    existing = sorted([c for c in classifications if c], key=_cls_order)
+    existing = sorted([c for c in classifications if c], key=_cls_sort)
     courses_data = (
         json.dumps({
             c.id: {
@@ -1693,6 +1712,85 @@ async def delete_classification(
             course.classification = ""
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@app.post("/admin/courses/classification/move")
+async def admin_cls_move(request: Request, _=Depends(check_admin)):
+    from fastapi.responses import JSONResponse
+    data = await request.json()
+    name = data.get("name", "")
+    direction = data.get("direction", "")
+    if not name or direction not in ("up", "down"):
+        return JSONResponse({"ok": False})
+
+    async with AsyncSessionLocal() as session:
+        all_cls = sorted(
+            [c for c in (await session.execute(
+                select(Course.classification).distinct()
+            )).scalars().all() if c],
+        )
+        cls_map = await _get_cls_order_map(session)
+        _cls_sort = _make_cls_sort(cls_map)
+        sorted_cls = sorted(all_cls, key=_cls_sort)
+
+        try:
+            idx = sorted_cls.index(name)
+        except ValueError:
+            return JSONResponse({"ok": False})
+
+        delta = -1 if direction == "up" else 1
+        swap_idx = idx + delta
+        if swap_idx < 0 or swap_idx >= len(sorted_cls):
+            return JSONResponse({"ok": True})
+
+        sorted_cls[idx], sorted_cls[swap_idx] = sorted_cls[swap_idx], sorted_cls[idx]
+
+        for i, cls_name in enumerate(sorted_cls):
+            existing = (await session.execute(
+                select(ClassificationOrder).where(ClassificationOrder.name == cls_name)
+            )).scalar_one_or_none()
+            if existing:
+                existing.sort_order = i
+            else:
+                session.add(ClassificationOrder(name=cls_name, sort_order=i))
+        await session.commit()
+    return JSONResponse({"ok": True})
+
+
+@app.post("/admin/courses/{course_id}/move")
+async def admin_course_move(course_id: int, request: Request, _=Depends(check_admin)):
+    from fastapi.responses import JSONResponse
+    data = await request.json()
+    direction = data.get("direction", "")
+    if direction not in ("up", "down"):
+        return JSONResponse({"ok": False})
+
+    async with AsyncSessionLocal() as session:
+        course = await session.get(Course, course_id)
+        if not course:
+            return JSONResponse({"ok": False})
+
+        all_in_cls = list((await session.execute(
+            select(Course)
+            .where(Course.classification == (course.classification or ""))
+            .order_by(Course.sort_order, Course.name)
+        )).scalars().all())
+
+        try:
+            idx = next(i for i, c in enumerate(all_in_cls) if c.id == course_id)
+        except StopIteration:
+            return JSONResponse({"ok": False})
+
+        delta = -1 if direction == "up" else 1
+        swap_idx = idx + delta
+        if swap_idx < 0 or swap_idx >= len(all_in_cls):
+            return JSONResponse({"ok": True})
+
+        all_in_cls[idx], all_in_cls[swap_idx] = all_in_cls[swap_idx], all_in_cls[idx]
+        for i, c in enumerate(all_in_cls):
+            c.sort_order = i
+        await session.commit()
+    return JSONResponse({"ok": True})
 
 
 @app.post("/admin/courses/update/{course_id}")

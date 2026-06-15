@@ -27,6 +27,15 @@ class Course(Base):
     category: Mapped[str] = mapped_column(String(20), nullable=False, server_default="専門")
     syllabus_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     reading: Mapped[str] = mapped_column(String(400), nullable=False, server_default="", default="")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+
+
+class ClassificationOrder(Base):
+    __tablename__ = "classification_orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class PendingReview(Base):
