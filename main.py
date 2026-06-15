@@ -104,6 +104,7 @@ def _cls_order(name: str) -> int:
 
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}
+EASE_COLOR = {"SS": "#10b981", "S": "#6366f1", "A": "#f59e0b", "B": "#f97316", "C": "#ef4444"}
 
 
 def stars(n: int) -> str:
@@ -229,9 +230,10 @@ def make_course_bubble(
     instructor: str,
     classification: str,
     avg_rating: Optional[float],
+    review_count: int,
     top_ease: Optional[str],
+    grading_summary: dict,
     comments: list[str],
-    grading_methods: list[str] = [],
     review_url: str = "",
     syllabus_url: str = "",
 ) -> FlexBubble:
@@ -255,16 +257,22 @@ def make_course_bubble(
             )
         )
 
-    # 学びになった度（星評価）
+    body_contents.append(FlexSeparator(margin="lg"))
+
+    # 学びになった度
     if avg_rating is not None:
+        body_contents.append(
+            FlexText(text="⭐ 学びになった度", size="xs", color="#64748b", weight="bold", margin="md")
+        )
         body_contents.append(
             FlexBox(
                 layout="horizontal",
                 contents=[
-                    FlexText(text="学びになった度", size="xs", color="#64748b"),
-                    FlexText(text=stars(round(avg_rating)), size="xs", color="#f59e0b", margin="sm"),
+                    FlexText(text=stars(round(avg_rating)), size="lg", color="#f59e0b", flex=0),
+                    FlexText(text=f"  {avg_rating:.1f}点", size="sm", color="#475569", margin="sm"),
+                    FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
                 ],
-                margin="md",
+                margin="xs",
             )
         )
     else:
@@ -272,31 +280,60 @@ def make_course_bubble(
             FlexText(text="⭐ まだレビューなし", size="sm", color="#94a3b8", margin="md")
         )
 
-    # 楽単度（星のみ）
+    # 楽単度
     if top_ease:
+        body_contents.append(
+            FlexText(text="😴 楽単度", size="xs", color="#64748b", weight="bold", margin="md")
+        )
         body_contents.append(
             FlexBox(
                 layout="horizontal",
                 contents=[
-                    FlexText(text="楽単度", size="xs", color="#64748b"),
-                    FlexText(text=EASE_STARS.get(top_ease, ""), size="xs", color="#f59e0b", margin="sm"),
+                    FlexBox(
+                        layout="horizontal",
+                        contents=[
+                            FlexText(
+                                text=EASE_LABEL.get(top_ease, top_ease),
+                                size="sm",
+                                color="#ffffff",
+                                weight="bold",
+                            ),
+                        ],
+                        background_color=EASE_COLOR.get(top_ease, "#6366f1"),
+                        corner_radius="12px",
+                        padding_x="lg",
+                        padding_y="sm",
+                    ),
                 ],
                 margin="xs",
             )
         )
 
-    # 成績評価方法（全件）
-    if grading_methods:
+    # 成績評価方法
+    grading_items = []
+    if grading_summary.get("attendance"):
+        grading_items.append(("🏫 出席", grading_summary["attendance"]))
+    if grading_summary.get("homework"):
+        grading_items.append(("📝 課題", grading_summary["homework"]))
+    if grading_summary.get("evals"):
+        grading_items.append(("🎯 評価", "・".join(grading_summary["evals"])))
+
+    if grading_items:
+        body_contents.append(FlexSeparator(margin="lg"))
         body_contents.append(
-            FlexBox(
-                layout="horizontal",
-                contents=[
-                    FlexText(text="📝 成績評価", size="xs", color="#64748b", flex=2),
-                    FlexText(text="・".join(grading_methods), size="xs", color="#334155", wrap=True, flex=5),
-                ],
-                margin="xs",
-            )
+            FlexText(text="📋 成績評価方法", size="xs", color="#64748b", weight="bold", margin="md")
         )
+        for label, val in grading_items:
+            body_contents.append(
+                FlexBox(
+                    layout="horizontal",
+                    contents=[
+                        FlexText(text=label, size="xs", color="#64748b", flex=2),
+                        FlexText(text=val, size="xs", color="#334155", flex=4, wrap=True),
+                    ],
+                    margin="xs",
+                )
+            )
 
     # コメント
     if comments:
@@ -358,11 +395,13 @@ async def get_user_max_reviews(session: AsyncSession, user_id: str) -> int:
 
 
 async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -> FlexMessage:
+    from collections import Counter as _Counter
     agg = (await session.execute(
         select(func.avg(PendingReview.rating), func.count(PendingReview.id))
         .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
     )).first()
     avg_rating = float(agg[0]) if agg and agg[0] else None
+    review_count = int(agg[1]) if agg and agg[1] else 0
 
     ease_rows = (await session.execute(
         select(PendingReview.ease_rating, func.count(PendingReview.id))
@@ -374,14 +413,36 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
 
     grading_rows = (await session.execute(
-        select(PendingReview.grading_method).distinct()
+        select(PendingReview.grading_method)
         .where(
             PendingReview.course_name == course.name,
             PendingReview.is_approved == True,
             PendingReview.grading_method.isnot(None),
         )
     )).scalars().all()
-    all_grading_methods = [g for g in grading_rows if g]
+    att_c, hw_c, eval_c = _Counter(), _Counter(), _Counter()
+    for gm in grading_rows:
+        if not gm:
+            continue
+        for part in gm.split(" / "):
+            if ":" not in part:
+                continue
+            key, val = part.split(":", 1)
+            key, val = key.strip(), val.strip()
+            if key == "出席":
+                att_c[val] += 1
+            elif key == "課題":
+                hw_c[val] += 1
+            elif key == "評価":
+                for ev in val.split("・"):
+                    ev = ev.strip()
+                    if ev:
+                        eval_c[ev] += 1
+    grading_summary = {
+        "attendance": att_c.most_common(1)[0][0] if att_c else None,
+        "homework": hw_c.most_common(1)[0][0] if hw_c else None,
+        "evals": [ev for ev, _ in eval_c.most_common(3)],
+    }
 
     limit = await get_user_max_reviews(session, user_id)
     comments = (await session.execute(
@@ -399,8 +460,7 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
     url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
     bubble = make_course_bubble(
         course.name, instructor_str, course.classification,
-        avg_rating, top_ease, list(comments),
-        grading_methods=all_grading_methods,
+        avg_rating, review_count, top_ease, grading_summary, list(comments),
         review_url=url,
         syllabus_url=course.syllabus_url or "",
     )
@@ -585,6 +645,7 @@ def make_ranking_bubble(title: str, items: list[dict]) -> FlexBubble:
 # ── Course list carousel ────────────────────────────────────────
 
 VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
+VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
 
 
 def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> FlexMessage:
@@ -592,11 +653,12 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
     btns = []
     for i, name in enumerate(variant_names):
         icon = VARIANT_ICONS.get(i, "▶")
+        color = VARIANT_COLORS[i % len(VARIANT_COLORS)]
         btns.append(
             FlexButton(
                 action=MessageAction(label=f"{icon} {name}", text=name),
-                style="primary" if i == 0 else "secondary",
-                color="#6366f1" if i == 0 else None,
+                style="primary",
+                color=color,
                 height="sm",
             )
         )
