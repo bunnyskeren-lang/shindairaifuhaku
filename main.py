@@ -710,6 +710,13 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [make_help_flex()]
 
+    # Exact course name match → show detail immediately (e.g. "アジア史A")
+    exact = (await session.execute(
+        select(Course).where(Course.name == t)
+    )).scalar_one_or_none()
+    if exact:
+        return [await get_course_flex(session, exact, user_id)]
+
     # Check if t is the base name of a variant group (A/B/C/D...)
     _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
     variant_courses = (await session.execute(
