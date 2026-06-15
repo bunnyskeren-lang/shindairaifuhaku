@@ -36,6 +36,12 @@ W, H = 2500, 843
 COLS, ROWS = 4, 2
 CW, RH = W // COLS, H // ROWS  # 625 x 421
 
+# セルに貼り込む画像 (ボタンインデックス → ファイルパス)
+CELL_IMAGES = {
+    6: "うりぼーネット.png",
+    7: "BEEFplus.png",
+}
+
 BUTTONS = [
     # 上段
     {
@@ -122,20 +128,24 @@ def make_image() -> bytes:
         x0, y0 = col * CW, row * RH
         x1, y1 = x0 + CW - 1, y0 + RH - 1
 
-        # セル背景
-        draw.rectangle([x0, y0, x1, y1], fill=btn["color"])
-        # 境界線
-        draw.rectangle([x0, y0, x1, y1], outline="#ffffff", width=5)
+        if i in CELL_IMAGES:
+            # セル画像を貼り込む
+            cell_img = Image.open(CELL_IMAGES[i]).convert("RGB").resize((CW, RH), Image.LANCZOS)
+            img.paste(cell_img, (x0, y0))
+        else:
+            # 色付きセル + ラベル
+            draw.rectangle([x0, y0, x1, y1], fill=btn["color"])
+            bbox = draw.textbbox((0, 0), btn["label"], font=font)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            draw.text(
+                (x0 + (CW - tw) // 2, y0 + (RH - th) // 2),
+                btn["label"],
+                fill="#ffffff",
+                font=font,
+            )
 
-        # テキストを中央に配置
-        bbox = draw.textbbox((0, 0), btn["label"], font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        draw.text(
-            (x0 + (CW - tw) // 2, y0 + (RH - th) // 2),
-            btn["label"],
-            fill="#ffffff",
-            font=font,
-        )
+        # 境界線（全セル共通）
+        draw.rectangle([x0, y0, x1, y1], outline="#ffffff", width=5)
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=95)
