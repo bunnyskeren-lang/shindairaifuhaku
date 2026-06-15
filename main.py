@@ -676,7 +676,7 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["専門科目", "専門", "専門一覧"]:
         return await handle_course_list(session, category="専門")
 
-    if t in ["レビュー投稿", "レビュー", "投稿"]:
+    if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 
