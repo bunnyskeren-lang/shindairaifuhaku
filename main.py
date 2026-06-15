@@ -567,159 +567,118 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
     )
 
 
-async def handle_course_list(session: AsyncSession, category: str = "") -> list:
+async def handle_course_list(category: str = "") -> list:
     from collections import defaultdict
-    stmt = select(Course).order_by(Course.name)
-    if category:
-        stmt = stmt.where(Course.category == category)
-    rows = (await session.execute(stmt)).scalars().all()
-    rows = sorted(rows, key=lambda c: (_cls_order(c.classification or ""), c.name or ""))
+    async with AsyncSessionLocal() as session:
+        stmt = select(Course).order_by(Course.name)
+        if category:
+            stmt = stmt.where(Course.category == category)
+        rows = (await session.execute(stmt)).scalars().all()
+        rows = sorted(rows, key=lambda c: (_cls_order(c.classification or ""), c.name or ""))
 
-    if not rows:
-        label = f"{category}の" if category else ""
-        return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
+        if not rows:
+            label = f"{category}の" if category else ""
+            return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
 
-    # Detect variant groups: courses sharing base name with A/B/C/D suffix
-    course_name_set = {c.name for c in rows}
-    seen_base: set[str] = set()
+        course_name_set = {c.name for c in rows}
+        seen_base: set[str] = set()
 
-    groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    for course in rows:
-        name = course.name
-        classification = course.classification or "その他"
-        if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
-            base = name[:-1]
-            variants = [s for s in 'ABCD' if base + s in course_name_set]
-            if len(variants) >= 2:
-                if base not in seen_base:
-                    seen_base.add(base)
-                    suffix = "/".join(variants)
-                    groups[classification].append((base, f"variant:{suffix}"))
-                continue
-        groups[classification].append((name, "single"))
+        groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
+        for course in rows:
+            name = course.name
+            classification = course.classification or "その他"
+            if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
+                base = name[:-1]
+                variants = [s for s in 'ABCD' if base + s in course_name_set]
+                if len(variants) >= 2:
+                    if base not in seen_base:
+                        seen_base.add(base)
+                        suffix = "/".join(variants)
+                        groups[classification].append((base, f"variant:{suffix}"))
+                    continue
+            groups[classification].append((name, "single"))
 
-    CAROUSEL_MAX = 12
-    all_groups = sorted(groups.items(), key=lambda x: _cls_order(x[0]))
-    visible_groups = all_groups[:CAROUSEL_MAX]
-    overflow_groups = all_groups[CAROUSEL_MAX:]
+        CAROUSEL_MAX = 12
+        all_groups = sorted(groups.items(), key=lambda x: _cls_order(x[0]))
+        visible_groups = all_groups[:CAROUSEL_MAX]
+        overflow_groups = all_groups[CAROUSEL_MAX:]
 
-    bubbles = []
-    for classification, entries in visible_groups:
-        btn_contents = []
-        for name, kind in entries[:8]:
-            if kind.startswith("variant:"):
-                suffix = kind.split(":", 1)[1]
-                display = f"{name} ({suffix})"
-            else:
-                display = name
-            btn_contents.append(
-                FlexBox(
-                    layout="vertical",
-                    action=MessageAction(label=display[:40], text=name),
-                    contents=[
-                        FlexText(
-                            text=display,
-                            wrap=True,
-                            size="sm",
-                            color="#4f46e5",
-                        )
-                    ],
-                    padding_top="sm",
-                    padding_bottom="sm",
+        bubbles = []
+        for classification, entries in visible_groups:
+            btn_contents = []
+            for name, kind in entries[:8]:
+                if kind.startswith("variant:"):
+                    suffix = kind.split(":", 1)[1]
+                    display = f"{name} ({suffix})"
+                else:
+                    display = name
+                btn_contents.append(
+                    FlexBox(
+                        layout="vertical",
+                        action=MessageAction(label=display[:40], text=name),
+                        contents=[
+                            FlexText(
+                                text=display,
+                                wrap=True,
+                                size="sm",
+                                color="#4f46e5",
+                            )
+                        ],
+                        padding_top="sm",
+                        padding_bottom="sm",
+                    )
                 )
-            )
-        bubbles.append(FlexBubble(
-            size="kilo",
-            header=FlexBox(
-                layout="vertical",
-                contents=[FlexText(text=classification, weight="bold", color="#ffffff", size="sm")],
-                background_color="#6366f1",
-                padding_all="md",
-            ),
-            body=FlexBox(
-                layout="vertical",
-                contents=btn_contents,
-                spacing="xs",
-                padding_all="md",
-            ),
-        ))
+            bubbles.append(FlexBubble(
+                size="kilo",
+                header=FlexBox(
+                    layout="vertical",
+                    contents=[FlexText(text=classification, weight="bold", color="#ffffff", size="sm")],
+                    background_color="#6366f1",
+                    padding_all="md",
+                ),
+                body=FlexBox(
+                    layout="vertical",
+                    contents=btn_contents,
+                    spacing="xs",
+                    padding_all="md",
+                ),
+            ))
 
-    alt = f"📚 {category}一覧" if category else "📚 科目一覧"
-    result = []
-    if not bubbles:
-        return [TextMessage(text="科目が登録されていません。")]
-    if len(bubbles) == 1:
-        result.append(FlexMessage(alt_text=alt, contents=bubbles[0]))
-    else:
-        result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=bubbles)))
+        alt = f"📚 {category}一覧" if category else "📚 科目一覧"
+        result = []
+        if not bubbles:
+            return [TextMessage(text="科目が登録されていません。")]
+        if len(bubbles) == 1:
+            result.append(FlexMessage(alt_text=alt, contents=bubbles[0]))
+        else:
+            result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=bubbles)))
 
-    if overflow_groups:
-        names = "、".join(cl for cl, _ in overflow_groups)
-        result.append(TextMessage(
-            text=f"他 {len(overflow_groups)} 分類（{names}）は科目名で直接検索できます。\n例：「微分積分学」と送ってください。"
-        ))
+        if overflow_groups:
+            names = "、".join(cl for cl, _ in overflow_groups)
+            result.append(TextMessage(
+                text=f"他 {len(overflow_groups)} 分類（{names}）は科目名で直接検索できます。\n例：「微分積分学」と送ってください。"
+            ))
 
-    return result
+        return result
 
 
 # ── Message handler ─────────────────────────────────────────────
 
-async def handle_message(session: AsyncSession, text: str, user_id: str = "") -> list:
+async def handle_message(text: str, user_id: str = "") -> list:
     t = text.strip()
 
     if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
-        return await handle_course_list(session)
+        return await handle_course_list()
 
     if t in ["教養", "教養科目", "教養一覧"]:
-        return await handle_course_list(session, category="教養")
+        return await handle_course_list(category="教養")
 
     if t in ["専門科目", "専門", "専門一覧"]:
-        return await handle_course_list(session, category="専門")
+        return await handle_course_list(category="専門")
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
-
-    if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
-        rows = (await session.execute(
-            select(PendingReview.course_name, func.avg(PendingReview.rating).label("avg"))
-            .where(PendingReview.is_approved == True)
-            .group_by(PendingReview.course_name)
-            .order_by(func.avg(PendingReview.rating).desc())
-            .limit(5)
-        )).all()
-        if not rows:
-            return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-        items = [
-            {"rank": i, "name": name, "stars": stars(round(float(avg)))}
-            for i, (name, avg) in enumerate(rows, 1)
-        ]
-        return [FlexMessage(
-            alt_text="🏆 人気の授業 TOP5",
-            contents=make_ranking_bubble("🏆 人気の授業 TOP5", items),
-        )]
-
-    if t in ["楽単ランキング", "楽単", "楽"]:
-        rows = (await session.execute(
-            select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id))
-            .where(PendingReview.is_approved == True)
-            .group_by(PendingReview.course_name, PendingReview.ease_rating)
-        )).all()
-        if not rows:
-            return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-        course_ease: dict[str, str] = {}
-        for name, ease, _ in rows:
-            if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
-                course_ease[name] = ease
-        top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
-        items = [
-            {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
-            for i, (name, ease) in enumerate(top5, 1)
-        ]
-        return [FlexMessage(
-            alt_text="😴 楽単ランキング TOP5",
-            contents=make_ranking_bubble("😴 楽単ランキング TOP5", items),
-        )]
 
     if t in ["ヘルプ", "help", "使い方", "？", "?"]:
         return [make_help_flex()]
@@ -727,64 +686,104 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [make_help_flex()]
 
-    # Exact course name match → show detail immediately (e.g. "アジア史A")
-    exact = (await session.execute(
-        select(Course).where(Course.name == t)
-    )).scalar_one_or_none()
-    if exact:
-        return [await get_course_flex(session, exact, user_id)]
+    async with AsyncSessionLocal() as session:
+        if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
+            rows = (await session.execute(
+                select(PendingReview.course_name, func.avg(PendingReview.rating).label("avg"))
+                .where(PendingReview.is_approved == True)
+                .group_by(PendingReview.course_name)
+                .order_by(func.avg(PendingReview.rating).desc())
+                .limit(5)
+            )).all()
+            if not rows:
+                return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+            items = [
+                {"rank": i, "name": name, "stars": stars(round(float(avg)))}
+                for i, (name, avg) in enumerate(rows, 1)
+            ]
+            return [FlexMessage(
+                alt_text="🏆 人気の授業 TOP5",
+                contents=make_ranking_bubble("🏆 人気の授業 TOP5", items),
+            )]
 
-    # Check if t is the base name of a variant group (A/B/C/D...)
-    _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
-    variant_courses = (await session.execute(
-        select(Course).where(Course.name.in_(_variant_names))
-        .order_by(Course.name)
-    )).scalars().all()
-    if len(variant_courses) >= 2:
-        return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
+        if t in ["楽単ランキング", "楽単", "楽"]:
+            rows = (await session.execute(
+                select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id))
+                .where(PendingReview.is_approved == True)
+                .group_by(PendingReview.course_name, PendingReview.ease_rating)
+            )).all()
+            if not rows:
+                return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+            course_ease: dict[str, str] = {}
+            for name, ease, _ in rows:
+                if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
+                    course_ease[name] = ease
+            top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
+            items = [
+                {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
+                for i, (name, ease) in enumerate(top5, 1)
+            ]
+            return [FlexMessage(
+                alt_text="😴 楽単ランキング TOP5",
+                contents=make_ranking_bubble("😴 楽単ランキング TOP5", items),
+            )]
 
-    # Course keyword search — split on spaces (half-width and full-width) for multi-token AND match
-    tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
-    def _escape(tok: str) -> str:
-        return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-    stmt = select(Course)
-    for tok in tokens:
-        e = _escape(tok)
-        stmt = stmt.where(or_(
-            Course.name.ilike(f"%{e}%", escape="\\"),
-            Course.reading.ilike(f"%{e}%", escape="\\"),
-        ))
-    courses = (await session.execute(stmt.limit(6))).scalars().all()
-    if courses:
-        # Batch-load all variants for courses ending in A/B/C/D (1 query instead of N)
-        potential_bases = {
-            c.name[:-1] for c in courses
-            if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
-        }
-        base_variants: dict[str, list[str]] = defaultdict(list)
-        if potential_bases:
-            all_variant_names = [b + s for b in potential_bases for s in ('A', 'B', 'C', 'D')]
-            variant_rows = (await session.execute(
-                select(Course.name).where(Course.name.in_(all_variant_names)).order_by(Course.name)
-            )).scalars().all()
-            for vname in variant_rows:
-                base_variants[vname[:-1]].append(vname)
+        # Exact course name match
+        exact = (await session.execute(
+            select(Course).where(Course.name == t)
+        )).scalar_one_or_none()
+        if exact:
+            return [await get_course_flex(session, exact, user_id)]
 
-        seen_base: set[str] = set()
-        result = []
-        for c in courses:
-            name = c.name
-            if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
-                base = name[:-1]
-                if base in seen_base:
-                    continue
-                variants = base_variants.get(base, [])
-                if len(variants) >= 2:
-                    seen_base.add(base)
-                    result.append(make_variant_selection_bubble(base, variants))
-                    continue
-            result.append(await get_course_flex(session, c, user_id))
-        return result[:5]
+        # Variant group (A/B/C/D...)
+        _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
+        variant_courses = (await session.execute(
+            select(Course).where(Course.name.in_(_variant_names)).order_by(Course.name)
+        )).scalars().all()
+        if len(variant_courses) >= 2:
+            return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
+
+        # Keyword search
+        tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
+        def _escape(tok: str) -> str:
+            return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        stmt = select(Course)
+        for tok in tokens:
+            e = _escape(tok)
+            stmt = stmt.where(or_(
+                Course.name.ilike(f"%{e}%", escape="\\"),
+                Course.reading.ilike(f"%{e}%", escape="\\"),
+            ))
+        courses = (await session.execute(stmt.limit(6))).scalars().all()
+        if courses:
+            potential_bases = {
+                c.name[:-1] for c in courses
+                if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
+            }
+            base_variants: dict[str, list[str]] = defaultdict(list)
+            if potential_bases:
+                all_variant_names = [b + s for b in potential_bases for s in ('A', 'B', 'C', 'D')]
+                variant_rows = (await session.execute(
+                    select(Course.name).where(Course.name.in_(all_variant_names)).order_by(Course.name)
+                )).scalars().all()
+                for vname in variant_rows:
+                    base_variants[vname[:-1]].append(vname)
+
+            seen_base: set[str] = set()
+            result = []
+            for c in courses:
+                name = c.name
+                if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
+                    base = name[:-1]
+                    if base in seen_base:
+                        continue
+                    variants = base_variants.get(base, [])
+                    if len(variants) >= 2:
+                        seen_base.add(base)
+                        result.append(make_variant_selection_bubble(base, variants))
+                        continue
+                result.append(await get_course_flex(session, c, user_id))
+            return result[:5]
 
     return [TextMessage(
         text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
@@ -827,7 +826,7 @@ async def _process_events(events) -> None:
                 try:
                     await save_log(session, user_id, "in", user_text)
                     messages = await asyncio.wait_for(
-                        handle_message(session, user_text, user_id),
+                        handle_message(user_text, user_id),
                         timeout=25.0,
                     )
                     await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
