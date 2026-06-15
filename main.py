@@ -1254,9 +1254,10 @@ async def admin_courses_update(
 @app.post("/admin/courses/delete/{course_id}")
 async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(Course).where(Course.id == course_id))
-        course = result.scalar_one_or_none()
+        course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
         if course:
+            await session.execute(delete(PendingReview).where(PendingReview.course_name == course.name))
+            await session.execute(delete(CourseInstructor).where(CourseInstructor.course_id == course_id))
             await session.delete(course)
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
