@@ -344,21 +344,8 @@ def make_course_bubble(
             FlexBox(
                 layout="horizontal",
                 contents=[
-                    FlexBox(
-                        layout="horizontal",
-                        contents=[
-                            FlexText(
-                                text=EASE_LABEL.get(top_ease, top_ease),
-                                size="sm",
-                                color="#ffffff",
-                                weight="bold",
-                            ),
-                        ],
-                        background_color=EASE_COLOR.get(top_ease, "#6366f1"),
-                        corner_radius="12px",
-                        padding_x="lg",
-                        padding_y="sm",
-                    ),
+                    FlexText(text=EASE_STARS.get(top_ease, ""), size="lg", color="#818cf8", flex=0),
+                    FlexText(text=f"  {EASE_LABEL.get(top_ease, top_ease)}", size="sm", color="#475569", margin="sm"),
                 ],
                 margin="xs",
             )
@@ -372,6 +359,8 @@ def make_course_bubble(
         grading_items.append(("📝 課題", grading_summary["homework"]))
     if grading_summary.get("evals"):
         grading_items.append(("🎯 評価", "・".join(grading_summary["evals"])))
+    for ex in grading_summary.get("extras", []):
+        grading_items.append(("💬 補足", ex))
 
     if grading_items:
         body_contents.append(FlexSeparator(margin="lg"))
@@ -476,6 +465,7 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         )
     )).scalars().all()
     att_c, hw_c, eval_c = _Counter(), _Counter(), _Counter()
+    extras: list[str] = []
     for gm in grading_rows:
         if not gm:
             continue
@@ -493,10 +483,13 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
                     ev = ev.strip()
                     if ev:
                         eval_c[ev] += 1
+            elif key == "補足" and val and val not in extras:
+                extras.append(val)
     grading_summary = {
         "attendance": att_c.most_common(1)[0][0] if att_c else None,
         "homework": hw_c.most_common(1)[0][0] if hw_c else None,
         "evals": [ev for ev, _ in eval_c.most_common(3)],
+        "extras": extras[:3],
     }
 
     limit = await get_user_max_reviews(session, user_id)
