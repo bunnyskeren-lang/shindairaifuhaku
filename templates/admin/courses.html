@@ -138,6 +138,10 @@
       </span>
     </td>
     <td style="white-space:nowrap">
+      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#eef2ff;color:#4338ca"
+              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
+        👨‍🏫 {{ instructors_by_course[c.id] | length }}人
+      </button>
       <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#f3f4f6;color:#374151"
               onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
         レビュー {{ reviews | length }}件{% if pending_count %} <span style="background:#f59e0b;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px">未承認{{ pending_count }}</span>{% endif %}
@@ -150,30 +154,32 @@
       </form>
     </td>
   </tr>
+  <!-- 教員管理トグル行 -->
+  <tr id="inst-{{ c.id }}" class="{{ gid }}" style="display:none">
+    <td colspan="4" style="padding:12px 16px;background:#eef2ff;border-bottom:1px solid #c7d2fe">
+      <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        {% for inst in instructors_by_course[c.id] %}
+        <span style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
+          {{ inst.name }}
+          <form method="post" action="/admin/courses/{{ c.id }}/instructors/delete/{{ inst.id }}" style="display:inline;margin:0">
+            <button type="submit" style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
+          </form>
+        </span>
+        {% else %}
+        <span style="color:#9ca3af;font-size:12px">まだ登録なし</span>
+        {% endfor %}
+        <form method="post" action="/admin/courses/{{ c.id }}/instructors/add"
+              style="display:inline-flex;gap:4px;align-items:center;margin:0">
+          <input type="text" name="name" placeholder="教員名を追加" maxlength="100"
+                 style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:140px;margin-top:0">
+          <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap">追加</button>
+        </form>
+      </div>
+    </td>
+  </tr>
   <tr id="rv-{{ c.id }}" class="{{ gid }} review-row" style="display:none">
     <td colspan="4" style="padding:0;background:#f9fafb">
-      <!-- 担当教員 -->
-      <div style="padding:10px 16px;background:#eef2ff;border-bottom:1px solid #e5e7eb">
-        <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-          {% for inst in instructors_by_course[c.id] %}
-          <span style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
-            {{ inst.name }}
-            <form method="post" action="/admin/courses/{{ c.id }}/instructors/delete/{{ inst.id }}" style="display:inline;margin:0">
-              <button type="submit" style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
-            </form>
-          </span>
-          {% else %}
-          <span style="color:#9ca3af;font-size:12px">まだ登録なし</span>
-          {% endfor %}
-          <form method="post" action="/admin/courses/{{ c.id }}/instructors/add"
-                style="display:inline-flex;gap:4px;align-items:center;margin:0">
-            <input type="text" name="name" placeholder="教員名を追加" maxlength="100"
-                   style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px;margin-top:0">
-            <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap">追加</button>
-          </form>
-        </div>
-      </div>
       <!-- レビュー -->
       {% if reviews %}
       <table style="margin:0;border-radius:0;font-size:12px">
@@ -274,6 +280,10 @@ function toggleGroup(id, headerTr) {
   if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
 }
 function toggleReviews(id) {
+  const tr = document.getElementById(id);
+  tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+}
+function toggleRow(id) {
   const tr = document.getElementById(id);
   tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
 }
