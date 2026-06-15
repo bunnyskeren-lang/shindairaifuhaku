@@ -53,11 +53,12 @@
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           🎓 学籍番号 <span class="text-red-500">*</span>
         </label>
-        <p class="text-xs text-gray-400 mb-3">数字7桁＋アルファベット1文字（例：1234567A）</p>
+        <p class="text-xs text-gray-400 mb-1">数字7桁＋学部コード（医学部のみ2文字: MM・ME・MH）</p>
+        <p class="text-xs text-gray-300 mb-3">L:文学 H:国際人間 J:法 E:経済 B:経営 S:理 T:工 A:農 Z:海洋政策 MM/ME/MH:医</p>
         <input type="text" name="student_id" id="student_id"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          placeholder="例：1234567A" required maxlength="8">
-        <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">数字7桁＋アルファベット1文字で入力してください（例：1234567A）</p>
+          placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9">
+        <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません。数字7桁＋学部コードで入力してください（例：2345678S、医学部：2345678MM）</p>
       </div>
       {% endif %}
 
@@ -388,7 +389,7 @@
 
     const studentIdInput = document.getElementById('student_id');
     const studentIdError = document.getElementById('studentIdError');
-    const STUDENT_ID_RE = /^\d{7}[A-Za-z]$/;
+    const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZ])$/i;
     if (studentIdInput) {
       studentIdInput.addEventListener('input', () => {
         const v = studentIdInput.value.trim();

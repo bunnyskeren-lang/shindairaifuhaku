@@ -27,7 +27,7 @@ def _fmt_jst(dt, fmt="%m/%d %H:%M") -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(JST).strftime(fmt)
-STUDENT_ID_RE = re.compile(r'^\d{7}[A-Za-z]$')
+STUDENT_ID_RE = re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZ])$', re.IGNORECASE)
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 
@@ -173,7 +173,7 @@ async def submit(
                 if not STUDENT_ID_RE.match(student_id.strip()):
                     raise HTTPException(
                         status_code=400,
-                        detail="学籍番号の形式が正しくありません（数字7桁＋アルファベット1文字）",
+                        detail="学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）",
                     )
                 session.add(UserProfile(
                     line_user_id=uid,
