@@ -1102,7 +1102,6 @@ async def admin_courses_add(
     name: str = Form(...),
     classification: str = Form(""),
     category: str = Form("専門"),
-    syllabus_url: str = Form(""),
 ):
     name_s = name.strip()
     async with AsyncSessionLocal() as session:
@@ -1117,7 +1116,6 @@ async def admin_courses_add(
         session.add(Course(
             name=name_s, instructor="",
             classification=classification.strip(), category=category,
-            syllabus_url=syllabus_url.strip() or None,
             reading=_reading(name_s),
         ))
         await session.commit()
@@ -1265,7 +1263,6 @@ async def admin_courses_update(
     name: str = Form(...),
     classification: str = Form(""),
     category: str = Form("専門"),
-    syllabus_url: str = Form(""),
 ):
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
@@ -1273,7 +1270,6 @@ async def admin_courses_update(
             course.name = name.strip()
             course.classification = classification.strip()
             course.category = category
-            course.syllabus_url = syllabus_url.strip() or None
             course.reading = _reading(name.strip())
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)

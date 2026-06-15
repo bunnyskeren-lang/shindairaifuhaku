@@ -42,9 +42,6 @@
                placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
       </label>
     </div>
-    <div style="margin-bottom:14px">
-      <label>シラバスURL<input type="url" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
-    </div>
     <button type="submit" class="btn btn-primary">➕ 追加する</button>
   </form>
 </div>
@@ -245,9 +242,6 @@
       <div style="margin-bottom:10px">
         <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
       </div>
-      <div style="margin-bottom:14px">
-        <label>シラバスURL<input type="url" id="editSyllabusUrl" name="syllabus_url" maxlength="500" placeholder="https://..."></label>
-      </div>
       <div style="display:flex;gap:8px">
         <button type="submit" class="btn btn-primary">💾 保存</button>
         <button type="button" class="btn" style="background:#e5e7eb;color:#374151" onclick="closeModal()">キャンセル</button>
@@ -288,7 +282,6 @@ function openEdit(id) {
   document.getElementById('editName').value = c.name;
   document.getElementById('editClassification').value = c.classification;
   document.getElementById('editCategory').value = c.category;
-  document.getElementById('editSyllabusUrl').value = c.syllabus_url;
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
   document.getElementById('editModal').classList.add('open');
 }
