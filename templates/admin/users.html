@@ -5,11 +5,12 @@
 {% block content %}
 <p style="font-size:13px;color:#666">デフォルトのコメント表示件数：<b>{{ max_reviews }}件</b>（MAX_REVIEWS環境変数）</p>
 <table>
-  <tr><th>名前</th><th>学籍番号</th><th>最終アクセス</th><th>コメント表示件数</th></tr>
+  <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th><th>コメント表示件数</th></tr>
   {% for u in users %}
   <tr>
     <td>{{ u.name or "―" }}</td>
     <td style="font-size:12px">{{ u.student_id or "―" }}</td>
+    <td style="font-size:11px;color:#9ca3af;word-break:break-all">{{ u.user_id if u.name else "―" }}</td>
     <td>{{ u.last_seen | jst }}</td>
     <td>
       <form method="post" action="/admin/users/set" style="margin:0;display:flex;gap:6px;align-items:center">
@@ -20,7 +21,7 @@
     </td>
   </tr>
   {% else %}
-  <tr><td colspan="4" style="color:#999;text-align:center;padding:16px">ユーザーなし</td></tr>
+  <tr><td colspan="5" style="color:#999;text-align:center;padding:16px">ユーザーなし</td></tr>
   {% endfor %}
 </table>
 {% endblock %}
