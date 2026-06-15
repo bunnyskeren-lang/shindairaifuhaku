@@ -97,10 +97,10 @@
           <button type="button" id="clearCourse" class="text-xs text-gray-400 hover:text-gray-600 underline">変更</button>
         </div>
         <p id="courseError" class="hidden mt-1 text-red-500 text-xs">科目を選択または入力してください</p>
-        <div id="instructorSelectSection" class="hidden mt-3 pt-3 border-t border-gray-100">
+        <div id="instructorSelectSection" class="mt-3 pt-3 border-t border-gray-100">
           <p class="text-sm font-semibold text-gray-700 mb-2">👨‍🏫 担当教員 <span class="text-red-500">*</span></p>
-          <div id="instructorChips" class="flex flex-wrap gap-2"></div>
-          <input type="text" id="instructorTextInput" class="hidden w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition" placeholder="担当教員名を入力してください" maxlength="100">
+          <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
+          <input type="text" id="instructorTextInput" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition" placeholder="担当教員名を入力してください" maxlength="100">
           <input type="hidden" name="selected_instructor" id="selectedInstructorHidden">
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を入力してください</p>
         </div>
@@ -363,6 +363,15 @@
     });
 
     let currentInstructors = [];
+    const chipsEl = document.getElementById('instructorChips');
+    const textInput = document.getElementById('instructorTextInput');
+
+    textInput.addEventListener('input', () => {
+      document.getElementById('selectedInstructorHidden').value = textInput.value.trim();
+      if (textInput.value.trim()) document.getElementById('instructorError').classList.add('hidden');
+      saveData();
+    });
+
     function selectCourse(name, instructors) {
       currentInstructors = instructors || [];
       document.getElementById('courseNameHidden').value = name;
@@ -371,10 +380,6 @@
       searchInput.classList.add('hidden');
       dropdown.classList.add('hidden');
       document.getElementById('courseError').classList.add('hidden');
-
-      const section = document.getElementById('instructorSelectSection');
-      const chipsEl = document.getElementById('instructorChips');
-      const textInput = document.getElementById('instructorTextInput');
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('instructorError').classList.add('hidden');
 
@@ -398,22 +403,19 @@
         chipsEl.classList.add('hidden');
         chipsEl.innerHTML = '';
         textInput.classList.remove('hidden');
-        textInput.oninput = () => {
-          document.getElementById('selectedInstructorHidden').value = textInput.value.trim();
-          if (textInput.value.trim()) document.getElementById('instructorError').classList.add('hidden');
-          saveData();
-        };
+        textInput.value = '';
       }
-      section.classList.remove('hidden');
       saveData();
     }
 
     document.getElementById('clearCourse').addEventListener('click', () => {
       document.getElementById('courseNameHidden').value = '';
       document.getElementById('selectedCourse').classList.add('hidden');
-      document.getElementById('instructorSelectSection').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
-      document.getElementById('instructorTextInput').value = '';
+      chipsEl.classList.add('hidden');
+      chipsEl.innerHTML = '';
+      textInput.classList.remove('hidden');
+      textInput.value = '';
       currentInstructors = [];
       searchInput.classList.remove('hidden');
       searchInput.value = '';
