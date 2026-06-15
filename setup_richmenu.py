@@ -31,43 +31,53 @@ REVIEW_FORM_URL = os.environ.get(
     "REVIEW_FORM_URL", "https://shindairaifuhaku-1.onrender.com"
 )
 
-# リッチメニューサイズ (コンパクト)
+# リッチメニューサイズ (4列×2行)
 W, H = 2500, 843
-COLS, ROWS = 3, 2
-CW, RH = W // COLS, H // ROWS  # 833 x 421
+COLS, ROWS = 4, 2
+CW, RH = W // COLS, H // ROWS  # 625 x 421
 
 BUTTONS = [
-    # 上段: 科目を見る（青系） + アクション（緑）
+    # 上段
     {
         "label": "教養科目一覧",
-        "color": "#0ea5e9",  # 空色
+        "color": "#0ea5e9",
         "action": MessageAction(label="教養科目一覧", text="教養"),
     },
     {
         "label": "専門科目一覧",
-        "color": "#1d4ed8",  # 濃紺
+        "color": "#1d4ed8",
         "action": MessageAction(label="専門科目一覧", text="専門"),
     },
     {
         "label": "レビュー投稿",
-        "color": "#16a34a",  # 緑
+        "color": "#16a34a",
         "action": URIAction(label="レビュー投稿", uri=REVIEW_FORM_URL),
     },
-    # 下段: ランキング（オレンジ系） + ユーティリティ（グレー）
+    {
+        "label": "ヘルプ",
+        "color": "#475569",
+        "action": MessageAction(label="ヘルプ", text="ヘルプ"),
+    },
+    # 下段
     {
         "label": "人気の授業",
-        "color": "#ea580c",  # オレンジ
+        "color": "#ea580c",
         "action": MessageAction(label="人気の授業", text="人気の授業"),
     },
     {
         "label": "楽単ランキング",
-        "color": "#ca8a04",  # 黄色
+        "color": "#ca8a04",
         "action": MessageAction(label="楽単ランキング", text="楽単ランキング"),
     },
     {
-        "label": "ヘルプ",
-        "color": "#475569",  # スレートグレー
-        "action": MessageAction(label="ヘルプ", text="ヘルプ"),
+        "label": "BEEFplus",
+        "color": "#7c3aed",
+        "action": URIAction(label="BEEFplus", uri="https://beefplus.center.kobe-u.ac.jp/login"),
+    },
+    {
+        "label": "KNOSOS",
+        "color": "#0f766e",
+        "action": URIAction(label="KNOSOS", uri="https://knosos.center.kobe-u.ac.jp"),
     },
 ]
 
