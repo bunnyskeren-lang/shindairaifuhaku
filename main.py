@@ -1421,24 +1421,45 @@ async def strip_trailing_numbers(
     return RedirectResponse("/admin/courses", status_code=303)
 
 
+@app.get("/admin/reviews", response_class=HTMLResponse)
+async def admin_reviews(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        pending = (await session.execute(
+            select(PendingReview)
+            .where(PendingReview.is_approved == False)
+            .order_by(PendingReview.created_at.desc())
+        )).scalars().all()
+        approved = (await session.execute(
+            select(PendingReview)
+            .where(PendingReview.is_approved == True)
+            .order_by(PendingReview.created_at.desc())
+            .limit(50)
+        )).scalars().all()
+    return templates.TemplateResponse("admin/reviews.html", {
+        "request": request,
+        "pending": pending,
+        "approved": approved,
+    })
+
+
 @app.post("/admin/reviews/approve/{review_id}")
-async def admin_review_approve(review_id: int, request: Request, _: str = Depends(check_admin)):
+async def admin_review_approve(review_id: int, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         review = await session.get(PendingReview, review_id)
         if review:
             review.is_approved = True
             await session.commit()
-    return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
+    return RedirectResponse("/admin/reviews", status_code=303)
 
 
 @app.post("/admin/reviews/reject/{review_id}")
-async def admin_review_reject(review_id: int, request: Request, _: str = Depends(check_admin)):
+async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         review = await session.get(PendingReview, review_id)
         if review:
             await session.delete(review)
             await session.commit()
-    return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
+    return RedirectResponse("/admin/reviews", status_code=303)
 
 
 @app.post("/admin/courses/add")
