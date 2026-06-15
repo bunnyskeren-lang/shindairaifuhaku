@@ -148,7 +148,7 @@
     </td>
   </tr>
   <!-- 教員管理トグル行 -->
-  <tr id="inst-{{ c.id }}" class="{{ gid }}" style="display:none">
+  <tr id="inst-{{ c.id }}" class="{{ gid }} inst-row" style="display:none">
     <td colspan="3" style="padding:12px 16px;background:#eef2ff;border-bottom:1px solid #c7d2fe">
       <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
       <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -264,10 +264,14 @@ const COURSES = {{ courses_data | safe }};
 {% raw %}
 function toggleGroup(id, headerTr) {
   var allRows = document.querySelectorAll('tr.' + id);
-  var courseRows = document.querySelectorAll('tr.' + id + ':not(.review-row)');
+  var courseRows = document.querySelectorAll('tr.' + id + ':not(.review-row):not(.inst-row)');
   var isExpanded = courseRows.length > 0 && courseRows[0].style.display !== 'none';
   allRows.forEach(function(tr) {
-    tr.style.display = (!isExpanded && !tr.classList.contains('review-row')) ? 'table-row' : 'none';
+    if (tr.classList.contains('review-row') || tr.classList.contains('inst-row')) {
+      tr.style.display = 'none';
+    } else {
+      tr.style.display = isExpanded ? 'none' : 'table-row';
+    }
   });
   var arrow = headerTr.querySelector('.grp-arrow');
   if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
