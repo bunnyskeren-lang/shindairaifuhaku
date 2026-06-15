@@ -100,8 +100,9 @@
         <div id="instructorSelectSection" class="hidden mt-3 pt-3 border-t border-gray-100">
           <p class="text-sm font-semibold text-gray-700 mb-2">👨‍🏫 担当教員 <span class="text-red-500">*</span></p>
           <div id="instructorChips" class="flex flex-wrap gap-2"></div>
+          <input type="text" id="instructorTextInput" class="hidden w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition" placeholder="担当教員名を入力してください" maxlength="100">
           <input type="hidden" name="selected_instructor" id="selectedInstructorHidden">
-          <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
+          <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を入力してください</p>
         </div>
       </div>
 
@@ -373,9 +374,14 @@
 
       const section = document.getElementById('instructorSelectSection');
       const chipsEl = document.getElementById('instructorChips');
+      const textInput = document.getElementById('instructorTextInput');
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('instructorError').classList.add('hidden');
+
       if (currentInstructors.length > 0) {
+        chipsEl.classList.remove('hidden');
+        textInput.classList.add('hidden');
+        textInput.value = '';
         chipsEl.innerHTML = currentInstructors.map(inst =>
           `<button type="button" class="chip-btn single" data-group="instructor" data-value="${inst.name}">${inst.name}</button>`
         ).join('');
@@ -388,10 +394,17 @@
             saveData();
           };
         });
-        section.classList.remove('hidden');
       } else {
-        section.classList.add('hidden');
+        chipsEl.classList.add('hidden');
+        chipsEl.innerHTML = '';
+        textInput.classList.remove('hidden');
+        textInput.oninput = () => {
+          document.getElementById('selectedInstructorHidden').value = textInput.value.trim();
+          if (textInput.value.trim()) document.getElementById('instructorError').classList.add('hidden');
+          saveData();
+        };
       }
+      section.classList.remove('hidden');
       saveData();
     }
 
@@ -400,6 +413,7 @@
       document.getElementById('selectedCourse').classList.add('hidden');
       document.getElementById('instructorSelectSection').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
+      document.getElementById('instructorTextInput').value = '';
       currentInstructors = [];
       searchInput.classList.remove('hidden');
       searchInput.value = '';
@@ -553,9 +567,9 @@
         document.getElementById('easeError').classList.remove('hidden');
         valid = false;
       }
-      if (document.getElementById('instructorSelectSection') &&
-          !document.getElementById('instructorSelectSection').classList.contains('hidden') &&
+      if (document.getElementById('courseNameHidden').value &&
           !document.getElementById('selectedInstructorHidden').value) {
+        document.getElementById('instructorSelectSection').classList.remove('hidden');
         document.getElementById('instructorError').classList.remove('hidden');
         valid = false;
       }
