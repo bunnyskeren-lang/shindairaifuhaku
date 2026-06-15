@@ -933,7 +933,7 @@ async def admin_page(request: Request, _: str = Depends(check_admin), page: int 
 
 
 @app.get("/admin/courses", response_class=HTMLResponse)
-async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", q: str = Query(default="")):
+async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", q: str = Query(default=""), category: str = Query(default="")):
     q = q.strip()
 
     def _search_filter(q: str):
@@ -946,6 +946,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
 
     async with AsyncSessionLocal() as session:
         base_stmt = select(Course)
+        if category:
+            base_stmt = base_stmt.where(Course.category == category)
         if q:
             base_stmt = base_stmt.where(_search_filter(q))
 
@@ -1016,6 +1018,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "request": request,
         "courses": courses,
         "grouped_courses": list(grouped_courses.items()),
+        "active_category": category,
         "classifications": existing,
         "class_counts": class_counts,
         "courses_data": courses_data,
