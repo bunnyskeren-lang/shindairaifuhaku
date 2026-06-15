@@ -369,12 +369,12 @@ def make_help_flex() -> FlexMessage:
         )
 
     return FlexMessage(
-        alt_text="📖 神大授業ナビ 使い方ガイド",
+        alt_text="📖 神大ライフハック 使い方ガイド",
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
                 contents=[
-                    FlexText(text="神大授業ナビ", weight="bold", color="#ffffff", size="xl"),
+                    FlexText(text="神大ライフハック", weight="bold", color="#ffffff", size="xl"),
                     FlexText(text="使い方ガイド", color="#c7d2fe", size="sm"),
                 ],
                 background_color="#6366f1",
@@ -417,12 +417,12 @@ def make_help_flex() -> FlexMessage:
 
 def make_welcome_flex() -> FlexMessage:
     return FlexMessage(
-        alt_text="🎓 神大授業ナビへようこそ！",
+        alt_text="🎓 神大ライフハックへようこそ！",
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
                 contents=[
-                    FlexText(text="🎓 神大授業ナビへ", weight="bold", color="#ffffff", size="xl"),
+                    FlexText(text="🎓 神大ライフハックへ", weight="bold", color="#ffffff", size="xl"),
                     FlexText(text="ようこそ！", color="#c7d2fe", size="lg", weight="bold"),
                 ],
                 background_color="#6366f1",
