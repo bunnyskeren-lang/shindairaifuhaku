@@ -1032,9 +1032,10 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
 
 
 @app.post("/admin/courses/{course_id}/instructors/add")
-async def add_instructor(course_id: int, request: Request, name: str = Form(...), _: str = Depends(check_admin)):
+async def add_instructor(course_id: int, request: Request, name: str = Form(...), url: str = Form(""), _: str = Depends(check_admin)):
     from fastapi.responses import JSONResponse
     name_s = name.strip()
+    url_s = url.strip() or None
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if name_s:
         async with AsyncSessionLocal() as session:
@@ -1050,12 +1051,12 @@ async def add_instructor(course_id: int, request: Request, name: str = Form(...)
                 referer = request.headers.get("Referer", "/admin/courses")
                 sep = "&" if "?" in referer else "?"
                 return RedirectResponse(f"{referer}{sep}inst_err={course_id}", status_code=303)
-            inst = CourseInstructor(course_id=course_id, name=name_s)
+            inst = CourseInstructor(course_id=course_id, name=name_s, url=url_s)
             session.add(inst)
             await session.commit()
             await session.refresh(inst)
             if is_ajax:
-                return JSONResponse({"ok": True, "id": inst.id, "name": inst.name})
+                return JSONResponse({"ok": True, "id": inst.id, "name": inst.name, "url": inst.url or ""})
     if is_ajax:
         return JSONResponse({"ok": False, "error": "empty"})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)

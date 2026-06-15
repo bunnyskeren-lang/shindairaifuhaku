@@ -154,7 +154,7 @@
       <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         {% for inst in instructors_by_course[c.id] %}
         <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
-          {{ inst.name }}
+          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
           <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
                   style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
         </span>
@@ -162,9 +162,11 @@
         <span id="inst-empty-{{ c.id }}" style="color:#9ca3af;font-size:12px">まだ登録なし</span>
         {% endfor %}
       </div>
-      <div style="display:flex;gap:4px;align-items:center;margin-top:8px">
-        <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名を追加" maxlength="100"
-               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:140px">
+      <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
+               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px">
+        <input type="url" id="inst-url-{{ c.id }}" placeholder="URL（任意）" maxlength="500"
+               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:200px">
         <button type="button" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap"
                 onclick="addInstructor({{ c.id }})">追加</button>
         <span id="inst-err-{{ c.id }}" style="display:none;color:#ef4444;font-size:12px;font-weight:bold">同じ教員がすでに追加されています</span>
@@ -319,6 +321,7 @@ document.querySelector('form').addEventListener('submit', function() {
 
 function addInstructor(courseId) {
   const input = document.getElementById('inst-input-' + courseId);
+  const urlInput = document.getElementById('inst-url-' + courseId);
   const errEl = document.getElementById('inst-err-' + courseId);
   const name = input.value.trim();
   if (!name) return;
@@ -329,7 +332,7 @@ function addInstructor(courseId) {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-Requested-With': 'XMLHttpRequest'
     },
-    body: 'name=' + encodeURIComponent(name)
+    body: 'name=' + encodeURIComponent(name) + '&url=' + encodeURIComponent(urlInput.value.trim())
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) {
       const list = document.getElementById('inst-list-' + courseId);
@@ -339,7 +342,10 @@ function addInstructor(courseId) {
       chip.id = 'inst-chip-' + data.id;
       chip.dataset.name = data.name;
       chip.style.cssText = 'background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px';
-      chip.innerHTML = data.name +
+      var nameHtml = data.url
+        ? '<a href="' + data.url + '" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">' + data.name + '</a>'
+        : data.name;
+      chip.innerHTML = nameHtml +
         ' <button type="button" onclick="deleteInstructor(' + courseId + ',' + data.id + ',this)"' +
         ' style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>';
       var inserted = false;
@@ -353,6 +359,7 @@ function addInstructor(courseId) {
       }
       if (!inserted) list.appendChild(chip);
       input.value = '';
+      urlInput.value = '';
     } else if (data.error === 'duplicate') {
       errEl.style.display = 'inline';
     }

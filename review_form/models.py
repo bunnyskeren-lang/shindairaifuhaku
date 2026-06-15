@@ -50,6 +50,7 @@ class CourseInstructor(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 
 class PushSubscription(Base):
