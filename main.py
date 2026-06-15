@@ -88,12 +88,9 @@ def _verify_admin_token(token: str) -> bool:
     except Exception:
         return False
 
-class _AdminAuthRequired(Exception):
-    pass
-
 def check_admin(request: Request):
     if not _verify_admin_token(request.cookies.get(ADMIN_COOKIE, "")):
-        raise _AdminAuthRequired()
+        raise HTTPException(status_code=307, headers={"Location": f"/admin/login?next={request.url.path}"})
 
 templates = Jinja2Templates(directory="templates")
 
@@ -201,11 +198,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
-
-@app.exception_handler(_AdminAuthRequired)
-async def _admin_auth_handler(request: Request, exc: _AdminAuthRequired):
-    return RedirectResponse(f"/admin/login?next={request.url.path}", status_code=303)
 
 
 @app.get("/admin/login", response_class=HTMLResponse)
