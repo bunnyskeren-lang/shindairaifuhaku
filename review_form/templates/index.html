@@ -47,6 +47,7 @@
         <input type="text" name="reg_name" id="reg_name"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
           placeholder="例：神戸 太郎" required maxlength="50">
+        <p id="regNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -73,6 +74,7 @@
         <input type="text" name="submitter_name" id="submitter_name"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
           placeholder="例：神大太郎" required maxlength="20">
+        <p id="submitterNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
       </div>
 
       <!-- 2. 科目名 + 担当教員 -->
@@ -386,11 +388,30 @@
       document.getElementById('charCount').textContent = document.getElementById('comment').value.length;
       saveData();
     });
-    document.getElementById('submitter_name').addEventListener('input', saveData);
+    function validateName(inputEl, errorEl) {
+      const v = inputEl.value.trim();
+      const invalid = v && !NAME_RE.test(v);
+      errorEl.classList.toggle('hidden', !invalid);
+      inputEl.classList.toggle('border-red-400', invalid);
+      inputEl.classList.toggle('ring-2', invalid);
+      inputEl.classList.toggle('ring-red-300', invalid);
+      return !invalid;
+    }
+
+    const submitterNameInput = document.getElementById('submitter_name');
+    const submitterNameError = document.getElementById('submitterNameError');
+    submitterNameInput.addEventListener('input', () => { validateName(submitterNameInput, submitterNameError); saveData(); });
+
+    const regNameInput = document.getElementById('reg_name');
+    const regNameError = document.getElementById('regNameError');
+    if (regNameInput) {
+      regNameInput.addEventListener('input', () => validateName(regNameInput, regNameError));
+    }
 
     const studentIdInput = document.getElementById('student_id');
     const studentIdError = document.getElementById('studentIdError');
     const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZ])$/;
+    const NAME_RE = /^[a-zA-Z0-9぀-ヿ一-鿿\s　]+$/;
     if (studentIdInput) {
       studentIdInput.addEventListener('input', () => {
         const v = studentIdInput.value.trim();
@@ -466,6 +487,9 @@
 
     document.getElementById('reviewForm').addEventListener('submit', e => {
       let valid = true;
+
+      if (!validateName(submitterNameInput, submitterNameError)) valid = false;
+      if (regNameInput && !validateName(regNameInput, regNameError)) valid = false;
 
       if (studentIdInput) {
         if (!STUDENT_ID_RE.test(studentIdInput.value.trim())) {
