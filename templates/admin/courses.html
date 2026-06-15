@@ -42,6 +42,29 @@
                placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
       </label>
     </div>
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <label style="flex:1">開講
+        <select name="term" style="margin-top:4px">
+          <option value="">未設定</option>
+          <option value="1Q">1Q（前期前半）</option>
+          <option value="2Q">2Q（前期後半）</option>
+          <option value="前期">前期（セメスター）</option>
+          <option value="3Q">3Q（後期前半）</option>
+          <option value="4Q">4Q（後期後半）</option>
+          <option value="後期">後期（セメスター）</option>
+          <option value="通年">通年</option>
+        </select>
+      </label>
+      <label style="flex:1">単位
+        <select name="credits" style="margin-top:4px">
+          <option value="0">未設定</option>
+          <option value="1">1単位</option>
+          <option value="2">2単位</option>
+          <option value="3">3単位</option>
+          <option value="4">4単位</option>
+        </select>
+      </label>
+    </div>
     <button type="submit" class="btn btn-primary">➕ 追加する</button>
   </form>
 </div>
@@ -137,7 +160,11 @@
   {% set reviews = reviews_by_course[c.name] %}
   {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
   <tr class="{{ gid }}" style="display:none">
-    <td>{{ c.name }}</td>
+    <td>
+      {{ c.name }}
+      {% if c.term %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term }}</span>{% endif %}
+      {% if c.credits %}<span style="font-size:10px;color:#059669;background:#ecfdf5;padding:1px 5px;border-radius:4px;margin-left:2px">{{ c.credits }}単位</span>{% endif %}
+    </td>
     <td>
       <span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">
         {{ c.category }}
@@ -266,6 +293,29 @@
       <div style="margin-bottom:10px">
         <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
       </div>
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <label style="flex:1">開講
+          <select id="editTerm" name="term" style="margin-top:4px">
+            <option value="">未設定</option>
+            <option value="1Q">1Q</option>
+            <option value="2Q">2Q</option>
+            <option value="前期">前期</option>
+            <option value="3Q">3Q</option>
+            <option value="4Q">4Q</option>
+            <option value="後期">後期</option>
+            <option value="通年">通年</option>
+          </select>
+        </label>
+        <label style="flex:1">単位
+          <select id="editCredits" name="credits" style="margin-top:4px">
+            <option value="0">未設定</option>
+            <option value="1">1単位</option>
+            <option value="2">2単位</option>
+            <option value="3">3単位</option>
+            <option value="4">4単位</option>
+          </select>
+        </label>
+      </div>
       <div style="display:flex;gap:8px">
         <button type="submit" class="btn btn-primary">💾 保存</button>
         <button type="button" class="btn" style="background:#e5e7eb;color:#374151" onclick="closeModal()">キャンセル</button>
@@ -306,6 +356,8 @@ function openEdit(id) {
   document.getElementById('editName').value = c.name;
   document.getElementById('editClassification').value = c.classification;
   document.getElementById('editCategory').value = c.category;
+  document.getElementById('editTerm').value = c.term || '';
+  document.getElementById('editCredits').value = c.credits || 0;
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
   document.getElementById('editModal').classList.add('open');
 }

@@ -194,6 +194,8 @@ def make_course_bubble(
     grading_methods: list[str] = [],
     review_url: str = "",
     syllabus_url: str = "",
+    term: str = "",
+    credits: int = 0,
 ) -> FlexBubble:
     body_contents = []
 
@@ -301,7 +303,15 @@ def make_course_bubble(
             contents=[
                 FlexText(text=name, weight="bold", size="lg", color="#ffffff", wrap=True),
                 FlexText(text=f"👨‍🏫 {instructor or '未設定'}", size="sm", color="#c7d2fe", margin="xs"),
-            ],
+            ] + ([
+                FlexText(
+                    text="  ".join(filter(None, [
+                        f"📅 {term}" if term else "",
+                        f"🎓 {credits}単位" if credits else "",
+                    ])),
+                    size="xs", color="#a5b4fc", margin="xs",
+                )
+            ] if term or credits else []),
             background_color="#6366f1",
             padding_all="lg",
         ),
@@ -363,6 +373,8 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         grading_methods=all_grading_methods,
         review_url=url,
         syllabus_url=course.syllabus_url or "",
+        term=course.term or "",
+        credits=course.credits or 0,
     )
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
 
@@ -948,8 +960,12 @@ async def admin_page(request: Request, _: str = Depends(check_admin), page: int 
 
 
 @app.get("/admin/courses", response_class=HTMLResponse)
-async def admin_courses(request: Request, _: str = Depends(check_admin), msg: str = "", q: str = Query(default="")):
+async def admin_courses(
+    request: Request, _: str = Depends(check_admin),
+    msg: str = "", q: str = Query(default=""), category: str = Query(default=""),
+):
     q = q.strip()
+    category = category.strip()
 
     def _search_filter(q: str):
         q_safe = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
@@ -963,11 +979,13 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         base_stmt = select(Course)
         if q:
             base_stmt = base_stmt.where(_search_filter(q))
+        if category:
+            base_stmt = base_stmt.where(Course.category == category)
 
         courses = (await session.execute(
-            base_stmt.order_by(Course.name)
+            base_stmt.order_by(Course.sort_order, Course.name)
         )).scalars().all()
-        courses = sorted(courses, key=lambda c: (_cls_order(c.classification or ""), c.name or ""))
+        courses = sorted(courses, key=lambda c: (_cls_order(c.classification or ""), c.sort_order, c.name or ""))
         total = len(courses)
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
@@ -988,6 +1006,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 "classification": c.classification or "",
                 "category": c.category,
                 "syllabus_url": c.syllabus_url or "",
+                "term": c.term or "",
+                "credits": c.credits or 0,
             }
             for c in courses
         }, ensure_ascii=False)
@@ -996,7 +1016,12 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         .replace(">", "\\u003e")
     )
 
-    from collections import defaultdict
+    # grouped_courses for template rendering
+    _groups_dict: dict = defaultdict(list)
+    for c in courses:
+        _groups_dict[c.classification or "未分類"].append(c)
+    grouped_courses = sorted(_groups_dict.items(), key=lambda x: _cls_order(x[0]))
+
     course_ids = [c.id for c in courses]
     course_names = [c.name for c in courses]
 
@@ -1025,6 +1050,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
     return templates.TemplateResponse("admin/courses.html", {
         "request": request,
         "courses": courses,
+        "grouped_courses": grouped_courses,
+        "active_category": category,
         "classifications": existing,
         "class_counts": class_counts,
         "courses_data": courses_data,
@@ -1084,6 +1111,8 @@ async def admin_courses_add(
     classification: str = Form(""),
     category: str = Form("専門"),
     syllabus_url: str = Form(""),
+    term: str = Form(""),
+    credits: int = Form(0),
 ):
     name_s = name.strip()
     instructor_s = instructor.strip()
@@ -1104,6 +1133,8 @@ async def admin_courses_add(
             classification=classification.strip(), category=category,
             syllabus_url=syllabus_url.strip() or None,
             reading=_reading(name_s),
+            term=term.strip(),
+            credits=credits,
         ))
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
@@ -1252,6 +1283,8 @@ async def admin_courses_update(
     classification: str = Form(""),
     category: str = Form("専門"),
     syllabus_url: str = Form(""),
+    term: str = Form(""),
+    credits: int = Form(0),
 ):
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
@@ -1262,6 +1295,8 @@ async def admin_courses_update(
             course.category = category
             course.syllabus_url = syllabus_url.strip() or None
             course.reading = _reading(name.strip())
+            course.term = term.strip()
+            course.credits = credits
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
