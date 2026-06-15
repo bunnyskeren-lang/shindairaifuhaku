@@ -1032,7 +1032,9 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
 
 @app.post("/admin/courses/{course_id}/instructors/add")
 async def add_instructor(course_id: int, request: Request, name: str = Form(...), _: str = Depends(check_admin)):
+    from fastapi.responses import JSONResponse
     name_s = name.strip()
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if name_s:
         async with AsyncSessionLocal() as session:
             existing = (await session.execute(
@@ -1042,21 +1044,33 @@ async def add_instructor(course_id: int, request: Request, name: str = Form(...)
                 )
             )).scalar_one_or_none()
             if existing:
+                if is_ajax:
+                    return JSONResponse({"ok": False, "error": "duplicate"})
                 referer = request.headers.get("Referer", "/admin/courses")
                 sep = "&" if "?" in referer else "?"
                 return RedirectResponse(f"{referer}{sep}inst_err={course_id}", status_code=303)
-            session.add(CourseInstructor(course_id=course_id, name=name_s))
+            inst = CourseInstructor(course_id=course_id, name=name_s)
+            session.add(inst)
             await session.commit()
+            await session.refresh(inst)
+            if is_ajax:
+                return JSONResponse({"ok": True, "id": inst.id, "name": inst.name})
+    if is_ajax:
+        return JSONResponse({"ok": False, "error": "empty"})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
 
 
 @app.post("/admin/courses/{course_id}/instructors/delete/{instructor_id}")
 async def delete_instructor(course_id: int, instructor_id: int, request: Request, _: str = Depends(check_admin)):
+    from fastapi.responses import JSONResponse
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     async with AsyncSessionLocal() as session:
         inst = await session.get(CourseInstructor, instructor_id)
         if inst:
             await session.delete(inst)
             await session.commit()
+    if is_ajax:
+        return JSONResponse({"ok": True})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
 
 
@@ -1084,19 +1098,14 @@ async def admin_review_reject(review_id: int, request: Request, _: str = Depends
 async def admin_courses_add(
     _: str = Depends(check_admin),
     name: str = Form(...),
-    instructor: str = Form(""),
     classification: str = Form(""),
     category: str = Form("専門"),
     syllabus_url: str = Form(""),
 ):
     name_s = name.strip()
-    instructor_s = instructor.strip()
     async with AsyncSessionLocal() as session:
         existing = (await session.execute(
-            select(Course).where(
-                Course.name == name_s,
-                Course.instructor == instructor_s,
-            )
+            select(Course).where(Course.name == name_s)
         )).scalar_one_or_none()
         if existing:
             return RedirectResponse(
@@ -1104,7 +1113,7 @@ async def admin_courses_add(
                 status_code=303,
             )
         session.add(Course(
-            name=name_s, instructor=instructor_s,
+            name=name_s, instructor="",
             classification=classification.strip(), category=category,
             syllabus_url=syllabus_url.strip() or None,
             reading=_reading(name_s),
