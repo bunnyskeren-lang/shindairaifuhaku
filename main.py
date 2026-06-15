@@ -1262,7 +1262,6 @@ async def admin_courses_update(
     course_id: int,
     _: str = Depends(check_admin),
     name: str = Form(...),
-    instructor: str = Form(""),
     classification: str = Form(""),
     category: str = Form("専門"),
     syllabus_url: str = Form(""),
@@ -1271,7 +1270,6 @@ async def admin_courses_update(
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
         if course:
             course.name = name.strip()
-            course.instructor = instructor.strip()
             course.classification = classification.strip()
             course.category = category
             course.syllabus_url = syllabus_url.strip() or None

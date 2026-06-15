@@ -233,9 +233,6 @@
         <label>科目名 *<input type="text" id="editName" name="name" required maxlength="200"></label>
       </div>
       <div style="margin-bottom:10px">
-        <label>担当教員<input type="text" id="editInstructor" name="instructor" maxlength="100"></label>
-      </div>
-      <div style="margin-bottom:10px">
         <label>カテゴリ *
           <select id="editCategory" name="category">
             <option value="専門">専門科目</option>
@@ -287,7 +284,6 @@ function toggleRow(id) {
 function openEdit(id) {
   const c = COURSES[id];
   document.getElementById('editName').value = c.name;
-  document.getElementById('editInstructor').value = c.instructor;
   document.getElementById('editClassification').value = c.classification;
   document.getElementById('editCategory').value = c.category;
   document.getElementById('editSyllabusUrl').value = c.syllabus_url;
