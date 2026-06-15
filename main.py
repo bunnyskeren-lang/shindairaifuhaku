@@ -1007,9 +1007,15 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
     for r in reviews_raw:
         reviews_by_course[r.course_name].append(r)
 
+    # groupby順を保持するため事前グループ化
+    grouped_courses: dict = defaultdict(list)
+    for c in courses:
+        grouped_courses[c.classification or "（未分類）"].append(c)
+
     return templates.TemplateResponse("admin/courses.html", {
         "request": request,
         "courses": courses,
+        "grouped_courses": list(grouped_courses.items()),
         "classifications": existing,
         "class_counts": class_counts,
         "courses_data": courses_data,

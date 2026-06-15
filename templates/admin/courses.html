@@ -96,7 +96,7 @@
 <table>
   <tr><th>科目名</th><th>教員</th><th>カテゴリ</th><th></th></tr>
   {% if courses %}
-  {% for classification, group_courses in courses | groupby("classification") %}
+  {% for classification, group_courses in grouped_courses %}
   {% set gid = "grp-" ~ loop.index %}
   {% set group_list = group_courses | list %}
   <tr onclick="toggleGroup('{{ gid }}', this)"
