@@ -235,10 +235,6 @@ def verify_signature(body: bytes, signature: str) -> bool:
     return hmac.compare_digest(base64.b64encode(digest).decode(), signature)
 
 
-def check_admin(creds: HTTPBasicCredentials = Depends(security)):
-    if not py_secrets.compare_digest(creds.password, ADMIN_PASSWORD):
-        raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Basic"})
-    return creds.username
 
 
 async def save_log(session: AsyncSession, user_id: str, direction: str, message: str):
