@@ -38,6 +38,7 @@ class PendingReview(Base):
     ease_rating: Mapped[str] = mapped_column(String(10), nullable=False)
     grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     comment: Mapped[str] = mapped_column(Text, nullable=False)
+    selected_instructor: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

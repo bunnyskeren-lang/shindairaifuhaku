@@ -97,10 +97,11 @@
           <button type="button" id="clearCourse" class="text-xs text-gray-400 hover:text-gray-600 underline">変更</button>
         </div>
         <p id="courseError" class="hidden mt-1 text-red-500 text-xs">科目を選択または入力してください</p>
-        <div id="instructorRow" class="hidden mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-          <span class="text-sm">👨‍🏫</span>
-          <span class="text-xs text-gray-500">担当教員：</span>
-          <span id="instructorDisplay" class="text-sm text-gray-700 font-medium"></span>
+        <div id="instructorSelectSection" class="hidden mt-3 pt-3 border-t border-gray-100">
+          <p class="text-sm font-semibold text-gray-700 mb-2">👨‍🏫 担当教員 <span class="text-red-500">*</span></p>
+          <div id="instructorChips" class="flex flex-wrap gap-2"></div>
+          <input type="hidden" name="selected_instructor" id="selectedInstructorHidden">
+          <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
         </div>
       </div>
 
@@ -129,33 +130,39 @@
       </div>
 
       <!-- 5. 成績評価方法 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
-        <label class="block text-sm font-semibold text-gray-700">
-          📋 成績評価方法
-        </label>
+      <div class="bg-white rounded-2xl shadow-sm p-5">
         <input type="hidden" name="grading_method" id="gradingMethodHidden">
+        <div class="flex items-center justify-between mb-4">
+          <label class="text-sm font-semibold text-gray-700">📋 成績評価方法</label>
+          <span class="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">補足以外は必須</span>
+        </div>
 
-        <div>
-          <p class="text-xs font-semibold text-gray-500 mb-2">出席確認</p>
+        <!-- 出席確認 -->
+        <div class="rounded-xl bg-teal-50 border border-teal-100 p-3 mb-3">
+          <p class="text-xs font-bold text-teal-700 mb-2">🏫 出席確認 <span class="text-red-500">*</span></p>
           <div class="flex flex-wrap gap-2">
             <button type="button" class="chip-btn single" data-group="attendance" data-value="毎回あり">毎回あり</button>
             <button type="button" class="chip-btn single" data-group="attendance" data-value="たまにあり">たまにあり</button>
             <button type="button" class="chip-btn single" data-group="attendance" data-value="なし">なし</button>
           </div>
+          <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
-        <div>
-          <p class="text-xs font-semibold text-gray-500 mb-2">課題の量</p>
+        <!-- 課題の量 -->
+        <div class="rounded-xl bg-orange-50 border border-orange-100 p-3 mb-3">
+          <p class="text-xs font-bold text-orange-700 mb-2">📝 課題の量 <span class="text-red-500">*</span></p>
           <div class="flex flex-wrap gap-2">
             <button type="button" class="chip-btn single" data-group="homework" data-value="多め">多め</button>
             <button type="button" class="chip-btn single" data-group="homework" data-value="普通">普通</button>
             <button type="button" class="chip-btn single" data-group="homework" data-value="少なめ">少なめ</button>
             <button type="button" class="chip-btn single" data-group="homework" data-value="なし">なし</button>
           </div>
+          <p id="homeworkError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
-        <div>
-          <p class="text-xs font-semibold text-gray-500 mb-2">評価方法（複数選択可）</p>
+        <!-- 評価方法 -->
+        <div class="rounded-xl bg-indigo-50 border border-indigo-100 p-3 mb-3">
+          <p class="text-xs font-bold text-indigo-700 mb-2">🎯 評価方法 <span class="text-red-500">*</span> <span class="font-normal text-indigo-400">複数選択可</span></p>
           <div class="flex flex-wrap gap-2">
             <button type="button" class="chip-btn multi" data-group="eval" data-value="期末テスト">期末テスト</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="中間テスト">中間テスト</button>
@@ -164,12 +171,14 @@
             <button type="button" class="chip-btn multi" data-group="eval" data-value="発表・プレゼン">発表・プレゼン</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="出席点">出席点</button>
           </div>
+          <p id="evalError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
         </div>
 
-        <div>
-          <p class="text-xs font-semibold text-gray-500 mb-2">補足・その他</p>
+        <!-- 補足 -->
+        <div class="rounded-xl bg-gray-50 border border-gray-100 p-3">
+          <p class="text-xs font-bold text-gray-500 mb-2">💬 補足・その他 <span class="font-normal text-gray-400">（任意）</span></p>
           <input type="text" id="gradingExtra"
-            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white"
             placeholder="例：持ち込み可、グループワークあり など" maxlength="100">
         </div>
       </div>
@@ -334,37 +343,55 @@
                 <span class="text-indigo-600 cursor-pointer underline" id="useAsIs">「${q}」で入力する</span>
               </div>`;
             dropdown.classList.remove('hidden');
-            document.getElementById('useAsIs')?.addEventListener('click', () => selectCourse(q, ''));
+            document.getElementById('useAsIs')?.addEventListener('click', () => selectCourse(q, []));
             return;
           }
 
           dropdown.innerHTML = items.map(c =>
-            `<div class="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-50 last:border-none" data-name="${c.name}" data-instructor="${c.instructor}">
+            `<div class="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-50 last:border-none" data-idx="${items.indexOf(c)}">
               <div class="text-sm font-medium">${c.name}</div>
-              ${c.instructor ? `<div class="text-xs text-gray-400 mt-0.5">👨‍🏫 ${c.instructor}</div>` : ''}
+              ${c.instructors.length ? `<div class="text-xs text-gray-400 mt-0.5">👨‍🏫 ${c.instructors.map(i=>i.name).join('・')}</div>` : ''}
             </div>`
           ).join('');
           dropdown.classList.remove('hidden');
-
-          dropdown.querySelectorAll('[data-name]').forEach(el => {
-            el.addEventListener('click', () => selectCourse(el.dataset.name, el.dataset.instructor));
+          dropdown.querySelectorAll('[data-idx]').forEach(el => {
+            const c = items[parseInt(el.dataset.idx)];
+            el.addEventListener('click', () => selectCourse(c.name, c.instructors));
           });
         } catch (_) {}
       }, 300);
     });
 
-    function selectCourse(name, instructor) {
+    let currentInstructors = [];
+    function selectCourse(name, instructors) {
+      currentInstructors = instructors || [];
       document.getElementById('courseNameHidden').value = name;
       document.getElementById('selectedCourseName').textContent = name;
       document.getElementById('selectedCourse').classList.remove('hidden');
       searchInput.classList.add('hidden');
       dropdown.classList.add('hidden');
       document.getElementById('courseError').classList.add('hidden');
-      if (instructor) {
-        document.getElementById('instructorDisplay').textContent = instructor;
-        document.getElementById('instructorRow').classList.remove('hidden');
+
+      const section = document.getElementById('instructorSelectSection');
+      const chipsEl = document.getElementById('instructorChips');
+      document.getElementById('selectedInstructorHidden').value = '';
+      document.getElementById('instructorError').classList.add('hidden');
+      if (currentInstructors.length > 0) {
+        chipsEl.innerHTML = currentInstructors.map(inst =>
+          `<button type="button" class="chip-btn single" data-group="instructor" data-value="${inst.name}">${inst.name}</button>`
+        ).join('');
+        chipsEl.querySelectorAll('.chip-btn').forEach(btn => {
+          btn.onclick = () => {
+            chipsEl.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('selectedInstructorHidden').value = btn.dataset.value;
+            document.getElementById('instructorError').classList.add('hidden');
+            saveData();
+          };
+        });
+        section.classList.remove('hidden');
       } else {
-        document.getElementById('instructorRow').classList.add('hidden');
+        section.classList.add('hidden');
       }
       saveData();
     }
@@ -372,7 +399,9 @@
     document.getElementById('clearCourse').addEventListener('click', () => {
       document.getElementById('courseNameHidden').value = '';
       document.getElementById('selectedCourse').classList.add('hidden');
-      document.getElementById('instructorRow').classList.add('hidden');
+      document.getElementById('instructorSelectSection').classList.add('hidden');
+      document.getElementById('selectedInstructorHidden').value = '';
+      currentInstructors = [];
       searchInput.classList.remove('hidden');
       searchInput.value = '';
       searchInput.focus();
@@ -431,6 +460,8 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           name: document.getElementById('submitter_name').value,
           course: document.getElementById('courseNameHidden').value,
+          instructors: currentInstructors,
+          selectedInstructor: document.getElementById('selectedInstructorHidden').value,
           rating: currentRating,
           ease: currentEase,
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
@@ -448,7 +479,15 @@
         const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
         if (!d) return;
         if (d.name) document.getElementById('submitter_name').value = d.name;
-        if (d.course) selectCourse(d.course, '');
+        if (d.course) {
+          selectCourse(d.course, d.instructors || []);
+          if (d.selectedInstructor) {
+            document.getElementById('selectedInstructorHidden').value = d.selectedInstructor;
+            document.querySelectorAll('[data-group="instructor"]').forEach(b => {
+              b.classList.toggle('active', b.dataset.value === d.selectedInstructor);
+            });
+          }
+        }
         if (d.rating) {
           currentRating = d.rating;
           document.getElementById('ratingHidden').value = d.rating;
@@ -513,6 +552,24 @@
       }
       if (!document.getElementById('easeHidden').value) {
         document.getElementById('easeError').classList.remove('hidden');
+        valid = false;
+      }
+      if (document.getElementById('instructorSelectSection') &&
+          !document.getElementById('instructorSelectSection').classList.contains('hidden') &&
+          !document.getElementById('selectedInstructorHidden').value) {
+        document.getElementById('instructorError').classList.remove('hidden');
+        valid = false;
+      }
+      if (!document.querySelector('[data-group="attendance"].active')) {
+        document.getElementById('attendanceError').classList.remove('hidden');
+        valid = false;
+      }
+      if (!document.querySelector('[data-group="homework"].active')) {
+        document.getElementById('homeworkError').classList.remove('hidden');
+        valid = false;
+      }
+      if (!document.querySelector('[data-group="eval"].active')) {
+        document.getElementById('evalError').classList.remove('hidden');
         valid = false;
       }
       if (!valid) { e.preventDefault(); window.scrollTo(0, 0); return; }

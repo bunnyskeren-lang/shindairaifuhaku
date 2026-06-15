@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
 from database import init_db, AsyncSessionLocal
-from models import Course, PendingReview, UserProfile, PushSubscription
+from models import Course, PendingReview, UserProfile, PushSubscription, CourseInstructor
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -142,23 +142,32 @@ async def search_courses(q: str = ""):
             def _escape(tok: str) -> str:
                 return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
             from sqlalchemy import or_
-            stmt = select(Course.name, Course.instructor)
+            stmt = select(Course)
             for tok in tokens:
                 t = _escape(tok)
                 stmt = stmt.where(or_(
                     Course.name.ilike(f"%{t}%", escape="\\"),
                     Course.reading.ilike(f"%{t}%", escape="\\"),
                 ))
-            stmt = (
-                stmt
-                .order_by(Course.name)
-                .limit(10)
-            )
+            stmt = stmt.order_by(Course.name).limit(10)
         else:
-            stmt = select(Course.name, Course.instructor).order_by(Course.name).limit(30)
-        result = await session.execute(stmt)
-        courses = result.all()
-    return {"courses": [{"name": c[0], "instructor": c[1] or ""} for c in courses]}
+            stmt = select(Course).order_by(Course.name).limit(30)
+        courses = (await session.execute(stmt)).scalars().all()
+        course_ids = [c.id for c in courses]
+        instructors_raw = []
+        if course_ids:
+            instructors_raw = (await session.execute(
+                select(CourseInstructor)
+                .where(CourseInstructor.course_id.in_(course_ids))
+                .order_by(CourseInstructor.name)
+            )).scalars().all()
+        insts_by_course: dict = {}
+        for inst in instructors_raw:
+            insts_by_course.setdefault(inst.course_id, []).append({"name": inst.name, "url": inst.url or ""})
+    return {"courses": [
+        {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
+        for c in courses
+    ]}
 
 
 @app.post("/submit")
@@ -173,6 +182,7 @@ async def submit(
     line_user_id: str = Form(default=""),
     reg_name: str = Form(default=""),
     student_id: str = Form(default=""),
+    selected_instructor: str = Form(default=""),
 ):
     if not (1 <= rating <= 5):
         raise HTTPException(status_code=400, detail="Invalid rating")
@@ -206,6 +216,7 @@ async def submit(
             ease_rating=ease_rating,
             grading_method=grading_method.strip()[:500] or None,
             comment=comment.strip()[:500],
+            selected_instructor=selected_instructor.strip()[:100] or None,
             is_approved=False,
         )
         session.add(review)
