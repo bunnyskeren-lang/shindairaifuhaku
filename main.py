@@ -752,13 +752,15 @@ async def handle_course_list(category: str = "") -> list:
         course_name_set = {c.name for c in rows}
         seen_base: set[str] = set()
 
-        # Pre-compute numeric variant groups
+        # Pre-compute numeric variant groups (plain digits OR letter+digits e.g. T1)
+        _VNUM = _re.compile(r'^(.*?)[\s　]*([A-Z]?\d+)$')
         _num_bases: dict[str, list] = defaultdict(list)
         for _c in rows:
-            _m = _re.match(r'^(.*?)[\s　]*(\d+)$', _c.name)
+            _m = _VNUM.match(_c.name)
             if _m:
                 _b = _m.group(1).strip()
-                _num_bases[_b].append((_c.name, int(_m.group(2))))
+                _sk = int(_re.search(r'\d+', _m.group(2)).group())
+                _num_bases[_b].append((_c.name, _sk))
         _num_variant_names = {n for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
         _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
         seen_num_base: set[str] = set()
@@ -937,12 +939,15 @@ async def handle_message(text: str, user_id: str = "") -> list:
         if len(variant_courses) >= 2:
             return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
 
-        # Numeric variant group (e.g. 「英語1」「英語2」)
+        # Numeric variant group (e.g. 「英語1」「英語2」or「第三外国語(ドイツ語)T1」)
         _num_candidates = (await session.execute(
             select(Course).where(Course.name.like(f"{t}%")).order_by(Course.name)
         )).scalars().all()
-        _num_pat = _re.compile(r'^' + _re.escape(t) + r'[\s　]*\d+$')
-        _num_variants = [c for c in _num_candidates if _num_pat.match(c.name)]
+        _num_pat = _re.compile(r'^' + _re.escape(t) + r'[\s　]*[A-Z]?\d+$')
+        _num_variants = sorted(
+            [c for c in _num_candidates if _num_pat.match(c.name)],
+            key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
+        )
         if len(_num_variants) >= 2:
             return [make_variant_selection_bubble(t, [c.name for c in _num_variants])]
 
@@ -994,7 +999,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                         seen_base.add(base)
                         result.append(make_variant_selection_bubble(base, variants))
                         continue
-                _m2 = _re.match(r'^(.*?)[\s　]*\d+$', name)
+                _m2 = _re.match(r'^(.*?)[\s　]*[A-Z]?\d+$', name)
                 if _m2:
                     base = _m2.group(1).strip()
                     if base in seen_num_base:
@@ -1421,6 +1426,34 @@ async def admin_reviews_cleanup(_: str = Depends(check_admin)):
         await session.execute(
             delete(PendingReview).where(PendingReview.course_name.not_in(course_names))
         )
+        await session.commit()
+    return RedirectResponse("/admin/courses", status_code=303)
+
+
+@app.post("/admin/courses/migrate-third-language")
+async def migrate_third_language(_: str = Depends(check_admin)):
+    LANGS = ["ドイツ語", "フランス語"]
+    NUMS = [1, 2, 3, 4]
+    async with AsyncSessionLocal() as session:
+        to_delete = (await session.execute(
+            select(Course).where(Course.name.contains("第三外国語"))
+        )).scalars().all()
+        for c in to_delete:
+            await session.execute(delete(PendingReview).where(PendingReview.course_name == c.name))
+            await session.execute(delete(CourseInstructor).where(CourseInstructor.course_id == c.id))
+            await session.delete(c)
+        for lang in LANGS:
+            for n in NUMS:
+                name = f"第三外国語({lang})T{n}"
+                existing = (await session.execute(
+                    select(Course).where(Course.name == name)
+                )).scalar_one_or_none()
+                if not existing:
+                    session.add(Course(
+                        name=name, instructor="",
+                        classification="外国語", category="教養",
+                        reading=_reading(name),
+                    ))
         await session.commit()
     return RedirectResponse("/admin/courses", status_code=303)
 

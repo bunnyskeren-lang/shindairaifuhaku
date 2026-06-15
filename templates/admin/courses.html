@@ -76,6 +76,14 @@
   </table>
 </div>
 
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">🔧 一括操作</h2>
+  <form method="post" action="/admin/courses/migrate-third-language"
+        onsubmit="return confirm('既存の第三外国語科目をすべて削除し、新しい8科目（ドイツ語・フランス語 × T1〜T4）を追加します。よろしいですか？')">
+    <button type="submit" class="btn btn-danger">🔄 第三外国語を再構成（ドイツ語・フランス語 T1〜T4）</button>
+  </form>
+</div>
+
 <!-- タブ -->
 <div style="display:flex;gap:4px;margin:16px 0 0">
   <a href="/admin/courses{% if q %}?q={{ q }}{% endif %}"
