@@ -793,19 +793,7 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
 
 # ── Routes ──────────────────────────────────────────────────────
 
-@app.post("/callback")
-async def callback(request: Request):
-    signature = request.headers.get("X-Line-Signature", "")
-    body = await request.body()
-
-    if not verify_signature(body, signature):
-        raise HTTPException(status_code=400, detail="Invalid signature")
-
-    try:
-        events = parser.parse(body.decode("utf-8"), signature)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid webhook payload")
-
+async def _process_events(events) -> None:
     if random.random() < 0.02:
         cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         async with AsyncSessionLocal() as session:
@@ -872,6 +860,21 @@ async def callback(request: Request):
                     except Exception:
                         pass
 
+
+@app.post("/callback")
+async def callback(request: Request):
+    signature = request.headers.get("X-Line-Signature", "")
+    body = await request.body()
+
+    if not verify_signature(body, signature):
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    try:
+        events = parser.parse(body.decode("utf-8"), signature)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
+    asyncio.create_task(_process_events(events))
     return {"status": "ok"}
 
 
