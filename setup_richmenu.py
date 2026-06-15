@@ -78,7 +78,7 @@ BUTTONS = [
     {
         "label": "うりぼーネット",
         "color": "#0f766e",
-        "action": URIAction(label="うりぼーネット", uri="https://uribo.kobe-u.ac.jp/"),
+        "action": URIAction(label="うりぼーネット", uri="https://www.uriboportal.ofc.kobe-u.ac.jp/"),
     },
     {
         "label": "BEEFplus",
