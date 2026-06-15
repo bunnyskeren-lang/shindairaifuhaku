@@ -15,7 +15,6 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from linebot.v3 import WebhookParser
@@ -67,8 +66,34 @@ MAX_REVIEWS = _parse_max_reviews(os.environ.get("MAX_REVIEWS", "3"))
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
-security = HTTPBasic()
 JST = timezone(timedelta(hours=9))
+
+ADMIN_COOKIE = "admin_tok"
+ADMIN_TOKEN_TTL = 4 * 3600
+_HMAC_KEY = hashlib.sha256((CHANNEL_SECRET + ADMIN_PASSWORD).encode()).digest()
+
+def _make_admin_token() -> str:
+    ts = int(datetime.now(timezone.utc).timestamp())
+    sig = hmac.new(_HMAC_KEY, f"admin:{ts}".encode(), hashlib.sha256).hexdigest()
+    return f"{ts}:{sig}"
+
+def _verify_admin_token(token: str) -> bool:
+    try:
+        ts_str, sig = token.split(":", 1)
+        ts = int(ts_str)
+        if datetime.now(timezone.utc).timestamp() - ts > ADMIN_TOKEN_TTL:
+            return False
+        expected = hmac.new(_HMAC_KEY, f"admin:{ts_str}".encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(sig, expected)
+    except Exception:
+        return False
+
+class _AdminAuthRequired(Exception):
+    pass
+
+def check_admin(request: Request):
+    if not _verify_admin_token(request.cookies.get(ADMIN_COOKIE, "")):
+        raise _AdminAuthRequired()
 
 templates = Jinja2Templates(directory="templates")
 
@@ -176,6 +201,33 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.exception_handler(_AdminAuthRequired)
+async def _admin_auth_handler(request: Request, exc: _AdminAuthRequired):
+    return RedirectResponse(f"/admin/login?next={request.url.path}", status_code=303)
+
+
+@app.get("/admin/login", response_class=HTMLResponse)
+async def admin_login_page(request: Request, next: str = "/admin"):
+    return templates.TemplateResponse("admin/login.html", {"request": request, "next": next, "error": False})
+
+
+@app.post("/admin/login")
+async def admin_login(request: Request, password: str = Form(...), next: str = Form(default="/admin")):
+    if not py_secrets.compare_digest(password.encode(), ADMIN_PASSWORD.encode()):
+        return templates.TemplateResponse("admin/login.html", {"request": request, "next": next, "error": True})
+    safe_next = next if next.startswith("/admin") else "/admin"
+    response = RedirectResponse(safe_next, status_code=303)
+    response.set_cookie(ADMIN_COOKIE, _make_admin_token(), httponly=True, samesite="strict")
+    return response
+
+
+@app.post("/admin/logout")
+async def admin_logout():
+    response = RedirectResponse("/admin/login", status_code=303)
+    response.delete_cookie(ADMIN_COOKIE)
+    return response
 
 
 def verify_signature(body: bytes, signature: str) -> bool:
