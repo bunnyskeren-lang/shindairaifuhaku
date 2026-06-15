@@ -112,7 +112,10 @@
   {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
   <tr class="{{ gid }}" style="display:none">
     <td>{{ c.name }}</td>
-    <td>{{ c.instructor or "―" }}</td>
+    <td style="font-size:12px;color:#4b5563">
+      {% set insts = instructors_by_course[c.id] %}
+      {% if insts %}{{ insts | map(attribute='name') | join('・') }}{% else %}―{% endif %}
+    </td>
     <td>
       <span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">
         {{ c.category }}
@@ -133,6 +136,29 @@
   </tr>
   <tr id="rv-{{ c.id }}" class="{{ gid }} review-row" style="display:none">
     <td colspan="4" style="padding:0;background:#f9fafb">
+      <!-- 担当教員 -->
+      <div style="padding:10px 16px;background:#eef2ff;border-bottom:1px solid #e5e7eb">
+        <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          {% for inst in instructors_by_course[c.id] %}
+          <span style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
+            {{ inst.name }}
+            <form method="post" action="/admin/courses/{{ c.id }}/instructors/delete/{{ inst.id }}" style="display:inline;margin:0">
+              <button type="submit" style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
+            </form>
+          </span>
+          {% else %}
+          <span style="color:#9ca3af;font-size:12px">まだ登録なし</span>
+          {% endfor %}
+          <form method="post" action="/admin/courses/{{ c.id }}/instructors/add"
+                style="display:inline-flex;gap:4px;align-items:center;margin:0">
+            <input type="text" name="name" placeholder="教員名を追加" maxlength="100"
+                   style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px;margin-top:0">
+            <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap">追加</button>
+          </form>
+        </div>
+      </div>
+      <!-- レビュー -->
       {% if reviews %}
       <table style="margin:0;border-radius:0;font-size:12px">
         <tr style="background:#e5e7eb">

@@ -39,7 +39,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription
+from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -325,9 +325,14 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         .limit(limit)
     )).scalars().all()
 
+    instructors = (await session.execute(
+        select(CourseInstructor).where(CourseInstructor.course_id == course.id)
+    )).scalars().all()
+    instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
+
     url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
     bubble = make_course_bubble(
-        course.name, course.instructor, course.classification,
+        course.name, instructor_str, course.classification,
         avg_rating, top_ease, list(comments),
         grading_methods=all_grading_methods,
         review_url=url,
@@ -513,6 +518,44 @@ def make_ranking_bubble(title: str, items: list[dict]) -> FlexBubble:
 
 # ── Course list carousel ────────────────────────────────────────
 
+VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
+
+
+def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> FlexMessage:
+    suffix_str = " / ".join(n[-1] for n in variant_names)
+    btns = []
+    for i, name in enumerate(variant_names):
+        icon = VARIANT_ICONS.get(i, "▶")
+        btns.append(
+            FlexButton(
+                action=MessageAction(label=f"{icon} {name}", text=name),
+                style="primary" if i == 0 else "secondary",
+                color="#6366f1" if i == 0 else None,
+                height="sm",
+            )
+        )
+    return FlexMessage(
+        alt_text=f"📚 {base_name} — {suffix_str} どれを見ますか？",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text=base_name, weight="bold", color="#ffffff", size="lg", wrap=True),
+                    FlexText(text=f"{suffix_str}  どれを見ますか？", color="#c7d2fe", size="sm"),
+                ],
+                background_color="#6366f1",
+                padding_all="lg",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=btns,
+                spacing="md",
+                padding_all="lg",
+            ),
+        ),
+    )
+
+
 async def handle_course_list(session: AsyncSession, category: str = "") -> list:
     from collections import defaultdict
     stmt = select(Course).order_by(Course.classification, Course.name)
@@ -524,9 +567,24 @@ async def handle_course_list(session: AsyncSession, category: str = "") -> list:
         label = f"{category}の" if category else ""
         return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
 
-    groups: dict[str, list] = defaultdict(list)
+    # Detect variant groups: courses sharing base name with A/B/C/D suffix
+    course_name_set = {c.name for c in rows}
+    seen_base: set[str] = set()
+
+    groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for course in rows:
-        groups[course.classification or "その他"].append(course)
+        name = course.name
+        classification = course.classification or "その他"
+        if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
+            base = name[:-1]
+            variants = [s for s in 'ABCD' if base + s in course_name_set]
+            if len(variants) >= 2:
+                if base not in seen_base:
+                    seen_base.add(base)
+                    suffix = "/".join(variants)
+                    groups[classification].append((base, f"variant:{suffix}"))
+                continue
+        groups[classification].append((name, "single"))
 
     CAROUSEL_MAX = 12
     all_groups = list(groups.items())
@@ -534,13 +592,18 @@ async def handle_course_list(session: AsyncSession, category: str = "") -> list:
     overflow_groups = all_groups[CAROUSEL_MAX:]
 
     bubbles = []
-    for classification, courses in visible_groups:
+    for classification, entries in visible_groups:
         btn_contents = []
-        for course in courses[:8]:
-            label = course.name if len(course.name) <= 20 else course.name[:19] + "…"
+        for name, kind in entries[:8]:
+            if kind.startswith("variant:"):
+                suffix = kind.split(":", 1)[1]
+                short = name if len(name) <= 14 else name[:13] + "…"
+                label = f"{short} {suffix}"
+            else:
+                label = name if len(name) <= 20 else name[:19] + "…"
             btn_contents.append(
                 FlexButton(
-                    action=MessageAction(label=label, text=course.name),
+                    action=MessageAction(label=label, text=name),
                     style="link",
                     height="sm",
                 )
@@ -563,6 +626,8 @@ async def handle_course_list(session: AsyncSession, category: str = "") -> list:
 
     alt = f"📚 {category}一覧" if category else "📚 科目一覧"
     result = []
+    if not bubbles:
+        return [TextMessage(text="科目が登録されていません。")]
     if len(bubbles) == 1:
         result.append(FlexMessage(alt_text=alt, contents=bubbles[0]))
     else:
@@ -642,6 +707,15 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [make_help_flex()]
 
+    # Check if t is the base name of a variant group (A/B/C/D...)
+    _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
+    variant_courses = (await session.execute(
+        select(Course).where(Course.name.in_(_variant_names))
+        .order_by(Course.name)
+    )).scalars().all()
+    if len(variant_courses) >= 2:
+        return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
+
     # Course keyword search — split on spaces (half-width and full-width) for multi-token AND match
     import re as _re
     tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
@@ -649,10 +723,34 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     stmt = select(Course)
     for tok in tokens:
-        stmt = stmt.where(Course.name.ilike(f"%{_escape(tok)}%", escape="\\"))
-    courses = (await session.execute(stmt.limit(3))).scalars().all()
+        e = _escape(tok)
+        stmt = stmt.where(or_(
+            Course.name.ilike(f"%{e}%", escape="\\"),
+            Course.reading.ilike(f"%{e}%", escape="\\"),
+        ))
+    courses = (await session.execute(stmt.limit(6))).scalars().all()
     if courses:
-        return [await get_course_flex(session, c, user_id) for c in courses]
+        # Group variant pairs (e.g., 心理学A + 心理学B → show selection bubble)
+        seen_base: set[str] = set()
+        course_name_set = {c.name for c in courses}
+        result = []
+        for c in courses:
+            name = c.name
+            if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
+                base = name[:-1]
+                if base in seen_base:
+                    continue
+                # Check if other variants of this base are in result set or DB
+                db_variants = (await session.execute(
+                    select(Course).where(Course.name.in_([base + s for s in ('A', 'B', 'C', 'D')]))
+                    .order_by(Course.name)
+                )).scalars().all()
+                if len(db_variants) >= 2:
+                    seen_base.add(base)
+                    result.append(make_variant_selection_bubble(base, [v.name for v in db_variants]))
+                    continue
+            result.append(await get_course_flex(session, c, user_id))
+        return result[:5]
 
     return [TextMessage(
         text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
@@ -834,7 +932,20 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         .replace(">", "\\u003e")
     )
 
+    from collections import defaultdict
+    course_ids = [c.id for c in courses]
     course_names = [c.name for c in courses]
+
+    if course_ids:
+        instructors_raw = (await session.execute(
+            select(CourseInstructor).where(CourseInstructor.course_id.in_(course_ids))
+        )).scalars().all()
+    else:
+        instructors_raw = []
+    instructors_by_course: dict = defaultdict(list)
+    for inst in instructors_raw:
+        instructors_by_course[inst.course_id].append(inst)
+
     if course_names:
         reviews_raw = (await session.execute(
             select(PendingReview)
@@ -843,7 +954,6 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         )).scalars().all()
     else:
         reviews_raw = []
-    from collections import defaultdict
     reviews_by_course: dict = defaultdict(list)
     for r in reviews_raw:
         reviews_by_course[r.course_name].append(r)
@@ -855,10 +965,31 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "class_counts": class_counts,
         "courses_data": courses_data,
         "reviews_by_course": reviews_by_course,
+        "instructors_by_course": instructors_by_course,
         "error": msg,
         "total": total,
         "q": q,
     })
+
+
+@app.post("/admin/courses/{course_id}/instructors/add")
+async def add_instructor(course_id: int, request: Request, name: str = Form(...), _: str = Depends(check_admin)):
+    name_s = name.strip()
+    if name_s:
+        async with AsyncSessionLocal() as session:
+            session.add(CourseInstructor(course_id=course_id, name=name_s))
+            await session.commit()
+    return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
+
+
+@app.post("/admin/courses/{course_id}/instructors/delete/{instructor_id}")
+async def delete_instructor(course_id: int, instructor_id: int, request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        inst = await session.get(CourseInstructor, instructor_id)
+        if inst:
+            await session.delete(inst)
+            await session.commit()
+    return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
 
 
 @app.post("/admin/reviews/approve/{review_id}")

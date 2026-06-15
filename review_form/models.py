@@ -44,6 +44,14 @@ class PendingReview(Base):
     )
 
 
+class CourseInstructor(Base):
+    __tablename__ = "course_instructors"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+
+
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 
