@@ -53,7 +53,7 @@
   <h2 style="margin-top:0">分類一覧</h2>
   <table style="margin-top:0">
     <tr><th>分類名</th><th>科目数</th><th></th></tr>
-    {% for cl, cnt in class_counts | dictsort %}
+    {% for cl, cnt in class_counts.items() %}
     <tr>
       <td>
         <form method="post" action="/admin/courses/classification/rename"

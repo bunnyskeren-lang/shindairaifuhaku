@@ -959,12 +959,13 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         classifications = (await session.execute(
             select(Course.classification).distinct().order_by(Course.classification)
         )).scalars().all()
-        class_counts = dict((await session.execute(
+        class_counts_raw = dict((await session.execute(
             select(Course.classification, func.count(Course.id))
             .where(Course.classification != "")
             .group_by(Course.classification)
             .order_by(Course.classification)
         )).all())
+        class_counts = {k: class_counts_raw[k] for k in sorted(class_counts_raw, key=_cls_order)}
 
     existing = sorted([c for c in classifications if c], key=_cls_order)
     courses_data = (
