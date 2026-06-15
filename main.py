@@ -1,11 +1,14 @@
 import os
+import re as _re
 import json
+import asyncio
 import random
 import traceback as _traceback
 import hashlib
 import hmac
 import base64
 import secrets as py_secrets
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -717,7 +720,6 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
 
     # Course keyword search — split on spaces (half-width and full-width) for multi-token AND match
-    import re as _re
     tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
     def _escape(tok: str) -> str:
         return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
@@ -730,9 +732,21 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
         ))
     courses = (await session.execute(stmt.limit(6))).scalars().all()
     if courses:
-        # Group variant pairs (e.g., 心理学A + 心理学B → show selection bubble)
+        # Batch-load all variants for courses ending in A/B/C/D (1 query instead of N)
+        potential_bases = {
+            c.name[:-1] for c in courses
+            if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
+        }
+        base_variants: dict[str, list[str]] = defaultdict(list)
+        if potential_bases:
+            all_variant_names = [b + s for b in potential_bases for s in ('A', 'B', 'C', 'D')]
+            variant_rows = (await session.execute(
+                select(Course.name).where(Course.name.in_(all_variant_names)).order_by(Course.name)
+            )).scalars().all()
+            for vname in variant_rows:
+                base_variants[vname[:-1]].append(vname)
+
         seen_base: set[str] = set()
-        course_name_set = {c.name for c in courses}
         result = []
         for c in courses:
             name = c.name
@@ -740,14 +754,10 @@ async def handle_message(session: AsyncSession, text: str, user_id: str = "") ->
                 base = name[:-1]
                 if base in seen_base:
                     continue
-                # Check if other variants of this base are in result set or DB
-                db_variants = (await session.execute(
-                    select(Course).where(Course.name.in_([base + s for s in ('A', 'B', 'C', 'D')]))
-                    .order_by(Course.name)
-                )).scalars().all()
-                if len(db_variants) >= 2:
+                variants = base_variants.get(base, [])
+                if len(variants) >= 2:
                     seen_base.add(base)
-                    result.append(make_variant_selection_bubble(base, [v.name for v in db_variants]))
+                    result.append(make_variant_selection_bubble(base, variants))
                     continue
             result.append(await get_course_flex(session, c, user_id))
         return result[:5]
@@ -804,7 +814,10 @@ async def callback(request: Request):
 
                 try:
                     await save_log(session, user_id, "in", user_text)
-                    messages = await handle_message(session, user_text, user_id)
+                    messages = await asyncio.wait_for(
+                        handle_message(session, user_text, user_id),
+                        timeout=25.0,
+                    )
                     await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
                     await line_api.reply_message(
                         ReplyMessageRequest(
@@ -812,6 +825,17 @@ async def callback(request: Request):
                             messages=messages[:5],
                         )
                     )
+                except asyncio.TimeoutError:
+                    await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
+                    try:
+                        await line_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
+                            )
+                        )
+                    except Exception:
+                        pass
                 except Exception as exc:
                     await save_error_log(exc, user_id=user_id, action=user_text)
                     try:
