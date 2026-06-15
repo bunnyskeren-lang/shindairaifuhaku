@@ -745,7 +745,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
             rows = (await session.execute(
                 select(PendingReview.course_name, func.avg(PendingReview.rating).label("avg"))
-                .where(PendingReview.is_approved == True)
+                .where(
+                    PendingReview.is_approved == True,
+                    PendingReview.course_name.in_(select(Course.name)),
+                )
                 .group_by(PendingReview.course_name)
                 .order_by(func.avg(PendingReview.rating).desc())
                 .limit(5)
@@ -764,7 +767,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         if t in ["楽単ランキング", "楽単", "楽"]:
             rows = (await session.execute(
                 select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id))
-                .where(PendingReview.is_approved == True)
+                .where(
+                    PendingReview.is_approved == True,
+                    PendingReview.course_name.in_(select(Course.name)),
+                )
                 .group_by(PendingReview.course_name, PendingReview.ease_rating)
             )).all()
             if not rows:
