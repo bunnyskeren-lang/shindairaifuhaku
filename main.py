@@ -1317,6 +1317,25 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         )).all())
         class_counts = {k: class_counts_raw[k] for k in sorted(class_counts_raw, key=_cls_sort)}
 
+        course_ids = [c.id for c in courses]
+        course_names = [c.name for c in courses]
+
+        if course_ids:
+            instructors_raw = (await session.execute(
+                select(CourseInstructor).where(CourseInstructor.course_id.in_(course_ids))
+            )).scalars().all()
+        else:
+            instructors_raw = []
+
+        if course_names:
+            reviews_raw = (await session.execute(
+                select(PendingReview)
+                .where(PendingReview.course_name.in_(course_names))
+                .order_by(PendingReview.is_approved, PendingReview.created_at.desc())
+            )).scalars().all()
+        else:
+            reviews_raw = []
+
     existing = sorted([c for c in classifications if c], key=_cls_sort)
     courses_data = (
         json.dumps({
@@ -1334,28 +1353,10 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         .replace(">", "\\u003e")
     )
 
-    from collections import defaultdict
-    course_ids = [c.id for c in courses]
-    course_names = [c.name for c in courses]
-
-    if course_ids:
-        instructors_raw = (await session.execute(
-            select(CourseInstructor).where(CourseInstructor.course_id.in_(course_ids))
-        )).scalars().all()
-    else:
-        instructors_raw = []
     instructors_by_course: dict = defaultdict(list)
     for inst in sorted(instructors_raw, key=lambda i: i.name):
         instructors_by_course[inst.course_id].append(inst)
 
-    if course_names:
-        reviews_raw = (await session.execute(
-            select(PendingReview)
-            .where(PendingReview.course_name.in_(course_names))
-            .order_by(PendingReview.is_approved, PendingReview.created_at.desc())
-        )).scalars().all()
-    else:
-        reviews_raw = []
     reviews_by_course: dict = defaultdict(list)
     for r in reviews_raw:
         reviews_by_course[r.course_name].append(r)

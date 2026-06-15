@@ -20,13 +20,14 @@
       <th>日時</th><th>科目名</th><th>投稿者</th><th>担当教員</th><th>評価</th><th>楽単</th><th>成績評価</th><th>コメント</th><th></th>
     </tr>
     {% for r in pending %}
+    {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}
     <tr>
       <td style="white-space:nowrap;font-size:11px">{{ r.created_at | jst }}</td>
       <td style="font-weight:bold">{{ r.course_name }}</td>
       <td>{{ r.submitter_name }}</td>
       <td style="font-size:12px;color:#6b7280">{{ r.selected_instructor or '―' }}</td>
       <td style="white-space:nowrap;color:#f59e0b">{{ '★' * r.rating }}{{ '☆' * (5 - r.rating) }}</td>
-      <td><span class="badge" style="background:#eef2ff;color:#6366f1">{{ r.ease_rating }}</span></td>
+      <td style="white-space:nowrap;color:#818cf8">{{ '★' * _e }}{{ '☆' * (5 - _e) }}</td>
       <td class="comment-cell" style="color:#6b7280">{{ r.grading_method or '―' }}</td>
       <td class="comment-cell">{{ r.comment }}</td>
       <td style="white-space:nowrap">
@@ -53,16 +54,18 @@
   <div style="overflow-x:auto">
   <table>
     <tr>
-      <th>日時</th><th>科目名</th><th>投稿者</th><th>担当教員</th><th>評価</th><th>楽単</th><th>コメント</th><th></th>
+      <th>日時</th><th>科目名</th><th>投稿者</th><th>担当教員</th><th>評価</th><th>楽単</th><th>成績評価</th><th>コメント</th><th></th>
     </tr>
     {% for r in approved %}
+    {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}
     <tr>
       <td style="white-space:nowrap;font-size:11px">{{ r.created_at | jst }}</td>
       <td style="font-weight:bold">{{ r.course_name }}</td>
       <td>{{ r.submitter_name }}</td>
       <td style="font-size:12px;color:#6b7280">{{ r.selected_instructor or '―' }}</td>
       <td style="white-space:nowrap;color:#f59e0b">{{ '★' * r.rating }}{{ '☆' * (5 - r.rating) }}</td>
-      <td><span class="badge" style="background:#eef2ff;color:#6366f1">{{ r.ease_rating }}</span></td>
+      <td style="white-space:nowrap;color:#818cf8">{{ '★' * _e }}{{ '☆' * (5 - _e) }}</td>
+      <td class="comment-cell" style="color:#6b7280">{{ r.grading_method or '―' }}</td>
       <td class="comment-cell">{{ r.comment }}</td>
       <td>
         <form class="action-form" method="post" action="/admin/reviews/reject/{{ r.id }}"
