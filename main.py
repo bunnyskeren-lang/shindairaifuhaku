@@ -37,7 +37,7 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
-from sqlalchemy import select, func, delete, or_
+from sqlalchemy import select, func, delete, or_, update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1319,9 +1319,57 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
 async def admin_reviews_cleanup(_: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         course_names = (await session.execute(select(Course.name))).scalars().all()
-        result = await session.execute(
+        await session.execute(
             delete(PendingReview).where(PendingReview.course_name.not_in(course_names))
         )
+        await session.commit()
+    return RedirectResponse("/admin/courses", status_code=303)
+
+
+@app.post("/admin/courses/strip-trailing-numbers")
+async def strip_trailing_numbers(
+    request: Request,
+    _: str = Depends(check_admin),
+    prefix: str = Form(default=""),
+):
+    import re as _re2
+    async with AsyncSessionLocal() as session:
+        stmt = select(Course)
+        if prefix.strip():
+            stmt = stmt.where(Course.name.contains(prefix.strip()))
+        courses = (await session.execute(stmt)).scalars().all()
+
+        groups: dict[str, list] = defaultdict(list)
+        for course in courses:
+            base = _re2.sub(r'[\s　]*\d+$', '', course.name).strip()
+            if base != course.name:
+                groups[base].append(course)
+
+        for base_name, dups in groups.items():
+            existing = (await session.execute(
+                select(Course).where(Course.name == base_name)
+            )).scalar_one_or_none()
+
+            if existing:
+                survivor_id = existing.id
+            else:
+                survivor = dups[0]
+                survivor.name = base_name
+                survivor.reading = _reading(base_name)
+                survivor_id = survivor.id
+                dups = dups[1:]
+
+            for dup in dups:
+                await session.execute(
+                    sa_update(PendingReview)
+                    .where(PendingReview.course_name == dup.name)
+                    .values(course_name=base_name)
+                )
+                await session.execute(
+                    delete(CourseInstructor).where(CourseInstructor.course_id == dup.id)
+                )
+                await session.delete(dup)
+
         await session.commit()
     return RedirectResponse("/admin/courses", status_code=303)
 

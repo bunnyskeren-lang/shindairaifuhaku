@@ -83,6 +83,17 @@
         onsubmit="return confirm('登録されていない科目のレビューをすべて削除しますか？')">
     <button type="submit" class="btn btn-danger">🗑 孤児レビューを削除</button>
   </form>
+
+  <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb">
+  <p style="font-size:13px;color:#64748b;margin:0 0 6px">科目名末尾の数字（クラス番号）を削除して同名科目をまとめます。</p>
+  <p style="font-size:12px;color:#94a3b8;margin:0 0 10px">例: 「外国語第2（英語）1」「外国語第2（英語）2」→「外国語第2（英語）」に統合</p>
+  <form method="post" action="/admin/courses/strip-trailing-numbers"
+        onsubmit="return confirm('末尾の数字を削除して科目を統合します。この操作は元に戻せません。続けますか？')"
+        style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <input type="text" name="prefix" placeholder="絞り込みキーワード（例: 外国語第2）"
+           style="flex:1;min-width:200px;padding:6px 10px;font-size:13px;border:1px solid #e5e7eb;border-radius:8px">
+    <button type="submit" class="btn btn-danger">🔢 末尾数字を削除して統合</button>
+  </form>
 </div>
 
 <!-- タブ -->
