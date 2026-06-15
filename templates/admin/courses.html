@@ -76,6 +76,15 @@
   </table>
 </div>
 
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">メンテナンス</h2>
+  <p style="font-size:13px;color:#64748b;margin:0 0 10px">存在しない科目のレビューデータを一括削除します。</p>
+  <form method="post" action="/admin/reviews/cleanup"
+        onsubmit="return confirm('登録されていない科目のレビューをすべて削除しますか？')">
+    <button type="submit" class="btn btn-danger">🗑 孤児レビューを削除</button>
+  </form>
+</div>
+
 <!-- タブ -->
 <div style="display:flex;gap:4px;margin:16px 0 0">
   <a href="/admin/courses{% if q %}?q={{ q }}{% endif %}"

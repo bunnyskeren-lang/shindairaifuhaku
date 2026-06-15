@@ -1247,6 +1247,17 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
 
 
+@app.post("/admin/reviews/cleanup")
+async def admin_reviews_cleanup(_: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        course_names = (await session.execute(select(Course.name))).scalars().all()
+        result = await session.execute(
+            delete(PendingReview).where(PendingReview.course_name.not_in(course_names))
+        )
+        await session.commit()
+    return RedirectResponse("/admin/courses", status_code=303)
+
+
 @app.post("/admin/reviews/approve/{review_id}")
 async def admin_review_approve(review_id: int, request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
