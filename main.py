@@ -50,8 +50,12 @@ load_dotenv()
 CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
-REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku-1.onrender.com")
+REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku.onrender.com")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
+SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
+STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZ])$')
 def _parse_max_reviews(val: str, default: int = 3, lo: int = 1, hi: int = 10) -> int:
     try:
         n = int(val)
@@ -107,6 +111,56 @@ def stars(n: int) -> str:
     return "★" * n + "☆" * (5 - n)
 
 
+async def send_push_notification(course_name: str, rating: int, ease_rating: str, comment: str):
+    if not VAPID_PRIVATE_KEY:
+        return
+    import json as _json
+    from pywebpush import webpush, WebPushException
+    from sqlalchemy import delete as _sa_delete
+    async with AsyncSessionLocal() as session:
+        subs = (await session.execute(select(PushSubscription))).scalars().all()
+    if not subs:
+        return
+    _stars = "★" * rating + "☆" * (5 - rating)
+    payload = _json.dumps({
+        "title": f"📝 新着レビュー: {course_name}",
+        "body": f"{_stars}  楽単: {ease_rating}\n{comment[:80]}",
+    })
+    expired_ids = []
+    for sub in subs:
+        try:
+            await asyncio.to_thread(
+                webpush,
+                subscription_info={"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}},
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": f"mailto:{VAPID_EMAIL}"},
+            )
+        except WebPushException as e:
+            if e.response is not None and e.response.status_code == 410:
+                expired_ids.append(sub.id)
+        except Exception:
+            pass
+    if expired_ids:
+        async with AsyncSessionLocal() as session:
+            await session.execute(_sa_delete(PushSubscription).where(PushSubscription.id.in_(expired_ids)))
+            await session.commit()
+
+
+async def _self_ping():
+    if not SELF_URL:
+        return
+    import httpx
+    await asyncio.sleep(30)
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.get(f"{SELF_URL}/health")
+        except Exception:
+            pass
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -116,6 +170,7 @@ async def lifespan(app: FastAPI):
         import traceback
         traceback.print_exc()
         print(f"DB ERROR: {e}", flush=True)
+    asyncio.create_task(_self_ping())
     yield
 
 
@@ -875,6 +930,120 @@ async def callback(request: Request):
 
     asyncio.create_task(_process_events(events))
     return {"status": "ok"}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request, uid: str = Query(default="")):
+    is_new_user = False
+    if uid:
+        async with AsyncSessionLocal() as session:
+            profile = (await session.execute(
+                select(UserProfile).where(UserProfile.line_user_id == uid)
+            )).scalar_one_or_none()
+            is_new_user = profile is None
+    return templates.TemplateResponse(
+        "form_index.html",
+        {"request": request, "uid": uid, "is_new_user": is_new_user},
+    )
+
+
+@app.get("/api/courses")
+async def search_courses(q: str = ""):
+    async with AsyncSessionLocal() as session:
+        if q.strip():
+            tokens = [tok for tok in _re.split(r'[\s　]+', q.strip()) if tok]
+            def _escape(tok: str) -> str:
+                return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+            stmt = select(Course)
+            for tok in tokens:
+                t = _escape(tok)
+                stmt = stmt.where(or_(
+                    Course.name.ilike(f"%{t}%", escape="\\"),
+                    Course.reading.ilike(f"%{t}%", escape="\\"),
+                ))
+            stmt = stmt.order_by(Course.name).limit(10)
+        else:
+            stmt = select(Course).order_by(Course.name).limit(30)
+        courses = (await session.execute(stmt)).scalars().all()
+        course_ids = [c.id for c in courses]
+        instructors_raw = []
+        if course_ids:
+            instructors_raw = (await session.execute(
+                select(CourseInstructor)
+                .where(CourseInstructor.course_id.in_(course_ids))
+                .order_by(CourseInstructor.name)
+            )).scalars().all()
+        insts_by_course: dict = {}
+        for inst in instructors_raw:
+            insts_by_course.setdefault(inst.course_id, []).append({"name": inst.name, "url": inst.url or ""})
+    return {"courses": [
+        {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
+        for c in courses
+    ]}
+
+
+@app.post("/submit")
+async def submit(
+    request: Request,
+    submitter_name: str = Form(...),
+    course_name: str = Form(...),
+    rating: int = Form(...),
+    ease_rating: str = Form(...),
+    grading_method: str = Form(default=""),
+    comment: str = Form(...),
+    line_user_id: str = Form(default=""),
+    reg_name: str = Form(default=""),
+    student_id: str = Form(default=""),
+    selected_instructor: str = Form(default=""),
+):
+    if not (1 <= rating <= 5):
+        raise HTTPException(status_code=400, detail="Invalid rating")
+    if ease_rating not in ("SS", "S", "A", "B", "C"):
+        raise HTTPException(status_code=400, detail="Invalid ease_rating")
+
+    async with AsyncSessionLocal() as session:
+        uid = line_user_id.strip()
+        if uid:
+            existing = (await session.execute(
+                select(UserProfile).where(UserProfile.line_user_id == uid)
+            )).scalar_one_or_none()
+            if existing is None:
+                if not reg_name.strip():
+                    raise HTTPException(status_code=400, detail="お名前を入力してください")
+                if not STUDENT_ID_RE.match(student_id.strip()):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）",
+                    )
+                session.add(UserProfile(
+                    line_user_id=uid,
+                    name=reg_name.strip()[:100],
+                    student_id=student_id.strip(),
+                ))
+
+        review = PendingReview(
+            submitter_name=submitter_name.strip()[:20],
+            course_name=course_name.strip()[:200],
+            rating=rating,
+            ease_rating=ease_rating,
+            grading_method=grading_method.strip()[:500] or None,
+            comment=comment.strip()[:500],
+            selected_instructor=selected_instructor.strip()[:100] or None,
+            is_approved=False,
+        )
+        session.add(review)
+        await session.commit()
+
+    await send_push_notification(
+        course_name=course_name.strip(),
+        rating=rating,
+        ease_rating=ease_rating,
+        comment=comment.strip(),
+    )
+
+    return templates.TemplateResponse(
+        "form_success.html", {"request": request, "course_name": course_name}
+    )
 
 
 @app.get("/sw.js")
