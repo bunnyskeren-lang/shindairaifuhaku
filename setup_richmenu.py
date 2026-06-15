@@ -70,14 +70,14 @@ BUTTONS = [
         "action": MessageAction(label="楽単ランキング", text="楽単ランキング"),
     },
     {
+        "label": "うりぼーネット",
+        "color": "#0f766e",
+        "action": URIAction(label="うりぼーネット", uri="https://knosos.center.kobe-u.ac.jp"),
+    },
+    {
         "label": "BEEFplus",
         "color": "#7c3aed",
         "action": URIAction(label="BEEFplus", uri="https://beefplus.center.kobe-u.ac.jp/login"),
-    },
-    {
-        "label": "KNOSOS",
-        "color": "#0f766e",
-        "action": URIAction(label="KNOSOS", uri="https://knosos.center.kobe-u.ac.jp"),
     },
 ]
 
@@ -142,7 +142,27 @@ def make_image() -> bytes:
     return buf.getvalue()
 
 
+def load_custom_image(path: str) -> bytes:
+    """カスタム画像を読み込む。JPEG以外はPillowでJPEGに変換する。"""
+    try:
+        from PIL import Image
+        img = Image.open(path).convert("RGB")
+        if img.size != (W, H):
+            print(f"  画像サイズ {img.size} → {W}x{H} にリサイズします")
+            img = img.resize((W, H), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=95)
+        return buf.getvalue()
+    except ImportError:
+        # Pillowなしの場合はそのまま読む (JPEGのみ)
+        with open(path, "rb") as f:
+            return f.read()
+
+
 def main():
+    # 使い方: python setup_richmenu.py [カスタム画像パス]
+    custom_image_path = sys.argv[1] if len(sys.argv) > 1 else None
+
     config = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
     with ApiClient(config) as client:
@@ -183,9 +203,14 @@ def main():
         rich_menu_id = result.rich_menu_id
         print(f"リッチメニュー作成: {rich_menu_id}")
 
-        # 画像を生成してアップロード
-        print("画像を生成中...")
-        image_data = make_image()
+        # 画像を読み込む or 生成する
+        if custom_image_path:
+            print(f"カスタム画像を使用: {custom_image_path}")
+            image_data = load_custom_image(custom_image_path)
+        else:
+            print("画像を自動生成中...")
+            image_data = make_image()
+
         req = urllib.request.Request(
             f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
             data=image_data,
