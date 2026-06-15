@@ -175,6 +175,9 @@
                  style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:140px;margin-top:0">
           <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap">追加</button>
         </form>
+        {% if request.query_params.get('inst_err') == c.id | string %}
+        <span style="color:#ef4444;font-size:12px;font-weight:bold">同じ教員がすでに追加されています</span>
+        {% endif %}
       </div>
     </td>
   </tr>

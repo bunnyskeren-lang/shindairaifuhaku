@@ -1035,6 +1035,16 @@ async def add_instructor(course_id: int, request: Request, name: str = Form(...)
     name_s = name.strip()
     if name_s:
         async with AsyncSessionLocal() as session:
+            existing = (await session.execute(
+                select(CourseInstructor).where(
+                    CourseInstructor.course_id == course_id,
+                    CourseInstructor.name == name_s,
+                )
+            )).scalar_one_or_none()
+            if existing:
+                referer = request.headers.get("Referer", "/admin/courses")
+                sep = "&" if "?" in referer else "?"
+                return RedirectResponse(f"{referer}{sep}inst_err={course_id}", status_code=303)
             session.add(CourseInstructor(course_id=course_id, name=name_s))
             await session.commit()
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
