@@ -600,15 +600,23 @@ async def handle_course_list(session: AsyncSession, category: str = "") -> list:
         for name, kind in entries[:8]:
             if kind.startswith("variant:"):
                 suffix = kind.split(":", 1)[1]
-                short = name if len(name) <= 14 else name[:13] + "…"
-                label = f"{short} {suffix}"
+                display = f"{name} ({suffix})"
             else:
-                label = name if len(name) <= 20 else name[:19] + "…"
+                display = name
             btn_contents.append(
-                FlexButton(
-                    action=MessageAction(label=label, text=name),
-                    style="link",
-                    height="sm",
+                FlexBox(
+                    layout="vertical",
+                    action=MessageAction(label=display[:40], text=name),
+                    contents=[
+                        FlexText(
+                            text=display,
+                            wrap=True,
+                            size="sm",
+                            color="#4f46e5",
+                        )
+                    ],
+                    padding_top="sm",
+                    padding_bottom="sm",
                 )
             )
         bubbles.append(FlexBubble(
