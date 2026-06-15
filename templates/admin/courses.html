@@ -202,6 +202,7 @@
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">成績評価</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
@@ -216,8 +217,9 @@
             {% endif %}
           </td>
           <td style="padding:6px 12px">{{ r.submitter_name }}</td>
-          <td style="padding:6px 12px;white-space:nowrap">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
-          <td style="padding:6px 12px">{{ r.ease_rating }}</td>
+          <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
+          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:#818cf8">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
+          <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method or '―' }}</td>
           <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
           <td style="padding:6px 12px;white-space:nowrap">
