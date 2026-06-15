@@ -153,7 +153,7 @@
       <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
       <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         {% for inst in instructors_by_course[c.id] %}
-        <span id="inst-chip-{{ inst.id }}" style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
+        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
           {{ inst.name }}
           <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
                   style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
@@ -341,11 +341,21 @@ function addInstructor(courseId) {
       if (empty) empty.remove();
       const chip = document.createElement('span');
       chip.id = 'inst-chip-' + data.id;
+      chip.dataset.name = data.name;
       chip.style.cssText = 'background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px';
       chip.innerHTML = data.name +
         ' <button type="button" onclick="deleteInstructor(' + courseId + ',' + data.id + ',this)"' +
         ' style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>';
-      list.appendChild(chip);
+      var inserted = false;
+      var siblings = list.querySelectorAll('span[data-name]');
+      for (var i = 0; i < siblings.length; i++) {
+        if (data.name.localeCompare(siblings[i].dataset.name, 'ja') < 0) {
+          list.insertBefore(chip, siblings[i]);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) list.appendChild(chip);
       input.value = '';
     } else if (data.error === 'duplicate') {
       errEl.style.display = 'inline';

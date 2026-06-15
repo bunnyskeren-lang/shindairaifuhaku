@@ -994,7 +994,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
     else:
         instructors_raw = []
     instructors_by_course: dict = defaultdict(list)
-    for inst in instructors_raw:
+    for inst in sorted(instructors_raw, key=lambda i: i.name):
         instructors_by_course[inst.course_id].append(inst)
 
     if course_names:
