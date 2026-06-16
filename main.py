@@ -721,10 +721,30 @@ async def handle_course_list(category: str = "") -> list:
         _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
         seen_num_base: set[str] = set()
 
+        # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
+        _VSEM = _re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
+        _sem_bases: dict[str, list] = defaultdict(list)
+        for _c in rows:
+            _m = _VSEM.match(_c.name)
+            if _m:
+                _base_lang = _m.group(1) + _m.group(3)
+                _sem_bases[_base_lang].append((_c.name, _m.group(2)))
+        _sem_variant_names = {n for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
+        _sem_base_for = {n: _b for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
+        seen_sem_base: set[str] = set()
+
         groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
         for course in rows:
             name = course.name
             classification = course.classification or "その他"
+            if name in _sem_variant_names:
+                base = _sem_base_for[name]
+                if base not in seen_sem_base:
+                    seen_sem_base.add(base)
+                    items_sorted = sorted(_sem_bases[base], key=lambda x: x[1])
+                    suffix = "/".join(sk for _, sk in items_sorted)
+                    groups[classification].append((base, f"variant:{suffix}"))
+                continue
             if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
                 base = name[:-1]
                 variants = [s for s in 'ABCD' if base + s in course_name_set]
