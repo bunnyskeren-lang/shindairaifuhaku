@@ -767,15 +767,7 @@ async def handle_course_list(category: str = "") -> list:
                 continue
             groups[classification].append((name, "single"))
 
-        CAROUSEL_MAX = 12
         all_groups = sorted(groups.items(), key=lambda x: _cls_sort(x[0]))
-        visible_groups = []
-        overflow_groups = []
-        for cls, ents in all_groups:
-            if len(visible_groups) < CAROUSEL_MAX:
-                visible_groups.append((cls, ents))
-            else:
-                overflow_groups.append((cls, ents))
 
         def _make_bubble(classification: str, entries: list) -> FlexBubble:
             btn_contents = []
@@ -810,23 +802,19 @@ async def handle_course_list(category: str = "") -> list:
                 ),
             )
 
-        bubbles = [_make_bubble(cls, ents) for cls, ents in visible_groups]
+        bubbles = [_make_bubble(cls, ents) for cls, ents in all_groups]
 
         alt = f"📚 {category}一覧" if category else "📚 科目一覧"
-        result = []
         if not bubbles:
             return [TextMessage(text="科目が登録されていません。")]
-        if len(bubbles) == 1:
-            result.append(FlexMessage(alt_text=alt, contents=bubbles[0]))
-        else:
-            result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=bubbles)))
 
-        if overflow_groups:
-            names = "、".join(cl for cl, _ in overflow_groups)
-            result.append(TextMessage(
-                text=f"他 {len(overflow_groups)} 分類（{names}）は科目名で直接検索できます。\n例：「微分積分学」と送ってください。"
-            ))
-
+        # 12バブルずつ複数カルーセルに分割（LINE上限）、最大5メッセージ
+        result = []
+        for chunk in [bubbles[i:i+12] for i in range(0, min(len(bubbles), 60), 12)]:
+            if len(chunk) == 1:
+                result.append(FlexMessage(alt_text=alt, contents=chunk[0]))
+            else:
+                result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=chunk)))
         return result
 
 
