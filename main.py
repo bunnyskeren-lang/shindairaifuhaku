@@ -54,6 +54,8 @@ VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
+LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
+APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZ])$')
 def _parse_max_reviews(val: str, default: int = 3, lo: int = 1, hi: int = 10) -> int:
     try:
@@ -1821,6 +1823,77 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
 @app.get("/privacy", response_class=HTMLResponse)
 async def privacy(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
+
+
+@app.get("/liff/course", response_class=HTMLResponse)
+async def liff_course(request: Request):
+    return templates.TemplateResponse("liff/course.html", {
+        "request": request,
+        "liff_id": LIFF_ID,
+        "review_form_url": REVIEW_FORM_URL,
+        "base_url": APP_URL,
+    })
+
+
+@app.get("/api/course/{course_id}")
+async def api_course(course_id: int):
+    async with AsyncSessionLocal() as session:
+        course = (await session.execute(
+            select(Course).where(Course.id == course_id)
+        )).scalar_one_or_none()
+        if not course:
+            raise HTTPException(status_code=404, detail="course not found")
+
+        instructors = (await session.execute(
+            select(CourseInstructor).where(CourseInstructor.course_id == course.id)
+        )).scalars().all()
+        instructor_str = "・".join(i.name for i in instructors) or course.instructor or ""
+
+        agg = (await session.execute(
+            select(func.avg(PendingReview.rating), func.count(PendingReview.id))
+            .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+        )).first()
+        avg_rating = float(agg[0]) if agg and agg[0] else None
+
+        ease_rows = (await session.execute(
+            select(PendingReview.ease_rating, func.count(PendingReview.id))
+            .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+            .group_by(PendingReview.ease_rating)
+        )).all()
+        top_ease = None
+        if ease_rows:
+            top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
+
+        grading_rows = (await session.execute(
+            select(PendingReview.grading_method).distinct()
+            .where(
+                PendingReview.course_name == course.name,
+                PendingReview.is_approved == True,
+                PendingReview.grading_method.isnot(None),
+            )
+        )).scalars().all()
+
+        comments = (await session.execute(
+            select(PendingReview.comment)
+            .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+            .order_by(PendingReview.created_at.desc())
+            .limit(10)
+        )).scalars().all()
+
+    return {
+        "id": course.id,
+        "name": course.name,
+        "instructor": instructor_str,
+        "classification": course.classification or "",
+        "category": course.category or "",
+        "term": course.term or "",
+        "credits": course.credits or 0,
+        "syllabus_url": course.syllabus_url or "",
+        "avg_rating": avg_rating,
+        "top_ease": top_ease,
+        "grading_methods": [r for r in grading_rows if r],
+        "comments": [c for c in comments if c],
+    }
 
 
 @app.get("/health")
