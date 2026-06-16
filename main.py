@@ -1899,4 +1899,4 @@ async def api_course(course_id: int):
 @app.get("/health")
 @app.head("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": "88cf130"}
