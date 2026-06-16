@@ -54,6 +54,8 @@ CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku-1.onrender.com")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
+APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 def _parse_max_reviews(val: str, default: int = 3, lo: int = 1, hi: int = 10) -> int:
     try:
         n = int(val)
@@ -328,53 +330,52 @@ async def get_user_max_reviews(session: AsyncSession, user_id: str) -> int:
 
 
 async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -> FlexMessage:
-    agg = (await session.execute(
-        select(func.avg(PendingReview.rating), func.count(PendingReview.id))
-        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-    )).first()
-    avg_rating = float(agg[0]) if agg and agg[0] else None
-
-    ease_rows = (await session.execute(
-        select(PendingReview.ease_rating, func.count(PendingReview.id))
-        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-        .group_by(PendingReview.ease_rating)
-    )).all()
-    top_ease = None
-    if ease_rows:
-        top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
-
-    grading_rows = (await session.execute(
-        select(PendingReview.grading_method).distinct()
-        .where(
-            PendingReview.course_name == course.name,
-            PendingReview.is_approved == True,
-            PendingReview.grading_method.isnot(None),
-        )
-    )).scalars().all()
-    all_grading_methods = [g for g in grading_rows if g]
-
-    limit = await get_user_max_reviews(session, user_id)
-    comments = (await session.execute(
-        select(PendingReview.comment)
-        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-        .order_by(PendingReview.created_at.desc())
-        .limit(limit)
-    )).scalars().all()
-
     instructors = (await session.execute(
         select(CourseInstructor).where(CourseInstructor.course_id == course.id)
     )).scalars().all()
     instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
 
-    url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
-    bubble = make_course_bubble(
-        course.name, instructor_str, course.classification,
-        avg_rating, top_ease, list(comments),
-        grading_methods=all_grading_methods,
-        review_url=url,
-        syllabus_url=course.syllabus_url or "",
-        term=course.term or "",
-        credits=course.credits or 0,
+    liff_url = f"https://liff.line.me/{LIFF_ID}?course_id={course.id}"
+
+    meta_parts = []
+    if course.term:
+        meta_parts.append(f"📅 {course.term}")
+    if course.credits:
+        meta_parts.append(f"🎓 {course.credits}単位")
+
+    bubble = FlexBubble(
+        header=FlexBox(
+            layout="vertical",
+            contents=[
+                FlexText(text=course.name, weight="bold", size="lg", color="#ffffff", wrap=True),
+                FlexText(text=f"👨‍🏫 {instructor_str}", size="sm", color="#c7d2fe", margin="xs"),
+            ] + ([FlexText(text="  ".join(meta_parts), size="xs", color="#a5b4fc", margin="xs")]
+                 if meta_parts else []),
+            background_color="#6366f1",
+            padding_all="lg",
+        ),
+        body=FlexBox(
+            layout="vertical",
+            contents=[
+                FlexText(
+                    text="タップして詳細・レビューを確認",
+                    size="sm", color="#64748b", wrap=True,
+                ),
+            ],
+            padding_all="lg",
+        ),
+        footer=FlexBox(
+            layout="vertical",
+            contents=[
+                FlexButton(
+                    action=URIAction(label="📖 詳細を見る", uri=liff_url),
+                    style="primary",
+                    color="#6366f1",
+                    height="sm",
+                )
+            ],
+            padding_all="md",
+        ),
     )
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
 
@@ -1316,6 +1317,80 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
 @app.get("/privacy", response_class=HTMLResponse)
 async def privacy(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
+
+
+# ── LIFF 科目詳細ページ ───────────────────────────────────────────────────────
+
+@app.get("/liff/course", response_class=HTMLResponse)
+async def liff_course(request: Request):
+    return templates.TemplateResponse("liff/course.html", {
+        "request": request,
+        "liff_id": LIFF_ID,
+        "review_form_url": REVIEW_FORM_URL,
+        "base_url": APP_URL,
+    })
+
+
+@app.get("/api/course/{course_id}")
+async def api_course(course_id: int):
+    async with AsyncSessionLocal() as session:
+        course = (await session.execute(
+            select(Course).where(Course.id == course_id)
+        )).scalar_one_or_none()
+        if not course:
+            raise HTTPException(status_code=404, detail="course not found")
+
+        instructors = (await session.execute(
+            select(CourseInstructor).where(CourseInstructor.course_id == course.id)
+        )).scalars().all()
+        instructor_str = "・".join(i.name for i in instructors) or course.instructor or ""
+
+        agg = (await session.execute(
+            select(func.avg(PendingReview.rating), func.count(PendingReview.id))
+            .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+        )).first()
+        avg_rating = float(agg[0]) if agg and agg[0] else None
+
+        ease_rows = (await session.execute(
+            select(PendingReview.ease_rating, func.count(PendingReview.id))
+            .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+            .group_by(PendingReview.ease_rating)
+        )).all()
+        top_ease = None
+        if ease_rows:
+            top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
+
+        grading_rows = (await session.execute(
+            select(PendingReview.grading_method).distinct()
+            .where(
+                PendingReview.course_name == course.name,
+                PendingReview.is_approved == True,
+                PendingReview.grading_method.isnot(None),
+            )
+        )).scalars().all()
+
+        comments = (await session.execute(
+            select(PendingReview.comment)
+            .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+            .order_by(PendingReview.created_at.desc())
+            .limit(10)
+        )).scalars().all()
+
+    return_data = {
+        "id": course.id,
+        "name": course.name,
+        "instructor": instructor_str,
+        "classification": course.classification or "",
+        "category": course.category or "",
+        "term": course.term or "",
+        "credits": course.credits or 0,
+        "syllabus_url": course.syllabus_url or "",
+        "avg_rating": avg_rating,
+        "top_ease": top_ease,
+        "grading_methods": [g for g in grading_rows if g],
+        "comments": list(comments),
+    }
+    return return_data
 
 
 @app.get("/health")

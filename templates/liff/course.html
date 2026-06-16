@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>科目詳細</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+         background: #f3f4f6; color: #1f2937; min-height: 100vh; }
+
+  .header {
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+    color: #fff;
+    padding: 20px 16px 24px;
+  }
+  .header h1 { font-size: 20px; font-weight: 700; line-height: 1.4; }
+  .header .instructor { font-size: 13px; color: #c7d2fe; margin-top: 6px; }
+  .header .meta { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .badge {
+    font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 600;
+  }
+  .badge-cls  { background: rgba(255,255,255,0.2); color: #e0e7ff; }
+  .badge-term { background: rgba(255,255,255,0.15); color: #c7d2fe; }
+  .badge-cr   { background: rgba(255,255,255,0.15); color: #c7d2fe; }
+
+  .card {
+    background: #fff; border-radius: 12px; margin: 12px; padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .section-title {
+    font-size: 11px; font-weight: 700; color: #6366f1;
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px;
+  }
+
+  .rating-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .rating-label { font-size: 13px; color: #64748b; width: 90px; }
+  .stars { font-size: 16px; color: #f59e0b; }
+  .no-review { font-size: 13px; color: #94a3b8; }
+
+  .grading { font-size: 13px; color: #374151; line-height: 1.6; }
+
+  .comment-box {
+    background: #f8fafc; border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 8px; font-size: 13px; color: #334155; line-height: 1.6;
+  }
+  .comment-box::before { content: "「"; color: #94a3b8; }
+  .comment-box::after  { content: "」"; color: #94a3b8; }
+
+  .actions { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .btn {
+    display: block; text-align: center; border-radius: 8px;
+    padding: 13px; font-size: 15px; font-weight: 600;
+    text-decoration: none; border: none; cursor: pointer; width: 100%;
+  }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-secondary { background: #f1f5f9; color: #4338ca; }
+  .btn:active { opacity: .85; }
+
+  #loading { text-align: center; padding: 60px 16px; color: #94a3b8; font-size: 14px; }
+  #error   { text-align: center; padding: 40px 16px; color: #ef4444; font-size: 14px; display: none; }
+</style>
+</head>
+<body>
+
+<div id="loading">読み込み中...</div>
+<div id="error">科目情報を取得できませんでした。</div>
+<div id="content" style="display:none">
+  <div class="header">
+    <h1 id="name"></h1>
+    <div class="instructor" id="instructor"></div>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="card" id="review-card">
+    <div class="section-title">評価</div>
+    <div id="ratings"></div>
+    <div id="grading-wrap" style="margin-top:10px;display:none">
+      <div style="font-size:11px;color:#64748b;margin-bottom:4px">📝 成績評価方法</div>
+      <div class="grading" id="grading"></div>
+    </div>
+  </div>
+
+  <div class="card" id="comments-card" style="display:none">
+    <div class="section-title">コメント</div>
+    <div id="comments"></div>
+  </div>
+
+  <div class="actions">
+    <a id="btn-review" class="btn btn-primary" href="#">✏️ レビューを投稿</a>
+    <a id="btn-syllabus" class="btn btn-secondary" href="#" style="display:none">📄 シラバスを見る</a>
+  </div>
+</div>
+
+<script>
+const LIFF_ID = "{{ liff_id }}";
+const REVIEW_FORM_URL = "{{ review_form_url }}";
+const BASE_URL = "{{ base_url }}";
+
+function stars(n) {
+  if (!n) return "";
+  const full = Math.round(n);
+  return "★".repeat(full) + "☆".repeat(5 - full);
+}
+
+const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★☆☆", S: "★★★★☆", SS: "★★★★★" };
+
+async function main() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+  } catch(e) {
+    console.warn("LIFF init failed", e);
+  }
+
+  const params = new URLSearchParams(location.search);
+  const courseId = params.get("course_id");
+  if (!courseId) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("error").style.display = "block";
+    document.getElementById("error").textContent = "科目IDが指定されていません。";
+    return;
+  }
+
+  let userId = null;
+  try {
+    if (liff.isLoggedIn()) {
+      const profile = await liff.getProfile();
+      userId = profile.userId;
+    }
+  } catch(e) {}
+
+  let data;
+  try {
+    const res = await fetch(`${BASE_URL}/api/course/${courseId}`);
+    if (!res.ok) throw new Error(res.status);
+    data = await res.json();
+  } catch(e) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("error").style.display = "block";
+    return;
+  }
+
+  // ── ヘッダー ──
+  document.getElementById("name").textContent = data.name;
+  document.getElementById("instructor").textContent = data.instructor
+    ? "👨‍🏫 " + data.instructor : "";
+
+  const meta = document.getElementById("meta");
+  if (data.classification)
+    meta.insertAdjacentHTML("beforeend",
+      `<span class="badge badge-cls">📂 ${data.classification}</span>`);
+  if (data.term)
+    meta.insertAdjacentHTML("beforeend",
+      `<span class="badge badge-term">📅 ${data.term}</span>`);
+  if (data.credits)
+    meta.insertAdjacentHTML("beforeend",
+      `<span class="badge badge-cr">🎓 ${data.credits}単位</span>`);
+
+  // ── 評価 ──
+  const ratingsEl = document.getElementById("ratings");
+  if (data.avg_rating != null) {
+    ratingsEl.innerHTML =
+      `<div class="rating-row">
+         <span class="rating-label">学びになった度</span>
+         <span class="stars">${stars(data.avg_rating)}</span>
+       </div>`;
+    if (data.top_ease) {
+      ratingsEl.insertAdjacentHTML("beforeend",
+        `<div class="rating-row">
+           <span class="rating-label">楽単度</span>
+           <span class="stars">${EASE_STARS[data.top_ease] || ""}</span>
+         </div>`);
+    }
+  } else {
+    ratingsEl.innerHTML = `<div class="no-review">⭐ まだレビューはありません</div>`;
+  }
+
+  if (data.grading_methods && data.grading_methods.length) {
+    document.getElementById("grading").textContent = data.grading_methods.join("・");
+    document.getElementById("grading-wrap").style.display = "block";
+  }
+
+  // ── コメント ──
+  if (data.comments && data.comments.length) {
+    const commentsEl = document.getElementById("comments");
+    data.comments.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "comment-box";
+      div.textContent = c;
+      commentsEl.appendChild(div);
+    });
+    document.getElementById("comments-card").style.display = "block";
+  }
+
+  // ── ボタン ──
+  const reviewUrl = userId
+    ? `${REVIEW_FORM_URL}?uid=${userId}&course=${encodeURIComponent(data.name)}`
+    : `${REVIEW_FORM_URL}?course=${encodeURIComponent(data.name)}`;
+  document.getElementById("btn-review").href = reviewUrl;
+
+  if (data.syllabus_url) {
+    const sylBtn = document.getElementById("btn-syllabus");
+    sylBtn.href = data.syllabus_url;
+    sylBtn.style.display = "block";
+  }
+
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("content").style.display = "block";
+}
+
+main();
+</script>
+</body>
+</html>
