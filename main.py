@@ -802,7 +802,15 @@ async def handle_course_list(category: str = "") -> list:
                 ),
             )
 
-        bubbles = [_make_bubble(cls, ents) for cls, ents in all_groups]
+        SPLIT_THRESHOLD = 20
+        bubbles = []
+        for cls, ents in all_groups:
+            if len(ents) > SPLIT_THRESHOLD:
+                mid = (len(ents) + 1) // 2
+                bubbles.append(_make_bubble(cls + "①", ents[:mid]))
+                bubbles.append(_make_bubble(cls + "②", ents[mid:]))
+            else:
+                bubbles.append(_make_bubble(cls, ents))
 
         alt = f"📚 {category}一覧" if category else "📚 科目一覧"
         if not bubbles:
