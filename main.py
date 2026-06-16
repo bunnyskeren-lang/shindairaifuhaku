@@ -770,8 +770,16 @@ async def handle_course_list(category: str = "") -> list:
         CAROUSEL_MAX = 12
         BUBBLE_MAX = 8
         all_groups = sorted(groups.items(), key=lambda x: _cls_sort(x[0]))
-        visible_groups = all_groups[:CAROUSEL_MAX]
-        overflow_groups = all_groups[CAROUSEL_MAX:]
+        visible_groups = []
+        overflow_groups = []
+        bubble_count = 0
+        for cls, ents in all_groups:
+            pages = -(-len(ents) // BUBBLE_MAX)
+            if bubble_count + pages <= CAROUSEL_MAX:
+                visible_groups.append((cls, ents))
+                bubble_count += pages
+            else:
+                overflow_groups.append((cls, ents))
 
         def _make_bubble(classification: str, entries: list, page: int, total_pages: int) -> FlexBubble:
             btn_contents = []
