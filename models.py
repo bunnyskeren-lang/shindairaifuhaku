@@ -28,6 +28,8 @@ class Course(Base):
     syllabus_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     reading: Mapped[str] = mapped_column(String(400), nullable=False, server_default="", default="")
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+    term: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    credits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class ClassificationOrder(Base):
