@@ -731,7 +731,7 @@ async def handle_course_list(category: str = "") -> list:
                 if len(variants) >= 2:
                     if base not in seen_base:
                         seen_base.add(base)
-                        suffix = "/".join(variants)
+                        suffix = ",".join(variants)
                         groups[classification].append((base, f"variant:{suffix}"))
                     continue
             if name in _num_variant_names:
@@ -739,7 +739,10 @@ async def handle_course_list(category: str = "") -> list:
                 if base not in seen_num_base:
                     seen_num_base.add(base)
                     nums_sorted = sorted(_num_bases[base], key=lambda x: x[1])
-                    suffix = "/".join(str(n) for _, n in nums_sorted)
+                    suffix = ",".join(
+                        _m2.group(2) if (_m2 := _VNUM.match(n)) else str(sk)
+                        for n, sk in nums_sorted
+                    )
                     groups[classification].append((base, f"numvariant:{suffix}"))
                 continue
             groups[classification].append((name, "single"))
