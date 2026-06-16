@@ -768,20 +768,16 @@ async def handle_course_list(category: str = "") -> list:
             groups[classification].append((name, "single"))
 
         CAROUSEL_MAX = 12
-        BUBBLE_MAX = 8
         all_groups = sorted(groups.items(), key=lambda x: _cls_sort(x[0]))
         visible_groups = []
         overflow_groups = []
-        bubble_count = 0
         for cls, ents in all_groups:
-            pages = -(-len(ents) // BUBBLE_MAX)
-            if bubble_count + pages <= CAROUSEL_MAX:
+            if len(visible_groups) < CAROUSEL_MAX:
                 visible_groups.append((cls, ents))
-                bubble_count += pages
             else:
                 overflow_groups.append((cls, ents))
 
-        def _make_bubble(classification: str, entries: list, page: int, total_pages: int) -> FlexBubble:
+        def _make_bubble(classification: str, entries: list) -> FlexBubble:
             btn_contents = []
             for name, kind in entries:
                 if kind.startswith("variant:") or kind.startswith("numvariant:"):
@@ -798,12 +794,11 @@ async def handle_course_list(category: str = "") -> list:
                         padding_bottom="sm",
                     )
                 )
-            header_text = f"{classification} ({page}/{total_pages})" if total_pages > 1 else classification
             return FlexBubble(
                 size="kilo",
                 header=FlexBox(
                     layout="vertical",
-                    contents=[FlexText(text=header_text, weight="bold", color="#ffffff", size="sm")],
+                    contents=[FlexText(text=classification, weight="bold", color="#ffffff", size="sm")],
                     background_color="#6366f1",
                     padding_all="md",
                 ),
@@ -815,11 +810,7 @@ async def handle_course_list(category: str = "") -> list:
                 ),
             )
 
-        bubbles = []
-        for classification, entries in visible_groups:
-            chunks = [entries[i:i+BUBBLE_MAX] for i in range(0, len(entries), BUBBLE_MAX)]
-            for i, chunk in enumerate(chunks, 1):
-                bubbles.append(_make_bubble(classification, chunk, i, len(chunks)))
+        bubbles = [_make_bubble(cls, ents) for cls, ents in visible_groups]
 
         alt = f"📚 {category}一覧" if category else "📚 科目一覧"
         result = []
