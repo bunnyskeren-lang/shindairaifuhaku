@@ -1837,9 +1837,7 @@ async def liff_course(request: Request):
 
 @app.get("/api/course/{course_id}")
 async def api_course(course_id: int):
-    import traceback as _tb
-    try:
-        async with AsyncSessionLocal() as session:
+    async with AsyncSessionLocal() as session:
             course = (await session.execute(
                 select(Course).where(Course.id == course_id)
             )).scalar_one_or_none()
@@ -1882,24 +1880,20 @@ async def api_course(course_id: int):
                 .limit(10)
             )).scalars().all()
 
-        return {
-            "id": course.id,
-            "name": course.name,
-            "instructor": instructor_str,
-            "classification": course.classification or "",
-            "category": course.category or "",
-            "term": getattr(course, "term", None) or "",
-            "credits": getattr(course, "credits", None) or 0,
-            "syllabus_url": course.syllabus_url or "",
-            "avg_rating": avg_rating,
-            "top_ease": top_ease,
-            "grading_methods": [r for r in grading_rows if r],
-            "comments": [c for c in comments if c],
-        }
-    except HTTPException:
-        raise
-    except Exception:
-        return {"error": _tb.format_exc()}
+    return {
+        "id": course.id,
+        "name": course.name,
+        "instructor": instructor_str,
+        "classification": course.classification or "",
+        "category": course.category or "",
+        "term": getattr(course, "term", None) or "",
+        "credits": getattr(course, "credits", None) or 0,
+        "syllabus_url": course.syllabus_url or "",
+        "avg_rating": avg_rating,
+        "top_ease": top_ease,
+        "grading_methods": [r for r in grading_rows if r],
+        "comments": [c for c in comments if c],
+    }
 
 
 @app.get("/health")
