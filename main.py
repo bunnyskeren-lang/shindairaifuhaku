@@ -910,6 +910,20 @@ async def handle_message(text: str, user_id: str = "") -> list:
         if exact:
             return [await get_course_flex(session, exact, user_id)]
 
+        # Seminar group e.g. 外国語セミナー(英語) → 外国語セミナーA(英語), B(英語)...
+        _vsem_m = _re.match(r'^(.*?セミナー)(\([^)]+\))$', t)
+        if _vsem_m:
+            _sem_prefix, _sem_lang = _vsem_m.group(1), _vsem_m.group(2)
+            _sem_courses = (await session.execute(
+                select(Course)
+                .where(Course.name.like(f"{_sem_prefix}%{_sem_lang}"))
+                .order_by(Course.name)
+            )).scalars().all()
+            if len(_sem_courses) == 1:
+                return [await get_course_flex(session, _sem_courses[0], user_id)]
+            if len(_sem_courses) >= 2:
+                return [make_variant_selection_bubble(t, [c.name for c in _sem_courses])]
+
         # Variant group (A/B/C/D...)
         _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
         variant_courses = (await session.execute(
