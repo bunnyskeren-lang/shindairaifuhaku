@@ -445,7 +445,7 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         select(CourseInstructor).where(CourseInstructor.course_id == course.id)
     )).scalars().all()
     instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
-    liff_url = f"https://liff.line.me/{LIFF_ID}?course_id={course.id}"
+    liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
     meta_parts = []
     if getattr(course, "term", None):
         meta_parts.append(f"📅 {course.term}")
