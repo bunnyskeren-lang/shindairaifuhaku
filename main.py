@@ -734,9 +734,11 @@ async def handle_course_list(category: str = "") -> list:
         seen_sem_base: set[str] = set()
 
         groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
+        cls_category: dict[str, str] = {}
         for course in rows:
             name = course.name
             classification = course.classification or "その他"
+            cls_category[classification] = course.category or ""
             if name in _sem_variant_names:
                 base = _sem_base_for[name]
                 if base not in seen_sem_base:
@@ -767,7 +769,9 @@ async def handle_course_list(category: str = "") -> list:
                 continue
             groups[classification].append((name, "single"))
 
-        all_groups = sorted(groups.items(), key=lambda x: _cls_sort(x[0]))
+        def _cat_order(cls: str) -> int:
+            return 0 if cls_category.get(cls, "") == "教養" else 1
+        all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), _cls_sort(x[0])))
 
         def _make_bubble(classification: str, entries: list) -> FlexBubble:
             btn_contents = []
@@ -838,7 +842,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await handle_course_list(category="教養")
 
     if t in ["専門科目", "専門", "専門一覧"]:
-        return await handle_course_list(category="専門")
+        return await handle_course_list(category="専門科目")
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
