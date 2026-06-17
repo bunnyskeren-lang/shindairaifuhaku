@@ -842,7 +842,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await handle_course_list(category="教養")
 
     if t in ["専門科目", "専門", "専門一覧"]:
-        return await handle_course_list(category="専門科目")
+        return await handle_course_list(category="専門")
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
