@@ -94,25 +94,6 @@
         <p class="text-xs text-gray-400 mt-1">未入力の場合は「匿名」で表示されます</p>
       </div>
 
-      <!-- 1c. 受講年度 -->
-      <div id="academicYearCard" class="bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">
-          📅 受講年度 <span class="text-red-500">*</span>
-        </label>
-        <select name="academic_year" id="academic_year"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white">
-          <option value="0">選択してください</option>
-          <option value="2026">2026年度</option>
-          <option value="2025">2025年度</option>
-          <option value="2024">2024年度</option>
-          <option value="2023">2023年度</option>
-          <option value="2022">2022年度</option>
-          <option value="2021">2021年度</option>
-          <option value="2020">2020年度</option>
-        </select>
-        <p id="academicYearError" class="hidden mt-1 text-red-500 text-xs">受講年度を選択してください</p>
-      </div>
-
       <!-- 2. 科目名 + 担当教員 -->
       <div id="courseCard" class="bg-white rounded-2xl shadow-sm p-5">
 
@@ -182,6 +163,25 @@
           <p id="instructorUnregistered" class="hidden text-xs text-gray-400">この科目は担当教員が登録されていません</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
         </div>
+      </div>
+
+      <!-- 2b. 受講年度 -->
+      <div id="academicYearCard" class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          📅 受講年度 <span class="text-red-500">*</span>
+        </label>
+        <select name="academic_year" id="academic_year"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white">
+          <option value="0">選択してください</option>
+          <option value="2026">2026年度</option>
+          <option value="2025">2025年度</option>
+          <option value="2024">2024年度</option>
+          <option value="2023">2023年度</option>
+          <option value="2022">2022年度</option>
+          <option value="2021">2021年度</option>
+          <option value="2020">2020年度</option>
+        </select>
+        <p id="academicYearError" class="hidden mt-1 text-red-500 text-xs">受講年度を選択してください</p>
       </div>
 
       <!-- 3. 充実度 -->
