@@ -156,6 +156,10 @@
           <span id="selectedCourseName" class="flex-1 font-medium"></span>
           <button type="button" id="clearCourse" class="text-xs text-gray-400 hover:text-gray-600 underline">変更</button>
         </div>
+        <!-- 先生名モードで科目選択後に教員名を表示 -->
+        <div id="selectedInstructorDisplay" class="hidden mt-2 px-1 text-sm font-semibold text-indigo-600">
+          👨‍🏫 <span id="selectedInstructorName"></span>
+        </div>
         <p id="courseError" class="hidden mt-1 text-red-500 text-xs">科目を選択または入力してください</p>
 
         <!-- 担当教員選択（科目名モード用） -->
@@ -510,6 +514,7 @@
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('selectedCourse').classList.add('hidden');
       document.getElementById('courseNameLabelInstr').classList.add('hidden');
+      document.getElementById('selectedInstructorDisplay').classList.add('hidden');
       document.getElementById('instructorSelectSection').classList.add('hidden');
       searchInput.classList.remove('hidden');
       searchInput.value = '';
@@ -621,6 +626,7 @@
       document.getElementById('courseNameHidden').value = '';
       document.getElementById('selectedCourse').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
+      document.getElementById('selectedInstructorDisplay').classList.add('hidden');
       chipsEl.classList.add('hidden');
       chipsEl.innerHTML = '';
       document.getElementById('instructorUnregistered').classList.add('hidden');
@@ -718,6 +724,8 @@
           document.getElementById('selectedCourseName').textContent = el.dataset.courseName;
           document.getElementById('selectedCourse').classList.remove('hidden');
           document.getElementById('courseNameLabelInstr').classList.remove('hidden');
+          document.getElementById('selectedInstructorName').textContent = inst.name;
+          document.getElementById('selectedInstructorDisplay').classList.remove('hidden');
           document.getElementById('instructorModeSection').classList.add('hidden');
           document.getElementById('instructorSelectSection').classList.add('hidden');
           document.getElementById('courseError').classList.add('hidden');
