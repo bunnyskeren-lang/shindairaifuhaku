@@ -1156,7 +1156,8 @@ async def search_instructors(q: str = ""):
     async with AsyncSessionLocal() as session:
         def _esc(s: str) -> str:
             return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-        escaped = _esc(q.strip())
+        q_clean = q.replace("　", " ").strip()
+        escaped = _esc(q_clean)
         insts = (await session.execute(
             select(CourseInstructor.name)
             .where(CourseInstructor.name.ilike(f"%{escaped}%", escape="\\"))
@@ -1168,7 +1169,7 @@ async def search_instructors(q: str = ""):
             norm_col = CourseInstructor.name
             for ch in ('・', '･', '（', '）', '(', ')'):
                 norm_col = func.replace(norm_col, ch, '')
-            escaped_norm = _esc(_normalize_form_q(q.strip()))
+            escaped_norm = _esc(_normalize_form_q(q_clean))
             insts = (await session.execute(
                 select(CourseInstructor.name)
                 .where(norm_col.ilike(f"%{escaped_norm}%", escape="\\"))
