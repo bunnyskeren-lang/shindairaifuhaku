@@ -152,18 +152,25 @@ async function main() {
       `<span class="badge badge-cr">🎓 ${data.credits}単位</span>`);
 
   // ── 総合評価 ──
+  const RATING_LABELS = ['', 'ほぼ学びなし', 'ちょい学び', 'まあまあ学びあり', 'かなり学べた', 'めちゃくちゃ学べた'];
+  const EASE_LABELS  = { C: '修羅場', B: '大変', A: '標準', S: '楽々', SS: '天国' };
+
   const ratingsEl = document.getElementById("ratings");
   if (data.avg_rating != null) {
+    const rLabel = RATING_LABELS[Math.round(data.avg_rating)] || '';
     ratingsEl.innerHTML =
       `<div class="rating-row">
          <span class="rating-label">学び濃度</span>
          <span class="stars">${stars(data.avg_rating)}</span>
+         <span style="font-size:12px;color:#64748b;margin-left:6px">${rLabel}</span>
        </div>`;
     if (data.top_ease) {
+      const eLabel = EASE_LABELS[data.top_ease] || '';
       ratingsEl.insertAdjacentHTML("beforeend",
         `<div class="rating-row">
            <span class="rating-label">楽単度</span>
            <span class="stars" style="color:#818cf8">${EASE_STARS[data.top_ease] || ""}</span>
+           <span style="font-size:12px;color:#64748b;margin-left:6px">${eLabel}</span>
          </div>`);
     }
   } else {
