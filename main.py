@@ -1204,6 +1204,8 @@ async def submit(
         raise HTTPException(status_code=400, detail="Invalid rating")
     if ease_rating not in ("SS", "S", "A", "B", "C"):
         raise HTTPException(status_code=400, detail="Invalid ease_rating")
+    if not (2000 <= academic_year <= 2100):
+        raise HTTPException(status_code=400, detail="受講年度を選択してください")
 
     sid = student_id.strip().upper()
     if not STUDENT_ID_RE.match(sid):
@@ -1248,7 +1250,7 @@ async def submit(
             comment=comment.strip()[:500],
             selected_instructor=selected_instructor.strip()[:100] or None,
             nickname=nickname.strip()[:30] or None,
-            academic_year=academic_year if 2000 <= academic_year <= 2100 else None,
+            academic_year=academic_year,
             is_approved=False,
         )
         session.add(review)

@@ -97,11 +97,11 @@
       <!-- 1c. 受講年度 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
-          📅 受講年度 <span class="text-gray-400 font-normal text-xs">（任意）</span>
+          📅 受講年度 <span class="text-red-500">*</span>
         </label>
         <select name="academic_year" id="academic_year"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white">
-          <option value="0">未選択</option>
+          <option value="0">選択してください</option>
           <option value="2026">2026年度</option>
           <option value="2025">2025年度</option>
           <option value="2024">2024年度</option>
@@ -110,6 +110,7 @@
           <option value="2021">2021年度</option>
           <option value="2020">2020年度</option>
         </select>
+        <p id="academicYearError" class="hidden mt-1 text-red-500 text-xs">受講年度を選択してください</p>
       </div>
 
       <!-- 2. 科目名 + 担当教員 -->
@@ -788,6 +789,10 @@
         }
       }
 
+      if (!document.getElementById('academic_year').value || document.getElementById('academic_year').value === '0') {
+        document.getElementById('academicYearError').classList.remove('hidden');
+        valid = false;
+      }
       if (!document.getElementById('courseNameHidden').value.trim()) {
         document.getElementById('courseError').classList.remove('hidden');
         valid = false;
