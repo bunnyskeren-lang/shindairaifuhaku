@@ -8,10 +8,10 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
-         background: #f3f4f6; color: #1f2937; min-height: 100vh; }
+         background: {% if IS_DEV %}#fff7ed{% else %}#f3f4f6{% endif %}; color: #1f2937; min-height: 100vh; }
 
   .header {
-    background: linear-gradient(135deg, #6366f1, #818cf8);
+    background: linear-gradient(135deg, {% if IS_DEV %}#ea580c, #fb923c{% else %}#6366f1, #818cf8{% endif %});
     color: #fff;
     padding: 20px 16px 24px;
   }
@@ -64,6 +64,7 @@
 </head>
 <body>
 
+{% if IS_DEV %}<div style="background:#ea580c;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:bold">🚧 開発環境</div>{% endif %}
 <div id="loading">読み込み中...</div>
 <div id="error">科目情報を取得できませんでした。</div>
 <div id="content" style="display:none">

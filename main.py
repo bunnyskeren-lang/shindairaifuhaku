@@ -1893,6 +1893,7 @@ async def liff_course(request: Request):
         "liff_id": LIFF_ID,
         "review_form_url": REVIEW_FORM_URL,
         "base_url": APP_URL,
+        "IS_DEV": IS_DEV,
     })
 
 
