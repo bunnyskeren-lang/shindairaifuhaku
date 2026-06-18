@@ -1166,10 +1166,14 @@ async def index(request: Request, uid: str = Query(default="")):
                 select(UserProfile).where(UserProfile.line_user_id == uid)
             )).scalar_one_or_none()
             is_new_user = profile is None
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         "form_index.html",
         {"request": request, "uid": uid, "is_new_user": is_new_user, "IS_DEV": IS_DEV},
     )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 _FORM_PUNCT = '・･（）()'
