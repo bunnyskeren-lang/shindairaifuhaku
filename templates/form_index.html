@@ -6,9 +6,15 @@
   <title>授業レビュー投稿 | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen pb-16">
+<body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
 
   <div class="max-w-md mx-auto px-4 pt-8">
+
+    {% if IS_DEV %}
+    <div class="bg-orange-500 text-white text-center text-sm font-bold py-2 px-4 rounded-2xl mb-4">
+      🚧 開発環境
+    </div>
+    {% endif %}
 
     <!-- Header -->
     <div class="text-center mb-6">
@@ -203,7 +209,7 @@
 
       <!-- Submit -->
       <button type="submit" id="submitBtn"
-        class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-700 active:scale-95 transition text-base shadow-md">
+        class="w-full {% if IS_DEV %}bg-orange-500 hover:bg-orange-600{% else %}bg-indigo-600 hover:bg-indigo-700{% endif %} text-white font-bold py-4 rounded-2xl active:scale-95 transition text-base shadow-md">
         レビューを送る ✈️
       </button>
 

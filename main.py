@@ -1164,7 +1164,7 @@ async def index(request: Request, uid: str = Query(default="")):
             is_new_user = profile is None
     return templates.TemplateResponse(
         "form_index.html",
-        {"request": request, "uid": uid, "is_new_user": is_new_user},
+        {"request": request, "uid": uid, "is_new_user": is_new_user, "IS_DEV": IS_DEV},
     )
 
 
