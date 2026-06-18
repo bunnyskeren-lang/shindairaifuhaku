@@ -1001,6 +1001,13 @@
       }
       if (!valid) { e.preventDefault(); refreshCardErrors(); window.scrollTo(0, 0); return; }
 
+      // 次回アクセス時の自動補完用にプロフィールをキャッシュ
+      try {
+        const _n = document.getElementById('submitter_name').value;
+        const _s = document.getElementById('student_id').value;
+        if (_n && _s) localStorage.setItem('kobe_profile', JSON.stringify({name: _n, student_id: _s}));
+      } catch(_) {}
+
       updateGradingMethod();
       localStorage.removeItem(STORAGE_KEY);
       const btn = document.getElementById('submitBtn');
@@ -1011,6 +1018,27 @@
     buildStars();
     buildEaseStars();
     loadData();
+
+    // サーバーが補完しなかった場合、ローカルキャッシュから名前・学籍番号を復元
+    (function() {
+      try {
+        const nameEl = document.getElementById('submitter_name');
+        const sidEl  = document.getElementById('student_id');
+        if (!nameEl.readOnly) {
+          const p = JSON.parse(localStorage.getItem('kobe_profile') || 'null');
+          if (p && p.name && !nameEl.value) {
+            nameEl.value = p.name;
+            nameEl.readOnly = true;
+            nameEl.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+          }
+          if (p && p.student_id && !sidEl.value) {
+            sidEl.value = p.student_id;
+            sidEl.readOnly = true;
+            sidEl.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+          }
+        }
+      } catch(_) {}
+    })();
 
     // URL の ?course= パラメーターがあれば科目を自動選択
     (async () => {
