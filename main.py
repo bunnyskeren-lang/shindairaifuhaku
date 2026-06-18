@@ -105,6 +105,8 @@ def _to_jst(dt) -> str:
 
 templates.env.filters["jst"] = _to_jst
 templates.env.globals["VAPID_PUBLIC_KEY"] = VAPID_PUBLIC_KEY
+IS_DEV = os.environ.get("ENV", "prod") == "dev"
+templates.env.globals["IS_DEV"] = IS_DEV
 
 try:
     import pykakasi as _pykakasi
