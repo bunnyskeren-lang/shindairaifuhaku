@@ -2065,12 +2065,15 @@ async def api_course(course_id: int):
             if ease_rows:
                 top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
-            reviews = (await session.execute(
+            reviews_raw = (await session.execute(
                 select(PendingReview)
                 .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                .order_by(PendingReview.created_at.desc())
-                .limit(20)
+                .limit(50)
             )).scalars().all()
+            reviews = sorted(
+                reviews_raw,
+                key=lambda r: (r.selected_instructor or "￿", -(r.academic_year or 0))
+            )[:20]
 
     return {
         "id": course.id,
