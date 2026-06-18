@@ -601,7 +601,7 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
 def make_classification_select_flex(classifications: list[str]) -> FlexMessage:
     btns = [
         FlexButton(
-            action=MessageAction(label=cls, text=f"教養:{cls}"),
+            action=MessageAction(label=cls, text=cls),
             style="secondary",
             height="sm",
         )
@@ -797,6 +797,14 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if t.startswith("教養:"):
         cls = t[len("教養:"):]
         return await handle_course_list(category="教養", classification=cls)
+
+    # 分類名の直接タップ（例：「教養(社会)」）
+    async with AsyncSessionLocal() as _cls_session:
+        _cls_hit = (await _cls_session.execute(
+            select(Course.classification).where(Course.classification == t).limit(1)
+        )).scalar_one_or_none()
+    if _cls_hit:
+        return await handle_course_list(category="教養", classification=t)
 
     if t in ["専門科目", "専門", "専門一覧"]:
         return await handle_course_list(category="専門")
