@@ -530,8 +530,12 @@
     const searchInput = document.getElementById('courseSearchInput');
     const dropdown = document.getElementById('courseDropdown');
     let debounceTimer;
+    let courseComposing = false;
+    searchInput.addEventListener('compositionstart', () => { courseComposing = true; });
+    searchInput.addEventListener('compositionend',   () => { courseComposing = false; searchInput.dispatchEvent(new Event('input')); });
 
     searchInput.addEventListener('input', () => {
+      if (courseComposing) return;
       document.getElementById('courseNameHidden').value = '';
       clearTimeout(debounceTimer);
       const q = searchInput.value.trim();
@@ -642,8 +646,12 @@
     const instrSearchInput = document.getElementById('instructorSearchInput');
     const instrSearchDropdown = document.getElementById('instructorSearchDropdown');
     let instrDebounceTimer;
+    let instrComposing = false;
+    instrSearchInput.addEventListener('compositionstart', () => { instrComposing = true; });
+    instrSearchInput.addEventListener('compositionend',   () => { instrComposing = false; instrSearchInput.dispatchEvent(new Event('input')); });
 
     instrSearchInput.addEventListener('input', () => {
+      if (instrComposing) return;
       clearTimeout(instrDebounceTimer);
       const q = instrSearchInput.value.trim();
       if (!q) { instrSearchDropdown.classList.add('hidden'); return; }
