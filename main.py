@@ -311,7 +311,7 @@ def make_course_bubble(
                 layout="vertical",
                 flex=1,
                 contents=[
-                    FlexText(text="学びになった度", size="xxs", color="#94a3b8"),
+                    FlexText(text="学び濃度", size="xxs", color="#94a3b8"),
                     FlexText(text=stars(round(avg_rating)), size="lg", color="#f59e0b", margin="xs"),
                     FlexText(text=f"{avg_rating:.1f}  ({review_count}件)", size="xxs", color="#64748b", margin="xs"),
                 ],

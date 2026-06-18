@@ -156,7 +156,7 @@ async function main() {
   if (data.avg_rating != null) {
     ratingsEl.innerHTML =
       `<div class="rating-row">
-         <span class="rating-label">学びになった度</span>
+         <span class="rating-label">学び濃度</span>
          <span class="stars">${stars(data.avg_rating)}</span>
        </div>`;
     if (data.top_ease) {
@@ -185,7 +185,7 @@ async function main() {
         html += `<div style="font-size:12px;color:#6366f1;margin-bottom:6px">👨‍🏫 ${r.instructor}</div>`;
       }
       html += `<div class="rating-row">
-        <span class="rating-label">学びになった度</span>
+        <span class="rating-label">学び濃度</span>
         <span class="stars">${stars(r.rating)}</span>
       </div>`;
       if (r.ease_rating) {
