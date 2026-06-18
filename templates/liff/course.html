@@ -211,13 +211,11 @@ async function main() {
       const card = document.createElement("div");
       card.className = "card";
       const byLabel = r.nickname ? r.nickname : "匿名";
-      let html = `<div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
-        <span>レビュー ${i + 1}</span>
-        <span style="font-size:11px;color:#94a3b8;font-weight:500">🏷️ ${byLabel}</span>
+      const instrLabel = r.instructor || "担当教員不明";
+      let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700;color:#6366f1">👨‍🏫 ${instrLabel}</span>
+        <span style="font-size:11px;color:#94a3b8">🏷️ ${byLabel}</span>
       </div>`;
-      if (r.instructor) {
-        html += `<div style="font-size:12px;color:#6366f1;margin-bottom:6px">👨‍🏫 ${r.instructor}</div>`;
-      }
       html += `<div class="rating-row">
         <span class="rating-label">学び濃度</span>
         <span class="stars">${stars(r.rating)}</span>
