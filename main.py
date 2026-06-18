@@ -3,6 +3,7 @@ import math
 import re as _re
 import json
 import asyncio
+from urllib.parse import quote as _url_quote
 import random
 import traceback as _traceback
 import hashlib
@@ -372,6 +373,50 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
 
 
+def make_no_review_flex(course: Course) -> FlexMessage:
+    form_url = f"{REVIEW_FORM_URL}?course={_url_quote(course.name)}"
+    liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
+    return FlexMessage(
+        alt_text=f"📖 {course.name}",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text=course.name, weight="bold", size="md", color="#ffffff", wrap=True),
+                ],
+                background_color="#94a3b8",
+                padding_all="lg",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="まだレビューがありません 😢", weight="bold", size="sm", color="#475569"),
+                    FlexText(
+                        text="あなたが最初のレビュワーになりませんか？🌟",
+                        size="xs", color="#64748b", margin="sm", wrap=True,
+                    ),
+                ],
+                padding_all="lg",
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                spacing="sm",
+                padding_all="md",
+                contents=[
+                    FlexButton(
+                        action=URIAction(label="✏️ レビューを投稿する", uri=form_url),
+                        style="primary", color="#6366f1", height="sm",
+                    ),
+                    FlexButton(
+                        action=URIAction(label="📖 科目詳細を見る", uri=liff_url),
+                        style="secondary", height="sm",
+                    ),
+                ],
+            ),
+        ),
+    )
+
+
 # ── Static reply texts ──────────────────────────────────────────
 
 PRIVACY_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com") + "/privacy"
@@ -642,6 +687,12 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
         _cls_sort = _make_cls_sort(cls_map)
         rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
 
+        reviewed_names: set[str] = set((await session.execute(
+            select(PendingReview.course_name)
+            .where(PendingReview.is_approved == True)
+            .distinct()
+        )).scalars().all())
+
         if not rows:
             label = f"{category}の" if category else ""
             return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
@@ -714,6 +765,22 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             return 0 if cls_category.get(cls, "") == "教養" else 1
         all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), _cls_sort(x[0])))
 
+        def _entry_has_review(name: str, kind: str) -> bool:
+            if kind == "single":
+                return name in reviewed_names
+            if kind.startswith("variant:"):
+                suffixes = kind.split(":", 1)[1].split("/")
+                if any(name + s in reviewed_names for s in suffixes):
+                    return True
+                if name in _sem_bases:
+                    return any(n in reviewed_names for n, _ in _sem_bases[name])
+                return False
+            if kind.startswith("numvariant:"):
+                if name in _num_bases:
+                    return any(n in reviewed_names for n, _ in _num_bases[name])
+                return False
+            return False
+
         def _make_bubble(classification: str, entries: list) -> FlexBubble:
             btn_contents = []
             for name, kind in entries:
@@ -722,11 +789,13 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                     display = f"{name} ({suffix})"
                 else:
                     display = name
+                has_review = _entry_has_review(name, kind)
+                text_color = "#4f46e5" if has_review else "#94a3b8"
                 btn_contents.append(
                     FlexBox(
                         layout="vertical",
                         action=MessageAction(label=display[:40], text=name),
-                        contents=[FlexText(text=display, wrap=True, size="sm", color="#4f46e5")],
+                        contents=[FlexText(text=display, wrap=True, size="sm", color=text_color)],
                         padding_top="sm",
                         padding_bottom="sm",
                     )
@@ -872,6 +941,12 @@ async def handle_message(text: str, user_id: str = "") -> list:
             select(Course).where(Course.name == t)
         )).scalar_one_or_none()
         if exact:
+            rc = (await session.execute(
+                select(func.count(PendingReview.id))
+                .where(PendingReview.course_name == exact.name, PendingReview.is_approved == True)
+            )).scalar_one()
+            if rc == 0:
+                return [make_no_review_flex(exact)]
             return [await get_course_flex(session, exact, user_id)]
 
         # Seminar group e.g. 外国語セミナー(英語) → 外国語セミナーA(英語), B(英語)...

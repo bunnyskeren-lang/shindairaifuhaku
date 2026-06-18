@@ -945,6 +945,18 @@
     buildStars();
     buildEaseStars();
     loadData();
+
+    // URL の ?course= パラメーターがあれば科目を自動選択
+    (async () => {
+      const urlCourse = new URLSearchParams(location.search).get('course');
+      if (!urlCourse) return;
+      try {
+        const res = await fetch(`/api/courses?q=${encodeURIComponent(urlCourse)}`);
+        const data = await res.json();
+        const match = (data.courses || []).find(c => c.name === urlCourse);
+        if (match) selectCourse(match.name, match.instructors);
+      } catch (_) {}
+    })();
   </script>
 </body>
 </html>
