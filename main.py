@@ -1198,6 +1198,7 @@ async def submit(
     student_id: str = Form(default=""),
     selected_instructor: str = Form(default=""),
     nickname: str = Form(default=""),
+    academic_year: int = Form(default=0),
 ):
     if not (1 <= rating <= 5):
         raise HTTPException(status_code=400, detail="Invalid rating")
@@ -1247,6 +1248,7 @@ async def submit(
             comment=comment.strip()[:500],
             selected_instructor=selected_instructor.strip()[:100] or None,
             nickname=nickname.strip()[:30] or None,
+            academic_year=academic_year if 2000 <= academic_year <= 2100 else None,
             is_approved=False,
         )
         session.add(review)
@@ -1958,6 +1960,7 @@ async def api_course(course_id: int):
                 "comment": r.comment,
                 "instructor": r.selected_instructor or "",
                 "nickname": r.nickname or "",
+                "academic_year": r.academic_year or 0,
             }
             for r in reviews
         ],
