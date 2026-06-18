@@ -1237,28 +1237,25 @@ async def search_instructors(q: str = ""):
             return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
         q_clean = q.replace("　", " ").strip()
         escaped = _esc(q_clean)
-        from sqlalchemy import case as sa_case
-        _starts = CourseInstructor.name.ilike(f"{escaped}%", escape="\\")
-        insts = (await session.execute(
+        insts_raw = (await session.execute(
             select(CourseInstructor.name)
             .where(CourseInstructor.name.ilike(f"%{escaped}%", escape="\\"))
             .distinct()
-            .order_by(sa_case((_starts, 0), else_=1), CourseInstructor.name)
-            .limit(10)
+            .limit(30)
         )).scalars().all()
+        insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))[:10]
         if not insts:
             norm_col = CourseInstructor.name
             for ch in ('・', '･', '（', '）', '(', ')'):
                 norm_col = func.replace(norm_col, ch, '')
             escaped_norm = _esc(_normalize_form_q(q_clean))
-            _starts_norm = norm_col.ilike(f"{escaped_norm}%", escape="\\")
-            insts = (await session.execute(
+            insts_raw = (await session.execute(
                 select(CourseInstructor.name)
                 .where(norm_col.ilike(f"%{escaped_norm}%", escape="\\"))
                 .distinct()
-                .order_by(sa_case((_starts_norm, 0), else_=1), CourseInstructor.name)
-                .limit(10)
+                .limit(30)
             )).scalars().all()
+            insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))[:10]
 
         result = []
         for name in insts:
