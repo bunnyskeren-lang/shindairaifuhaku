@@ -823,7 +823,14 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
         SPLIT_THRESHOLD = 10
         bubbles = []
         for cls, ents in all_groups:
-            if len(ents) > SPLIT_THRESHOLD:
+            if cls == "教養(総合)":
+                others = [(n, k) for n, k in ents if "GCP" not in n]
+                gcps   = [(n, k) for n, k in ents if "GCP" in n]
+                if others:
+                    bubbles.append(_make_bubble("教養(総合)", others))
+                if gcps:
+                    bubbles.append(_make_bubble("教養(総合) GCP", gcps))
+            elif len(ents) > SPLIT_THRESHOLD:
                 mid = (len(ents) + 1) // 2
                 bubbles.append(_make_bubble(cls + "①", ents[:mid]))
                 bubbles.append(_make_bubble(cls + "②", ents[mid:]))
