@@ -46,3 +46,6 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE courses ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
         ))
+        await conn.execute(text(
+            "ALTER TABLE pending_reviews ADD COLUMN IF NOT EXISTS nickname VARCHAR(30)"
+        ))

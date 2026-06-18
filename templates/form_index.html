@@ -83,6 +83,17 @@
         <p id="submitterNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
       </div>
 
+      <!-- 1b. ニックネーム（任意） -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          🏷️ ニックネーム <span class="text-gray-400 font-normal text-xs">（任意・公開されます）</span>
+        </label>
+        <input type="text" name="nickname" id="nickname"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+          placeholder="例：神大生A、工学部2回生 など" maxlength="30">
+        <p class="text-xs text-gray-400 mt-1">未入力の場合は「匿名」で表示されます</p>
+      </div>
+
       <!-- 2. 科目名 + 担当教員 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
@@ -480,6 +491,7 @@
       saveTimer = setTimeout(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           name: document.getElementById('submitter_name').value,
+          nickname: document.getElementById('nickname').value,
           course: document.getElementById('courseNameHidden').value,
           instructors: currentInstructors,
           selectedInstructor: document.getElementById('selectedInstructorHidden').value,
@@ -500,6 +512,7 @@
         const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
         if (!d) return;
         if (d.name) document.getElementById('submitter_name').value = d.name;
+        if (d.nickname) document.getElementById('nickname').value = d.nickname;
         if (d.course) {
           selectCourse(d.course, d.instructors || []);
           if (d.selectedInstructor) {
