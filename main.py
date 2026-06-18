@@ -459,16 +459,39 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
 
     body_contents = []
     if avg_ease is not None:
+        _filled = max(1, round(avg_ease * 4))
+        _unfilled = 20 - _filled
+        bar_contents = [
+            FlexBox(layout="vertical",
+                    contents=[FlexText(text=" ", size="xxs")],
+                    background_color="#818cf8", flex=_filled),
+        ]
+        if _unfilled > 0:
+            bar_contents.append(
+                FlexBox(layout="vertical",
+                        contents=[FlexText(text=" ", size="xxs")],
+                        background_color="#ddd6fe", flex=_unfilled)
+            )
         body_contents.append(
             FlexBox(
-                layout="horizontal",
+                layout="vertical",
                 contents=[
-                    FlexText(text="楽単度", size="xs", color="#94a3b8", flex=0),
-                    FlexText(text=stars(int(avg_ease + 0.5)), size="lg", color="#818cf8", flex=0, margin="sm"),
-                    FlexText(text=f"  {avg_ease:.1f}", size="sm", color="#1e293b", margin="sm", weight="bold", flex=0),
-                    FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
+                    FlexBox(
+                        layout="horizontal",
+                        contents=[
+                            FlexText(text="楽単度", size="xs", color="#94a3b8", flex=0),
+                            FlexText(text=f"{avg_ease:.1f}", size="sm", color="#1e293b", margin="sm", weight="bold", flex=0),
+                            FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
+                        ],
+                        align_items="center",
+                    ),
+                    FlexBox(
+                        layout="horizontal",
+                        contents=bar_contents,
+                        corner_radius="6px",
+                        margin="xs",
+                    ),
                 ],
-                align_items="center",
             )
         )
     elif review_count == 0:
