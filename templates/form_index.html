@@ -57,7 +57,7 @@
       </div>
       {% endif %}
 
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="studentIdCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           🎓 学籍番号 <span class="text-red-500">*</span>
         </label>
@@ -66,14 +66,14 @@
         <input type="text" name="student_id" id="student_id"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
-          style="text-transform:uppercase" autocomplete="off">
+          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
       </div>
 
       <input type="hidden" name="line_user_id" value="{{ uid }}">
 
       <!-- 1. 名前 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="nameCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           👤 名前 <span class="text-red-500">*</span>
         </label>
@@ -95,7 +95,7 @@
       </div>
 
       <!-- 1c. 受講年度 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="academicYearCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           📅 受講年度 <span class="text-red-500">*</span>
         </label>
@@ -114,7 +114,7 @@
       </div>
 
       <!-- 2. 科目名 + 担当教員 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="courseCard" class="bg-white rounded-2xl shadow-sm p-5">
 
         <!-- トグル -->
         <div class="flex rounded-xl overflow-hidden border border-gray-200 mb-4">
@@ -160,8 +160,13 @@
           </div>
         </div>
 
+        <!-- 科目名ラベル（先生名モードで科目選択後に表示） -->
+        <div id="courseNameLabelInstr" class="hidden mt-3 pt-3 border-t border-gray-100">
+          <p class="text-sm font-semibold text-gray-700 mb-2">📖 科目名 <span class="text-red-500">*</span></p>
+        </div>
+
         <!-- 選択済み表示（共通） -->
-        <div id="selectedCourse" class="hidden mt-3 bg-green-50 border border-green-200 rounded-xl px-3 py-2 flex items-center gap-2 text-sm text-green-700">
+        <div id="selectedCourse" class="hidden bg-green-50 border border-green-200 rounded-xl px-3 py-2 flex items-center gap-2 text-sm text-green-700">
           <span>✅</span>
           <span id="selectedCourseName" class="flex-1 font-medium"></span>
           <button type="button" id="clearCourse" class="text-xs text-gray-400 hover:text-gray-600 underline">変更</button>
@@ -178,7 +183,7 @@
       </div>
 
       <!-- 3. 充実度 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="ratingCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           ⭐ 充実度 <span class="text-red-500">*</span>
         </label>
@@ -206,7 +211,7 @@
       </div>
 
       <!-- 4. 楽単度（星形式） -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="easeCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           😴 楽単度 <span class="text-red-500">*</span>
         </label>
@@ -234,7 +239,7 @@
       </div>
 
       <!-- 5. 成績評価方法 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="gradingCard" class="bg-white rounded-2xl shadow-sm p-5">
         <input type="hidden" name="grading_method" id="gradingMethodHidden">
         <div class="flex items-center justify-between mb-4">
           <label class="text-sm font-semibold text-gray-700">📋 成績評価方法</label>
@@ -342,6 +347,11 @@
         <a href="https://shindairaifuhaku.onrender.com/privacy" target="_blank"
            class="underline text-gray-400 hover:text-indigo-500">プライバシーポリシー</a>
         に同意したものとみなします。
+      </p>
+      <p class="text-center text-xs text-gray-400 mt-2">
+        お問い合わせは
+        <a href="mailto:bunnyskeren@gmail.com"
+           class="underline text-gray-400 hover:text-indigo-500">こちら</a>
       </p>
 
     </form>
@@ -495,6 +505,7 @@
       document.getElementById('courseNameHidden').value = '';
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('selectedCourse').classList.add('hidden');
+      document.getElementById('courseNameLabelInstr').classList.add('hidden');
       document.getElementById('instructorSelectSection').classList.remove('hidden');
       searchInput.classList.remove('hidden');
       searchInput.value = '';
@@ -511,6 +522,7 @@
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('selectedCourse').classList.add('hidden');
       document.getElementById('instructorSelectSection').classList.add('hidden');
+      document.getElementById('courseNameLabelInstr').classList.add('hidden');
       document.getElementById('instructorSearchInput').value = '';
       document.getElementById('instructorCourseList').classList.add('hidden');
     });
@@ -608,6 +620,7 @@
         document.getElementById('instructorSelectSection').classList.remove('hidden');
         searchInput.focus();
       } else {
+        document.getElementById('courseNameLabelInstr').classList.add('hidden');
         document.getElementById('instructorModeSection').classList.remove('hidden');
         document.getElementById('instructorSelectSection').classList.add('hidden');
         document.getElementById('instructorCourseList').classList.remove('hidden');
@@ -681,6 +694,7 @@
           document.getElementById('selectedInstructorHidden').value = inst.name;
           document.getElementById('selectedCourseName').textContent = el.dataset.courseName;
           document.getElementById('selectedCourse').classList.remove('hidden');
+          document.getElementById('courseNameLabelInstr').classList.remove('hidden');
           document.getElementById('instructorModeSection').classList.add('hidden');
           document.getElementById('instructorSelectSection').classList.add('hidden');
           document.getElementById('courseError').classList.add('hidden');
@@ -750,13 +764,19 @@
     const NAME_RE = /^[a-zA-Z0-9぀-ヿ一-鿿\s　]+$/;
     if (studentIdInput) {
       studentIdInput.addEventListener('input', () => {
-        studentIdInput.value = studentIdInput.value.toUpperCase();
+        const pos = studentIdInput.selectionStart;
+        const upper = studentIdInput.value.toUpperCase();
+        if (upper !== studentIdInput.value) {
+          studentIdInput.value = upper;
+          try { studentIdInput.setSelectionRange(pos, pos); } catch(_) {}
+        }
         const v = studentIdInput.value.trim();
         const invalid = v && !STUDENT_ID_RE.test(v);
         studentIdError.classList.toggle('hidden', !invalid);
         studentIdInput.classList.toggle('border-red-400', invalid);
         studentIdInput.classList.toggle('ring-2', invalid);
         studentIdInput.classList.toggle('ring-red-300', invalid);
+        if (!invalid) clearCardError('studentIdCard');
       });
     }
 
@@ -842,6 +862,35 @@
       } catch (_) {}
     }
 
+    const CARD_IDS = ['studentIdCard','nameCard','academicYearCard','courseCard','ratingCard','easeCard','gradingCard'];
+    function clearCardError(id) {
+      const el = document.getElementById(id);
+      if (el) { el.classList.remove('ring-2','ring-red-400'); el.style.background = ''; }
+    }
+    function markCardError(id) {
+      const el = document.getElementById(id);
+      if (el) { el.classList.add('ring-2','ring-red-400'); el.style.background = '#fff5f5'; }
+    }
+    function refreshCardErrors() {
+      CARD_IDS.forEach(clearCardError);
+      const map = [
+        ['submitterNameError','nameCard'],
+        ['studentIdError','studentIdCard'],
+        ['academicYearError','academicYearCard'],
+        ['courseError','courseCard'],
+        ['instructorError','courseCard'],
+        ['ratingError','ratingCard'],
+        ['easeError','easeCard'],
+        ['attendanceError','gradingCard'],
+        ['homeworkError','gradingCard'],
+        ['evalError','gradingCard'],
+      ];
+      map.forEach(([errId, cardId]) => {
+        const errEl = document.getElementById(errId);
+        if (errEl && !errEl.classList.contains('hidden')) markCardError(cardId);
+      });
+    }
+
     document.getElementById('reviewForm').addEventListener('submit', e => {
       let valid = true;
 
@@ -890,7 +939,7 @@
         document.getElementById('evalError').classList.remove('hidden');
         valid = false;
       }
-      if (!valid) { e.preventDefault(); window.scrollTo(0, 0); return; }
+      if (!valid) { e.preventDefault(); refreshCardErrors(); window.scrollTo(0, 0); return; }
 
       updateGradingMethod();
       localStorage.removeItem(STORAGE_KEY);
