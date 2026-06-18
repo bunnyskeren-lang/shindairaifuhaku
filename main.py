@@ -150,7 +150,7 @@ def _make_cls_sort(cls_map: dict):
     return key
 
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
-EASE_LABEL = {"SS": "超楽 😴😴", "S": "楽 😴", "A": "普通 😊", "B": "きつめ 😤", "C": "激ムズ 😰"}
+EASE_LABEL = {"SS": "天国", "S": "楽々", "A": "標準", "B": "大変", "C": "修羅場"}
 EASE_COLOR = {"SS": "#10b981", "S": "#6366f1", "A": "#f59e0b", "B": "#f97316", "C": "#ef4444"}
 
 
