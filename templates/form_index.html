@@ -221,7 +221,11 @@
             <button type="button" class="chip-btn multi" data-group="eval" data-value="小テスト">小テスト</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="発表・プレゼン">発表・プレゼン</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="出席点">出席点</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="__custom__">✏️ 手入力</button>
           </div>
+          <input type="text" id="evalCustomInput"
+            class="hidden w-full mt-2 border border-indigo-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white"
+            placeholder="例：口頭試問、実技など" maxlength="50">
           <p id="evalError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
         </div>
 
@@ -348,9 +352,24 @@
         } else {
           btn.classList.toggle('active');
         }
+        if (btn.dataset.value === '__custom__') {
+          const customInput = document.getElementById('evalCustomInput');
+          if (btn.classList.contains('active')) {
+            customInput.classList.remove('hidden');
+            customInput.focus();
+          } else {
+            customInput.classList.add('hidden');
+            customInput.value = '';
+          }
+        }
         updateGradingMethod();
         saveData();
       };
+    });
+
+    document.getElementById('evalCustomInput').addEventListener('input', () => {
+      updateGradingMethod();
+      saveData();
     });
 
     document.getElementById('gradingExtra').addEventListener('input', () => {
@@ -364,7 +383,12 @@
       if (att) parts.push(`出席:${att.dataset.value}`);
       const hw = document.querySelector('[data-group="homework"].active');
       if (hw) parts.push(`課題:${hw.dataset.value}`);
-      const evals = [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value);
+      const evals = [...document.querySelectorAll('[data-group="eval"].active')].map(b => {
+        if (b.dataset.value === '__custom__') {
+          return document.getElementById('evalCustomInput').value.trim() || null;
+        }
+        return b.dataset.value;
+      }).filter(Boolean);
       if (evals.length) parts.push(`評価:${evals.join('・')}`);
       const extra = document.getElementById('gradingExtra').value.trim();
       if (extra) parts.push(`補足:${extra}`);
@@ -649,6 +673,7 @@
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
           homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
           evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
+          evalCustom: document.getElementById('evalCustomInput').value,
           gradingExtra: document.getElementById('gradingExtra').value,
           comment: document.getElementById('comment').value,
         }));
@@ -697,6 +722,11 @@
           document.querySelectorAll('[data-group="eval"]').forEach(b => {
             b.classList.toggle('active', d.evals.includes(b.dataset.value));
           });
+          if (d.evals.includes('__custom__')) {
+            const customInput = document.getElementById('evalCustomInput');
+            customInput.classList.remove('hidden');
+            if (d.evalCustom) customInput.value = d.evalCustom;
+          }
         }
         if (d.gradingExtra) document.getElementById('gradingExtra').value = d.gradingExtra;
         if (d.comment) {
