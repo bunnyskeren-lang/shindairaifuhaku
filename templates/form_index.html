@@ -66,10 +66,10 @@
         <p class="text-xs text-gray-400 mb-1">数字7桁＋学部コード（医学部のみ2文字: MM・ME・MH）</p>
         <p class="text-xs text-gray-300 mb-1">L:文学 H:国際人間 J:法 E:経済 B:経営 S:理 T:工 A:農 Z:海洋政策 MM/ME/MH:医</p>
         <input type="text" name="student_id" id="student_id"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition{% if stored_student_id %} bg-gray-50 text-gray-500 cursor-not-allowed{% endif %}"
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-          value="{{ stored_student_id }}">
+          value="{{ stored_student_id }}"{% if stored_student_id %} readonly{% endif %}>
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
       </div>
 
@@ -79,9 +79,9 @@
           👤 名前 <span class="text-red-500">*</span>
         </label>
         <input type="text" name="submitter_name" id="submitter_name"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition{% if stored_name %} bg-gray-50 text-gray-500 cursor-not-allowed{% endif %}"
           placeholder="例：神大太郎" required maxlength="20"
-          value="{{ stored_name }}">
+          value="{{ stored_name }}"{% if stored_name %} readonly{% endif %}>
         <p id="submitterNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
       </div>
 
