@@ -596,6 +596,7 @@
       document.getElementById('courseNameHidden').value = name;
       document.getElementById('selectedCourseName').textContent = name;
       document.getElementById('selectedCourse').classList.remove('hidden');
+      document.getElementById('courseNameLabelInstr').classList.remove('hidden');
       if (searchMode === 'course') {
         searchInput.classList.add('hidden');
         document.getElementById('instructorSelectSection').classList.remove('hidden');
@@ -640,6 +641,7 @@
       if (searchMode === 'course') {
         searchInput.classList.remove('hidden');
         searchInput.value = '';
+        document.getElementById('courseNameLabelInstr').classList.add('hidden');
         document.getElementById('instructorSelectSection').classList.add('hidden');
         searchInput.focus();
       } else {
