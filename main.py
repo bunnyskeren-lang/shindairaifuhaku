@@ -1030,16 +1030,15 @@ async def handle_message(text: str, user_id: str = "") -> list:
         courses = (await session.execute(stmt.limit(6))).scalars().all()
 
         # 句読点を除去した正規化検索（フォールバック）
+        # ユーザーが・などを省略 → DB側の科目名を正規化して比較
         if not courses:
-            t_norm = _normalize_q(t)
-            if t_norm != t:
-                norm_col = Course.name
-                for ch in ('・', '･', '（', '）', '(', ')'):
-                    norm_col = func.replace(norm_col, ch, '')
-                e_norm = _escape(t_norm)
-                courses = (await session.execute(
-                    select(Course).where(norm_col.ilike(f"%{e_norm}%", escape="\\")).limit(6)
-                )).scalars().all()
+            norm_col = Course.name
+            for ch in ('・', '･', '（', '）', '(', ')'):
+                norm_col = func.replace(norm_col, ch, '')
+            e_norm = _escape(_normalize_q(t))
+            courses = (await session.execute(
+                select(Course).where(norm_col.ilike(f"%{e_norm}%", escape="\\")).limit(6)
+            )).scalars().all()
         if courses:
             # Letter variants (A/B/C/D)
             potential_bases = {
