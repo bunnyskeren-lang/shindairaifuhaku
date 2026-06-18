@@ -764,13 +764,7 @@
     const NAME_RE = /^[a-zA-Z0-9぀-ヿ一-鿿\s　]+$/;
     if (studentIdInput) {
       studentIdInput.addEventListener('input', () => {
-        const pos = studentIdInput.selectionStart;
-        const upper = studentIdInput.value.toUpperCase();
-        if (upper !== studentIdInput.value) {
-          studentIdInput.value = upper;
-          try { studentIdInput.setSelectionRange(pos, pos); } catch(_) {}
-        }
-        const v = studentIdInput.value.trim();
+        const v = studentIdInput.value.trim().toUpperCase();
         const invalid = v && !STUDENT_ID_RE.test(v);
         studentIdError.classList.toggle('hidden', !invalid);
         studentIdInput.classList.toggle('border-red-400', invalid);
