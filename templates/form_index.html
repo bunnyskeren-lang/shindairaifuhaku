@@ -401,6 +401,21 @@
 
   <script>
     const STORAGE_KEY = 'kobe_review_v2';
+
+    // uid を localStorage に永続化し、URL にない場合はリダイレクトで補完
+    (function() {
+      const params = new URLSearchParams(location.search);
+      const urlUid = params.get('uid');
+      if (urlUid) {
+        localStorage.setItem('kobe_uid', urlUid);
+      } else {
+        const cached = localStorage.getItem('kobe_uid');
+        if (cached) {
+          params.set('uid', cached);
+          location.replace(location.pathname + '?' + params.toString());
+        }
+      }
+    })();
     const RATING_LABELS = ['', 'ほぼ学びなし 😔', 'ちょい学び 🙂', 'まあまあ学びあり 😊', 'かなり学べた 😄', 'めちゃくちゃ学べた 🤩'];
     const EASE_VALS   = ['', 'C', 'B', 'A', 'S', 'SS'];
     const EASE_LABELS = ['', '修羅場 😱', '大変 😤', '標準 😐', '楽々 😌', '天国 😇'];
