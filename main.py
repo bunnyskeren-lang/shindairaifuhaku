@@ -304,115 +304,73 @@ def make_course_bubble(
 ) -> FlexBubble:
     body_contents = []
 
-    # 分類タグ
-    if classification:
-        body_contents.append(
-            FlexBox(
-                layout="horizontal",
-                contents=[
-                    FlexBox(
-                        layout="vertical",
-                        contents=[FlexText(text=f"📂 {classification}", size="xs", color="#6366f1")],
-                        background_color="#eef2ff",
-                        corner_radius="20px",
-                        padding_all="sm",
-                    )
-                ],
-                margin="sm",
-            )
-        )
-
-    body_contents.append(FlexSeparator(margin="lg"))
-
-    # 学びになった度
+    # 評価（横並び2列）
     if avg_rating is not None:
-        body_contents.append(
-            FlexText(text="⭐ 学びになった度", size="xs", color="#64748b", weight="bold", margin="md")
-        )
-        body_contents.append(
+        cols = [
             FlexBox(
-                layout="horizontal",
+                layout="vertical",
+                flex=1,
                 contents=[
-                    FlexText(text=stars(round(avg_rating)), size="lg", color="#f59e0b", flex=0),
-                    FlexText(text=f"  {avg_rating:.1f}点", size="sm", color="#475569", margin="sm"),
-                    FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
+                    FlexText(text="学びになった度", size="xxs", color="#94a3b8"),
+                    FlexText(text=stars(round(avg_rating)), size="lg", color="#f59e0b", margin="xs"),
+                    FlexText(text=f"{avg_rating:.1f}  ({review_count}件)", size="xxs", color="#64748b", margin="xs"),
                 ],
-                margin="xs",
-            )
-        )
-    else:
-        body_contents.append(
-            FlexText(text="⭐ まだレビューなし", size="sm", color="#94a3b8", margin="md")
-        )
-
-    # 楽単度
-    if top_ease:
-        body_contents.append(
-            FlexText(text="😴 楽単度", size="xs", color="#64748b", weight="bold", margin="md")
-        )
-        body_contents.append(
-            FlexBox(
-                layout="horizontal",
-                contents=[
-                    FlexText(text=EASE_STARS.get(top_ease, ""), size="lg", color="#818cf8", flex=0),
-                    FlexText(text=f"  {EASE_LABEL.get(top_ease, top_ease)}", size="sm", color="#475569", margin="sm"),
-                ],
-                margin="xs",
-            )
-        )
-
-    # 成績評価方法
-    grading_items = []
-    if grading_summary.get("attendance"):
-        grading_items.append(("🏫 出席", grading_summary["attendance"]))
-    if grading_summary.get("homework"):
-        grading_items.append(("📝 課題", grading_summary["homework"]))
-    if grading_summary.get("evals"):
-        grading_items.append(("🎯 評価", "・".join(grading_summary["evals"])))
-    for ex in grading_summary.get("extras", []):
-        grading_items.append(("💬 補足", ex))
-
-    if grading_items:
-        body_contents.append(FlexSeparator(margin="lg"))
-        body_contents.append(
-            FlexText(text="📋 成績評価方法", size="xs", color="#64748b", weight="bold", margin="md")
-        )
-        for label, val in grading_items:
-            body_contents.append(
-                FlexBox(
-                    layout="horizontal",
-                    contents=[
-                        FlexText(text=label, size="xs", color="#64748b", flex=2),
-                        FlexText(text=val, size="xs", color="#334155", flex=4, wrap=True),
-                    ],
-                    margin="xs",
-                )
-            )
-
-    # コメント
-    if comments:
-        body_contents.append(FlexSeparator(margin="lg"))
-        body_contents.append(
-            FlexText(text="💬 コメント", size="xs", color="#64748b", weight="bold", margin="sm")
-        )
-        for comment in comments:
-            preview = comment[:80] + ("..." if len(comment) > 80 else "")
-            body_contents.append(
+            ),
+        ]
+        if top_ease:
+            cols.append(
                 FlexBox(
                     layout="vertical",
-                    contents=[FlexText(text=f"「{preview}」", size="sm", wrap=True, color="#334155")],
-                    background_color="#f8fafc",
-                    corner_radius="8px",
-                    padding_all="sm",
-                    margin="sm",
+                    flex=1,
+                    contents=[
+                        FlexText(text="楽単度", size="xxs", color="#94a3b8"),
+                        FlexText(text=EASE_STARS.get(top_ease, ""), size="lg", color="#818cf8", margin="xs"),
+                        FlexText(text=EASE_LABEL.get(top_ease, ""), size="xxs", color="#64748b", margin="xs"),
+                    ],
                 )
             )
+        body_contents.append(FlexBox(layout="horizontal", contents=cols))
+    else:
+        body_contents.append(
+            FlexText(text="まだレビューはありません", size="sm", color="#94a3b8")
+        )
+
+    # 成績評価（1行にまとめる）
+    grading_parts = []
+    if grading_summary.get("attendance"):
+        grading_parts.append(grading_summary["attendance"])
+    if grading_summary.get("evals"):
+        grading_parts.append("・".join(grading_summary["evals"]))
+    if grading_parts:
+        body_contents.append(
+            FlexText(
+                text="📋 " + " / ".join(grading_parts),
+                size="xs",
+                color="#64748b",
+                wrap=True,
+                margin="lg",
+            )
+        )
+
+    # コメント（1件・60文字）
+    if comments:
+        preview = comments[0][:60] + ("…" if len(comments[0]) > 60 else "")
+        body_contents.append(
+            FlexBox(
+                layout="vertical",
+                contents=[FlexText(text=f"「{preview}」", size="xs", wrap=True, color="#64748b")],
+                background_color="#f8fafc",
+                corner_radius="8px",
+                padding_all="sm",
+                margin="lg",
+            )
+        )
 
     footer_contents = []
     if syllabus_url:
         footer_contents.append(
             FlexButton(
-                action=URIAction(label="📄 シラバス", uri=syllabus_url),
+                action=URIAction(label="シラバス", uri=syllabus_url),
                 style="secondary",
                 height="sm",
             )
@@ -426,14 +384,20 @@ def make_course_bubble(
         )
     )
 
+    header_contents = [
+        FlexText(text=name, weight="bold", size="lg", color="#ffffff", wrap=True),
+        FlexText(text=instructor or "担当教員未設定", size="xs", color="#c7d2fe", margin="xs"),
+    ]
+    if classification:
+        header_contents.append(
+            FlexText(text=classification, size="xxs", color="#a5b4fc", margin="xs")
+        )
+
     return FlexBubble(
         header=FlexBox(
             layout="vertical",
-            contents=[
-                FlexText(text=name, weight="bold", size="lg", color="#ffffff", wrap=True),
-                FlexText(text=f"👨‍🏫 {instructor or '未設定'}", size="sm", color="#c7d2fe", margin="xs"),
-            ],
-            background_color="#6366f1",
+            contents=header_contents,
+            background_color="#4f46e5",
             padding_all="lg",
         ),
         body=FlexBox(layout="vertical", contents=body_contents, padding_all="lg"),
