@@ -421,13 +421,24 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
 
     rating_row = await session.execute(
         select(
-            func.avg(PendingReview.rating).label("avg"),
             func.count(PendingReview.id).label("cnt"),
+            func.avg(PendingReview.rating).label("avg_rating"),
         ).where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
     )
     r = rating_row.one()
-    avg_rating = float(r.avg) if r.avg else None
     review_count = r.cnt or 0
+
+    ease_rows = (await session.execute(
+        select(PendingReview.ease_rating)
+        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+        .where(PendingReview.ease_rating.isnot(None))
+    )).scalars().all()
+    _ease_map = {"C": 1, "B": 2, "A": 3, "S": 4, "SS": 5}
+    avg_ease: Optional[float] = None
+    if ease_rows:
+        vals = [_ease_map[e] for e in ease_rows if e in _ease_map]
+        if vals:
+            avg_ease = sum(vals) / len(vals)
 
     meta_parts = []
     if getattr(course, "term", None):
@@ -447,18 +458,18 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         )
 
     body_contents = []
-    if avg_rating is not None:
+    if avg_ease is not None:
         body_contents.append(
             FlexBox(
                 layout="horizontal",
                 contents=[
-                    FlexText(text=stars(round(avg_rating)), size="lg", color="#f59e0b", flex=0),
-                    FlexText(text=f"  {avg_rating:.1f}", size="sm", color="#1e293b", margin="sm", weight="bold", flex=0),
+                    FlexText(text=stars(round(avg_ease)), size="lg", color="#818cf8", flex=0),
+                    FlexText(text=f"  {avg_ease:.1f}", size="sm", color="#1e293b", margin="sm", weight="bold", flex=0),
                     FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
                 ],
             )
         )
-    else:
+    elif review_count == 0:
         body_contents.append(
             FlexText(text="まだレビューはありません", size="sm", color="#94a3b8")
         )
