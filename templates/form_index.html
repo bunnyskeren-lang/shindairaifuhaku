@@ -540,8 +540,44 @@
     const dropdown = document.getElementById('courseDropdown');
     let debounceTimer;
     let courseComposing = false;
+
+    async function fetchCourses(q) {
+      try {
+        const res = await fetch(`/api/courses?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        const items = data.courses || [];
+        if (items.length === 0) {
+          dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${q}」に一致する科目はありません</div>`;
+          dropdown.classList.remove('hidden');
+          return;
+        }
+        dropdown.innerHTML = items.map((c, idx) =>
+          `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
+            style="border-bottom: 1px solid #f3f4f6; transition: background .1s"
+            onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+            <div style="font-size:14px;font-weight:600;color:#1e293b">${c.name}</div>
+            ${c.instructors.length
+              ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">${c.instructors.map(i=>i.name).join(' · ')}</div>`
+              : ''}
+          </div>`
+        ).join('');
+        dropdown.classList.remove('hidden');
+        dropdown.querySelectorAll('[data-idx]').forEach(el => {
+          const c = items[parseInt(el.dataset.idx)];
+          el.addEventListener('click', () => selectCourse(c.name, c.instructors));
+        });
+      } catch (_) {}
+    }
+
     searchInput.addEventListener('compositionstart', () => { courseComposing = true; });
-    searchInput.addEventListener('compositionend',   () => { courseComposing = false; searchInput.dispatchEvent(new Event('input')); });
+    searchInput.addEventListener('compositionend', () => {
+      courseComposing = false;
+      document.getElementById('courseNameHidden').value = '';
+      const q = searchInput.value.trim();
+      if (!q) { dropdown.classList.add('hidden'); return; }
+      clearTimeout(debounceTimer);
+      fetchCourses(q);
+    });
 
     searchInput.addEventListener('input', () => {
       if (courseComposing) return;
@@ -549,37 +585,7 @@
       clearTimeout(debounceTimer);
       const q = searchInput.value.trim();
       if (!q) { dropdown.classList.add('hidden'); return; }
-
-      debounceTimer = setTimeout(async () => {
-        try {
-          const res = await fetch(`/api/courses?q=${encodeURIComponent(q)}`);
-          const data = await res.json();
-          const items = data.courses || [];
-
-          if (items.length === 0) {
-            dropdown.innerHTML =
-              `<div class="px-4 py-4 text-sm text-gray-500">「${q}」に一致する科目はありません</div>`;
-            dropdown.classList.remove('hidden');
-            return;
-          }
-
-          dropdown.innerHTML = items.map((c, idx) =>
-            `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
-              style="border-bottom: 1px solid #f3f4f6; transition: background .1s"
-              onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-              <div style="font-size:14px;font-weight:600;color:#1e293b">${c.name}</div>
-              ${c.instructors.length
-                ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">${c.instructors.map(i=>i.name).join(' · ')}</div>`
-                : ''}
-            </div>`
-          ).join('');
-          dropdown.classList.remove('hidden');
-          dropdown.querySelectorAll('[data-idx]').forEach(el => {
-            const c = items[parseInt(el.dataset.idx)];
-            el.addEventListener('click', () => selectCourse(c.name, c.instructors));
-          });
-        } catch (_) {}
-      }, 300);
+      debounceTimer = setTimeout(() => fetchCourses(q), 150);
     });
 
     let currentInstructors = [];
@@ -661,46 +667,56 @@
     let instrDebounceTimer;
     let instrComposing = false;
     let instrAbort = null;
+
+    function clearInstrSearch() {
+      instrSearchDropdown.classList.add('hidden');
+      document.getElementById('instructorCourseList').classList.add('hidden');
+      document.getElementById('selectedInstructorHidden').value = '';
+    }
+
+    async function fetchInstructors(q) {
+      if (instrAbort) instrAbort.abort();
+      instrAbort = new AbortController();
+      try {
+        const res = await fetch(`/api/instructors?q=${encodeURIComponent(q)}`, { signal: instrAbort.signal });
+        const data = await res.json();
+        const items = data.instructors || [];
+        if (items.length === 0) {
+          instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${q}」に一致する先生が見つかりませんでした</div>`;
+          instrSearchDropdown.classList.remove('hidden');
+          return;
+        }
+        instrSearchDropdown.innerHTML = items.map((inst, idx) =>
+          `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
+            style="border-bottom:1px solid #f3f4f6;transition:background .1s"
+            onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+            <div style="font-size:14px;font-weight:600;color:#1e293b">${inst.name}</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:2px">${inst.courses.length}科目担当</div>
+          </div>`
+        ).join('');
+        instrSearchDropdown.classList.remove('hidden');
+        instrSearchDropdown.querySelectorAll('[data-instr-idx]').forEach(el => {
+          const inst = items[parseInt(el.dataset.instrIdx)];
+          el.addEventListener('click', () => selectInstructor(inst));
+        });
+      } catch(e) { if (e.name !== 'AbortError') console.warn(e); }
+    }
+
     instrSearchInput.addEventListener('compositionstart', () => { instrComposing = true; });
-    instrSearchInput.addEventListener('compositionend',   () => { instrComposing = false; instrSearchInput.dispatchEvent(new Event('input')); });
+    instrSearchInput.addEventListener('compositionend', () => {
+      instrComposing = false;
+      const q = instrSearchInput.value.trim();
+      if (!q) { clearInstrSearch(); return; }
+      clearTimeout(instrDebounceTimer);
+      fetchInstructors(q);
+    });
 
     instrSearchInput.addEventListener('input', () => {
       if (instrComposing) return;
       clearTimeout(instrDebounceTimer);
       const q = instrSearchInput.value.trim();
-      if (!q) {
-        instrSearchDropdown.classList.add('hidden');
-        document.getElementById('instructorCourseList').classList.add('hidden');
-        document.getElementById('selectedInstructorHidden').value = '';
-        return;
-      }
-      instrDebounceTimer = setTimeout(async () => {
-        if (instrAbort) instrAbort.abort();
-        instrAbort = new AbortController();
-        try {
-          const res = await fetch(`/api/instructors?q=${encodeURIComponent(q)}`, { signal: instrAbort.signal });
-          const data = await res.json();
-          const items = data.instructors || [];
-          if (items.length === 0) {
-            instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${q}」に一致する先生が見つかりませんでした</div>`;
-            instrSearchDropdown.classList.remove('hidden');
-            return;
-          }
-          instrSearchDropdown.innerHTML = items.map((inst, idx) =>
-            `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
-              style="border-bottom:1px solid #f3f4f6;transition:background .1s"
-              onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-              <div style="font-size:14px;font-weight:600;color:#1e293b">${inst.name}</div>
-              <div style="font-size:12px;color:#94a3b8;margin-top:2px">${inst.courses.length}科目担当</div>
-            </div>`
-          ).join('');
-          instrSearchDropdown.classList.remove('hidden');
-          instrSearchDropdown.querySelectorAll('[data-instr-idx]').forEach(el => {
-            const inst = items[parseInt(el.dataset.instrIdx)];
-            el.addEventListener('click', () => selectInstructor(inst));
-          });
-        } catch(e) { if (e.name !== 'AbortError') console.warn(e); }
-      }, 300);
+      if (!q) { clearInstrSearch(); return; }
+      instrDebounceTimer = setTimeout(() => fetchInstructors(q), 150);
     });
 
     function selectInstructor(inst) {
