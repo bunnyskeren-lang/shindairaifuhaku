@@ -132,6 +132,15 @@ function stars(n) {
   return "★".repeat(full) + "☆".repeat(5 - full);
 }
 
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★☆☆", S: "★★★★☆", SS: "★★★★★" };
 
 async function main() {
@@ -217,8 +226,8 @@ async function main() {
     data.reviews.forEach((r, i) => {
       const card = document.createElement("div");
       card.className = "card";
-      const byLabel = r.nickname ? r.nickname : "匿名";
-      const instrLabel = r.instructor || "担当教員不明";
+      const byLabel = r.nickname ? esc(r.nickname) : "匿名";
+      const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:13px;font-weight:700;color:#6366f1">👨‍🏫 ${instrLabel}</span>
         <span style="font-size:11px;color:#94a3b8">🏷️ ${byLabel}</span>
@@ -241,10 +250,10 @@ async function main() {
         for (const part of gmParts) {
           const idx = part.indexOf(':');
           if (idx === -1) {
-            gmHtml += `<div style="font-size:12px;color:#374151">${part}</div>`;
+            gmHtml += `<div style="font-size:12px;color:#374151">${esc(part)}</div>`;
           } else {
-            const key = part.slice(0, idx);
-            const val = part.slice(idx + 1);
+            const key = esc(part.slice(0, idx));
+            const val = esc(part.slice(idx + 1));
             gmHtml += `<div style="display:flex;align-items:baseline;gap:6px">
               <span style="font-size:10px;font-weight:700;color:#6366f1;background:#ede9fe;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0">${key}</span>
               <span style="font-size:12px;color:#374151;line-height:1.5">${val}</span>
@@ -255,7 +264,7 @@ async function main() {
         html += gmHtml;
       }
       if (r.comment) {
-        html += `<div class="comment-box" style="margin-top:8px">${r.comment}</div>`;
+        html += `<div class="comment-box" style="margin-top:8px">${esc(r.comment)}</div>`;
       }
       card.innerHTML = html;
       reviewsSection.appendChild(card);

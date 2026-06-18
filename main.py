@@ -291,120 +291,6 @@ async def save_error_log(exc: Exception, user_id: str | None = None, action: str
 EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★☆☆", "B": "★★☆☆☆", "C": "★☆☆☆☆"}
 
 
-def make_course_bubble(
-    name: str,
-    instructor: str,
-    classification: str,
-    avg_rating: Optional[float],
-    review_count: int,
-    top_ease: Optional[str],
-    grading_summary: dict,
-    comments: list[str],
-    review_url: str = "",
-    syllabus_url: str = "",
-) -> FlexBubble:
-    body_contents = []
-
-    # 評価（横並び2列）
-    if avg_rating is not None:
-        cols = [
-            FlexBox(
-                layout="vertical",
-                flex=1,
-                contents=[
-                    FlexText(text="学び濃度", size="xxs", color="#94a3b8"),
-                    FlexText(text=stars(round(avg_rating)), size="lg", color="#f59e0b", margin="xs"),
-                    FlexText(text=f"{avg_rating:.1f}  ({review_count}件)", size="xxs", color="#64748b", margin="xs"),
-                ],
-            ),
-        ]
-        if top_ease:
-            cols.append(
-                FlexBox(
-                    layout="vertical",
-                    flex=1,
-                    contents=[
-                        FlexText(text="楽単度", size="xxs", color="#94a3b8"),
-                        FlexText(text=EASE_STARS.get(top_ease, ""), size="lg", color="#818cf8", margin="xs"),
-                        FlexText(text=EASE_LABEL.get(top_ease, ""), size="xxs", color="#64748b", margin="xs"),
-                    ],
-                )
-            )
-        body_contents.append(FlexBox(layout="horizontal", contents=cols))
-    else:
-        body_contents.append(
-            FlexText(text="まだレビューはありません", size="sm", color="#94a3b8")
-        )
-
-    # 成績評価（1行にまとめる）
-    grading_parts = []
-    if grading_summary.get("attendance"):
-        grading_parts.append(grading_summary["attendance"])
-    if grading_summary.get("evals"):
-        grading_parts.append("・".join(grading_summary["evals"]))
-    if grading_parts:
-        body_contents.append(
-            FlexText(
-                text="📋 " + " / ".join(grading_parts),
-                size="xs",
-                color="#64748b",
-                wrap=True,
-                margin="lg",
-            )
-        )
-
-    # コメント（1件・60文字）
-    if comments:
-        preview = comments[0][:60] + ("…" if len(comments[0]) > 60 else "")
-        body_contents.append(
-            FlexBox(
-                layout="vertical",
-                contents=[FlexText(text=f"「{preview}」", size="xs", wrap=True, color="#64748b")],
-                background_color="#f8fafc",
-                corner_radius="8px",
-                padding_all="sm",
-                margin="lg",
-            )
-        )
-
-    footer_contents = []
-    if syllabus_url:
-        footer_contents.append(
-            FlexButton(
-                action=URIAction(label="シラバス", uri=syllabus_url),
-                style="secondary",
-                height="sm",
-            )
-        )
-    footer_contents.append(
-        FlexButton(
-            action=URIAction(label="✏️ レビューを投稿", uri=review_url or REVIEW_FORM_URL),
-            style="primary",
-            color="#6366f1",
-            height="sm",
-        )
-    )
-
-    header_contents = [
-        FlexText(text=name, weight="bold", size="lg", color="#ffffff", wrap=True),
-        FlexText(text=instructor or "担当教員未設定", size="xs", color="#c7d2fe", margin="xs"),
-    ]
-    if classification:
-        header_contents.append(
-            FlexText(text=classification, size="xxs", color="#a5b4fc", margin="xs")
-        )
-
-    return FlexBubble(
-        header=FlexBox(
-            layout="vertical",
-            contents=header_contents,
-            background_color="#4f46e5",
-            padding_all="lg",
-        ),
-        body=FlexBox(layout="vertical", contents=body_contents, padding_all="lg"),
-        footer=FlexBox(layout="vertical", contents=footer_contents, padding_all="md", spacing="sm"),
-    )
-
 
 async def get_user_max_reviews(session: AsyncSession, user_id: str) -> int:
     pref = (await session.execute(
@@ -421,25 +307,21 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
     liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
 
     rating_row = await session.execute(
-        select(
-            func.count(PendingReview.id).label("cnt"),
-            func.avg(PendingReview.rating).label("avg_rating"),
-        ).where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+        select(func.count(PendingReview.id).label("cnt"))
+        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
     )
     r = rating_row.one()
     review_count = r.cnt or 0
 
     ease_rows = (await session.execute(
-        select(PendingReview.ease_rating)
+        select(PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
         .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
         .where(PendingReview.ease_rating.isnot(None))
-    )).scalars().all()
-    _ease_map = {"C": 1, "B": 2, "A": 3, "S": 4, "SS": 5}
-    avg_ease: Optional[float] = None
+        .group_by(PendingReview.ease_rating)
+    )).all()
+    top_ease_flex: Optional[str] = None
     if ease_rows:
-        vals = [_ease_map[e] for e in ease_rows if e in _ease_map]
-        if vals:
-            avg_ease = sum(vals) / len(vals)
+        top_ease_flex = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
     meta_parts = []
     if getattr(course, "term", None):
@@ -459,13 +341,13 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
         )
 
     body_contents = []
-    if avg_ease is not None:
+    if top_ease_flex is not None:
         body_contents.append(
             FlexBox(
                 layout="horizontal",
                 contents=[
                     FlexText(text="楽単度", size="xs", color="#94a3b8", flex=0),
-                    FlexText(text=stars(math.ceil(avg_ease)), size="lg", color="#818cf8", flex=0, margin="sm"),
+                    FlexText(text=EASE_STARS.get(top_ease_flex, ""), size="lg", color="#818cf8", flex=0, margin="sm"),
                     FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
                 ],
                 align_items="center",
@@ -1195,6 +1077,12 @@ async def index(request: Request, uid: str = Query(default="")):
     )
 
 
+_FORM_PUNCT = '・･（）()'
+def _normalize_form_q(s: str) -> str:
+    for ch in _FORM_PUNCT:
+        s = s.replace(ch, '')
+    return s
+
 @app.get("/api/courses")
 async def search_courses(q: str = ""):
     async with AsyncSessionLocal() as session:
@@ -1210,9 +1098,20 @@ async def search_courses(q: str = ""):
                     Course.reading.ilike(f"%{t}%", escape="\\"),
                 ))
             stmt = stmt.order_by(Course.name).limit(10)
+            courses = (await session.execute(stmt)).scalars().all()
+            if not courses:
+                norm_col = Course.name
+                for ch in ('・', '･', '（', '）', '(', ')'):
+                    norm_col = func.replace(norm_col, ch, '')
+                norm_tokens = [_normalize_form_q(tok) for tok in tokens]
+                stmt2 = select(Course)
+                for tok in norm_tokens:
+                    t = _escape(tok)
+                    stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
+                courses = (await session.execute(stmt2.order_by(Course.name).limit(10))).scalars().all()
         else:
             stmt = select(Course).order_by(Course.name).limit(30)
-        courses = (await session.execute(stmt)).scalars().all()
+            courses = (await session.execute(stmt)).scalars().all()
         course_ids = [c.id for c in courses]
         instructors_raw = []
         if course_ids:
@@ -1990,7 +1889,7 @@ async def api_course(course_id: int):
             )).all()
             top_ease = None
             if ease_rows:
-                top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
+                top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
             reviews = (await session.execute(
                 select(PendingReview)
