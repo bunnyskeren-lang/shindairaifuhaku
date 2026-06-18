@@ -219,8 +219,13 @@ async def lifespan(app: FastAPI):
         import traceback
         traceback.print_exc()
         print(f"DB ERROR: {e}", flush=True)
-    asyncio.create_task(_self_ping())
+    ping_task = asyncio.create_task(_self_ping())
     yield
+    ping_task.cancel()
+    try:
+        await ping_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(lifespan=lifespan)
@@ -291,12 +296,6 @@ async def save_error_log(exc: Exception, user_id: str | None = None, action: str
 EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★☆☆", "B": "★★☆☆☆", "C": "★☆☆☆☆"}
 
 
-
-async def get_user_max_reviews(session: AsyncSession, user_id: str) -> int:
-    pref = (await session.execute(
-        select(UserPreference).where(UserPreference.user_id == user_id)
-    )).scalar_one_or_none()
-    return pref.max_reviews if pref else MAX_REVIEWS
 
 
 async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -> FlexMessage:
@@ -554,8 +553,17 @@ VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
 VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
 
 
+def _variant_suffix(base: str, full: str) -> str:
+    if full.startswith(base):
+        return full[len(base):]
+    for b_ch, f_ch in zip(base, full):
+        if b_ch != f_ch:
+            return f_ch
+    return full[-1]
+
+
 def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> FlexMessage:
-    suffix_str = " / ".join(n[-1] for n in variant_names)
+    suffix_str = " / ".join(_variant_suffix(base_name, n) for n in variant_names)
     btns = []
     for i, name in enumerate(variant_names):
         icon = VARIANT_ICONS.get(i, "▶")
@@ -862,9 +870,13 @@ async def handle_message(text: str, user_id: str = "") -> list:
         _vsem_m = _re.match(r'^(.*?セミナー)(\([^)]+\))$', t)
         if _vsem_m:
             _sem_prefix, _sem_lang = _vsem_m.group(1), _vsem_m.group(2)
+            def _esc_like(s: str) -> str:
+                return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
             _sem_courses = (await session.execute(
                 select(Course)
-                .where(Course.name.like(f"{_sem_prefix}%{_sem_lang}"))
+                .where(Course.name.ilike(
+                    f"{_esc_like(_sem_prefix)}%{_esc_like(_sem_lang)}", escape="\\"
+                ))
                 .order_by(Course.name)
             )).scalars().all()
             if len(_sem_courses) == 1:
@@ -884,7 +896,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         _num_candidates = (await session.execute(
             select(Course).where(Course.name.like(f"{t}%")).order_by(Course.name)
         )).scalars().all()
-        _num_pat = _re.compile(r'^' + _re.escape(t) + r'[\s　]*[A-Z]?\d+$')
+        _num_pat = _re.compile(r'^' + _re.escape(t) + r'(?<!\d)[\s　]*[A-Z]?\d+$')
         _num_variants = sorted(
             [c for c in _num_candidates if _num_pat.match(c.name)],
             key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
@@ -1134,7 +1146,9 @@ async def search_instructors(q: str = ""):
     if not q.strip():
         return {"instructors": []}
     async with AsyncSessionLocal() as session:
-        escaped = q.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        def _esc(s: str) -> str:
+            return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        escaped = _esc(q.strip())
         insts = (await session.execute(
             select(CourseInstructor.name)
             .where(CourseInstructor.name.ilike(f"%{escaped}%", escape="\\"))
@@ -1142,6 +1156,18 @@ async def search_instructors(q: str = ""):
             .order_by(CourseInstructor.name)
             .limit(10)
         )).scalars().all()
+        if not insts:
+            norm_col = CourseInstructor.name
+            for ch in ('・', '･', '（', '）', '(', ')'):
+                norm_col = func.replace(norm_col, ch, '')
+            escaped_norm = _esc(_normalize_form_q(q.strip()))
+            insts = (await session.execute(
+                select(CourseInstructor.name)
+                .where(norm_col.ilike(f"%{escaped_norm}%", escape="\\"))
+                .distinct()
+                .order_by(CourseInstructor.name)
+                .limit(10)
+            )).scalars().all()
 
         result = []
         for name in insts:
@@ -1186,6 +1212,12 @@ async def submit(
         )
 
     async with AsyncSessionLocal() as session:
+        course_exists = (await session.execute(
+            select(Course.id).where(Course.name == course_name.strip())
+        )).scalar_one_or_none()
+        if not course_exists:
+            raise HTTPException(status_code=400, detail="指定された科目は存在しません")
+
         uid = line_user_id.strip()
         if uid:
             existing = (await session.execute(
@@ -1341,6 +1373,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 select(PendingReview)
                 .where(PendingReview.course_name.in_(course_names))
                 .order_by(PendingReview.is_approved, PendingReview.created_at.desc())
+                .limit(500)
             )).scalars().all()
         else:
             reviews_raw = []
@@ -1823,13 +1856,21 @@ async def admin_courses_update(
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
         if course:
-            course.name = name.strip()
+            old_name = course.name
+            new_name = name.strip()
+            course.name = new_name
             course.classification = classification.strip()
             course.category = category
-            course.reading = _reading(name.strip())
+            course.reading = _reading(new_name)
             course.term = term.strip() or None
             course.credits = credits if credits else None
             course.syllabus_url = syllabus_url.strip() or None
+            if old_name != new_name:
+                await session.execute(
+                    sa_update(PendingReview)
+                    .where(PendingReview.course_name == old_name)
+                    .values(course_name=new_name)
+                )
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
