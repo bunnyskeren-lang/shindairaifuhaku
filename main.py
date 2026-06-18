@@ -1269,6 +1269,22 @@ async def search_instructors(q: str = ""):
                 "name": name,
                 "courses": [{"id": c.id, "name": c.name} for c in courses],
             })
+
+        if not result:
+            # Course.instructor フィールドからも検索
+            fallback_courses = (await session.execute(
+                select(Course)
+                .where(Course.instructor.ilike(f"%{escaped}%", escape="\\"))
+                .order_by(Course.name)
+                .limit(10)
+            )).scalars().all()
+            instr_map: dict[str, list] = {}
+            for c in fallback_courses:
+                if c.instructor:
+                    instr_map.setdefault(c.instructor, []).append({"id": c.id, "name": c.name})
+            for instr_name, cs in instr_map.items():
+                result.append({"name": instr_name, "courses": cs})
+
     return {"instructors": result}
 
 
