@@ -1925,20 +1925,11 @@ async def api_course(course_id: int):
             if ease_rows:
                 top_ease = sorted(ease_rows, key=lambda r: EASE_ORDER.get(r[0], 99))[0][0]
 
-            grading_rows = (await session.execute(
-                select(PendingReview.grading_method).distinct()
-                .where(
-                    PendingReview.course_name == course.name,
-                    PendingReview.is_approved == True,
-                    PendingReview.grading_method.isnot(None),
-                )
-            )).scalars().all()
-
-            comments = (await session.execute(
-                select(PendingReview.comment)
+            reviews = (await session.execute(
+                select(PendingReview)
                 .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
                 .order_by(PendingReview.created_at.desc())
-                .limit(10)
+                .limit(20)
             )).scalars().all()
 
     return {
@@ -1952,8 +1943,16 @@ async def api_course(course_id: int):
         "syllabus_url": course.syllabus_url or "",
         "avg_rating": avg_rating,
         "top_ease": top_ease,
-        "grading_methods": [r for r in grading_rows if r],
-        "comments": [c for c in comments if c],
+        "reviews": [
+            {
+                "rating": r.rating,
+                "ease_rating": r.ease_rating,
+                "grading_method": r.grading_method or "",
+                "comment": r.comment,
+                "instructor": r.selected_instructor or "",
+            }
+            for r in reviews
+        ],
     }
 
 

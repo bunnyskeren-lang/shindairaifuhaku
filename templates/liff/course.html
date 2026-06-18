@@ -73,19 +73,12 @@
     <div class="meta" id="meta"></div>
   </div>
 
-  <div class="card" id="review-card">
-    <div class="section-title">評価</div>
+  <div class="card" id="summary-card">
+    <div class="section-title">総合評価</div>
     <div id="ratings"></div>
-    <div id="grading-wrap" style="margin-top:10px;display:none">
-      <div style="font-size:11px;color:#64748b;margin-bottom:4px">📝 成績評価方法</div>
-      <div class="grading" id="grading"></div>
-    </div>
   </div>
 
-  <div class="card" id="comments-card" style="display:none">
-    <div class="section-title">コメント</div>
-    <div id="comments"></div>
-  </div>
+  <div id="reviews-section"></div>
 
   <div class="actions">
     <a id="btn-review" class="btn btn-primary" href="#">✏️ レビューを投稿</a>
@@ -157,7 +150,7 @@ async function main() {
     meta.insertAdjacentHTML("beforeend",
       `<span class="badge badge-cr">🎓 ${data.credits}単位</span>`);
 
-  // ── 評価 ──
+  // ── 総合評価 ──
   const ratingsEl = document.getElementById("ratings");
   if (data.avg_rating != null) {
     ratingsEl.innerHTML =
@@ -169,28 +162,43 @@ async function main() {
       ratingsEl.insertAdjacentHTML("beforeend",
         `<div class="rating-row">
            <span class="rating-label">楽単度</span>
-           <span class="stars">${EASE_STARS[data.top_ease] || ""}</span>
+           <span class="stars" style="color:#818cf8">${EASE_STARS[data.top_ease] || ""}</span>
          </div>`);
     }
   } else {
     ratingsEl.innerHTML = `<div class="no-review">⭐ まだレビューはありません</div>`;
   }
 
-  if (data.grading_methods && data.grading_methods.length) {
-    document.getElementById("grading").textContent = data.grading_methods.join("・");
-    document.getElementById("grading-wrap").style.display = "block";
-  }
-
-  // ── コメント ──
-  if (data.comments && data.comments.length) {
-    const commentsEl = document.getElementById("comments");
-    data.comments.forEach(c => {
-      const div = document.createElement("div");
-      div.className = "comment-box";
-      div.textContent = c;
-      commentsEl.appendChild(div);
+  // ── レビューカード（1件ずつ） ──
+  const reviewsSection = document.getElementById("reviews-section");
+  if (data.reviews && data.reviews.length) {
+    data.reviews.forEach((r, i) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      let html = `<div class="section-title">レビュー ${i + 1}</div>`;
+      if (r.instructor) {
+        html += `<div style="font-size:12px;color:#6366f1;margin-bottom:6px">👨‍🏫 ${r.instructor}</div>`;
+      }
+      html += `<div class="rating-row">
+        <span class="rating-label">学びになった度</span>
+        <span class="stars">${stars(r.rating)}</span>
+      </div>`;
+      if (r.ease_rating) {
+        html += `<div class="rating-row">
+          <span class="rating-label">楽単度</span>
+          <span class="stars" style="color:#818cf8">${EASE_STARS[r.ease_rating] || ""}</span>
+        </div>`;
+      }
+      if (r.grading_method) {
+        html += `<div style="margin-top:8px;font-size:11px;color:#64748b">📝 成績評価方法</div>
+                 <div class="grading">${r.grading_method}</div>`;
+      }
+      if (r.comment) {
+        html += `<div class="comment-box" style="margin-top:8px">${r.comment}</div>`;
+      }
+      card.innerHTML = html;
+      reviewsSection.appendChild(card);
     });
-    document.getElementById("comments-card").style.display = "block";
   }
 
   // ── ボタン ──
