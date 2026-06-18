@@ -292,19 +292,42 @@
 
       <!-- 6. コメント -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">
+        <label class="block text-sm font-semibold text-gray-700 mb-1">
           💬 コメント <span class="text-red-500">*</span>
         </label>
-        <textarea name="comment" id="comment" rows="5"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
-          placeholder="授業の雰囲気、テストの傾向、おすすめポイントなど自由に書いてください！"
-          required maxlength="500"></textarea>
-        <div class="flex justify-between items-center mt-2">
-          <div class="flex items-center gap-1.5 text-xs text-green-600 font-medium">
-            <span>💾</span>
-            <span id="saveStatus">自動保存済み ✓</span>
+        <p class="text-xs text-gray-400 mb-3">後輩のためにできるだけ詳しく書いてもらえると嬉しいです🙏</p>
+
+        <!-- プロンプトチップ -->
+        <div class="mb-3">
+          <p class="text-xs text-gray-400 mb-2">📌 タップして書くきっかけに</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="prompt-chip" data-prompt="【授業の雰囲気】">📚 雰囲気</button>
+            <button type="button" class="prompt-chip" data-prompt="【テスト・課題】">📝 テスト</button>
+            <button type="button" class="prompt-chip" data-prompt="【おすすめポイント】">💡 おすすめ</button>
+            <button type="button" class="prompt-chip" data-prompt="【注意点】">⚠️ 注意点</button>
+            <button type="button" class="prompt-chip" data-prompt="【こんな人におすすめ】">👥 こんな人に</button>
           </div>
-          <p class="text-xs text-gray-400"><span id="charCount">0</span>/500文字</p>
+        </div>
+
+        <textarea name="comment" id="comment" rows="7"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
+          placeholder="例）&#13;&#10;【授業の雰囲気】毎回グループワークあり。先生は質問しやすい雰囲気。&#13;&#10;【テスト・課題】期末レポートのみ。テーマは自由で書きやすい。&#13;&#10;【おすすめポイント】実践的な内容が多く就活にも役立った！"
+          required maxlength="500"></textarea>
+
+        <!-- 文字数フィードバック -->
+        <div class="mt-2">
+          <div class="flex justify-between items-center mb-1">
+            <span id="commentFeedback" class="text-xs font-medium text-gray-400"></span>
+            <span class="text-xs text-gray-400"><span id="charCount">0</span>/500文字</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+            <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs text-green-600 font-medium mt-2">
+          <span>💾</span>
+          <span id="saveStatus">自動保存済み ✓</span>
         </div>
       </div>
 
@@ -343,6 +366,19 @@
       color: #6366f1;
       background: #eef2ff;
     }
+    .prompt-chip {
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1.5px solid #e0e7ff;
+      color: #6366f1;
+      background: #f5f3ff;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .prompt-chip:active { transform: scale(0.95); background: #ede9fe; }
   </style>
 
   <script>
@@ -653,8 +689,39 @@
       });
     }
 
+    const COMMENT_FEEDBACK = [
+      [0,   '',    '#e5e7eb', 0],
+      [1,   'もう少し詳しく書いてみよう！✍️', '#fbbf24', 5],
+      [30,  'いい感じ！もう少し書いてみて💪', '#f97316', 30],
+      [80,  'ナイス！後輩の参考になりそう😊', '#6366f1', 60],
+      [150, '充実したレビューです！🎉', '#10b981', 85],
+      [250, '神レビュー！ありがとうございます🙏', '#10b981', 100],
+    ];
+    function updateCommentFeedback(len) {
+      document.getElementById('charCount').textContent = len;
+      let row = COMMENT_FEEDBACK[0];
+      for (const r of COMMENT_FEEDBACK) { if (len >= r[0]) row = r; }
+      document.getElementById('commentFeedback').textContent = row[1];
+      document.getElementById('charBar').style.width = row[3] + '%';
+      document.getElementById('charBar').style.background = row[2];
+    }
+
+    document.querySelectorAll('.prompt-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const ta = document.getElementById('comment');
+        const prompt = chip.dataset.prompt;
+        const cur = ta.value;
+        if (cur && !cur.endsWith('\n')) ta.value = cur + '\n';
+        ta.value += prompt;
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        updateCommentFeedback(ta.value.length);
+        saveData();
+      });
+    });
+
     document.getElementById('comment').addEventListener('input', () => {
-      document.getElementById('charCount').textContent = document.getElementById('comment').value.length;
+      updateCommentFeedback(document.getElementById('comment').value.length);
       saveData();
     });
     function validateName(inputEl, errorEl) {
@@ -769,7 +836,7 @@
         if (d.gradingExtra) document.getElementById('gradingExtra').value = d.gradingExtra;
         if (d.comment) {
           document.getElementById('comment').value = d.comment;
-          document.getElementById('charCount').textContent = d.comment.length;
+          updateCommentFeedback(d.comment.length);
         }
         updateGradingMethod();
       } catch (_) {}
