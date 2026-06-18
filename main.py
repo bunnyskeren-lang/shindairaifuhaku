@@ -1011,6 +1011,12 @@ async def handle_message(text: str, user_id: str = "") -> list:
             return [make_variant_selection_bubble(t, [c.name for c in _num_variants])]
 
         # Keyword search
+        _PUNCT = '・･、。「」『』【】（）()／/〜~'
+        def _normalize_q(s: str) -> str:
+            for ch in _PUNCT:
+                s = s.replace(ch, '')
+            return s
+
         tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
         def _escape(tok: str) -> str:
             return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
@@ -1022,6 +1028,18 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 Course.reading.ilike(f"%{e}%", escape="\\"),
             ))
         courses = (await session.execute(stmt.limit(6))).scalars().all()
+
+        # 句読点を除去した正規化検索（フォールバック）
+        if not courses:
+            t_norm = _normalize_q(t)
+            if t_norm != t:
+                norm_col = Course.name
+                for ch in ('・', '･', '（', '）', '(', ')'):
+                    norm_col = func.replace(norm_col, ch, '')
+                e_norm = _escape(t_norm)
+                courses = (await session.execute(
+                    select(Course).where(norm_col.ilike(f"%{e_norm}%", escape="\\")).limit(6)
+                )).scalars().all()
         if courses:
             # Letter variants (A/B/C/D)
             potential_bases = {
