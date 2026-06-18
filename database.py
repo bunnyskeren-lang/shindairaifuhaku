@@ -16,7 +16,7 @@ ssl_ctx.verify_mode = ssl.CERT_NONE
 engine = create_async_engine(
     _url,
     echo=False,
-    connect_args={"ssl": ssl_ctx, "command_timeout": 30},
+    connect_args={"ssl": ssl_ctx, "command_timeout": 30, "prepared_statement_cache_size": 0},
     pool_pre_ping=True,
     pool_recycle=270,
     pool_size=10,
