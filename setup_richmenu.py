@@ -38,8 +38,8 @@ CW, RH = W // COLS, H // ROWS  # 625 x 421
 
 # セルに貼り込む画像 (ボタンインデックス → ファイルパス)
 CELL_IMAGES = {
-    6: "うりぼーネット.png",
-    7: "BEEFplus.png",
+    6: "picture/uribo portal.png",
+    7: "picture/BEEFplus.png",
 }
 
 BUTTONS = [
@@ -50,9 +50,9 @@ BUTTONS = [
         "action": MessageAction(label="教養科目一覧", text="教養"),
     },
     {
-        "label": "専門科目一覧",
-        "color": "#1d4ed8",
-        "action": MessageAction(label="専門科目一覧", text="専門"),
+        "label": "Coming Soon",
+        "color": "#94a3b8",
+        "action": MessageAction(label="専門科目一覧", text="専門comingsoon"),
     },
     {
         "label": "レビュー投稿",
@@ -76,9 +76,9 @@ BUTTONS = [
         "action": MessageAction(label="楽単ランキング", text="楽単ランキング"),
     },
     {
-        "label": "うりぼーネット",
+        "label": "うりぼーポータル",
         "color": "#0f766e",
-        "action": URIAction(label="うりぼーネット", uri="https://www.uriboportal.ofc.kobe-u.ac.jp/"),
+        "action": URIAction(label="うりぼーポータル", uri="https://www.uriboportal.ofc.kobe-u.ac.jp/"),
     },
     {
         "label": "BEEFplus",

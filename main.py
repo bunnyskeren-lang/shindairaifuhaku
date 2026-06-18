@@ -902,6 +902,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if _cls_hit:
         return await handle_course_list(category="教養", classification=t)
 
+    if t == "専門comingsoon":
+        return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
+
     if t in ["専門科目", "専門", "専門一覧"]:
         return await handle_course_list(category="専門")
 
