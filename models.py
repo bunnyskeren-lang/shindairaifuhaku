@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, func, UniqueConstraint
+from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -29,7 +29,7 @@ class Course(Base):
     reading: Mapped[str] = mapped_column(String(400), nullable=False, server_default="", default="")
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     term: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    credits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    credits: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
 
 class ClassificationOrder(Base):

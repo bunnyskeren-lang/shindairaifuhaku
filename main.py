@@ -120,6 +120,12 @@ except Exception:
 
 _CLS_ORDER_KEYS = ["基盤", "人文", "社会", "自然", "総合", "健康", "外国語"]
 
+def _normalize_instructor_name(name: str) -> str:
+    if any('぀' <= c <= '鿿' for c in name):
+        return name.replace(' ', '')
+    return name
+
+
 def _cls_order(name: str) -> int:
     for i, kw in enumerate(_CLS_ORDER_KEYS):
         if kw in (name or ""):
@@ -690,12 +696,45 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
     )
 
 
-async def handle_course_list(category: str = "") -> list:
+def make_classification_select_flex(classifications: list[str]) -> FlexMessage:
+    btns = [
+        FlexButton(
+            action=MessageAction(label=cls, text=f"教養:{cls}"),
+            style="secondary",
+            height="sm",
+        )
+        for cls in classifications
+    ]
+    return FlexMessage(
+        alt_text="📚 教養科目 — 系統を選んでください",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="📚 教養科目", weight="bold", color="#ffffff", size="lg"),
+                    FlexText(text="系統を選んでください", color="#c7d2fe", size="sm"),
+                ],
+                background_color="#6366f1",
+                padding_all="lg",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=btns,
+                spacing="md",
+                padding_all="lg",
+            ),
+        ),
+    )
+
+
+async def handle_course_list(category: str = "", classification: str = "") -> list:
     from collections import defaultdict
     async with AsyncSessionLocal() as session:
         stmt = select(Course).order_by(Course.sort_order, Course.name)
         if category:
             stmt = stmt.where(Course.category == category)
+        if classification:
+            stmt = stmt.where(Course.classification == classification)
         rows = (await session.execute(stmt)).scalars().all()
         cls_map = await _get_cls_order_map(session)
         _cls_sort = _make_cls_sort(cls_map)
@@ -806,7 +845,7 @@ async def handle_course_list(category: str = "") -> list:
                 ),
             )
 
-        SPLIT_THRESHOLD = 20
+        SPLIT_THRESHOLD = 10
         bubbles = []
         for cls, ents in all_groups:
             if len(ents) > SPLIT_THRESHOLD:
@@ -839,7 +878,23 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await handle_course_list()
 
     if t in ["教養", "教養科目", "教養一覧"]:
+        async with AsyncSessionLocal() as session:
+            cls_map = await _get_cls_order_map(session)
+            _cls_sort = _make_cls_sort(cls_map)
+            clss = sorted(
+                [c for c in (await session.execute(
+                    select(Course.classification).distinct()
+                    .where(Course.category == "教養", Course.classification != "")
+                )).scalars().all() if c],
+                key=_cls_sort,
+            )
+        if clss:
+            return [make_classification_select_flex(clss)]
         return await handle_course_list(category="教養")
+
+    if t.startswith("教養:"):
+        cls = t[len("教養:"):]
+        return await handle_course_list(category="教養", classification=cls)
 
     if t in ["専門科目", "専門", "専門一覧"]:
         return await handle_course_list(category="専門")
@@ -1372,7 +1427,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
 @app.post("/admin/courses/{course_id}/instructors/add")
 async def add_instructor(course_id: int, request: Request, name: str = Form(...), url: str = Form(""), _: str = Depends(check_admin)):
     from fastapi.responses import JSONResponse
-    name_s = name.strip()
+    name_s = _normalize_instructor_name(name.strip())
     url_s = url.strip() or None
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if name_s:
@@ -1548,6 +1603,9 @@ async def admin_courses_add(
     name: str = Form(...),
     classification: str = Form(""),
     category: str = Form("専門"),
+    term: str = Form(""),
+    credits: float = Form(0),
+    syllabus_url: str = Form(""),
 ):
     name_s = name.strip()
     async with AsyncSessionLocal() as session:
@@ -1563,6 +1621,9 @@ async def admin_courses_add(
             name=name_s, instructor="",
             classification=classification.strip(), category=category,
             reading=_reading(name_s),
+            term=term.strip() or None,
+            credits=credits if credits else None,
+            syllabus_url=syllabus_url.strip() or None,
         ))
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
@@ -1788,6 +1849,9 @@ async def admin_courses_update(
     name: str = Form(...),
     classification: str = Form(""),
     category: str = Form("専門"),
+    term: str = Form(""),
+    credits: float = Form(0),
+    syllabus_url: str = Form(""),
 ):
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
@@ -1796,6 +1860,9 @@ async def admin_courses_update(
             course.classification = classification.strip()
             course.category = category
             course.reading = _reading(name.strip())
+            course.term = term.strip() or None
+            course.credits = credits if credits else None
+            course.syllabus_url = syllabus_url.strip() or None
             await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
