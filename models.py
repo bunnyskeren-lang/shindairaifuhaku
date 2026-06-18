@@ -53,6 +53,7 @@ class PendingReview(Base):
     selected_instructor: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     nickname: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    student_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

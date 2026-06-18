@@ -1160,15 +1160,27 @@ async def callback(request: Request):
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, uid: str = Query(default="")):
     is_new_user = False
+    stored_name = ""
+    stored_student_id = ""
     if uid:
         async with AsyncSessionLocal() as session:
             profile = (await session.execute(
                 select(UserProfile).where(UserProfile.line_user_id == uid)
             )).scalar_one_or_none()
             is_new_user = profile is None
+            if profile:
+                stored_name = profile.name
+                stored_student_id = profile.student_id
     response = templates.TemplateResponse(
         "form_index.html",
-        {"request": request, "uid": uid, "is_new_user": is_new_user, "IS_DEV": IS_DEV},
+        {
+            "request": request,
+            "uid": uid,
+            "is_new_user": is_new_user,
+            "stored_name": stored_name,
+            "stored_student_id": stored_student_id,
+            "IS_DEV": IS_DEV,
+        },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -1355,6 +1367,7 @@ async def submit(
             selected_instructor=selected_instructor.strip()[:100] or None,
             nickname=nickname.strip()[:30] or None,
             academic_year=academic_year,
+            student_id=student_id.strip()[:20] or None,
             is_approved=False,
         )
         session.add(review)

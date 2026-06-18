@@ -57,6 +57,23 @@
       </div>
       {% endif %}
 
+      <input type="hidden" name="line_user_id" value="{{ uid }}">
+
+      {% if stored_name %}
+      <!-- 登録済みユーザー: 名前・学籍番号を表示のみ -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <p class="text-sm font-semibold text-gray-700 mb-3">👤 登録情報</p>
+        <div class="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+          <div>
+            <p class="text-sm font-bold text-gray-800">{{ stored_name }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">🎓 {{ stored_student_id }}</p>
+          </div>
+          <span class="text-xs text-green-600 font-semibold">登録済み ✓</span>
+        </div>
+        <input type="hidden" name="submitter_name" id="submitter_name" value="{{ stored_name }}">
+        <input type="hidden" name="student_id" id="student_id" value="{{ stored_student_id }}">
+      </div>
+      {% else %}
       <div id="studentIdCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           🎓 学籍番号 <span class="text-red-500">*</span>
@@ -70,8 +87,6 @@
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
       </div>
 
-      <input type="hidden" name="line_user_id" value="{{ uid }}">
-
       <!-- 1. 名前 -->
       <div id="nameCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
@@ -82,6 +97,7 @@
           placeholder="例：神大太郎" required maxlength="20">
         <p id="submitterNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
       </div>
+      {% endif %}
 
       <!-- 1b. ニックネーム（任意） -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -763,7 +779,9 @@
 
     const submitterNameInput = document.getElementById('submitter_name');
     const submitterNameError = document.getElementById('submitterNameError');
-    submitterNameInput.addEventListener('input', () => { validateName(submitterNameInput, submitterNameError); saveData(); });
+    if (submitterNameInput && submitterNameInput.type !== 'hidden') {
+      submitterNameInput.addEventListener('input', () => { validateName(submitterNameInput, submitterNameError); saveData(); });
+    }
 
     const regNameInput = document.getElementById('reg_name');
     const regNameError = document.getElementById('regNameError');
@@ -901,7 +919,7 @@
     document.getElementById('reviewForm').addEventListener('submit', e => {
       let valid = true;
 
-      if (!validateName(submitterNameInput, submitterNameError)) valid = false;
+      if (submitterNameInput && submitterNameInput.type !== 'hidden' && !validateName(submitterNameInput, submitterNameError)) valid = false;
       if (regNameInput && !validateName(regNameInput, regNameError)) valid = false;
 
       if (studentIdInput) {
