@@ -299,26 +299,34 @@ EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★�
 
 
 
-async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -> FlexMessage:
-    instructors = (await session.execute(
-        select(CourseInstructor).where(CourseInstructor.course_id == course.id)
-    )).scalars().all()
+async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
+    async def _instrs():
+        async with AsyncSessionLocal() as s:
+            return (await s.execute(
+                select(CourseInstructor).where(CourseInstructor.course_id == course.id)
+            )).scalars().all()
+
+    async def _count():
+        async with AsyncSessionLocal() as s:
+            return (await s.execute(
+                select(func.count(PendingReview.id).label("cnt"))
+                .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+            )).one()
+
+    async def _ease():
+        async with AsyncSessionLocal() as s:
+            return (await s.execute(
+                select(PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
+                .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+                .where(PendingReview.ease_rating.isnot(None))
+                .group_by(PendingReview.ease_rating)
+            )).all()
+
+    instructors, count_row, ease_rows = await asyncio.gather(_instrs(), _count(), _ease())
+
     instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
     liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
-
-    rating_row = await session.execute(
-        select(func.count(PendingReview.id).label("cnt"))
-        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-    )
-    r = rating_row.one()
-    review_count = r.cnt or 0
-
-    ease_rows = (await session.execute(
-        select(PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
-        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-        .where(PendingReview.ease_rating.isnot(None))
-        .group_by(PendingReview.ease_rating)
-    )).all()
+    review_count = count_row.cnt or 0
     top_ease_flex: Optional[str] = None
     if ease_rows:
         top_ease_flex = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
@@ -966,7 +974,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             )).scalar_one()
             if rc == 0:
                 return [make_no_review_flex(exact)]
-            return [await get_course_flex(session, exact, user_id)]
+            return [await get_course_flex(exact, user_id)]
 
         # Seminar group e.g. 外国語セミナー(英語) → 外国語セミナーA(英語), B(英語)...
         _vsem_m = _re.match(r'^(.*?セミナー)(\([^)]+\))$', t)
@@ -982,7 +990,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 .order_by(Course.name)
             )).scalars().all()
             if len(_sem_courses) == 1:
-                return [await get_course_flex(session, _sem_courses[0], user_id)]
+                return [await get_course_flex(_sem_courses[0], user_id)]
             if len(_sem_courses) >= 2:
                 return [make_variant_selection_bubble(t, [c.name for c in _sem_courses])]
 
@@ -1081,7 +1089,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                         seen_num_base.add(base)
                         result.append(make_variant_selection_bubble(base, sorted(num_vs)))
                         continue
-                result.append(await get_course_flex(session, c, user_id))
+                result.append(await get_course_flex(c, user_id))
             return result[:5]
 
     return [TextMessage(
@@ -2052,31 +2060,43 @@ async def api_course(course_id: int):
             if not course:
                 raise HTTPException(status_code=404, detail="course not found")
 
-            instructors = (await session.execute(
-                select(CourseInstructor).where(CourseInstructor.course_id == course.id)
-            )).scalars().all()
+            async def _instrs():
+                async with AsyncSessionLocal() as s:
+                    return (await s.execute(
+                        select(CourseInstructor).where(CourseInstructor.course_id == course.id)
+                    )).scalars().all()
+
+            async def _agg():
+                async with AsyncSessionLocal() as s:
+                    return (await s.execute(
+                        select(func.avg(PendingReview.rating), func.count(PendingReview.id))
+                        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+                    )).first()
+
+            async def _ease():
+                async with AsyncSessionLocal() as s:
+                    return (await s.execute(
+                        select(PendingReview.ease_rating, func.count(PendingReview.id))
+                        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+                        .group_by(PendingReview.ease_rating)
+                    )).all()
+
+            async def _reviews():
+                async with AsyncSessionLocal() as s:
+                    return (await s.execute(
+                        select(PendingReview)
+                        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+                        .limit(50)
+                    )).scalars().all()
+
+            instructors, agg, ease_rows, reviews_raw = await asyncio.gather(
+                _instrs(), _agg(), _ease(), _reviews()
+            )
             instructor_str = "・".join(i.name for i in instructors) or course.instructor or ""
-
-            agg = (await session.execute(
-                select(func.avg(PendingReview.rating), func.count(PendingReview.id))
-                .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-            )).first()
             avg_rating = float(agg[0]) if agg and agg[0] else None
-
-            ease_rows = (await session.execute(
-                select(PendingReview.ease_rating, func.count(PendingReview.id))
-                .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                .group_by(PendingReview.ease_rating)
-            )).all()
             top_ease = None
             if ease_rows:
                 top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
-
-            reviews_raw = (await session.execute(
-                select(PendingReview)
-                .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                .limit(50)
-            )).scalars().all()
             reviews = sorted(
                 reviews_raw,
                 key=lambda r: (r.selected_instructor or "￿", -(r.academic_year or 0))
