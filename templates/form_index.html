@@ -96,30 +96,63 @@
 
       <!-- 2. 科目名 + 担当教員 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">
-          📖 科目名 <span class="text-red-500">*</span>
-        </label>
-        <div class="relative">
-          <input type="text" id="courseSearchInput"
-            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-            placeholder="科目名を入力して検索..." autocomplete="off">
-          <input type="hidden" name="course_name" id="courseNameHidden">
-          <div id="courseDropdown"
-            class="hidden absolute z-20 w-full mt-1 bg-white rounded-2xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"
-            style="border: 1px solid #e9ecf0">
+
+        <!-- トグル -->
+        <div class="flex rounded-xl overflow-hidden border border-gray-200 mb-4">
+          <button type="button" id="modeCourseBtn"
+            class="flex-1 py-2 text-sm font-semibold transition"
+            style="background:#6366f1;color:#fff">📖 科目名で探す</button>
+          <button type="button" id="modeInstructorBtn"
+            class="flex-1 py-2 text-sm font-semibold transition"
+            style="background:#fff;color:#6b7280">👨‍🏫 先生名で探す</button>
+        </div>
+
+        <input type="hidden" name="course_name" id="courseNameHidden">
+        <input type="hidden" name="selected_instructor" id="selectedInstructorHidden">
+
+        <!-- 科目名モード -->
+        <div id="courseModeSection">
+          <div class="relative">
+            <input type="text" id="courseSearchInput"
+              class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+              placeholder="科目名を入力して検索..." autocomplete="off">
+            <div id="courseDropdown"
+              class="hidden absolute z-20 w-full mt-1 bg-white rounded-2xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"
+              style="border: 1px solid #e9ecf0">
+            </div>
           </div>
         </div>
-        <div id="selectedCourse" class="hidden mt-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2 flex items-center gap-2 text-sm text-green-700">
+
+        <!-- 先生名モード -->
+        <div id="instructorModeSection" class="hidden">
+          <div class="relative">
+            <input type="text" id="instructorSearchInput"
+              class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+              placeholder="先生の名前を入力して検索..." autocomplete="off">
+            <div id="instructorSearchDropdown"
+              class="hidden absolute z-20 w-full mt-1 bg-white rounded-2xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"
+              style="border: 1px solid #e9ecf0">
+            </div>
+          </div>
+          <div id="instructorCourseList" class="hidden mt-3">
+            <p class="text-xs text-gray-500 mb-2" id="instructorCourseLabel"></p>
+            <div id="instructorCourseItems" class="flex flex-col gap-1"></div>
+          </div>
+        </div>
+
+        <!-- 選択済み表示（共通） -->
+        <div id="selectedCourse" class="hidden mt-3 bg-green-50 border border-green-200 rounded-xl px-3 py-2 flex items-center gap-2 text-sm text-green-700">
           <span>✅</span>
           <span id="selectedCourseName" class="flex-1 font-medium"></span>
           <button type="button" id="clearCourse" class="text-xs text-gray-400 hover:text-gray-600 underline">変更</button>
         </div>
         <p id="courseError" class="hidden mt-1 text-red-500 text-xs">科目を選択または入力してください</p>
+
+        <!-- 担当教員選択（科目名モード用） -->
         <div id="instructorSelectSection" class="mt-3 pt-3 border-t border-gray-100">
           <p class="text-sm font-semibold text-gray-700 mb-2">👨‍🏫 担当教員 <span class="text-red-500">*</span></p>
           <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
           <input type="text" id="instructorTextInput" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition" placeholder="担当教員名を入力してください" maxlength="100">
-          <input type="hidden" name="selected_instructor" id="selectedInstructorHidden">
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を入力してください</p>
         </div>
       </div>
@@ -338,6 +371,38 @@
       document.getElementById('gradingMethodHidden').value = parts.join(' / ');
     }
 
+    let searchMode = 'course';
+
+    document.getElementById('modeCourseBtn').addEventListener('click', () => {
+      if (searchMode === 'course') return;
+      searchMode = 'course';
+      document.getElementById('modeCourseBtn').style.cssText = 'background:#6366f1;color:#fff;flex:1;padding:8px;font-size:14px;font-weight:600;transition:all .15s';
+      document.getElementById('modeInstructorBtn').style.cssText = 'background:#fff;color:#6b7280;flex:1;padding:8px;font-size:14px;font-weight:600;transition:all .15s';
+      document.getElementById('courseModeSection').classList.remove('hidden');
+      document.getElementById('instructorModeSection').classList.add('hidden');
+      document.getElementById('courseNameHidden').value = '';
+      document.getElementById('selectedInstructorHidden').value = '';
+      document.getElementById('selectedCourse').classList.add('hidden');
+      document.getElementById('instructorSelectSection').classList.remove('hidden');
+      searchInput.classList.remove('hidden');
+      searchInput.value = '';
+    });
+
+    document.getElementById('modeInstructorBtn').addEventListener('click', () => {
+      if (searchMode === 'instructor') return;
+      searchMode = 'instructor';
+      document.getElementById('modeInstructorBtn').style.cssText = 'background:#6366f1;color:#fff;flex:1;padding:8px;font-size:14px;font-weight:600;transition:all .15s';
+      document.getElementById('modeCourseBtn').style.cssText = 'background:#fff;color:#6b7280;flex:1;padding:8px;font-size:14px;font-weight:600;transition:all .15s';
+      document.getElementById('instructorModeSection').classList.remove('hidden');
+      document.getElementById('courseModeSection').classList.add('hidden');
+      document.getElementById('courseNameHidden').value = '';
+      document.getElementById('selectedInstructorHidden').value = '';
+      document.getElementById('selectedCourse').classList.add('hidden');
+      document.getElementById('instructorSelectSection').classList.add('hidden');
+      document.getElementById('instructorSearchInput').value = '';
+      document.getElementById('instructorCourseList').classList.add('hidden');
+    });
+
     const searchInput = document.getElementById('courseSearchInput');
     const dropdown = document.getElementById('courseDropdown');
     let debounceTimer;
@@ -401,7 +466,7 @@
       document.getElementById('courseNameHidden').value = name;
       document.getElementById('selectedCourseName').textContent = name;
       document.getElementById('selectedCourse').classList.remove('hidden');
-      searchInput.classList.add('hidden');
+      if (searchMode === 'course') searchInput.classList.add('hidden');
       dropdown.classList.add('hidden');
       document.getElementById('courseError').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
@@ -441,16 +506,92 @@
       textInput.classList.remove('hidden');
       textInput.value = '';
       currentInstructors = [];
-      searchInput.classList.remove('hidden');
-      searchInput.value = '';
-      searchInput.focus();
+      if (searchMode === 'course') {
+        searchInput.classList.remove('hidden');
+        searchInput.value = '';
+        document.getElementById('instructorSelectSection').classList.remove('hidden');
+        searchInput.focus();
+      } else {
+        document.getElementById('instructorModeSection').classList.remove('hidden');
+        document.getElementById('instructorSelectSection').classList.add('hidden');
+        document.getElementById('instructorCourseList').classList.remove('hidden');
+      }
     });
 
     document.addEventListener('click', e => {
       if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
         dropdown.classList.add('hidden');
       }
+      const instrInput = document.getElementById('instructorSearchInput');
+      const instrDrop = document.getElementById('instructorSearchDropdown');
+      if (instrInput && instrDrop && !instrInput.contains(e.target) && !instrDrop.contains(e.target)) {
+        instrDrop.classList.add('hidden');
+      }
     });
+
+    // 先生名検索
+    const instrSearchInput = document.getElementById('instructorSearchInput');
+    const instrSearchDropdown = document.getElementById('instructorSearchDropdown');
+    let instrDebounceTimer;
+
+    instrSearchInput.addEventListener('input', () => {
+      clearTimeout(instrDebounceTimer);
+      const q = instrSearchInput.value.trim();
+      if (!q) { instrSearchDropdown.classList.add('hidden'); return; }
+      instrDebounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/instructors?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          const items = data.instructors || [];
+          if (items.length === 0) {
+            instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${q}」に一致する先生が見つかりませんでした</div>`;
+            instrSearchDropdown.classList.remove('hidden');
+            return;
+          }
+          instrSearchDropdown.innerHTML = items.map((inst, idx) =>
+            `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
+              style="border-bottom:1px solid #f3f4f6;transition:background .1s"
+              onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+              <div style="font-size:14px;font-weight:600;color:#1e293b">${inst.name}</div>
+              <div style="font-size:12px;color:#94a3b8;margin-top:2px">${inst.courses.length}科目担当</div>
+            </div>`
+          ).join('');
+          instrSearchDropdown.classList.remove('hidden');
+          instrSearchDropdown.querySelectorAll('[data-instr-idx]').forEach(el => {
+            const inst = items[parseInt(el.dataset.instrIdx)];
+            el.addEventListener('click', () => selectInstructor(inst));
+          });
+        } catch(_) {}
+      }, 300);
+    });
+
+    function selectInstructor(inst) {
+      instrSearchInput.value = inst.name;
+      instrSearchDropdown.classList.add('hidden');
+      document.getElementById('selectedInstructorHidden').value = inst.name;
+      const courseLabel = document.getElementById('instructorCourseLabel');
+      const courseItems = document.getElementById('instructorCourseItems');
+      courseLabel.textContent = `${inst.name} の担当科目（${inst.courses.length}件）`;
+      courseItems.innerHTML = inst.courses.map(c =>
+        `<div class="px-3 py-2 rounded-xl cursor-pointer text-sm font-medium text-gray-700"
+          style="border:1px solid #e5e7eb;transition:background .1s"
+          onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''"
+          data-course-name="${c.name.replace(/"/g,'&quot;')}">${c.name}</div>`
+      ).join('');
+      document.getElementById('instructorCourseList').classList.remove('hidden');
+      courseItems.querySelectorAll('[data-course-name]').forEach(el => {
+        el.addEventListener('click', () => {
+          document.getElementById('courseNameHidden').value = el.dataset.courseName;
+          document.getElementById('selectedInstructorHidden').value = inst.name;
+          document.getElementById('selectedCourseName').textContent = el.dataset.courseName;
+          document.getElementById('selectedCourse').classList.remove('hidden');
+          document.getElementById('instructorModeSection').classList.add('hidden');
+          document.getElementById('instructorSelectSection').classList.add('hidden');
+          document.getElementById('courseError').classList.add('hidden');
+          saveData();
+        });
+      });
+    }
 
     document.getElementById('comment').addEventListener('input', () => {
       document.getElementById('charCount').textContent = document.getElementById('comment').value.length;

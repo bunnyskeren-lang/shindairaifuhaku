@@ -1200,6 +1200,35 @@ async def search_courses(q: str = ""):
     ]}
 
 
+@app.get("/api/instructors")
+async def search_instructors(q: str = ""):
+    if not q.strip():
+        return {"instructors": []}
+    async with AsyncSessionLocal() as session:
+        escaped = q.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        insts = (await session.execute(
+            select(CourseInstructor.name)
+            .where(CourseInstructor.name.ilike(f"%{escaped}%", escape="\\"))
+            .distinct()
+            .order_by(CourseInstructor.name)
+            .limit(10)
+        )).scalars().all()
+
+        result = []
+        for name in insts:
+            courses = (await session.execute(
+                select(Course)
+                .join(CourseInstructor, CourseInstructor.course_id == Course.id)
+                .where(CourseInstructor.name == name)
+                .order_by(Course.name)
+            )).scalars().all()
+            result.append({
+                "name": name,
+                "courses": [{"id": c.id, "name": c.name} for c in courses],
+            })
+    return {"instructors": result}
+
+
 @app.post("/submit")
 async def submit(
     request: Request,
