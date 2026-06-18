@@ -828,6 +828,31 @@
     const studentIdError = document.getElementById('studentIdError');
     const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZ])$/;
     const NAME_RE = /^[a-zA-Z0-9぀-ヿ一-鿿\s　]+$/;
+    let _autofillTimer;
+    async function tryAutofill(sid) {
+      const uid = new URLSearchParams(location.search).get('uid') || '';
+      if (!uid) return;
+      const nameEl = document.getElementById('submitter_name');
+      if (nameEl && nameEl.readOnly) return;
+      try {
+        const res = await fetch(`/api/autofill?uid=${encodeURIComponent(uid)}&student_id=${encodeURIComponent(sid)}`);
+        const d = await res.json();
+        if (!d.found || !d.name) return;
+        if (nameEl && !nameEl.readOnly) {
+          nameEl.value = d.name;
+          nameEl.readOnly = true;
+          nameEl.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+        }
+        const regEl = document.getElementById('reg_name');
+        if (regEl) { regEl.value = d.name; regEl.removeAttribute('required'); }
+        if (studentIdInput && !studentIdInput.readOnly) {
+          studentIdInput.readOnly = true;
+          studentIdInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+        }
+        try { localStorage.setItem('kobe_profile', JSON.stringify({name: d.name, student_id: sid})); } catch(_) {}
+      } catch(_) {}
+    }
+
     if (studentIdInput) {
       studentIdInput.addEventListener('input', () => {
         const v = studentIdInput.value.trim().toUpperCase();
@@ -837,6 +862,10 @@
         studentIdInput.classList.toggle('ring-2', invalid);
         studentIdInput.classList.toggle('ring-red-300', invalid);
         if (!invalid) clearCardError('studentIdCard');
+        clearTimeout(_autofillTimer);
+        if (!invalid && STUDENT_ID_RE.test(v)) {
+          _autofillTimer = setTimeout(() => tryAutofill(v), 300);
+        }
       });
     }
 

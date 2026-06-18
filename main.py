@@ -1330,6 +1330,35 @@ async def search_instructors(q: str = ""):
     return {"instructors": result}
 
 
+@app.get("/api/autofill")
+async def autofill_profile(uid: str = Query(default=""), student_id: str = Query(default="")):
+    uid = uid.strip()
+    sid = student_id.strip().upper()
+    if not uid or not sid or not STUDENT_ID_RE.match(sid):
+        return {"found": False}
+    async with AsyncSessionLocal() as session:
+        existing = (await session.execute(
+            select(UserProfile).where(UserProfile.line_user_id == uid)
+        )).scalar_one_or_none()
+        if existing:
+            return {"found": True, "name": existing.name}
+        row = (await session.execute(
+            select(PendingReview.submitter_name)
+            .where(PendingReview.student_id == sid)
+            .order_by(PendingReview.created_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+        if not row:
+            return {"found": False}
+        taken = (await session.execute(
+            select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
+        )).scalar_one_or_none()
+        if not taken:
+            session.add(UserProfile(line_user_id=uid, name=row, student_id=sid))
+            await session.commit()
+        return {"found": True, "name": row}
+
+
 @app.post("/submit")
 async def submit(
     request: Request,
