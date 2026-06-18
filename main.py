@@ -347,7 +347,7 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
                 layout="horizontal",
                 contents=[
                     FlexText(text="楽単度", size="xs", color="#94a3b8", flex=0),
-                    FlexText(text=EASE_STARS.get(top_ease_flex, ""), size="lg", color="#818cf8", flex=0, margin="sm"),
+                    FlexText(text=EASE_STARS.get(top_ease_flex, ""), size="xl", color="#FFD700", flex=0, margin="sm"),
                     FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
                 ],
                 align_items="center",
