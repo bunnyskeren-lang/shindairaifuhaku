@@ -141,7 +141,7 @@
           <div id="instructorCourseList" class="hidden mt-3 pt-3 border-t border-gray-100">
             <p class="text-sm font-semibold text-gray-700 mb-2">📖 科目名 <span class="text-red-500">*</span></p>
             <p class="text-xs text-gray-500 mb-2" id="instructorCourseLabel"></p>
-            <div id="instructorCourseItems" class="flex flex-col gap-1"></div>
+            <div id="instructorCourseItems" class="flex flex-wrap gap-2"></div>
           </div>
         </div>
 
@@ -711,14 +711,14 @@
       const courseItems = document.getElementById('instructorCourseItems');
       courseLabel.textContent = `${inst.name} の担当科目（${inst.courses.length}件）`;
       courseItems.innerHTML = inst.courses.map(c =>
-        `<div class="px-3 py-2 rounded-xl cursor-pointer text-sm font-medium text-gray-700"
-          style="border:1px solid #e5e7eb;transition:background .1s"
-          onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''"
-          data-course-name="${c.name.replace(/"/g,'&quot;')}">${c.name}</div>`
+        `<button type="button" class="chip-btn"
+          data-course-name="${c.name.replace(/"/g,'&quot;')}">${c.name}</button>`
       ).join('');
       document.getElementById('instructorCourseList').classList.remove('hidden');
       courseItems.querySelectorAll('[data-course-name]').forEach(el => {
         el.addEventListener('click', () => {
+          courseItems.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+          el.classList.add('active');
           document.getElementById('courseNameHidden').value = el.dataset.courseName;
           document.getElementById('selectedInstructorHidden').value = inst.name;
           document.getElementById('selectedCourseName').textContent = el.dataset.courseName;
