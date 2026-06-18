@@ -643,12 +643,16 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
     )
 
 
-def make_classification_select_flex(classifications: list[str]) -> FlexMessage:
+def make_classification_select_flex(classifications: list[str], reviewed_cls: set | None = None) -> FlexMessage:
+    if reviewed_cls is None:
+        reviewed_cls = set()
     btns = [
-        FlexButton(
-            action=MessageAction(label=cls, text=cls),
-            style="secondary",
-            height="sm",
+        FlexBox(
+            layout="vertical",
+            action=MessageAction(label=cls[:40], text=cls),
+            contents=[FlexText(text=cls, size="sm", color="#4f46e5" if cls in reviewed_cls else "#94a3b8", weight="bold")],
+            padding_top="sm",
+            padding_bottom="sm",
         )
         for cls in classifications
     ]
@@ -667,8 +671,8 @@ def make_classification_select_flex(classifications: list[str]) -> FlexMessage:
             body=FlexBox(
                 layout="vertical",
                 contents=btns,
-                spacing="md",
-                padding_all="lg",
+                spacing="xs",
+                padding_all="md",
             ),
         ),
     )
@@ -859,8 +863,16 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 )).scalars().all() if c],
                 key=_cls_sort,
             )
+            reviewed_names_edu = set((await session.execute(
+                select(PendingReview.course_name).where(PendingReview.is_approved == True).distinct()
+            )).scalars().all())
+            cls_course_rows = (await session.execute(
+                select(Course.classification, Course.name)
+                .where(Course.category == "教養", Course.classification != "")
+            )).all()
+            reviewed_cls = {row.classification for row in cls_course_rows if row.name in reviewed_names_edu}
         if clss:
-            return [make_classification_select_flex(clss)]
+            return [make_classification_select_flex(clss, reviewed_cls)]
         return await handle_course_list(category="教養")
 
     if t.startswith("教養:"):
