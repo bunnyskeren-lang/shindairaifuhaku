@@ -134,7 +134,8 @@
           <div class="relative">
             <input type="text" id="courseSearchInput"
               class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-              placeholder="科目名を入力して検索..." autocomplete="off">
+              placeholder="科目名を入力して検索..."
+              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
             <div id="courseDropdown"
               class="hidden absolute z-20 w-full mt-1 bg-white rounded-2xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"
               style="border: 1px solid #e9ecf0">
@@ -147,7 +148,8 @@
           <div class="relative">
             <input type="text" id="instructorSearchInput"
               class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-              placeholder="先生の名前を入力して検索..." autocomplete="off">
+              placeholder="先生の名前を入力して検索..."
+              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
             <div id="instructorSearchDropdown"
               class="hidden absolute z-20 w-full mt-1 bg-white rounded-2xl shadow-lg overflow-hidden max-h-64 overflow-y-auto"
               style="border: 1px solid #e9ecf0">
@@ -647,6 +649,7 @@
     const instrSearchDropdown = document.getElementById('instructorSearchDropdown');
     let instrDebounceTimer;
     let instrComposing = false;
+    let instrAbort = null;
     instrSearchInput.addEventListener('compositionstart', () => { instrComposing = true; });
     instrSearchInput.addEventListener('compositionend',   () => { instrComposing = false; instrSearchInput.dispatchEvent(new Event('input')); });
 
@@ -656,8 +659,10 @@
       const q = instrSearchInput.value.trim();
       if (!q) { instrSearchDropdown.classList.add('hidden'); return; }
       instrDebounceTimer = setTimeout(async () => {
+        if (instrAbort) instrAbort.abort();
+        instrAbort = new AbortController();
         try {
-          const res = await fetch(`/api/instructors?q=${encodeURIComponent(q)}`);
+          const res = await fetch(`/api/instructors?q=${encodeURIComponent(q)}`, { signal: instrAbort.signal });
           const data = await res.json();
           const items = data.instructors || [];
           if (items.length === 0) {
@@ -678,7 +683,7 @@
             const inst = items[parseInt(el.dataset.instrIdx)];
             el.addEventListener('click', () => selectInstructor(inst));
           });
-        } catch(_) {}
+        } catch(e) { if (e.name !== 'AbortError') console.warn(e); }
       }, 300);
     });
 
