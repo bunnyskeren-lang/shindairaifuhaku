@@ -418,28 +418,61 @@ async def get_course_flex(session: AsyncSession, course: Course, user_id: str) -
     )).scalars().all()
     instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
     liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
+
+    rating_row = await session.execute(
+        select(
+            func.avg(PendingReview.rating).label("avg"),
+            func.count(PendingReview.id).label("cnt"),
+        ).where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+    )
+    r = rating_row.one()
+    avg_rating = float(r.avg) if r.avg else None
+    review_count = r.cnt or 0
+
     meta_parts = []
     if getattr(course, "term", None):
-        meta_parts.append(f"📅 {course.term}")
+        meta_parts.append(course.term)
     if getattr(course, "credits", None):
-        meta_parts.append(f"🎓 {course.credits}単位")
+        meta_parts.append(f"{course.credits}単位")
+    if course.classification:
+        meta_parts.append(course.classification)
+
     header_contents = [
         FlexText(text=course.name, weight="bold", size="lg", color="#ffffff", wrap=True),
-        FlexText(text=f"👨‍🏫 {instructor_str}", size="sm", color="#c7d2fe", margin="xs"),
+        FlexText(text=instructor_str, size="xs", color="#c7d2fe", margin="xs"),
     ]
     if meta_parts:
         header_contents.append(
-            FlexText(text="  ".join(meta_parts), size="xs", color="#a5b4fc", margin="xs")
+            FlexText(text="  ".join(meta_parts), size="xxs", color="#a5b4fc", margin="xs")
         )
+
+    body_contents = []
+    if avg_rating is not None:
+        body_contents.append(
+            FlexBox(
+                layout="horizontal",
+                contents=[
+                    FlexText(text=stars(round(avg_rating)), size="lg", color="#f59e0b", flex=0),
+                    FlexText(text=f"  {avg_rating:.1f}", size="sm", color="#1e293b", margin="sm", weight="bold", flex=0),
+                    FlexText(text=f"({review_count}件)", size="xs", color="#94a3b8", margin="sm"),
+                ],
+            )
+        )
+    else:
+        body_contents.append(
+            FlexText(text="まだレビューはありません", size="sm", color="#94a3b8")
+        )
+    body_contents.append(
+        FlexText(text="タップして詳細・レビューを確認", size="xs", color="#b0bec5", margin="md")
+    )
+
     bubble = FlexBubble(
         header=FlexBox(layout="vertical", contents=header_contents,
-                       background_color="#6366f1", padding_all="lg"),
-        body=FlexBox(layout="vertical", contents=[
-            FlexText(text="タップして詳細・レビューを確認", size="sm", color="#64748b", wrap=True),
-        ], padding_all="lg"),
+                       background_color="#4f46e5", padding_all="lg"),
+        body=FlexBox(layout="vertical", contents=body_contents, padding_all="lg"),
         footer=FlexBox(layout="vertical", contents=[
-            FlexButton(action=URIAction(label="📖 詳細を見る", uri=liff_url),
-                       style="primary", color="#6366f1", height="sm")
+            FlexButton(action=URIAction(label="詳細・レビューを見る", uri=liff_url),
+                       style="primary", color="#4f46e5", height="sm")
         ], padding_all="md"),
     )
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
