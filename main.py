@@ -1223,6 +1223,13 @@ async def submit(
     if ease_rating not in ("SS", "S", "A", "B", "C"):
         raise HTTPException(status_code=400, detail="Invalid ease_rating")
 
+    sid = student_id.strip().upper()
+    if not STUDENT_ID_RE.match(sid):
+        raise HTTPException(
+            status_code=400,
+            detail="学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）",
+        )
+
     async with AsyncSessionLocal() as session:
         uid = line_user_id.strip()
         if uid:
@@ -1232,16 +1239,17 @@ async def submit(
             if existing is None:
                 if not reg_name.strip():
                     raise HTTPException(status_code=400, detail="お名前を入力してください")
-                if not STUDENT_ID_RE.match(student_id.strip()):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）",
-                    )
                 session.add(UserProfile(
                     line_user_id=uid,
                     name=reg_name.strip()[:100],
-                    student_id=student_id.strip(),
+                    student_id=sid,
                 ))
+            else:
+                if existing.student_id != sid:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="学籍番号が登録情報と一致しません",
+                    )
 
         review = PendingReview(
             submitter_name=submitter_name.strip()[:20],
