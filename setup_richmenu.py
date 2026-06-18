@@ -57,7 +57,7 @@ BUTTONS = [
     {
         "label": "レビュー投稿",
         "color": "#16a34a",
-        "action": URIAction(label="レビュー投稿", uri=REVIEW_FORM_URL),
+        "action": MessageAction(label="レビュー投稿", text="レビュー投稿"),
     },
     {
         "label": "ヘルプ",

@@ -1019,12 +1019,19 @@
     buildEaseStars();
     loadData();
 
-    // サーバーが補完しなかった場合、ローカルキャッシュから名前・学籍番号を復元
+    // プロフィールキャッシュの読み書き
     (function() {
       try {
         const nameEl = document.getElementById('submitter_name');
         const sidEl  = document.getElementById('student_id');
-        if (!nameEl.readOnly) {
+        if (nameEl.readOnly) {
+          // サーバーが補完済み → ローカルキャッシュも更新（次回 uid なし時のため）
+          localStorage.setItem('kobe_profile', JSON.stringify({
+            name: nameEl.value,
+            student_id: sidEl.value
+          }));
+        } else {
+          // サーバー未補完 → ローカルキャッシュから復元
           const p = JSON.parse(localStorage.getItem('kobe_profile') || 'null');
           if (p && p.name && !nameEl.value) {
             nameEl.value = p.name;
