@@ -2201,9 +2201,11 @@ async def api_course(course_id: int):
 
 
 _RICHMENU_URLS: dict[str, str] = {
-    "beefplus": "https://beefplus.center.kobe-u.ac.jp/login",
-    "uribop":   "https://www.uriboportal.ofc.kobe-u.ac.jp/",
-    "uribon":   "https://www.uriboportal.ofc.kobe-u.ac.jp/",
+    "beefplus":  "https://beefplus.center.kobe-u.ac.jp/login",
+    "uribop":    "https://www.uriboportal.ofc.kobe-u.ac.jp/",
+    "uribon":    "https://www.uriboportal.ofc.kobe-u.ac.jp/",
+    "toshokan":  "https://lib.kobe-u.ac.jp/",          # TODO: スマホ入館の正式URL
+    "bus":       "https://www.city.kobe.lg.jp/a79474/shimin/traffic/bus/timetable/",  # TODO: 正式URL
 }
 
 @app.get("/r/{name}")
@@ -2220,9 +2222,11 @@ async def richmenu_redirect(name: str):
 @app.get("/admin/richmenu-stats")
 async def admin_richmenu_stats(request: Request, _=Depends(check_admin)):
     RICHMENU_LABELS = {
-        "beefplus": "BEEFplus",
-        "uribop":   "うりぼーポータル",
-        "uribon":   "うりぼーネット",
+        "beefplus":  "BEEFplus",
+        "uribop":    "うりぼーポータル",
+        "uribon":    "うりぼーネット",
+        "toshokan":  "図書館スマホ入館",
+        "bus":       "市バス時刻表",
     }
     MSG_LABELS = {
         "レビュー投稿": "レビューを投稿",

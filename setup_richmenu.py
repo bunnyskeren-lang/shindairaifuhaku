@@ -44,51 +44,69 @@ from linebot.v3.messaging import (
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", _default_url)
 
-W, H = 2500, 1686   # フル高さメニュー（picture/ricchimenu.png の比率に合わせた）
+W, H = 2500, 1686
 
 # ── picture/ricchimenu.png のレイアウト ──────────────────────────
 #
-#  上段 (h=920):
-#    [  レビューを投稿 (w=1000)  ][  BEEFplus (w=1500)          ]
+#  上段 (h=640):
+#    [  レビューを投稿 (w=1000)  ][  BEEFplus (w=1500)              ]
 #
-#  下段 (h=766):
-#    [教養][専門CS][カミCS][うりP][うりN][ヘルプ]  ← 各 ~417px
+#  中段 (h=760):
+#    [ 教養 ][ 専門 ][ 食堂メニュー ] | [うりぼーポータル]
+#    (各w=583)                       | [図書館スマホ入館] ← w=750
+#                                    | [ヘルプ         ]
 #
+#  下段 (h=286):
+#    [          市バス時刻表 (全幅)              ]
+#
+
+_TOP_H  = 640
+_MID_Y  = 640;  _MID_H = 760
+_BOT_Y  = 1400; _BOT_H = 286
+_COL_W  = 583   # 中段左3列の幅
+_RGHT_X = 1750; _RGHT_W = 750  # 中段右列
+_STK_H  = 253   # 右列1マスの高さ
+
 CELLS = [
-    # ── 上段 ─────────────────────────────────────────────────────
-    dict(x=0,    y=0,   w=1000, h=920,
+    # ── 上段 ──────────────────────────────────────────────────────
+    dict(x=0,       y=0,      w=1000,    h=_TOP_H,
          label="レビューを投稿",
          action=MessageAction(label="レビュー投稿", text="レビュー投稿")),
 
-    dict(x=1000, y=0,   w=1500, h=920,
+    dict(x=1000,    y=0,      w=1500,    h=_TOP_H,
          label="BEEFplus",
          action=URIAction(label="BEEFplus", uri=f"{REVIEW_FORM_URL}/r/beefplus")),
 
-    # ── 下段 (6等分) ─────────────────────────────────────────────
-    dict(x=0,    y=920, w=416,  h=766,
+    # ── 中段 左3列 ────────────────────────────────────────────────
+    dict(x=0,       y=_MID_Y, w=_COL_W,  h=_MID_H,
          label="教養",
          action=MessageAction(label="教養科目一覧", text="教養")),
 
-    dict(x=416,  y=920, w=417,  h=766,
+    dict(x=_COL_W,  y=_MID_Y, w=_COL_W,  h=_MID_H,
          label="専門 Coming Soon",
          action=MessageAction(label="専門科目一覧", text="専門comingsoon")),
 
-    dict(x=833,  y=920, w=417,  h=766,
-         label="カミングスーン",
-         action=MessageAction(label="カミングスーン", text="専門comingsoon")),
+    dict(x=_COL_W*2, y=_MID_Y, w=_RGHT_X-_COL_W*2, h=_MID_H,
+         label="食堂メニュー",
+         action=MessageAction(label="食堂メニュー", text="食堂メニュー")),
 
-    dict(x=1250, y=920, w=417,  h=766,
+    # ── 中段 右列（縦3分割） ───────────────────────────────────────
+    dict(x=_RGHT_X, y=_MID_Y,          w=_RGHT_W, h=_STK_H,
          label="うりぼーポータル",
          action=URIAction(label="うりぼーポータル", uri=f"{REVIEW_FORM_URL}/r/uribop")),
 
-    dict(x=1667, y=920, w=417,  h=766,
-         label="うりぼーネット",
-         # TODO: 正しいURLに更新
-         action=URIAction(label="うりぼーネット", uri=f"{REVIEW_FORM_URL}/r/uribon")),
+    dict(x=_RGHT_X, y=_MID_Y+_STK_H,  w=_RGHT_W, h=_STK_H,
+         label="図書館スマホ入館",
+         action=URIAction(label="図書館スマホ入館", uri=f"{REVIEW_FORM_URL}/r/toshokan")),
 
-    dict(x=2084, y=920, w=416,  h=766,
+    dict(x=_RGHT_X, y=_MID_Y+_STK_H*2, w=_RGHT_W, h=_MID_H-_STK_H*2,
          label="ヘルプ",
          action=MessageAction(label="ヘルプ", text="ヘルプ")),
+
+    # ── 下段 全幅 ─────────────────────────────────────────────────
+    dict(x=0,       y=_BOT_Y, w=2500,   h=_BOT_H,
+         label="市バス時刻表",
+         action=URIAction(label="市バス時刻表", uri=f"{REVIEW_FORM_URL}/r/bus")),
 ]
 
 
