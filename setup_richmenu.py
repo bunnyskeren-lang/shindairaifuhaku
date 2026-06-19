@@ -178,8 +178,16 @@ def make_image() -> bytes:
         ch  = cy1 - cy0
 
         if i in CELL_IMAGES:
-            # 画像セルは角丸マスクで貼り込む
-            cell = Image.open(CELL_IMAGES[i]).convert("RGB").resize((cw, ch), Image.LANCZOS)
+            # アスペクト比を保ちながら白背景にセンタリング（contain）
+            src = Image.open(CELL_IMAGES[i]).convert("RGBA")
+            sw, sh = src.size
+            scale = min(cw / sw, ch / sh)
+            nw, nh = int(sw * scale), int(sh * scale)
+            src = src.resize((nw, nh), Image.LANCZOS)
+            cell = Image.new("RGB", (cw, ch), (255, 255, 255))
+            ox = (cw - nw) // 2
+            oy = (ch - nh) // 2
+            cell.paste(src.convert("RGB"), (ox, oy), src)
             mask = Image.new("L", (cw, ch), 0)
             ImageDraw.Draw(mask).rounded_rectangle([0, 0, cw-1, ch-1], radius=RAD, fill=255)
             img.paste(cell, (cx0, cy0), mask)
