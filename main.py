@@ -44,7 +44,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap
+from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -60,14 +60,6 @@ SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZ])$')
-def _parse_max_reviews(val: str, default: int = 3, lo: int = 1, hi: int = 10) -> int:
-    try:
-        n = int(val)
-    except (ValueError, TypeError):
-        return default
-    return max(lo, min(hi, n))
-
-MAX_REVIEWS = _parse_max_reviews(os.environ.get("MAX_REVIEWS", "3"))
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
@@ -1884,15 +1876,9 @@ async def admin_users(request: Request, _: str = Depends(check_admin)):
             .order_by(func.max(MessageLog.created_at).desc())
         )).all()
 
-        prefs = {p.user_id: p.max_reviews for p in (await session.execute(
-            select(UserPreference)
-        )).scalars().all()}
-
     return templates.TemplateResponse("admin/users.html", {
         "request": request,
         "users": users,
-        "prefs": prefs,
-        "max_reviews": MAX_REVIEWS,
     })
 
 
@@ -1949,23 +1935,6 @@ async def admin_activity(request: Request, _: str = Depends(check_admin)):
         "rows": rows,
     })
 
-
-@app.post("/admin/users/set")
-async def admin_users_set(
-    _: str = Depends(check_admin),
-    user_id: str = Form(...),
-    max_reviews: int = Form(...),
-):
-    async with AsyncSessionLocal() as session:
-        pref = (await session.execute(
-            select(UserPreference).where(UserPreference.user_id == user_id)
-        )).scalar_one_or_none()
-        if pref:
-            pref.max_reviews = max(1, min(10, max_reviews))
-        else:
-            session.add(UserPreference(user_id=user_id, max_reviews=max(1, min(10, max_reviews))))
-        await session.commit()
-    return RedirectResponse(url="/admin/users", status_code=303)
 
 
 @app.post("/admin/courses/classification/rename")
