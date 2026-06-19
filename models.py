@@ -60,12 +60,6 @@ class PendingReview(Base):
     )
 
 
-class UserPreference(Base):
-    __tablename__ = "user_preferences"
-
-    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    max_reviews: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
-
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
