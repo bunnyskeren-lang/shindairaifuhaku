@@ -2298,64 +2298,60 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin)):
         "bus":      "市バス時刻表",
         "kyoyoin":  "教養教育院",
     }
+    MSG_BTN_LABELS = {
+        "教養":           "教養科目一覧",
+        "専門comingsoon": "専門（Coming Soon）",
+        "ヘルプ":         "ヘルプ",
+    }
     async with AsyncSessionLocal() as session:
         uri_rows = (await session.execute(
             select(RichMenuTap.button, func.count(RichMenuTap.id).label("cnt"))
             .group_by(RichMenuTap.button)
             .order_by(func.count(RichMenuTap.id).desc())
         )).all()
-        activity_rows = (await session.execute(
-            select(UserActivity.user_id, UserActivity.action,
-                   UserActivity.count, UserActivity.last_at)
+        msg_btn_rows = (await session.execute(
+            select(UserActivity.action, func.sum(UserActivity.count).label("cnt"))
+            .where(UserActivity.action.in_(list(MSG_BTN_LABELS.keys())))
+            .group_by(UserActivity.action)
+            .order_by(func.sum(UserActivity.count).desc())
         )).all()
-        profiles = (await session.execute(
-            select(UserProfile.line_user_id, UserProfile.name, UserProfile.student_id)
+        activity_joined = (await session.execute(
+            select(
+                UserActivity.user_id,
+                UserProfile.name,
+                UserProfile.student_id,
+                UserActivity.action,
+                UserActivity.count,
+                UserActivity.last_at,
+            )
+            .outerjoin(UserProfile, UserProfile.line_user_id == UserActivity.user_id)
+            .order_by(UserActivity.user_id, UserActivity.count.desc())
         )).all()
-
-    profile_map = {p.line_user_id: p for p in profiles}
 
     uri_stats = [
         {"label": RICHMENU_LABELS.get(r.button, r.button), "count": r.cnt}
         for r in uri_rows
     ]
+    msg_btn_stats = [
+        {"label": MSG_BTN_LABELS.get(r.action, r.action), "count": int(r.cnt or 0)}
+        for r in msg_btn_rows
+    ]
 
     action_totals: dict[str, int] = defaultdict(int)
-    for row in activity_rows:
+    for row in activity_joined:
         action_totals[row.action] += row.count
     msg_ranking = sorted(action_totals.items(), key=lambda x: x[1], reverse=True)[:20]
 
-    user_data: dict[str, dict] = {}
-    for row in activity_rows:
-        uid = row.user_id
-        if uid not in user_data:
-            p = profile_map.get(uid)
-            user_data[uid] = {
-                "user_id": uid,
-                "name": p.name if p else "—",
-                "student_id": p.student_id if p else "—",
-                "total": 0,
-                "actions": [],
-                "last_at": None,
-            }
-        user_data[uid]["total"] += row.count
-        user_data[uid]["actions"].append({"action": row.action, "count": row.count})
-        if user_data[uid]["last_at"] is None or row.last_at > user_data[uid]["last_at"]:
-            user_data[uid]["last_at"] = row.last_at
-
-    users = sorted(user_data.values(), key=lambda u: u["total"], reverse=True)
-    for u in users:
-        u["actions"] = sorted(u["actions"], key=lambda a: a["count"], reverse=True)[:5]
-
-    max_uri = max((s["count"] for s in uri_stats), default=1)
-    max_msg = max((c for _, c in msg_ranking), default=1)
+    all_bar_counts = [s["count"] for s in uri_stats] + [s["count"] for s in msg_btn_stats] + [c for _, c in msg_ranking]
+    max_bar = max(all_bar_counts, default=1)
 
     return templates.TemplateResponse("admin/usage_stats.html", {
         "request": request,
         "uri_stats": uri_stats,
+        "msg_btn_stats": msg_btn_stats,
         "msg_ranking": msg_ranking,
-        "users": users,
-        "max_uri": max_uri,
-        "max_msg": max_msg,
+        "activity_rows": activity_joined,
+        "max_bar": max_bar,
         "IS_DEV": IS_DEV,
         "VAPID_PUBLIC_KEY": VAPID_PUBLIC_KEY,
     })

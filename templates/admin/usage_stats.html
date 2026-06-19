@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
-{% block title %}利用統計{% endblock %}
-{% block heading %}📊 利用統計{% endblock %}
+{% block title %}統計{% endblock %}
+{% block heading %}📊 統計{% endblock %}
 
 {% block extra_style %}
 .bar-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
@@ -9,20 +9,19 @@
 .bar-fill { height:100%; border-radius:999px; }
 .bar-count { width:48px; text-align:right; font-size:12px; font-weight:bold; color:#4338ca; flex-shrink:0; }
 .section-title { font-size:12px; font-weight:bold; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; margin:20px 0 8px; }
-.user-row { border-bottom:1px solid #f3f4f6; padding:10px 0; }
-.user-row:last-child { border-bottom:none; }
-.user-name { font-size:13px; font-weight:600; color:#1e293b; }
-.user-sub { font-size:11px; color:#94a3b8; margin-top:1px; }
-.user-total { font-size:13px; font-weight:bold; color:#6366f1; text-align:right; white-space:nowrap; }
-.tag { display:inline-block; background:#eef2ff; color:#4338ca; font-size:11px; padding:2px 8px; border-radius:999px; margin:2px 2px 0 0; }
+.user-block { background:#fff; border-radius:8px; margin-bottom:12px; overflow:hidden; border:1px solid #e5e7eb; }
+.user-header { background:#6366f1; color:#fff; padding:8px 14px; font-size:13px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; }
+.user-header span { font-weight:normal; font-size:11px; opacity:.8; margin-left:8px; }
+.user-total { font-size:11px; opacity:.9; white-space:nowrap; }
+.action-table { width:100%; border-collapse:collapse; font-size:13px; }
+.action-table td { padding:6px 14px; border-bottom:1px solid #e5e7eb; }
+.action-table tr:last-child td { border-bottom:none; }
+.count-badge { background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:bold; }
 {% endblock %}
 
 {% block content %}
-<p style="font-size:12px;color:#6b7280;margin-bottom:16px">
-  ※ URIボタン（BEEFplus等）はユーザー別の特定ができないため合計のみ表示。メッセージボタン・テキスト送信はユーザー別に集計。
-</p>
 
-<!-- ① URIタップ合計 -->
+<!-- ① リッチメニュー URIタップ合計 -->
 <div class="card">
   <div class="section-title">🔗 リッチメニュー URIタップ合計</div>
   {% if uri_stats %}
@@ -30,9 +29,24 @@
     <div class="bar-row">
       <div class="bar-label" title="{{ s.label }}">{{ s.label }}</div>
       <div class="bar-wrap">
-        <div class="bar-fill" style="width:{{ (s.count / max_uri * 100) | int }}%;background:#6366f1"></div>
+        <div class="bar-fill" style="width:{{ (s.count / max_bar * 100) | int }}%;background:#6366f1"></div>
       </div>
       <div class="bar-count">{{ s.count }}回</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p style="color:#9ca3af;font-size:13px">まだ記録がありません</p>
+  {% endif %}
+
+  <div class="section-title" style="margin-top:16px">💬 メッセージボタン合計</div>
+  {% if msg_btn_stats %}
+    {% for s in msg_btn_stats %}
+    <div class="bar-row">
+      <div class="bar-label" title="{{ s.label }}">{{ s.label }}</div>
+      <div class="bar-wrap">
+        <div class="bar-fill" style="width:{{ (s.count / max_bar * 100) | int }}%;background:#10b981"></div>
+      </div>
+      <div class="bar-count" style="color:#059669">{{ s.count }}回</div>
     </div>
     {% endfor %}
   {% else %}
@@ -42,15 +56,15 @@
 
 <!-- ② 全体メッセージランキング -->
 <div class="card">
-  <div class="section-title">💬 送信メッセージ 全体ランキング（上位20件）</div>
+  <div class="section-title">📨 送信メッセージ 全体ランキング（上位20件）</div>
   {% if msg_ranking %}
     {% for action, count in msg_ranking %}
     <div class="bar-row">
       <div class="bar-label" title="{{ action }}">{{ action }}</div>
       <div class="bar-wrap">
-        <div class="bar-fill" style="width:{{ (count / max_msg * 100) | int }}%;background:#10b981"></div>
+        <div class="bar-fill" style="width:{{ (count / max_bar * 100) | int }}%;background:#f59e0b"></div>
       </div>
-      <div class="bar-count" style="color:#059669">{{ count }}回</div>
+      <div class="bar-count" style="color:#d97706">{{ count }}回</div>
     </div>
     {% endfor %}
   {% else %}
@@ -58,35 +72,50 @@
   {% endif %}
 </div>
 
-<!-- ③ ユーザー別 -->
-<div class="card">
-  <div class="section-title">👤 ユーザー別 利用履歴（合計利用回数順）</div>
-  {% if users %}
-    {% for u in users %}
-    <div class="user-row">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <div style="min-width:0">
-          <div class="user-name">{{ u.name }}</div>
-          <div class="user-sub">{{ u.student_id }} &nbsp;·&nbsp; {{ u.user_id[:12] }}…</div>
-          <div style="margin-top:6px">
-            {% for a in u.actions %}
-            <span class="tag">{{ a.action }} <b>{{ a.count }}</b></span>
-            {% endfor %}
-          </div>
-        </div>
-        <div>
-          <div class="user-total">計 {{ u.total }}回</div>
-          {% if u.last_at %}
-          <div style="font-size:11px;color:#94a3b8;text-align:right;margin-top:2px">
-            {{ u.last_at.strftime('%m/%d %H:%M') }}
-          </div>
-          {% endif %}
-        </div>
+<!-- ③ ユーザー別利用履歴 -->
+<h2>👤 ユーザー別 利用履歴</h2>
+{% set ns = namespace(current_user=None, total=0) %}
+{% for r in activity_rows %}
+  {% if r.user_id != ns.current_user %}
+    {% if ns.current_user is not none %}
+      </table></div>
+      <div style="padding:6px 14px 8px;text-align:right;font-size:12px;font-weight:bold;color:#6366f1">
+        合計 {{ ns.total }}回
       </div>
     </div>
-    {% endfor %}
-  {% else %}
-    <p style="color:#9ca3af;font-size:13px">まだ記録がありません</p>
+    {% endif %}
+    {% set ns.current_user = r.user_id %}
+    {% set ns.total = 0 %}
+    <div class="user-block">
+      <div class="user-header">
+        <div>
+          {{ r.name or "未登録" }}
+          {% if r.student_id %}<span>{{ r.student_id }}</span>{% endif %}
+        </div>
+      </div>
+      <div><table class="action-table">
   {% endif %}
-</div>
+  {% set ns.total = ns.total + r.count %}
+  <tr>
+    <td>{{ r.action }}</td>
+    <td style="text-align:right;width:80px">
+      <span class="count-badge">{{ r.count }}回</span>
+    </td>
+    <td style="color:#9ca3af;font-size:11px;width:110px;text-align:right">
+      {{ r.last_at | jst }}
+    </td>
+  </tr>
+{% endfor %}
+{% if ns.current_user is not none %}
+      </table></div>
+      <div style="padding:6px 14px 8px;text-align:right;font-size:12px;font-weight:bold;color:#6366f1">
+        合計 {{ ns.total }}回
+      </div>
+    </div>
+{% endif %}
+
+{% if not activity_rows %}
+<p style="color:#9ca3af;text-align:center;padding:32px">データなし</p>
+{% endif %}
+
 {% endblock %}
