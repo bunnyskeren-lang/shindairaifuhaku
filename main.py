@@ -2201,6 +2201,7 @@ async def api_course(course_id: int):
 
 
 _RICHMENU_URLS: dict[str, str] = {
+    "review":    REVIEW_FORM_URL,
     "beefplus":  "https://beefplus.center.kobe-u.ac.jp/login",
     "uribop":    "https://www.uriboportal.ofc.kobe-u.ac.jp/",
     "uribon":    "https://www.uriboportal.ofc.kobe-u.ac.jp/",
@@ -2223,6 +2224,7 @@ async def richmenu_redirect(name: str):
 @app.get("/admin/richmenu-stats")
 async def admin_richmenu_stats(request: Request, _=Depends(check_admin)):
     RICHMENU_LABELS = {
+        "review":    "レビューを投稿",
         "beefplus":  "BEEFplus",
         "uribop":    "うりぼーポータル",
         "uribon":    "うりぼーネット",

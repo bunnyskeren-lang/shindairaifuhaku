@@ -71,7 +71,7 @@ CELLS = [
     # ── 上段 ──────────────────────────────────────────────────────
     dict(x=0,       y=0,      w=1000,    h=_TOP_H,
          label="レビューを投稿",
-         action=MessageAction(label="レビュー投稿", text="レビュー投稿")),
+         action=URIAction(label="レビューを投稿", uri=f"{REVIEW_FORM_URL}/r/review")),
 
     dict(x=1000,    y=0,      w=1500,    h=_TOP_H,
          label="BEEFplus",
