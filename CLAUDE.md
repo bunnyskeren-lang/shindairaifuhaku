@@ -41,6 +41,12 @@ echo yes | python -X utf8 setup_richmenu.py --env prod
 - `courses`
 - `course_instructors`
 
+### LIFF ID の固定ルール
+| 環境 | LIFF_ID |
+|---|---|
+| **本番** | `2010406205-emxo5rhE`（コードデフォルト） |
+| **dev** | `2010433465-R8b5k1SZ`（`.env.dev` に記載） |
+
 ### REVIEW_FORM_URL の固定ルール
 | 環境 | REVIEW_FORM_URL |
 |---|---|
