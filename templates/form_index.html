@@ -1041,7 +1041,16 @@
         document.getElementById('evalError').classList.remove('hidden');
         valid = false;
       }
-      if (!valid) { e.preventDefault(); refreshCardErrors(); window.scrollTo(0, 0); return; }
+      if (!valid) {
+        e.preventDefault();
+        refreshCardErrors();
+        setTimeout(() => {
+          const firstErr = document.querySelector('.text-red-500:not(.hidden)');
+          if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          else window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 150);
+        return;
+      }
 
       // 次回アクセス時の自動補完用にプロフィールをキャッシュ
       try {
