@@ -584,7 +584,7 @@
             onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
             <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}</div>
             ${c.instructors.length
-              ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">${c.instructors.map(i=>escapeHtml(i.name)).join(' · ')}</div>`
+              ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">担当教員 ${c.instructors.length}名</div>`
               : ''}
           </div>`
         ).join('');
