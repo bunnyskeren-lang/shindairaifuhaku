@@ -1034,7 +1034,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             if len(_sem_courses) == 1:
                 return [await get_course_flex(_sem_courses[0], user_id)]
             if len(_sem_courses) >= 2:
-                return [make_variant_selection_bubble(t, [c.name for c in _sem_courses])]
+                return list(await asyncio.gather(*[get_course_flex(c, user_id) for c in _sem_courses]))
 
         # Variant group (A/B/C/D...)
         _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
@@ -1042,7 +1042,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             select(Course).where(Course.name.in_(_variant_names)).order_by(Course.name)
         )).scalars().all()
         if len(variant_courses) >= 2:
-            return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
+            return list(await asyncio.gather(*[get_course_flex(c, user_id) for c in variant_courses]))
 
         # Numeric variant group (e.g. 「英語1」「英語2」or「第三外国語(ドイツ語)T1」)
         _num_candidates = (await session.execute(
@@ -1054,7 +1054,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
         )
         if len(_num_variants) >= 2:
-            return [make_variant_selection_bubble(t, [c.name for c in _num_variants])]
+            return list(await asyncio.gather(*[get_course_flex(c, user_id) for c in _num_variants]))
 
         # Keyword search
         _PUNCT = '・･、。「」『』【】（）()／/〜~'
@@ -1086,51 +1086,8 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 select(Course).where(norm_col.ilike(f"%{e_norm}%", escape="\\")).limit(6)
             )).scalars().all()
         if courses:
-            # Letter variants (A/B/C/D)
-            potential_bases = {
-                c.name[:-1] for c in courses
-                if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
-            }
-            base_variants: dict[str, list[str]] = defaultdict(list)
-            if potential_bases:
-                all_variant_names = [b + s for b in potential_bases for s in ('A', 'B', 'C', 'D')]
-                variant_rows = (await session.execute(
-                    select(Course.name).where(Course.name.in_(all_variant_names)).order_by(Course.name)
-                )).scalars().all()
-                for vname in variant_rows:
-                    base_variants[vname[:-1]].append(vname)
-
-            # Numeric variants
-            _kw_num_bases: dict[str, list[str]] = defaultdict(list)
-            for c in courses:
-                _m = _re.match(r'^(.*?)[\s　]*(\d+)$', c.name)
-                if _m:
-                    _kw_num_bases[_m.group(1).strip()].append(c.name)
-
-            seen_base: set[str] = set()
-            seen_num_base: set[str] = set()
             result = []
             for c in courses:
-                name = c.name
-                if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
-                    base = name[:-1]
-                    if base in seen_base:
-                        continue
-                    variants = base_variants.get(base, [])
-                    if len(variants) >= 2:
-                        seen_base.add(base)
-                        result.append(make_variant_selection_bubble(base, variants))
-                        continue
-                _m2 = _re.match(r'^(.*?)[\s　]*[A-Z]?\d+$', name)
-                if _m2:
-                    base = _m2.group(1).strip()
-                    if base in seen_num_base:
-                        continue
-                    num_vs = _kw_num_bases.get(base, [])
-                    if len(num_vs) >= 2:
-                        seen_num_base.add(base)
-                        result.append(make_variant_selection_bubble(base, sorted(num_vs)))
-                        continue
                 result.append(await get_course_flex(c, user_id))
             return result[:5]
 
