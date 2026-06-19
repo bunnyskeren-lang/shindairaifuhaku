@@ -2227,6 +2227,7 @@ _RICHMENU_URLS: dict[str, str] = {
     "shokudo":   "https://west2-univ.jp/sp/kobe-univ.php",
     "toshokan":  "https://lib.kobe-u.ac.jp/services/barcode/",
     "bus":       "https://kotsu.city.kobe.lg.jp/",
+    "kyoyoin":   "https://www.iphe.kobe-u.ac.jp/general-education-courses/",
 }
 
 @app.get("/r/{name}")

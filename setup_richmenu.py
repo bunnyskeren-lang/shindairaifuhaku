@@ -103,16 +103,21 @@ CELLS = [
          label="ヘルプ",
          action=MessageAction(label="ヘルプ", text="ヘルプ")),
 
-    # ── 下段 全幅 ─────────────────────────────────────────────────
-    dict(x=0,       y=_BOT_Y, w=2500,   h=_BOT_H,
+    # ── 下段 2分割 ────────────────────────────────────────────────
+    dict(x=0,    y=_BOT_Y, w=1500, h=_BOT_H,
          label="市バス時刻表",
          action=URIAction(label="市バス時刻表", uri=f"{REVIEW_FORM_URL}/r/bus")),
+
+    dict(x=1500, y=_BOT_Y, w=1000, h=_BOT_H,
+         label="教養教育院",
+         action=URIAction(label="教養教育院", uri=f"{REVIEW_FORM_URL}/r/kyoyoin")),
 ]
 
 # ── リダイレクト先URL（main.py の _RICHMENU_URLS と合わせること）
 # shokudo  → https://west2-univ.jp/sp/kobe-univ.php
 # toshokan → https://lib.kobe-u.ac.jp/services/barcode/
 # bus      → https://kotsu.city.kobe.lg.jp/
+# kyoyoin  → https://www.iphe.kobe-u.ac.jp/general-education-courses/
 
 
 def load_font(size: int):
