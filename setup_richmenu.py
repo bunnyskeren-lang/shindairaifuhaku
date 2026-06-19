@@ -88,7 +88,7 @@ CELLS = [
 
     dict(x=_COL_W*2, y=_MID_Y, w=_RGHT_X-_COL_W*2, h=_MID_H,
          label="食堂メニュー",
-         action=MessageAction(label="食堂メニュー", text="食堂メニュー")),
+         action=URIAction(label="食堂メニュー", uri=f"{REVIEW_FORM_URL}/r/shokudo")),
 
     # ── 中段 右列（縦3分割） ───────────────────────────────────────
     dict(x=_RGHT_X, y=_MID_Y,          w=_RGHT_W, h=_STK_H,
@@ -108,6 +108,11 @@ CELLS = [
          label="市バス時刻表",
          action=URIAction(label="市バス時刻表", uri=f"{REVIEW_FORM_URL}/r/bus")),
 ]
+
+# ── リダイレクト先URL（main.py の _RICHMENU_URLS と合わせること）
+# shokudo  → https://west2-univ.jp/sp/kobe-univ.php
+# toshokan → https://lib.kobe-u.ac.jp/services/barcode/
+# bus      → https://kotsu.city.kobe.lg.jp/
 
 
 def load_font(size: int):

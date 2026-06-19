@@ -2204,8 +2204,9 @@ _RICHMENU_URLS: dict[str, str] = {
     "beefplus":  "https://beefplus.center.kobe-u.ac.jp/login",
     "uribop":    "https://www.uriboportal.ofc.kobe-u.ac.jp/",
     "uribon":    "https://www.uriboportal.ofc.kobe-u.ac.jp/",
-    "toshokan":  "https://lib.kobe-u.ac.jp/",          # TODO: スマホ入館の正式URL
-    "bus":       "https://www.city.kobe.lg.jp/a79474/shimin/traffic/bus/timetable/",  # TODO: 正式URL
+    "shokudo":   "https://west2-univ.jp/sp/kobe-univ.php",
+    "toshokan":  "https://lib.kobe-u.ac.jp/services/barcode/",
+    "bus":       "https://kotsu.city.kobe.lg.jp/",
 }
 
 @app.get("/r/{name}")
@@ -2225,6 +2226,7 @@ async def admin_richmenu_stats(request: Request, _=Depends(check_admin)):
         "beefplus":  "BEEFplus",
         "uribop":    "うりぼーポータル",
         "uribon":    "うりぼーネット",
+        "shokudo":   "食堂メニュー",
         "toshokan":  "図書館スマホ入館",
         "bus":       "市バス時刻表",
     }
