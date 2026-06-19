@@ -500,6 +500,12 @@
       saveData();
     });
 
+    document.getElementById('academic_year').addEventListener('change', () => {
+      if (document.getElementById('academic_year').value !== '0') {
+        document.getElementById('academicYearError').classList.add('hidden');
+      }
+    });
+
     function updateGradingMethod() {
       const parts = [];
       const att = document.querySelector('[data-group="attendance"].active');
