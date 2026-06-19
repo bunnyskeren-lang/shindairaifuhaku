@@ -353,7 +353,7 @@ async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
     instructors, count_row, ease_rows = await asyncio.gather(_instrs(), _count(), _ease())
 
     instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
-    liff_url = f"https://liff.line.me/{LIFF_ID}?course_id={course.id}"
+    liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
     review_count = count_row.cnt or 0
     top_ease_flex: Optional[str] = None
     if ease_rows:
@@ -413,7 +413,7 @@ def make_no_review_flex(course: Course, user_id: str = "") -> FlexMessage:
     form_url = f"{REVIEW_FORM_URL}?course={_url_quote(course.name)}"
     if user_id:
         form_url += f"&uid={user_id}"
-    liff_url = f"https://liff.line.me/{LIFF_ID}?course_id={course.id}"
+    liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
     return FlexMessage(
         alt_text=f"📖 {course.name}",
         contents=FlexBubble(
