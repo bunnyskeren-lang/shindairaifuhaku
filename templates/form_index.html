@@ -994,6 +994,15 @@
     }
 
     document.getElementById('reviewForm').addEventListener('submit', e => {
+      // 全エラーを一旦リセット
+      ['submitterNameError','regNameError','studentIdError','academicYearError',
+       'courseError','instructorError','ratingError','easeError',
+       'attendanceError','homeworkError','evalError'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+      CARD_IDS.forEach(clearCardError);
+
       let valid = true;
 
       if (submitterNameInput && submitterNameInput.type !== 'hidden' && !validateName(submitterNameInput, submitterNameError)) valid = false;
