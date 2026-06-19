@@ -12,6 +12,45 @@
 - `--env prod` は**ユーザーから明示的に「本番のリッチメニューを更新して」と言われた場合のみ**実行すること
 - `--env dev` はユーザーの許可のもとで自由に実行してよい
 
+## モデル変更時のルール
+
+- `models.py` でクラスを追加・削除したら、**必ず `database.py` の `init_db()` 内の import も同時に更新すること**
+- 新しいモデルを追加した場合は import に追加、削除した場合は import から除去する
+
+## データ保護ルール
+
+- **投稿されたレビュー（PendingReviewテーブル）は、ユーザーから明示的な削除指示がない限り絶対に消去しないこと**
+- 科目の削除・変更・マージなど、いかなる操作においても、その科目に紐づくレビューを巻き添えで削除しないこと
+- レビューに影響しうるDB操作を行う前は、必ずユーザーに確認を取ること
+
+## 本番デプロイ手順
+
+ユーザーから明示的に本番デプロイを指示された場合、以下の順で実行する：
+
+```bash
+# 1. コードを本番ブランチにプッシュ
+git push origin dev:shindairaifuhaku-prod
+
+# 2. 本番リッチメニューを更新
+echo yes | python -X utf8 setup_richmenu.py --env prod
+```
+
+### DBの科目データを dev → prod に同期する場合
+レビュー・ログ・ユーザー系テーブルは**絶対に触らないこと**。同期対象は以下3テーブルのみ：
+- `classification_orders`
+- `courses`
+- `course_instructors`
+
+### REVIEW_FORM_URL の固定ルール
+| 環境 | REVIEW_FORM_URL |
+|---|---|
+| **本番** | `https://shindairaifuhaku.onrender.com` |
+| **dev** | `https://shindairaifuhaku-1.onrender.com` |
+
+- `programing files/.env` の `REVIEW_FORM_URL` は必ず本番URLのままにすること
+- `programing files/.env.dev` の `REVIEW_FORM_URL` は必ず dev URLのままにすること
+- **絶対に入れ替えないこと**
+
 ## .env ファイル構成
 
 | ファイル | 環境 |
