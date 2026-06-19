@@ -1425,12 +1425,6 @@ async def submit(
         if not course_exists:
             return _form_error("指定された科目が見つかりません")
 
-        existing_count = (await session.execute(
-            select(func.count(PendingReview.id)).where(PendingReview.student_id == sid)
-        )).scalar_one()
-        if existing_count >= MAX_REVIEWS:
-            return _form_error(f"レビューの投稿上限（{MAX_REVIEWS}件）に達しています")
-
         uid = line_user_id.strip()
         if uid:
             existing = (await session.execute(
