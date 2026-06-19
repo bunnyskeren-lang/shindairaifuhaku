@@ -2219,13 +2219,43 @@ async def richmenu_redirect(name: str):
 
 @app.get("/admin/richmenu-stats")
 async def admin_richmenu_stats(request: Request, _=Depends(check_admin)):
+    RICHMENU_LABELS = {
+        "beefplus": "BEEFplus",
+        "uribop":   "うりぼーポータル",
+        "uribon":   "うりぼーネット",
+    }
+    MSG_LABELS = {
+        "レビュー投稿": "レビューを投稿",
+        "教養":         "教養科目一覧",
+        "専門comingsoon": "専門（Coming Soon）",
+        "ヘルプ":       "ヘルプ",
+    }
     async with AsyncSessionLocal() as session:
-        rows = (await session.execute(
+        uri_rows = (await session.execute(
             select(RichMenuTap.button, func.count(RichMenuTap.id).label("cnt"))
             .group_by(RichMenuTap.button)
             .order_by(func.count(RichMenuTap.id).desc())
         )).all()
-    return {"stats": [{"button": r.button, "count": r.cnt} for r in rows]}
+        msg_rows = (await session.execute(
+            select(UserActivity.action, func.sum(UserActivity.count).label("cnt"))
+            .where(UserActivity.action.in_(list(MSG_LABELS.keys())))
+            .group_by(UserActivity.action)
+            .order_by(func.sum(UserActivity.count).desc())
+        )).all()
+
+    uri_stats = [{"label": RICHMENU_LABELS.get(r.button, r.button), "count": r.cnt} for r in uri_rows]
+    msg_stats = [{"label": MSG_LABELS.get(r.action, r.action), "count": int(r.cnt or 0)} for r in msg_rows]
+    all_stats = uri_stats + msg_stats
+    max_count = max((s["count"] for s in all_stats), default=1)
+
+    return templates.TemplateResponse("admin/richmenu.html", {
+        "request": request,
+        "uri_stats": uri_stats,
+        "msg_stats": msg_stats,
+        "max_count": max_count,
+        "IS_DEV": IS_DEV,
+        "VAPID_PUBLIC_KEY": VAPID_PUBLIC_KEY,
+    })
 
 
 @app.get("/health")

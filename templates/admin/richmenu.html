@@ -1,0 +1,52 @@
+{% extends "admin/base.html" %}
+{% block title %}リッチメニュー統計{% endblock %}
+{% block heading %}🗂️ リッチメニュー タップ統計{% endblock %}
+
+{% block extra_style %}
+.stat-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.stat-label { width:160px; font-size:13px; font-weight:600; color:#374151; flex-shrink:0; }
+.stat-bar-wrap { flex:1; background:#e5e7eb; border-radius:999px; height:18px; overflow:hidden; }
+.stat-bar { height:100%; border-radius:999px; transition:width .4s; }
+.stat-count { width:48px; text-align:right; font-size:13px; font-weight:bold; color:#4338ca; flex-shrink:0; }
+.section-title { font-size:13px; font-weight:bold; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; margin:20px 0 8px; }
+{% endblock %}
+
+{% block content %}
+<p style="font-size:13px;color:#666;margin-bottom:16px">
+  URIボタン（外部リンク）は /r/ 経由のリダイレクト数、メッセージボタンは送信回数の合計です。
+</p>
+
+<div class="card">
+  <div class="section-title">🔗 外部リンクボタン（BEEFplus・うりぼー系）</div>
+  {% if uri_stats %}
+    {% for s in uri_stats %}
+    <div class="stat-row">
+      <div class="stat-label">{{ s.label }}</div>
+      <div class="stat-bar-wrap">
+        <div class="stat-bar" style="width:{{ (s.count / max_count * 100) | int }}%;background:#6366f1"></div>
+      </div>
+      <div class="stat-count">{{ s.count }}回</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p style="color:#9ca3af;font-size:13px">まだタップ記録がありません</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="section-title">💬 メッセージボタン（レビュー・教養・ヘルプ）</div>
+  {% if msg_stats %}
+    {% for s in msg_stats %}
+    <div class="stat-row">
+      <div class="stat-label">{{ s.label }}</div>
+      <div class="stat-bar-wrap">
+        <div class="stat-bar" style="width:{{ (s.count / max_count * 100) | int }}%;background:#10b981"></div>
+      </div>
+      <div class="stat-count">{{ s.count }}回</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p style="color:#9ca3af;font-size:13px">まだ記録がありません</p>
+  {% endif %}
+</div>
+{% endblock %}
