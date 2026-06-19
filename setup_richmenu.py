@@ -1,18 +1,33 @@
 """
 リッチメニューをセットアップするスクリプト。
-実行: python setup_richmenu.py
 
-必要な環境変数:
-  LINE_CHANNEL_ACCESS_TOKEN
-  REVIEW_FORM_URL (省略可、デフォルト: https://shindairaifuhaku-1.onrender.com)
+実行:
+  dev:  python setup_richmenu.py --env dev
+  本番: python setup_richmenu.py --env prod  ← 確認プロンプトあり
+
+必要な環境変数ファイル:
+  dev:  programing files/.env.dev
+  本番: programing files/.env
 """
+import argparse
 import io
 import os
 import sys
 import urllib.request
 
+parser = argparse.ArgumentParser(description="リッチメニューセットアップ")
+parser.add_argument("--env", choices=["dev", "prod"], required=True,
+                    help="実行環境: dev または prod")
+parser.add_argument("image", nargs="?", help="カスタム画像パス（省略可）")
+_args = parser.parse_args()
+
 from dotenv import load_dotenv
-load_dotenv()
+if _args.env == "dev":
+    load_dotenv("programing files/.env.dev")
+    _default_url = "https://shindairaifuhaku-1.onrender.com"
+else:
+    load_dotenv("programing files/.env")
+    _default_url = "https://shindairaifuhaku.onrender.com"
 
 from linebot.v3.messaging import (
     ApiClient,
@@ -27,9 +42,7 @@ from linebot.v3.messaging import (
 )
 
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
-REVIEW_FORM_URL = os.environ.get(
-    "REVIEW_FORM_URL", "https://shindairaifuhaku-1.onrender.com"
-)
+REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", _default_url)
 
 # リッチメニューサイズ (4列×2行)
 W, H = 2500, 843
@@ -112,40 +125,95 @@ def load_font(size: int):
         return ImageFont.load_default()
 
 
+def _hex(h: str):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+
 def make_image() -> bytes:
     try:
         from PIL import Image, ImageDraw
     except ImportError:
-        print("❌ Pillow が見つかりません。インストールしてください: pip install pillow")
+        print("❌ Pillow が見つかりません: pip install pillow")
         sys.exit(1)
 
-    img = Image.new("RGB", (W, H), "#1e293b")
+    PAD = 14   # カード間の余白
+    RAD = 28   # 角丸半径
+
+    # (アイコン文字, 上部色, 下部色, テキスト色)
+    CELL_STYLES = [
+        ("◎", _hex("1d4ed8"), _hex("1e40af"), (255,255,255)),   # 教養  blue
+        ("◇", _hex("475569"), _hex("334155"), (148,163,184)),   # Coming Soon  slate
+        ("★", _hex("16a34a"), _hex("15803d"), (255,255,255)),   # レビュー  green
+        ("？", _hex("334155"), _hex("1e293b"), (100,116,139)),   # ヘルプ  dark
+        ("▲", _hex("dc2626"), _hex("b91c1c"), (255,255,255)),   # 人気  red
+        ("◆", _hex("d97706"), _hex("b45309"), (255,255,255)),   # 楽単  amber
+        None,   # 6: image
+        None,   # 7: image
+    ]
+
+    font_icon  = load_font(130)
+    font_label = load_font(70)
+    font_sm    = load_font(54)   # 長いラベル用
+
+    # ── 背景グラデーション ──
+    bg_top = (6, 10, 26)
+    bg_bot = (18, 24, 52)
+    img  = Image.new("RGB", (W, H), bg_top)
     draw = ImageDraw.Draw(img)
-    font = load_font(100)
+    for y in range(H):
+        t = y / H
+        draw.line([(0, y), (W-1, y)],
+                  fill=tuple(int(a + (b-a)*t) for a, b in zip(bg_top, bg_bot)))
 
     for i, btn in enumerate(BUTTONS):
         col, row = i % COLS, i // COLS
-        x0, y0 = col * CW, row * RH
-        x1, y1 = x0 + CW - 1, y0 + RH - 1
+        cx0 = col * CW + PAD
+        cy0 = row * RH + PAD
+        cx1 = (col + 1) * CW - PAD
+        cy1 = (row + 1) * RH - PAD
+        cw  = cx1 - cx0
+        ch  = cy1 - cy0
 
         if i in CELL_IMAGES:
-            # セル画像を貼り込む
-            cell_img = Image.open(CELL_IMAGES[i]).convert("RGB").resize((CW, RH), Image.LANCZOS)
-            img.paste(cell_img, (x0, y0))
-        else:
-            # 色付きセル + ラベル
-            draw.rectangle([x0, y0, x1, y1], fill=btn["color"])
-            bbox = draw.textbbox((0, 0), btn["label"], font=font)
-            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-            draw.text(
-                (x0 + (CW - tw) // 2, y0 + (RH - th) // 2),
-                btn["label"],
-                fill="#ffffff",
-                font=font,
-            )
+            # 画像セルは角丸マスクで貼り込む
+            cell = Image.open(CELL_IMAGES[i]).convert("RGB").resize((cw, ch), Image.LANCZOS)
+            mask = Image.new("L", (cw, ch), 0)
+            ImageDraw.Draw(mask).rounded_rectangle([0, 0, cw-1, ch-1], radius=RAD, fill=255)
+            img.paste(cell, (cx0, cy0), mask)
+            continue
 
-        # 境界線（全セル共通）
-        draw.rectangle([x0, y0, x1, y1], outline="#ffffff", width=5)
+        style = CELL_STYLES[i]
+        if not style:
+            continue
+        icon, ctop, cbot, fg = style
+        label = btn["label"]
+
+        # ── グラデーションカード ──
+        card  = Image.new("RGB", (cw, ch))
+        cdraw = ImageDraw.Draw(card)
+        for y in range(ch):
+            t = y / ch
+            cdraw.line([(0, y), (cw-1, y)],
+                       fill=tuple(int(a + (b-a)*t) for a, b in zip(ctop, cbot)))
+        mask = Image.new("L", (cw, ch), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, cw-1, ch-1], radius=RAD, fill=255)
+        img.paste(card, (cx0, cy0), mask)
+
+        # ── アイコン（上寄り中央） ──
+        bb = draw.textbbox((0, 0), icon, font=font_icon)
+        iw, ih = bb[2]-bb[0], bb[3]-bb[1]
+        ix = cx0 + (cw - iw) // 2 - bb[0]
+        iy = cy0 + int(ch * 0.18) - bb[1]
+        draw.text((ix, iy), icon, fill=fg, font=font_icon)
+
+        # ── ラベル（下寄り中央） ──
+        lf = font_sm if len(label) > 6 else font_label
+        bb2 = draw.textbbox((0, 0), label, font=lf)
+        lw  = bb2[2]-bb2[0]
+        lx  = cx0 + (cw - lw) // 2 - bb2[0]
+        ly  = cy0 + int(ch * 0.68) - bb2[1]
+        draw.text((lx, ly), label, fill=fg, font=lf)
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=95)
@@ -170,13 +238,26 @@ def load_custom_image(path: str) -> bytes:
 
 
 def main():
-    # 使い方: python setup_richmenu.py [カスタム画像パス]
-    custom_image_path = sys.argv[1] if len(sys.argv) > 1 else None
+    custom_image_path = _args.image
 
     config = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
     with ApiClient(config) as client:
         api = MessagingApi(client)
+
+        # ── 対象ボットを表示・確認 ──
+        bot_info = api.get_bot_info()
+        print(f"{'='*50}")
+        print(f"対象ボット : {bot_info.display_name}")
+        print(f"ボットID   : {bot_info.user_id}")
+        print(f"環境       : {_args.env.upper()}")
+        print(f"フォームURL: {REVIEW_FORM_URL}")
+        print(f"{'='*50}")
+        if _args.env == "prod":
+            ans = input("⚠️  本番環境に適用します。本当によろしいですか？ (yes と入力): ")
+            if ans.strip().lower() != "yes":
+                print("中止しました")
+                sys.exit(0)
 
         # 既存のデフォルトリッチメニューを削除
         try:
