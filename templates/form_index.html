@@ -473,6 +473,8 @@
         } else {
           btn.classList.toggle('active');
         }
+        const errMap = { attendance: 'attendanceError', homework: 'homeworkError', eval: 'evalError' };
+        if (errMap[btn.dataset.group]) document.getElementById(errMap[btn.dataset.group]).classList.add('hidden');
         if (btn.dataset.value === '__custom__') {
           const customInput = document.getElementById('evalCustomInput');
           if (btn.classList.contains('active')) {
