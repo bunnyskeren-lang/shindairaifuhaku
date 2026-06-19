@@ -105,9 +105,12 @@ def load_font(size: int):
     from PIL import ImageFont
 
     candidates = [
-        "C:/Windows/Fonts/msgothic.ttc",
+        "C:/Windows/Fonts/HGRMB.TTC",    # 丸ゴシックB（ポップ・太字）
+        "C:/Windows/Fonts/HGRME.TTC",    # 丸ゴシック
+        "C:/Windows/Fonts/BIZ-UDGothicB.ttc",
         "C:/Windows/Fonts/yugothb.ttc",
         "C:/Windows/Fonts/meiryo.ttc",
+        "C:/Windows/Fonts/msgothic.ttc",
         "C:/Windows/Fonts/arial.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
@@ -199,9 +202,9 @@ def make_image() -> bytes:
         ImageDraw.Draw(mask).rounded_rectangle([0, 0, cw-1, ch-1], radius=RAD, fill=255)
         img.paste(card, (cx0, cy0), mask)
 
-        # ── イラスト（上部 55% の領域に収める） ──
-        icon_area_h = int(ch * 0.58)
-        icon_size   = int(min(cw, icon_area_h) * 0.72)
+        # ── イラスト（上部 62% の領域・大きめ） ──
+        icon_area_h = int(ch * 0.62)
+        icon_size   = int(min(cw, icon_area_h) * 0.88)
         icon_img = Image.open(icon_path).convert("RGBA").resize(
             (icon_size, icon_size), Image.LANCZOS
         )
@@ -209,12 +212,15 @@ def make_image() -> bytes:
         iy = cy0 + (icon_area_h - icon_size) // 2
         img.paste(icon_img, (ix, iy), icon_img)
 
-        # ── ラベル（下部） ──
+        # ── ラベル（アウトライン付きポップ文字） ──
         lf = font_sm if len(label) > 6 else font_label
         bb = draw.textbbox((0, 0), label, font=lf)
         lw = bb[2] - bb[0]
         lx = cx0 + (cw - lw) // 2 - bb[0]
-        ly = cy0 + int(ch * 0.68) - bb[1]
+        ly = cy0 + int(ch * 0.70) - bb[1]
+        outline = (0, 0, 0)
+        for ox, oy in [(-4,0),(4,0),(0,-4),(0,4),(-3,-3),(3,-3),(-3,3),(3,3)]:
+            draw.text((lx+ox, ly+oy), label, fill=outline, font=lf)
         draw.text((lx, ly), label, fill=fg, font=lf)
 
     buf = io.BytesIO()
