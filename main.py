@@ -1400,37 +1400,36 @@ async def submit(
     nickname: str = Form(default=""),
     academic_year: int = Form(default=0),
 ):
+    def _form_error(msg: str):
+        return templates.TemplateResponse(
+            "form_error.html", {"request": request, "message": msg}, status_code=400
+        )
+
     if not (1 <= rating <= 5):
-        raise HTTPException(status_code=400, detail="Invalid rating")
+        return _form_error("評価が不正です")
     if ease_rating not in ("SS", "S", "A", "B", "C"):
-        raise HTTPException(status_code=400, detail="Invalid ease_rating")
+        return _form_error("楽単度が不正です")
     if not (2000 <= academic_year <= 2100):
-        raise HTTPException(status_code=400, detail="受講年度を選択してください")
+        return _form_error("受講年度を選択してください")
     if not comment.strip():
-        raise HTTPException(status_code=400, detail="コメントを入力してください")
+        return _form_error("コメントを入力してください")
 
     sid = student_id.strip().upper()
     if not STUDENT_ID_RE.match(sid):
-        raise HTTPException(
-            status_code=400,
-            detail="学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）",
-        )
+        return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 
     async with AsyncSessionLocal() as session:
         course_exists = (await session.execute(
             select(Course.id).where(Course.name == course_name.strip())
         )).scalar_one_or_none()
         if not course_exists:
-            raise HTTPException(status_code=400, detail="指定された科目は存在しません")
+            return _form_error("指定された科目が見つかりません")
 
         existing_count = (await session.execute(
             select(func.count(PendingReview.id)).where(PendingReview.student_id == sid)
         )).scalar_one()
         if existing_count >= MAX_REVIEWS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"レビューの投稿上限（{MAX_REVIEWS}件）に達しています",
-            )
+            return _form_error(f"レビューの投稿上限（{MAX_REVIEWS}件）に達しています")
 
         uid = line_user_id.strip()
         if uid:
@@ -1439,7 +1438,7 @@ async def submit(
             )).scalar_one_or_none()
             if existing is None:
                 if not reg_name.strip():
-                    raise HTTPException(status_code=400, detail="お名前を入力してください")
+                    return _form_error("お名前を入力してください")
                 try:
                     session.add(UserProfile(
                         line_user_id=uid,
@@ -1451,10 +1450,7 @@ async def submit(
                     await session.rollback()
             else:
                 if existing.student_id != sid:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="学籍番号が登録情報と一致しません",
-                    )
+                    return _form_error("学籍番号が登録情報と一致しません")
 
         review = PendingReview(
             submitter_name=submitter_name.strip()[:20],
