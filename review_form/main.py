@@ -149,7 +149,7 @@ async def search_courses(q: str = ""):
                     Course.name.ilike(f"%{t}%", escape="\\"),
                     Course.reading.ilike(f"%{t}%", escape="\\"),
                 ))
-            stmt = stmt.order_by(Course.name).limit(10)
+            stmt = stmt.order_by(Course.name)
         else:
             stmt = select(Course).order_by(Course.name).limit(30)
         courses = (await session.execute(stmt)).scalars().all()

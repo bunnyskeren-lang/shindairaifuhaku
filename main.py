@@ -1260,7 +1260,7 @@ async def search_courses(q: str = ""):
                     Course.name.ilike(f"%{t}%", escape="\\"),
                     Course.reading.ilike(f"%{t}%", escape="\\"),
                 ))
-            stmt = stmt.order_by(Course.name).limit(10)
+            stmt = stmt.order_by(Course.name)
             courses = (await session.execute(stmt)).scalars().all()
             if not courses:
                 norm_col = Course.name
@@ -1271,7 +1271,7 @@ async def search_courses(q: str = ""):
                 for tok in norm_tokens:
                     t = _escape(tok)
                     stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
-                courses = (await session.execute(stmt2.order_by(Course.name).limit(10))).scalars().all()
+                courses = (await session.execute(stmt2.order_by(Course.name))).scalars().all()
         else:
             stmt = select(Course).order_by(Course.name).limit(30)
             courses = (await session.execute(stmt)).scalars().all()
@@ -1305,9 +1305,8 @@ async def search_instructors(q: str = ""):
             select(CourseInstructor.name)
             .where(CourseInstructor.name.ilike(f"%{escaped}%", escape="\\"))
             .distinct()
-            .limit(30)
         )).scalars().all()
-        insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))[:10]
+        insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))
         if not insts:
             norm_col = CourseInstructor.name
             for ch in ('・', '･', '（', '）', '(', ')'):
@@ -1317,9 +1316,8 @@ async def search_instructors(q: str = ""):
                 select(CourseInstructor.name)
                 .where(norm_col.ilike(f"%{escaped_norm}%", escape="\\"))
                 .distinct()
-                .limit(30)
             )).scalars().all()
-            insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))[:10]
+            insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))
 
         result = []
         for name in insts:
