@@ -3,6 +3,7 @@ import math
 import re as _re
 import json
 import asyncio
+import time
 from urllib.parse import quote as _url_quote
 import random
 import traceback as _traceback
@@ -259,6 +260,41 @@ def verify_signature(body: bytes, signature: str) -> bool:
     return hmac.compare_digest(base64.b64encode(digest).decode(), signature)
 
 
+
+
+_cls_cache: set[str] = set()
+_cls_cache_at: float = 0.0
+_CLS_CACHE_TTL = 300  # 5分
+
+async def _get_cls_set() -> set[str]:
+    global _cls_cache, _cls_cache_at
+    if _cls_cache and time.monotonic() - _cls_cache_at < _CLS_CACHE_TTL:
+        return _cls_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(select(Course.classification).distinct())).scalars().all()
+    _cls_cache = {r for r in rows if r}
+    _cls_cache_at = time.monotonic()
+    return _cls_cache
+
+
+async def _save_log_bg(user_id: str, direction: str, message: str) -> None:
+    try:
+        async with AsyncSessionLocal() as session:
+            session.add(MessageLog(user_id=user_id, direction=direction, message=message))
+            if direction == "in":
+                now = datetime.now(timezone.utc)
+                stmt = (
+                    pg_insert(UserActivity)
+                    .values(user_id=user_id, action=message[:200], count=1, last_at=now)
+                    .on_conflict_do_update(
+                        index_elements=["user_id", "action"],
+                        set_={"count": UserActivity.count + 1, "last_at": now},
+                    )
+                )
+                await session.execute(stmt)
+            await session.commit()
+    except Exception as exc:
+        await save_error_log(exc, user_id=user_id, action=f"save_log_{direction}")
 
 
 async def save_log(session: AsyncSession, user_id: str, direction: str, message: str):
@@ -908,11 +944,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await handle_course_list(category="教養", classification=cls)
 
     # 分類名の直接タップ（例：「教養(社会)」）
-    async with AsyncSessionLocal() as _cls_session:
-        _cls_hit = (await _cls_session.execute(
-            select(Course.classification).where(Course.classification == t).limit(1)
-        )).scalar_one_or_none()
-    if _cls_hit:
+    if t in await _get_cls_set():
         return await handle_course_list(classification=t)
 
     if t == "専門comingsoon":
@@ -1126,65 +1158,64 @@ async def _process_events(events) -> None:
         await save_error_log(exc, action="cleanup")
 
     try:
-        async with AsyncSessionLocal() as session:
-            async with AsyncApiClient(configuration) as api_client:
-                line_api = AsyncMessagingApi(api_client)
-                for event in events:
-                    if isinstance(event, FollowEvent):
-                        try:
-                            await line_api.reply_message(
-                                ReplyMessageRequest(
-                                    reply_token=event.reply_token,
-                                    messages=[make_welcome_flex()],
-                                )
-                            )
-                        except Exception as exc:
-                            await save_error_log(exc, action="follow")
-                        continue
-
-                    if not isinstance(event, MessageEvent):
-                        continue
-                    if not isinstance(event.message, TextMessageContent):
-                        continue
-
-                    user_id = event.source.user_id
-                    user_text = event.message.text
-
+        async with AsyncApiClient(configuration) as api_client:
+            line_api = AsyncMessagingApi(api_client)
+            for event in events:
+                if isinstance(event, FollowEvent):
                     try:
-                        await save_log(session, user_id, "in", user_text)
-                        messages = await asyncio.wait_for(
-                            handle_message(user_text, user_id),
-                            timeout=25.0,
-                        )
                         await line_api.reply_message(
                             ReplyMessageRequest(
                                 reply_token=event.reply_token,
-                                messages=messages[:5],
+                                messages=[make_welcome_flex()],
                             )
                         )
-                        await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
-                    except asyncio.TimeoutError:
-                        await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
-                        try:
-                            await line_api.reply_message(
-                                ReplyMessageRequest(
-                                    reply_token=event.reply_token,
-                                    messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
-                                )
-                            )
-                        except Exception:
-                            pass
                     except Exception as exc:
-                        await save_error_log(exc, user_id=user_id, action=user_text)
-                        try:
-                            await line_api.reply_message(
-                                ReplyMessageRequest(
-                                    reply_token=event.reply_token,
-                                    messages=[TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")],
-                                )
+                        await save_error_log(exc, action="follow")
+                    continue
+
+                if not isinstance(event, MessageEvent):
+                    continue
+                if not isinstance(event.message, TextMessageContent):
+                    continue
+
+                user_id = event.source.user_id
+                user_text = event.message.text
+
+                try:
+                    asyncio.create_task(_save_log_bg(user_id, "in", user_text))
+                    messages = await asyncio.wait_for(
+                        handle_message(user_text, user_id),
+                        timeout=25.0,
+                    )
+                    await line_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=messages[:5],
+                        )
+                    )
+                    asyncio.create_task(_save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
+                except asyncio.TimeoutError:
+                    await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
+                    try:
+                        await line_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
                             )
-                        except Exception:
-                            pass
+                        )
+                    except Exception:
+                        pass
+                except Exception as exc:
+                    await save_error_log(exc, user_id=user_id, action=user_text)
+                    try:
+                        await line_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")],
+                            )
+                        )
+                    except Exception:
+                        pass
     except Exception as exc:
         await save_error_log(exc, action="process_events")
 
