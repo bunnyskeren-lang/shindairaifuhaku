@@ -381,8 +381,10 @@ async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
     return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
 
 
-def make_no_review_flex(course: Course) -> FlexMessage:
+def make_no_review_flex(course: Course, user_id: str = "") -> FlexMessage:
     form_url = f"{REVIEW_FORM_URL}?course={_url_quote(course.name)}"
+    if user_id:
+        form_url += f"&uid={user_id}"
     liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
     return FlexMessage(
         alt_text=f"📖 {course.name}",
@@ -658,7 +660,7 @@ def make_classification_select_flex(classifications: list[str], reviewed_cls: se
         FlexBox(
             layout="vertical",
             action=MessageAction(label=cls[:40], text=cls),
-            contents=[FlexText(text=cls, size="sm", color="#4f46e5" if cls in reviewed_cls else "#94a3b8", weight="bold")],
+            contents=[FlexText(text=cls, size="lg", color="#4f46e5" if cls in reviewed_cls else "#94a3b8", weight="bold")],
             padding_top="sm",
             padding_bottom="sm",
         )
@@ -900,7 +902,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             select(Course.classification).where(Course.classification == t).limit(1)
         )).scalar_one_or_none()
     if _cls_hit:
-        return await handle_course_list(category="教養", classification=t)
+        return await handle_course_list(classification=t)
 
     if t == "専門comingsoon":
         return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
@@ -976,7 +978,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 .where(PendingReview.course_name == exact.name, PendingReview.is_approved == True)
             )).scalar_one()
             if rc == 0:
-                return [make_no_review_flex(exact)]
+                return [make_no_review_flex(exact, user_id)]
             return [await get_course_flex(exact, user_id)]
 
         # Seminar group e.g. 外国語セミナー(英語) → 外国語セミナーA(英語), B(英語)...
@@ -1103,71 +1105,77 @@ async def handle_message(text: str, user_id: str = "") -> list:
 # ── Routes ──────────────────────────────────────────────────────
 
 async def _process_events(events) -> None:
-    if random.random() < 0.02:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    try:
+        if random.random() < 0.02:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+            async with AsyncSessionLocal() as session:
+                await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
+                await session.commit()
+    except Exception as exc:
+        await save_error_log(exc, action="cleanup")
+
+    try:
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
-            await session.commit()
+            async with AsyncApiClient(configuration) as api_client:
+                line_api = AsyncMessagingApi(api_client)
+                for event in events:
+                    if isinstance(event, FollowEvent):
+                        try:
+                            await line_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=event.reply_token,
+                                    messages=[make_welcome_flex()],
+                                )
+                            )
+                        except Exception as exc:
+                            await save_error_log(exc, action="follow")
+                        continue
 
-    async with AsyncSessionLocal() as session:
-        async with AsyncApiClient(configuration) as api_client:
-            line_api = AsyncMessagingApi(api_client)
-            for event in events:
-                if isinstance(event, FollowEvent):
+                    if not isinstance(event, MessageEvent):
+                        continue
+                    if not isinstance(event.message, TextMessageContent):
+                        continue
+
+                    user_id = event.source.user_id
+                    user_text = event.message.text
+
                     try:
+                        await save_log(session, user_id, "in", user_text)
+                        messages = await asyncio.wait_for(
+                            handle_message(user_text, user_id),
+                            timeout=25.0,
+                        )
                         await line_api.reply_message(
                             ReplyMessageRequest(
                                 reply_token=event.reply_token,
-                                messages=[make_welcome_flex()],
+                                messages=messages[:5],
                             )
                         )
+                        await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
+                    except asyncio.TimeoutError:
+                        await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
+                        try:
+                            await line_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=event.reply_token,
+                                    messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
+                                )
+                            )
+                        except Exception:
+                            pass
                     except Exception as exc:
-                        await save_error_log(exc, action="follow")
-                    continue
-
-                if not isinstance(event, MessageEvent):
-                    continue
-                if not isinstance(event.message, TextMessageContent):
-                    continue
-
-                user_id = event.source.user_id
-                user_text = event.message.text
-
-                try:
-                    await save_log(session, user_id, "in", user_text)
-                    messages = await asyncio.wait_for(
-                        handle_message(user_text, user_id),
-                        timeout=25.0,
-                    )
-                    await save_log(session, user_id, "out", f"[{len(messages)} msg(s)]")
-                    await line_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=event.reply_token,
-                            messages=messages[:5],
-                        )
-                    )
-                except asyncio.TimeoutError:
-                    await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
-                    try:
-                        await line_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
+                        await save_error_log(exc, user_id=user_id, action=user_text)
+                        try:
+                            await line_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=event.reply_token,
+                                    messages=[TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")],
+                                )
                             )
-                        )
-                    except Exception:
-                        pass
-                except Exception as exc:
-                    await save_error_log(exc, user_id=user_id, action=user_text)
-                    try:
-                        await line_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=[TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")],
-                            )
-                        )
-                    except Exception:
-                        pass
+                        except Exception:
+                            pass
+    except Exception as exc:
+        await save_error_log(exc, action="process_events")
 
 
 @app.post("/callback")
@@ -1183,7 +1191,10 @@ async def callback(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook payload")
 
-    asyncio.create_task(_process_events(events))
+    task = asyncio.create_task(_process_events(events))
+    task.add_done_callback(
+        lambda t: t.exception() if not t.cancelled() and t.exception() else None
+    )
     return {"status": "ok"}
 
 
@@ -1354,8 +1365,11 @@ async def autofill_profile(uid: str = Query(default=""), student_id: str = Query
             select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
         )).scalar_one_or_none()
         if not taken:
-            session.add(UserProfile(line_user_id=uid, name=row, student_id=sid))
-            await session.commit()
+            try:
+                session.add(UserProfile(line_user_id=uid, name=row, student_id=sid))
+                await session.commit()
+            except Exception:
+                await session.rollback()
         return {"found": True, "name": row}
 
 
@@ -1381,6 +1395,8 @@ async def submit(
         raise HTTPException(status_code=400, detail="Invalid ease_rating")
     if not (2000 <= academic_year <= 2100):
         raise HTTPException(status_code=400, detail="受講年度を選択してください")
+    if not comment.strip():
+        raise HTTPException(status_code=400, detail="コメントを入力してください")
 
     sid = student_id.strip().upper()
     if not STUDENT_ID_RE.match(sid):
@@ -1396,6 +1412,15 @@ async def submit(
         if not course_exists:
             raise HTTPException(status_code=400, detail="指定された科目は存在しません")
 
+        existing_count = (await session.execute(
+            select(func.count(PendingReview.id)).where(PendingReview.student_id == sid)
+        )).scalar_one()
+        if existing_count >= MAX_REVIEWS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"レビューの投稿上限（{MAX_REVIEWS}件）に達しています",
+            )
+
         uid = line_user_id.strip()
         if uid:
             existing = (await session.execute(
@@ -1404,11 +1429,15 @@ async def submit(
             if existing is None:
                 if not reg_name.strip():
                     raise HTTPException(status_code=400, detail="お名前を入力してください")
-                session.add(UserProfile(
-                    line_user_id=uid,
-                    name=reg_name.strip()[:100],
-                    student_id=sid,
-                ))
+                try:
+                    session.add(UserProfile(
+                        line_user_id=uid,
+                        name=reg_name.strip()[:100],
+                        student_id=sid,
+                    ))
+                    await session.flush()
+                except Exception:
+                    await session.rollback()
             else:
                 if existing.student_id != sid:
                     raise HTTPException(
@@ -1426,7 +1455,7 @@ async def submit(
             selected_instructor=selected_instructor.strip()[:100] or None,
             nickname=nickname.strip()[:30] or None,
             academic_year=academic_year,
-            student_id=student_id.strip()[:20] or None,
+            student_id=sid or None,
             is_approved=False,
         )
         session.add(review)
@@ -2134,30 +2163,30 @@ async def api_course(course_id: int):
                 key=lambda r: (r.selected_instructor or "￿", -(r.academic_year or 0))
             )[:20]
 
-    return {
-        "id": course.id,
-        "name": course.name,
-        "instructor": instructor_str,
-        "classification": course.classification or "",
-        "category": course.category or "",
-        "term": getattr(course, "term", None) or "",
-        "credits": getattr(course, "credits", None) or 0,
-        "syllabus_url": course.syllabus_url or "",
-        "avg_rating": avg_rating,
-        "top_ease": top_ease,
-        "reviews": [
-            {
-                "rating": r.rating,
-                "ease_rating": r.ease_rating,
-                "grading_method": r.grading_method or "",
-                "comment": r.comment,
-                "instructor": r.selected_instructor or "",
-                "nickname": r.nickname or "",
-                "academic_year": r.academic_year or 0,
+            return {
+                "id": course.id,
+                "name": course.name,
+                "instructor": instructor_str,
+                "classification": course.classification or "",
+                "category": course.category or "",
+                "term": getattr(course, "term", None) or "",
+                "credits": getattr(course, "credits", None) or 0,
+                "syllabus_url": course.syllabus_url or "",
+                "avg_rating": avg_rating,
+                "top_ease": top_ease,
+                "reviews": [
+                    {
+                        "rating": r.rating,
+                        "ease_rating": r.ease_rating,
+                        "grading_method": r.grading_method or "",
+                        "comment": r.comment,
+                        "instructor": r.selected_instructor or "",
+                        "nickname": r.nickname or "",
+                        "academic_year": r.academic_year or 0,
+                    }
+                    for r in reviews
+                ],
             }
-            for r in reviews
-        ],
-    }
 
 
 @app.get("/health")

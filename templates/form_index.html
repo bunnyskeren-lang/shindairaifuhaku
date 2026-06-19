@@ -352,7 +352,7 @@
 
       <p class="text-center text-xs text-gray-400 mt-3">
         送信することで
-        <a href="https://shindairaifuhaku.onrender.com/privacy" target="_blank"
+        <a href="/privacy" target="_blank"
            class="underline text-gray-400 hover:text-indigo-500">プライバシーポリシー</a>
         に同意したものとみなします。
       </p>
@@ -556,13 +556,17 @@
     let debounceTimer;
     let courseComposing = false;
 
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     async function fetchCourses(q) {
       try {
         const res = await fetch(`/api/courses?q=${encodeURIComponent(q)}`);
         const data = await res.json();
         const items = data.courses || [];
         if (items.length === 0) {
-          dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${q}」に一致する科目はありません</div>`;
+          dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する科目はありません</div>`;
           dropdown.classList.remove('hidden');
           return;
         }
@@ -570,9 +574,9 @@
           `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
             style="border-bottom: 1px solid #f3f4f6; transition: background .1s"
             onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-            <div style="font-size:14px;font-weight:600;color:#1e293b">${c.name}</div>
+            <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}</div>
             ${c.instructors.length
-              ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">${c.instructors.map(i=>i.name).join(' · ')}</div>`
+              ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">${c.instructors.map(i=>escapeHtml(i.name)).join(' · ')}</div>`
               : ''}
           </div>`
         ).join('');
@@ -625,7 +629,7 @@
       if (currentInstructors.length > 0) {
         chipsEl.classList.remove('hidden');
         chipsEl.innerHTML = currentInstructors.map(inst =>
-          `<button type="button" class="chip-btn single" data-group="instructor" data-value="${inst.name}">${inst.name}</button>`
+          `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</button>`
         ).join('');
         chipsEl.querySelectorAll('.chip-btn').forEach(btn => {
           btn.onclick = () => {
@@ -699,7 +703,7 @@
         const data = await res.json();
         const items = data.instructors || [];
         if (items.length === 0) {
-          instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${q}」に一致する先生が見つかりませんでした</div>`;
+          instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する先生が見つかりませんでした</div>`;
           instrSearchDropdown.classList.remove('hidden');
           return;
         }
@@ -707,7 +711,7 @@
           `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
             style="border-bottom:1px solid #f3f4f6;transition:background .1s"
             onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-            <div style="font-size:14px;font-weight:600;color:#1e293b">${inst.name}</div>
+            <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(inst.name)}</div>
             <div style="font-size:12px;color:#94a3b8;margin-top:2px">${inst.courses.length}科目担当</div>
           </div>`
         ).join('');
@@ -745,7 +749,7 @@
       courseLabel.textContent = `${inst.name} の担当科目（${inst.courses.length}件）`;
       courseItems.innerHTML = inst.courses.map(c =>
         `<button type="button" class="chip-btn"
-          data-course-name="${c.name.replace(/"/g,'&quot;')}">${c.name}</button>`
+          data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`
       ).join('');
       document.getElementById('instructorCourseList').classList.remove('hidden');
       courseItems.querySelectorAll('[data-course-name]').forEach(el => {
@@ -899,7 +903,8 @@
         const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
         if (!d) return;
         if (d.academic_year) document.getElementById('academic_year').value = d.academic_year;
-        if (d.name) document.getElementById('submitter_name').value = d.name;
+        const _nameEl = document.getElementById('submitter_name');
+        if (d.name && _nameEl && !_nameEl.readOnly) _nameEl.value = d.name;
         if (d.nickname) document.getElementById('nickname').value = d.nickname;
         if (d.course) {
           selectCourse(d.course, d.instructors || []);
