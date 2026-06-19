@@ -112,6 +112,16 @@ class CourseInstructor(Base):
     url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 
+class RichMenuTap(Base):
+    __tablename__ = "richmenu_taps"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    button: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    tapped_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 

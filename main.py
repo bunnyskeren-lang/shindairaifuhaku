@@ -43,7 +43,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder
+from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -2187,6 +2187,34 @@ async def api_course(course_id: int):
                     for r in reviews
                 ],
             }
+
+
+_RICHMENU_URLS: dict[str, str] = {
+    "beefplus": "https://beefplus.center.kobe-u.ac.jp/login",
+    "uribop":   "https://www.uriboportal.ofc.kobe-u.ac.jp/",
+    "uribon":   "https://www.uriboportal.ofc.kobe-u.ac.jp/",
+}
+
+@app.get("/r/{name}")
+async def richmenu_redirect(name: str):
+    url = _RICHMENU_URLS.get(name)
+    if not url:
+        raise HTTPException(status_code=404)
+    async with AsyncSessionLocal() as session:
+        session.add(RichMenuTap(button=name))
+        await session.commit()
+    return RedirectResponse(url=url, status_code=302)
+
+
+@app.get("/admin/richmenu-stats")
+async def admin_richmenu_stats(request: Request, _=Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(RichMenuTap.button, func.count(RichMenuTap.id).label("cnt"))
+            .group_by(RichMenuTap.button)
+            .order_by(func.count(RichMenuTap.id).desc())
+        )).all()
+    return {"stats": [{"button": r.button, "count": r.cnt} for r in rows]}
 
 
 @app.get("/health")
