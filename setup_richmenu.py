@@ -140,19 +140,18 @@ def make_image() -> bytes:
     PAD = 14   # カード間の余白
     RAD = 28   # 角丸半径
 
-    # (アイコン文字, 上部色, 下部色, テキスト色)
+    # (イラストパス, 上部色, 下部色, テキスト色)
     CELL_STYLES = [
-        ("◎", _hex("1d4ed8"), _hex("1e40af"), (255,255,255)),   # 教養  blue
-        ("◇", _hex("475569"), _hex("334155"), (148,163,184)),   # Coming Soon  slate
-        ("★", _hex("16a34a"), _hex("15803d"), (255,255,255)),   # レビュー  green
-        ("？", _hex("334155"), _hex("1e293b"), (100,116,139)),   # ヘルプ  dark
-        ("▲", _hex("dc2626"), _hex("b91c1c"), (255,255,255)),   # 人気  red
-        ("◆", _hex("d97706"), _hex("b45309"), (255,255,255)),   # 楽単  amber
+        ("picture/icon_kyoyo.png",      _hex("1d4ed8"), _hex("1e40af"), (255,255,255)),
+        ("picture/icon_comingsoon.png",  _hex("475569"), _hex("334155"), (148,163,184)),
+        ("picture/icon_review.png",      _hex("16a34a"), _hex("15803d"), (255,255,255)),
+        ("picture/icon_help.png",        _hex("334155"), _hex("1e293b"), (100,116,139)),
+        ("picture/icon_popular.png",     _hex("dc2626"), _hex("b91c1c"), (255,255,255)),
+        ("picture/icon_ranking.png",     _hex("d97706"), _hex("b45309"), (255,255,255)),
         None,   # 6: image
         None,   # 7: image
     ]
 
-    font_icon  = load_font(130)
     font_label = load_font(70)
     font_sm    = load_font(54)   # 長いラベル用
 
@@ -186,7 +185,7 @@ def make_image() -> bytes:
         style = CELL_STYLES[i]
         if not style:
             continue
-        icon, ctop, cbot, fg = style
+        icon_path, ctop, cbot, fg = style
         label = btn["label"]
 
         # ── グラデーションカード ──
@@ -200,19 +199,22 @@ def make_image() -> bytes:
         ImageDraw.Draw(mask).rounded_rectangle([0, 0, cw-1, ch-1], radius=RAD, fill=255)
         img.paste(card, (cx0, cy0), mask)
 
-        # ── アイコン（上寄り中央） ──
-        bb = draw.textbbox((0, 0), icon, font=font_icon)
-        iw, ih = bb[2]-bb[0], bb[3]-bb[1]
-        ix = cx0 + (cw - iw) // 2 - bb[0]
-        iy = cy0 + int(ch * 0.18) - bb[1]
-        draw.text((ix, iy), icon, fill=fg, font=font_icon)
+        # ── イラスト（上部 55% の領域に収める） ──
+        icon_area_h = int(ch * 0.58)
+        icon_size   = int(min(cw, icon_area_h) * 0.72)
+        icon_img = Image.open(icon_path).convert("RGBA").resize(
+            (icon_size, icon_size), Image.LANCZOS
+        )
+        ix = cx0 + (cw - icon_size) // 2
+        iy = cy0 + (icon_area_h - icon_size) // 2
+        img.paste(icon_img, (ix, iy), icon_img)
 
-        # ── ラベル（下寄り中央） ──
+        # ── ラベル（下部） ──
         lf = font_sm if len(label) > 6 else font_label
-        bb2 = draw.textbbox((0, 0), label, font=lf)
-        lw  = bb2[2]-bb2[0]
-        lx  = cx0 + (cw - lw) // 2 - bb2[0]
-        ly  = cy0 + int(ch * 0.68) - bb2[1]
+        bb = draw.textbbox((0, 0), label, font=lf)
+        lw = bb[2] - bb[0]
+        lx = cx0 + (cw - lw) // 2 - bb[0]
+        ly = cy0 + int(ch * 0.68) - bb[1]
         draw.text((lx, ly), label, fill=fg, font=lf)
 
     buf = io.BytesIO()
