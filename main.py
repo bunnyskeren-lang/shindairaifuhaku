@@ -651,9 +651,11 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
     for i, name in enumerate(variant_names):
         icon = VARIANT_ICONS.get(i, "▶")
         color = VARIANT_COLORS[i % len(VARIANT_COLORS)]
+        suffix = _variant_suffix(base_name, name).strip()
+        label = f"{icon} {suffix}"[:40]
         btns.append(
             FlexButton(
-                action=MessageAction(label=f"{icon} {name}", text=name),
+                action=MessageAction(label=label, text=name),
                 style="primary",
                 color=color,
                 height="sm",
