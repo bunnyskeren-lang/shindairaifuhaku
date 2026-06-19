@@ -660,9 +660,20 @@ def make_classification_select_flex(classifications: list[str], reviewed_cls: se
         FlexBox(
             layout="vertical",
             action=MessageAction(label=cls[:40], text=cls),
-            contents=[FlexText(text=cls, size="lg", color="#4f46e5" if cls in reviewed_cls else "#94a3b8", weight="bold")],
-            padding_top="sm",
-            padding_bottom="sm",
+            contents=[
+                FlexText(
+                    text=cls,
+                    size="lg",
+                    color="#4f46e5" if cls in reviewed_cls else "#475569",
+                    weight="bold",
+                    align="center",
+                )
+            ],
+            background_color="#eef2ff" if cls in reviewed_cls else "#f8fafc",
+            border_width="2px",
+            border_color="#4f46e5" if cls in reviewed_cls else "#cbd5e1",
+            corner_radius="20px",
+            padding_all="md",
         )
         for cls in classifications
     ]
@@ -681,7 +692,7 @@ def make_classification_select_flex(classifications: list[str], reviewed_cls: se
             body=FlexBox(
                 layout="vertical",
                 contents=btns,
-                spacing="xs",
+                spacing="sm",
                 padding_all="md",
             ),
         ),
