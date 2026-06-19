@@ -155,8 +155,8 @@ def make_image() -> bytes:
         None,   # 7: image
     ]
 
-    font_label = load_font(70)
-    font_sm    = load_font(54)   # 長いラベル用
+    font_label = load_font(52)
+    font_sm    = load_font(42)   # 長いラベル用
 
     # ── 背景グラデーション ──
     bg_top = (6, 10, 26)
@@ -202,9 +202,10 @@ def make_image() -> bytes:
         ImageDraw.Draw(mask).rounded_rectangle([0, 0, cw-1, ch-1], radius=RAD, fill=255)
         img.paste(card, (cx0, cy0), mask)
 
-        # ── イラスト（上部 62% の領域・大きめ） ──
-        icon_area_h = int(ch * 0.62)
-        icon_size   = int(min(cw, icon_area_h) * 0.88)
+        # ── イラスト（カードの大部分を占める） ──
+        label_area_h = int(ch * 0.22)   # 下部22%をラベル用に確保
+        icon_area_h  = ch - label_area_h
+        icon_size    = int(min(cw, icon_area_h) * 0.90)
         icon_img = Image.open(icon_path).convert("RGBA").resize(
             (icon_size, icon_size), Image.LANCZOS
         )
@@ -212,14 +213,14 @@ def make_image() -> bytes:
         iy = cy0 + (icon_area_h - icon_size) // 2
         img.paste(icon_img, (ix, iy), icon_img)
 
-        # ── ラベル（アウトライン付きポップ文字） ──
+        # ── ラベル（小さめ・下部サブテキスト） ──
         lf = font_sm if len(label) > 6 else font_label
         bb = draw.textbbox((0, 0), label, font=lf)
         lw = bb[2] - bb[0]
         lx = cx0 + (cw - lw) // 2 - bb[0]
-        ly = cy0 + int(ch * 0.70) - bb[1]
+        ly = cy0 + icon_area_h + (label_area_h - (bb[3]-bb[1])) // 2 - bb[1]
         outline = (0, 0, 0)
-        for ox, oy in [(-4,0),(4,0),(0,-4),(0,4),(-3,-3),(3,-3),(-3,3),(3,3)]:
+        for ox, oy in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,-2),(-2,2),(2,2)]:
             draw.text((lx+ox, ly+oy), label, fill=outline, font=lf)
         draw.text((lx, ly), label, fill=fg, font=lf)
 
