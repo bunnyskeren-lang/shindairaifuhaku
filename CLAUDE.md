@@ -42,10 +42,16 @@ echo yes | python -X utf8 setup_richmenu.py --env prod
 - `course_instructors`
 
 ### LIFF ID の固定ルール
-| 環境 | LIFF_ID |
-|---|---|
-| **本番** | `2010406205-emxo5rhE`（コードデフォルト） |
-| **dev** | `2010433465-R8b5k1SZ`（`.env.dev` に記載） |
+
+| 環境 | LIFF_ID | 科目詳細エンドポイント |
+|---|---|---|
+| **本番** | `2010406205-emxo5rhE` | `https://shindairaifuhaku.onrender.com/liff/course` |
+| **dev** | `2010433465-R8b5k1SZ` | `https://shindairaifuhaku-1.onrender.com/liff/course` |
+
+- 本番の科目詳細ボタンは必ず本番 LIFF ID を使い、本番エンドポイントを開くこと
+- dev の科目詳細ボタンは必ず dev LIFF ID を使い、dev エンドポイントを開くこと
+- **LIFF ID を dev と本番で入れ替えることは絶対に禁止**
+- `LIFF_ID` は Render の各サービス環境変数で管理する（本番はコードデフォルト値と一致）
 
 ### REVIEW_FORM_URL の固定ルール
 | 環境 | REVIEW_FORM_URL |
