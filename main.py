@@ -645,15 +645,16 @@ def _variant_suffix(base: str, full: str) -> str:
     return full[-1]
 
 
-def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> FlexMessage:
+def make_variant_selection_bubble(base_name: str, variant_names: list[str], reviewed_names: set[str] = frozenset()) -> FlexMessage:
     suffix_str = " / ".join(_variant_suffix(base_name, n) for n in variant_names)
     rows = []
     for name in variant_names:
+        color = "#4f46e5" if name in reviewed_names else "#94a3b8"
         rows.append(
             FlexBox(
                 layout="vertical",
                 action=MessageAction(label=name[:40], text=name),
-                contents=[FlexText(text=name, wrap=True, size="sm", color="#4f46e5")],
+                contents=[FlexText(text=name, wrap=True, size="sm", color=color)],
                 padding_top="sm",
                 padding_bottom="sm",
             )
@@ -1002,6 +1003,11 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 contents=make_ranking_bubble("😴 楽単ランキング TOP5", items),
             )]
 
+        # レビューがある科目名セット（バリアント選択の色分けに使用）
+        _reviewed_names: set[str] = set((await session.execute(
+            select(PendingReview.course_name).where(PendingReview.is_approved == True).distinct()
+        )).scalars().all())
+
         # Exact course name match
         exact = (await session.execute(
             select(Course).where(Course.name == t)
@@ -1031,7 +1037,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             if len(_sem_courses) == 1:
                 return [await get_course_flex(_sem_courses[0], user_id)]
             if len(_sem_courses) >= 2:
-                return [make_variant_selection_bubble(t, [c.name for c in _sem_courses])]
+                return [make_variant_selection_bubble(t, [c.name for c in _sem_courses], _reviewed_names)]
 
         # Variant group (A/B/C/D...)
         _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
@@ -1039,7 +1045,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             select(Course).where(Course.name.in_(_variant_names)).order_by(Course.name)
         )).scalars().all()
         if len(variant_courses) >= 2:
-            return [make_variant_selection_bubble(t, [c.name for c in variant_courses])]
+            return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
 
         # Numeric variant group (e.g. 「英語1」「英語2」or「第三外国語(ドイツ語)T1」)
         _num_candidates = (await session.execute(
@@ -1051,7 +1057,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
         )
         if len(_num_variants) >= 2:
-            return [make_variant_selection_bubble(t, [c.name for c in _num_variants])]
+            return [make_variant_selection_bubble(t, [c.name for c in _num_variants], _reviewed_names)]
 
         # Keyword search
         _PUNCT = '・･、。「」『』【】（）()／/〜~'
@@ -1116,7 +1122,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                     variants = base_variants.get(base, [])
                     if len(variants) >= 2:
                         seen_base.add(base)
-                        result.append(make_variant_selection_bubble(base, variants))
+                        result.append(make_variant_selection_bubble(base, variants, _reviewed_names))
                         continue
                 _m2 = _re.match(r'^(.*?)[\s　]*[A-Z]?\d+$', name)
                 if _m2:
@@ -1126,7 +1132,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                     num_vs = _kw_num_bases.get(base, [])
                     if len(num_vs) >= 2:
                         seen_num_base.add(base)
-                        result.append(make_variant_selection_bubble(base, sorted(num_vs)))
+                        result.append(make_variant_selection_bubble(base, sorted(num_vs), _reviewed_names))
                         continue
                 result.append(await get_course_flex(c, user_id))
             return result[:5]
