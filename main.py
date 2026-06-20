@@ -36,8 +36,9 @@ from linebot.v3.messaging import (
     FlexCarousel,
     URIAction,
     MessageAction,
+    PostbackAction,
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, PostbackEvent
 
 from sqlalchemy import select, func, delete, or_, update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -653,7 +654,7 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str], revi
         rows.append(
             FlexBox(
                 layout="vertical",
-                action=MessageAction(label=name[:40], text=name),
+                action=PostbackAction(label=name[:40], data=name),
                 contents=[FlexText(text=name, wrap=True, size="sm", color=color)],
                 padding_top="sm",
                 padding_bottom="sm",
@@ -687,7 +688,7 @@ def make_classification_select_flex(classifications: list[str], reviewed_cls: se
     btns = [
         FlexBox(
             layout="vertical",
-            action=MessageAction(label=cls[:40], text=cls),
+            action=PostbackAction(label=cls[:40], data=cls),
             contents=[
                 FlexText(
                     text=cls,
@@ -847,7 +848,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                 btn_contents.append(
                     FlexBox(
                         layout="vertical",
-                        action=MessageAction(label=display[:40], text=name),
+                        action=PostbackAction(label=display[:40], data=name),
                         contents=[FlexText(text=display, wrap=True, size="sm", color=text_color)],
                         padding_top="sm",
                         padding_bottom="sm",
@@ -1168,6 +1169,42 @@ async def _process_events(events) -> None:
                         )
                     except Exception as exc:
                         await save_error_log(exc, action="follow")
+                    continue
+
+                if isinstance(event, PostbackEvent):
+                    user_id = event.source.user_id
+                    data = event.postback.data
+                    try:
+                        asyncio.create_task(_save_log_bg(user_id, "in", f"[postback]{data}"))
+                        messages = await asyncio.wait_for(
+                            handle_message(data, user_id),
+                            timeout=25.0,
+                        )
+                        await line_api.reply_message(
+                            ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=messages[:5],
+                            )
+                        )
+                        asyncio.create_task(_save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
+                    except asyncio.TimeoutError:
+                        await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=data)
+                        try:
+                            await line_api.reply_message(ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
+                            ))
+                        except Exception:
+                            pass
+                    except Exception as exc:
+                        await save_error_log(exc, user_id=user_id, action=f"postback:{data}")
+                        try:
+                            await line_api.reply_message(ReplyMessageRequest(
+                                reply_token=event.reply_token,
+                                messages=[TextMessage(text="エラーが発生しました。もう一度お試しください。")],
+                            ))
+                        except Exception:
+                            pass
                     continue
 
                 if not isinstance(event, MessageEvent):
