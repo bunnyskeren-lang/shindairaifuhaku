@@ -266,6 +266,7 @@
           <input type="text" id="formatCustomInput"
             class="hidden w-full mt-2 border border-purple-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition bg-white"
             placeholder="例：ハイブリッド形式など" maxlength="30">
+          <p id="formatCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
           <p id="classFormatError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
         </div>
 
@@ -307,6 +308,7 @@
           <input type="text" id="evalCustomInput"
             class="hidden w-full mt-2 border border-indigo-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white"
             placeholder="例：口頭試問、実技など" maxlength="50">
+          <p id="evalCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
           <p id="evalError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
         </div>
 
@@ -516,6 +518,18 @@
 
     ['evalCustomInput', 'formatCustomInput', 'gradingExtra'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => { updateGradingMethod(); saveData(); });
+    });
+    document.getElementById('evalCustomInput').addEventListener('input', () => {
+      if (document.getElementById('evalCustomInput').value.trim()) {
+        document.getElementById('evalCustomError').classList.add('hidden');
+        document.getElementById('evalCustomInput').classList.remove('border-red-400');
+      }
+    });
+    document.getElementById('formatCustomInput').addEventListener('input', () => {
+      if (document.getElementById('formatCustomInput').value.trim()) {
+        document.getElementById('formatCustomError').classList.add('hidden');
+        document.getElementById('formatCustomInput').classList.remove('border-red-400');
+      }
     });
 
     document.getElementById('reviewForm').addEventListener('keydown', e => {
@@ -1067,7 +1081,7 @@
       // 全エラーを一旦リセット
       ['submitterNameError','regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
-       'classFormatError','attendanceError','homeworkError','evalError'].forEach(id => {
+       'classFormatError','formatCustomError','attendanceError','homeworkError','evalError','evalCustomError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -1116,22 +1130,26 @@
         document.getElementById('homeworkError').classList.remove('hidden');
         valid = false;
       }
-      // 評価方法：手入力のみ選択 & 何も打っていない場合はエラー
+      // 評価方法
       const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
-      const evalValues = evalActives.map(b => b.dataset.value === '__custom__'
-        ? document.getElementById('evalCustomInput').value.trim()
-        : b.dataset.value).filter(Boolean);
-      if (evalValues.length === 0) {
+      if (evalActives.length === 0) {
         document.getElementById('evalError').classList.remove('hidden');
         valid = false;
+      } else if (evalActives.some(b => b.dataset.value === '__custom__') &&
+                 !document.getElementById('evalCustomInput').value.trim()) {
+        document.getElementById('evalCustomError').classList.remove('hidden');
+        document.getElementById('evalCustomInput').classList.add('border-red-400');
+        valid = false;
       }
-      // 授業形式：手入力のみ選択 & 何も打っていない場合はエラー
+      // 授業形式
       const fmtActives = [...document.querySelectorAll('[data-group="class_format"].active')];
-      const fmtValues = fmtActives.map(b => b.dataset.value === '__format_custom__'
-        ? document.getElementById('formatCustomInput').value.trim()
-        : b.dataset.value).filter(Boolean);
-      if (fmtValues.length === 0) {
+      if (fmtActives.length === 0) {
         document.getElementById('classFormatError').classList.remove('hidden');
+        valid = false;
+      } else if (fmtActives.some(b => b.dataset.value === '__format_custom__') &&
+                 !document.getElementById('formatCustomInput').value.trim()) {
+        document.getElementById('formatCustomError').classList.remove('hidden');
+        document.getElementById('formatCustomInput').classList.add('border-red-400');
         valid = false;
       }
       // コメント必須
