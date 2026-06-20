@@ -1357,6 +1357,39 @@ async def search_courses(q: str = ""):
     ]}
 
 
+@app.get("/api/preload")
+async def api_preload():
+    async with AsyncSessionLocal() as session:
+        courses_res, insts_res = await asyncio.gather(
+            session.execute(select(Course).order_by(Course.name)),
+            session.execute(select(CourseInstructor).order_by(CourseInstructor.name)),
+        )
+        courses = courses_res.scalars().all()
+        insts_raw = insts_res.scalars().all()
+    insts_by_course: dict = {}
+    inst_courses: dict = {}
+    course_by_id = {c.id: c.name for c in courses}
+    for inst in insts_raw:
+        insts_by_course.setdefault(inst.course_id, []).append({"name": inst.name})
+        cname = course_by_id.get(inst.course_id)
+        if cname:
+            bucket = inst_courses.setdefault(inst.name, [])
+            if not any(x["name"] == cname for x in bucket):
+                bucket.append({"name": cname})
+    course_list = [
+        {"id": c.id, "name": c.name, "reading": c.reading or "", "instructors": insts_by_course.get(c.id, [])}
+        for c in courses
+    ]
+    instructor_list = [
+        {"name": name, "courses": clist}
+        for name, clist in sorted(inst_courses.items())
+    ]
+    from fastapi.responses import JSONResponse
+    res = JSONResponse({"courses": course_list, "instructors": instructor_list})
+    res.headers["Cache-Control"] = "public, max-age=300"
+    return res
+
+
 @app.get("/api/instructors")
 async def search_instructors(q: str = ""):
     if not q.strip():

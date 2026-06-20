@@ -592,58 +592,73 @@
 
     const searchInput = document.getElementById('courseSearchInput');
     const dropdown = document.getElementById('courseDropdown');
-    let debounceTimer;
     let courseComposing = false;
 
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    async function fetchCourses(q) {
-      try {
-        const res = await fetch(`/api/courses?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        const items = data.courses || [];
-        if (items.length === 0) {
-          dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する科目はありません</div>`;
-          dropdown.classList.remove('hidden');
-          return;
-        }
-        dropdown.innerHTML = items.map((c, idx) =>
-          `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
-            style="border-bottom: 1px solid #f3f4f6; transition: background .1s"
-            onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-            <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}</div>
-            ${c.instructors.length
-              ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">担当教員 ${c.instructors.length}名</div>`
-              : ''}
-          </div>`
-        ).join('');
+    // ── プリロードキャッシュ ──
+    let _preload = null;
+    fetch('/api/preload').then(r => r.json()).then(d => { _preload = d; }).catch(() => {});
+
+    function _normStr(s) { return s.replace(/[・･（）()]/g, '').toLowerCase(); }
+
+    function _showCourseDropdown(items, q) {
+      if (items.length === 0) {
+        dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する科目はありません</div>`;
         dropdown.classList.remove('hidden');
-        dropdown.querySelectorAll('[data-idx]').forEach(el => {
-          const c = items[parseInt(el.dataset.idx)];
-          el.addEventListener('click', () => selectCourse(c.name, c.instructors));
+        return;
+      }
+      dropdown.innerHTML = items.slice(0, 30).map((c, idx) =>
+        `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
+          style="border-bottom:1px solid #f3f4f6;transition:background .1s"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+          <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}</div>
+          ${c.instructors.length
+            ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">担当教員 ${c.instructors.length}名</div>`
+            : ''}
+        </div>`
+      ).join('');
+      dropdown.classList.remove('hidden');
+      dropdown.querySelectorAll('[data-idx]').forEach(el => {
+        const c = items[parseInt(el.dataset.idx)];
+        el.addEventListener('click', () => selectCourse(c.name, c.instructors));
+      });
+    }
+
+    function searchCourses(q) {
+      document.getElementById('courseNameHidden').value = '';
+      if (!q) { dropdown.classList.add('hidden'); return; }
+      if (_preload) {
+        const tokens = q.trim().split(/[\s　]+/).filter(Boolean).map(t => t.toLowerCase());
+        const normTokens = tokens.map(_normStr);
+        const items = _preload.courses.filter(c => {
+          const name = c.name.toLowerCase();
+          const reading = (c.reading || '').toLowerCase();
+          const normName = _normStr(c.name);
+          return tokens.every((tok, i) =>
+            name.includes(tok) || reading.includes(tok) || normName.includes(normTokens[i])
+          );
         });
-      } catch (_) {}
+        _showCourseDropdown(items, q);
+      } else {
+        fetch(`/api/courses?q=${encodeURIComponent(q)}`)
+          .then(r => r.json())
+          .then(d => _showCourseDropdown(d.courses || [], q))
+          .catch(() => {});
+      }
     }
 
     searchInput.addEventListener('compositionstart', () => { courseComposing = true; });
     searchInput.addEventListener('compositionend', () => {
       courseComposing = false;
-      document.getElementById('courseNameHidden').value = '';
-      const q = searchInput.value.trim();
-      if (!q) { dropdown.classList.add('hidden'); return; }
-      clearTimeout(debounceTimer);
-      fetchCourses(q);
+      searchCourses(searchInput.value.trim());
     });
 
     searchInput.addEventListener('input', () => {
       if (courseComposing) return;
-      document.getElementById('courseNameHidden').value = '';
-      clearTimeout(debounceTimer);
-      const q = searchInput.value.trim();
-      if (!q) { dropdown.classList.add('hidden'); return; }
-      debounceTimer = setTimeout(() => fetchCourses(q), 150);
+      searchCourses(searchInput.value.trim());
     });
 
     let currentInstructors = [];
@@ -728,9 +743,7 @@
     // 先生名検索
     const instrSearchInput = document.getElementById('instructorSearchInput');
     const instrSearchDropdown = document.getElementById('instructorSearchDropdown');
-    let instrDebounceTimer;
     let instrComposing = false;
-    let instrAbort = null;
 
     function clearInstrSearch() {
       instrSearchDropdown.classList.add('hidden');
@@ -738,49 +751,55 @@
       document.getElementById('selectedInstructorHidden').value = '';
     }
 
-    async function fetchInstructors(q) {
-      if (instrAbort) instrAbort.abort();
-      instrAbort = new AbortController();
-      try {
-        const res = await fetch(`/api/instructors?q=${encodeURIComponent(q)}`, { signal: instrAbort.signal });
-        const data = await res.json();
-        const items = data.instructors || [];
-        if (items.length === 0) {
-          instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する先生が見つかりませんでした</div>`;
-          instrSearchDropdown.classList.remove('hidden');
-          return;
-        }
-        instrSearchDropdown.innerHTML = items.map((inst, idx) =>
-          `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
-            style="border-bottom:1px solid #f3f4f6;transition:background .1s"
-            onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-            <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(inst.name)}</div>
-            <div style="font-size:12px;color:#94a3b8;margin-top:2px">${inst.courses.length}科目担当</div>
-          </div>`
-        ).join('');
+    function _showInstrDropdown(items, q) {
+      if (items.length === 0) {
+        instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する先生が見つかりませんでした</div>`;
         instrSearchDropdown.classList.remove('hidden');
-        instrSearchDropdown.querySelectorAll('[data-instr-idx]').forEach(el => {
-          const inst = items[parseInt(el.dataset.instrIdx)];
-          el.addEventListener('click', () => selectInstructor(inst));
-        });
-      } catch(e) { if (e.name !== 'AbortError') console.warn(e); }
+        return;
+      }
+      instrSearchDropdown.innerHTML = items.slice(0, 20).map((inst, idx) =>
+        `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
+          style="border-bottom:1px solid #f3f4f6;transition:background .1s"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+          <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(inst.name)}</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:2px">${inst.courses.length}科目担当</div>
+        </div>`
+      ).join('');
+      instrSearchDropdown.classList.remove('hidden');
+      instrSearchDropdown.querySelectorAll('[data-instr-idx]').forEach(el => {
+        const inst = items[parseInt(el.dataset.instrIdx)];
+        el.addEventListener('click', () => selectInstructor(inst));
+      });
+    }
+
+    function searchInstructors(q) {
+      if (!q) { clearInstrSearch(); return; }
+      if (_preload) {
+        const ql = q.replace(/　/g, ' ').trim().toLowerCase();
+        const items = _preload.instructors
+          .filter(i => i.name.toLowerCase().includes(ql))
+          .sort((a, b) => {
+            const al = a.name.toLowerCase(), bl = b.name.toLowerCase();
+            return (al.startsWith(ql) ? 0 : 1) - (bl.startsWith(ql) ? 0 : 1) || al.localeCompare(bl);
+          });
+        _showInstrDropdown(items, q);
+      } else {
+        fetch(`/api/instructors?q=${encodeURIComponent(q)}`)
+          .then(r => r.json())
+          .then(d => _showInstrDropdown(d.instructors || [], q))
+          .catch(() => {});
+      }
     }
 
     instrSearchInput.addEventListener('compositionstart', () => { instrComposing = true; });
     instrSearchInput.addEventListener('compositionend', () => {
       instrComposing = false;
-      const q = instrSearchInput.value.trim();
-      if (!q) { clearInstrSearch(); return; }
-      clearTimeout(instrDebounceTimer);
-      fetchInstructors(q);
+      searchInstructors(instrSearchInput.value.trim());
     });
 
     instrSearchInput.addEventListener('input', () => {
       if (instrComposing) return;
-      clearTimeout(instrDebounceTimer);
-      const q = instrSearchInput.value.trim();
-      if (!q) { clearInstrSearch(); return; }
-      instrDebounceTimer = setTimeout(() => fetchInstructors(q), 150);
+      searchInstructors(instrSearchInput.value.trim());
     });
 
     function selectInstructor(inst) {
@@ -1164,11 +1183,14 @@
     (async () => {
       const urlCourse = new URLSearchParams(location.search).get('course');
       if (!urlCourse) return;
-      try {
-        const res = await fetch(`/api/courses?q=${encodeURIComponent(urlCourse)}`);
-        const data = await res.json();
+      const trySelect = (data) => {
         const match = (data.courses || []).find(c => c.name === urlCourse);
         if (match) selectCourse(match.name, match.instructors);
+      };
+      if (_preload) { trySelect(_preload); return; }
+      try {
+        const res = await fetch(`/api/courses?q=${encodeURIComponent(urlCourse)}`);
+        trySelect(await res.json());
       } catch (_) {}
     })();
   </script>
