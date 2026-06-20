@@ -345,11 +345,8 @@
 
         <!-- 文字数フィードバック -->
         <div class="mt-2">
-          <div class="flex justify-between items-center mb-1">
-            <span id="commentFeedback" class="text-xs font-medium text-gray-400"></span>
-            <span class="text-xs text-gray-400"><span id="charCount">0</span>/500文字</span>
-          </div>
-          <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+          <span id="commentFeedback" class="text-xs font-medium text-gray-400"></span>
+          <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mt-1">
             <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
           </div>
         </div>
@@ -856,7 +853,6 @@
       [100, '神レビュー！ありがとうございます🙏', '#10b981', 100],
     ];
     function updateCommentFeedback(len) {
-      document.getElementById('charCount').textContent = len;
       let row = COMMENT_FEEDBACK[0];
       for (const r of COMMENT_FEEDBACK) { if (len >= r[0]) row = r; }
       document.getElementById('commentFeedback').textContent = row[1];
