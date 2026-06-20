@@ -45,7 +45,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap
+from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -1979,6 +1979,20 @@ async def admin_activity(request: Request, _: str = Depends(check_admin)):
 
 
 
+@app.get("/admin/course-views", response_class=HTMLResponse)
+async def admin_course_views(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(CourseView).order_by(CourseView.view_count.desc())
+        )).scalars().all()
+    return templates.TemplateResponse("admin/course_views.html", {
+        "request": request,
+        "rows": rows,
+        "IS_DEV": IS_DEV,
+        "VAPID_PUBLIC_KEY": VAPID_PUBLIC_KEY,
+    })
+
+
 @app.post("/admin/courses/classification/rename")
 async def rename_classification(
     _: str = Depends(check_admin),
@@ -2196,8 +2210,24 @@ async def api_course(course_id: int):
                         .limit(50)
                     )).scalars().all()
 
-            instructors, agg, ease_rows, reviews_raw = await asyncio.gather(
-                _instrs(), _agg(), _ease(), _reviews()
+            async def _record_view():
+                async with AsyncSessionLocal() as s:
+                    await s.execute(
+                        pg_insert(CourseView).values(
+                            course_id=course.id,
+                            course_name=course.name,
+                            view_count=1,
+                            last_viewed_at=datetime.now(timezone.utc),
+                        ).on_conflict_do_update(
+                            index_elements=["course_id"],
+                            set_={"view_count": CourseView.view_count + 1,
+                                  "last_viewed_at": datetime.now(timezone.utc)},
+                        )
+                    )
+                    await s.commit()
+
+            instructors, agg, ease_rows, reviews_raw, _ = await asyncio.gather(
+                _instrs(), _agg(), _ease(), _reviews(), _record_view()
             )
             instructor_str = "・".join(i.name for i in instructors) or course.instructor or ""
             avg_rating = float(agg[0]) if agg and agg[0] else None

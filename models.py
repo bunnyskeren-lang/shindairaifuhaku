@@ -116,6 +116,15 @@ class RichMenuTap(Base):
     )
 
 
+class CourseView(Base):
+    __tablename__ = "course_views"
+
+    course_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 

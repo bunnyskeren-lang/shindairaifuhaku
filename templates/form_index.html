@@ -264,6 +264,21 @@
           <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
+        <!-- 授業形式 -->
+        <div class="rounded-xl bg-purple-50 border border-purple-100 p-3 mb-3">
+          <p class="text-xs font-bold text-purple-700 mb-2">🎓 授業形式 <span class="text-red-500">*</span> <span class="font-normal text-purple-400">複数選択可</span></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="chip-btn multi" data-group="class_format" data-value="対面">対面</button>
+            <button type="button" class="chip-btn multi" data-group="class_format" data-value="リアルタイム配信">リアルタイム配信</button>
+            <button type="button" class="chip-btn multi" data-group="class_format" data-value="オンデマンド">オンデマンド</button>
+            <button type="button" class="chip-btn multi" data-group="class_format" data-value="__format_custom__">✏️ 手入力</button>
+          </div>
+          <input type="text" id="formatCustomInput"
+            class="hidden w-full mt-2 border border-purple-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition bg-white"
+            placeholder="例：ハイブリッド形式など" maxlength="30">
+          <p id="classFormatError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
+        </div>
+
         <!-- 課題の量 -->
         <div class="rounded-xl bg-orange-50 border border-orange-100 p-3 mb-3">
           <p class="text-xs font-bold text-orange-700 mb-2">📝 課題の量 <span class="text-red-500">*</span></p>
@@ -473,7 +488,7 @@
         } else {
           btn.classList.toggle('active');
         }
-        const errMap = { attendance: 'attendanceError', homework: 'homeworkError', eval: 'evalError' };
+        const errMap = { attendance: 'attendanceError', homework: 'homeworkError', eval: 'evalError', class_format: 'classFormatError' };
         if (errMap[btn.dataset.group]) document.getElementById(errMap[btn.dataset.group]).classList.add('hidden');
         if (btn.dataset.value === '__custom__') {
           const customInput = document.getElementById('evalCustomInput');
@@ -485,12 +500,27 @@
             customInput.value = '';
           }
         }
+        if (btn.dataset.value === '__format_custom__') {
+          const formatInput = document.getElementById('formatCustomInput');
+          if (btn.classList.contains('active')) {
+            formatInput.classList.remove('hidden');
+            formatInput.focus();
+          } else {
+            formatInput.classList.add('hidden');
+            formatInput.value = '';
+          }
+        }
         updateGradingMethod();
         saveData();
       };
     });
 
     document.getElementById('evalCustomInput').addEventListener('input', () => {
+      updateGradingMethod();
+      saveData();
+    });
+
+    document.getElementById('formatCustomInput').addEventListener('input', () => {
       updateGradingMethod();
       saveData();
     });
@@ -508,6 +538,13 @@
 
     function updateGradingMethod() {
       const parts = [];
+      const formats = [...document.querySelectorAll('[data-group="class_format"].active')].map(b => {
+        if (b.dataset.value === '__format_custom__') {
+          return document.getElementById('formatCustomInput').value.trim() || null;
+        }
+        return b.dataset.value;
+      }).filter(Boolean);
+      if (formats.length) parts.push(`形式:${formats.join('・')}`);
       const att = document.querySelector('[data-group="attendance"].active');
       if (att) parts.push(`出席:${att.dataset.value}`);
       const hw = document.querySelector('[data-group="homework"].active');
@@ -895,6 +932,8 @@
           selectedInstructor: document.getElementById('selectedInstructorHidden').value,
           rating: currentRating,
           ease: currentEase,
+          classFormats: [...document.querySelectorAll('[data-group="class_format"].active')].map(b => b.dataset.value),
+          formatCustom: document.getElementById('formatCustomInput').value,
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
           homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
           evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
@@ -934,6 +973,16 @@
           document.getElementById('easeHidden').value = EASE_VALS[d.ease];
           document.getElementById('easeLabel').textContent = EASE_LABELS[d.ease];
           buildEaseStars();
+        }
+        if (d.classFormats?.length) {
+          document.querySelectorAll('[data-group="class_format"]').forEach(b => {
+            b.classList.toggle('active', d.classFormats.includes(b.dataset.value));
+          });
+          if (d.classFormats.includes('__format_custom__')) {
+            const formatInput = document.getElementById('formatCustomInput');
+            formatInput.classList.remove('hidden');
+            if (d.formatCustom) formatInput.value = d.formatCustom;
+          }
         }
         if (d.attendance) {
           document.querySelectorAll('[data-group="attendance"]').forEach(b => {
@@ -983,6 +1032,7 @@
         ['instructorError','courseCard'],
         ['ratingError','ratingCard'],
         ['easeError','easeCard'],
+        ['classFormatError','gradingCard'],
         ['attendanceError','gradingCard'],
         ['homeworkError','gradingCard'],
         ['evalError','gradingCard'],
@@ -997,7 +1047,7 @@
       // 全エラーを一旦リセット
       ['submitterNameError','regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
-       'attendanceError','homeworkError','evalError'].forEach(id => {
+       'classFormatError','attendanceError','homeworkError','evalError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -1036,6 +1086,10 @@
           !document.getElementById('selectedInstructorHidden').value) {
         document.getElementById('instructorSelectSection').classList.remove('hidden');
         document.getElementById('instructorError').classList.remove('hidden');
+        valid = false;
+      }
+      if (!document.querySelector('[data-group="class_format"].active')) {
+        document.getElementById('classFormatError').classList.remove('hidden');
         valid = false;
       }
       if (!document.querySelector('[data-group="attendance"].active')) {

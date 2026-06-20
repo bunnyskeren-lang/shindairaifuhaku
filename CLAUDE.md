@@ -42,8 +42,8 @@
 # 1. コードを本番ブランチにプッシュ
 git push origin dev:shindairaifuhaku-prod
 
-# 2. 本番リッチメニューを更新
-echo yes | python -X utf8 setup_richmenu.py --env prod
+# 2. 本番リッチメニューを更新（programing files/ から実行すること）
+cd "programing files" && python -X utf8 setup_richmenu.py "../picture/ricchimenu.png"
 ```
 
 ### DBの同期（デプロイ時に必ず実施）

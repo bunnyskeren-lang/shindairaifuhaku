@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% block title %}科目閲覧数{% endblock %}
+{% block heading %}📈 科目詳細画面 閲覧数{% endblock %}
+{% block content %}
+<p style="font-size:13px;color:#6b7280;margin-bottom:12px">LIFFの科目詳細画面が開かれた回数（累計）</p>
+{% if rows %}
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>科目名</th>
+      <th>閲覧数</th>
+      <th>最終閲覧</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td style="color:#9ca3af">{{ loop.index }}</td>
+      <td>{{ row.course_name }}</td>
+      <td><strong>{{ row.view_count }}</strong></td>
+      <td style="color:#6b7280;font-size:12px">{{ row.last_viewed_at.strftime('%Y/%m/%d %H:%M') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#6b7280;font-size:13px">まだ閲覧データがありません。</p>
+{% endif %}
+{% endblock %}
