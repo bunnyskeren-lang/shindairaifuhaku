@@ -1074,6 +1074,11 @@
     }
 
     document.getElementById('reviewForm').addEventListener('submit', e => {
+      // 送信ボタン以外（スマホキーボードのGoキーなど）からの送信は静かに止める
+      if (!e.submitter || e.submitter.id !== 'submitBtn') {
+        e.preventDefault();
+        return;
+      }
       // 全エラーを一旦リセット
       ['submitterNameError','regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
