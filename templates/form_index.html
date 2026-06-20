@@ -515,9 +515,13 @@
     });
 
     ['evalCustomInput', 'formatCustomInput', 'gradingExtra'].forEach(id => {
-      const el = document.getElementById(id);
-      el.addEventListener('input', () => { updateGradingMethod(); saveData(); });
-      el.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+      document.getElementById(id).addEventListener('input', () => { updateGradingMethod(); saveData(); });
+    });
+
+    document.getElementById('reviewForm').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.type !== 'submit') {
+        e.preventDefault();
+      }
     });
 
     document.getElementById('academic_year').addEventListener('change', () => {
