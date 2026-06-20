@@ -165,6 +165,7 @@
         <!-- 担当教員選択（科目名モード用） -->
         <div id="instructorSelectSection" class="hidden mt-3 pt-3 border-t border-gray-100">
           <p class="text-sm font-semibold text-gray-700 mb-2">👨‍🏫 担当教員 <span class="text-red-500">*</span></p>
+          <p id="instructorHint" class="hidden text-xs font-medium text-indigo-500 mb-2">👆 担当教員をタップして選択してください</p>
           <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
           <p id="instructorUnregistered" class="hidden text-xs text-gray-400">この科目は担当教員が登録されていません</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
@@ -673,6 +674,7 @@
 
       if (currentInstructors.length > 0) {
         chipsEl.classList.remove('hidden');
+        document.getElementById('instructorHint').classList.remove('hidden');
         chipsEl.innerHTML = currentInstructors.map(inst =>
           `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</button>`
         ).join('');
@@ -681,6 +683,7 @@
             chipsEl.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById('selectedInstructorHidden').value = btn.dataset.value;
+            document.getElementById('instructorHint').classList.add('hidden');
             document.getElementById('instructorError').classList.add('hidden');
             saveData();
           };
@@ -688,6 +691,7 @@
       } else {
         chipsEl.classList.add('hidden');
         chipsEl.innerHTML = '';
+        document.getElementById('instructorHint').classList.add('hidden');
         document.getElementById('instructorUnregistered').classList.remove('hidden');
       }
       saveData();
@@ -700,6 +704,7 @@
       document.getElementById('selectedInstructorDisplay').classList.add('hidden');
       chipsEl.classList.add('hidden');
       chipsEl.innerHTML = '';
+      document.getElementById('instructorHint').classList.add('hidden');
       document.getElementById('instructorUnregistered').classList.add('hidden');
       currentInstructors = [];
       if (searchMode === 'course') {
@@ -960,6 +965,7 @@
             document.querySelectorAll('[data-group="instructor"]').forEach(b => {
               b.classList.toggle('active', b.dataset.value === d.selectedInstructor);
             });
+            document.getElementById('instructorHint').classList.add('hidden');
           }
         }
         if (d.rating) {
