@@ -2104,18 +2104,23 @@ async def privacy(request: Request):
 
 @app.get("/liff/course", response_class=HTMLResponse)
 async def liff_course(request: Request):
-    return templates.TemplateResponse("liff/course.html", {
-        "request": request,
-        "liff_id": LIFF_ID,
-        "review_form_url": REVIEW_FORM_URL,
-        "base_url": APP_URL,
-        "IS_DEV": IS_DEV,
-    })
+    try:
+        return templates.TemplateResponse("liff/course.html", {
+            "request": request,
+            "liff_id": LIFF_ID,
+            "review_form_url": REVIEW_FORM_URL,
+            "base_url": APP_URL,
+            "IS_DEV": IS_DEV,
+        })
+    except Exception as exc:
+        await save_error_log(exc, action="liff_course")
+        raise
 
 
 @app.get("/api/course/{course_id}")
 async def api_course(course_id: int):
-    async with AsyncSessionLocal() as session:
+    try:
+        async with AsyncSessionLocal() as session:
             course = (await session.execute(
                 select(Course).where(Course.id == course_id)
             )).scalar_one_or_none()
@@ -2188,6 +2193,11 @@ async def api_course(course_id: int):
                     for r in reviews
                 ],
             }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        await save_error_log(exc, action=f"api_course/{course_id}")
+        raise
 
 
 _RICHMENU_URLS: dict[str, str] = {
