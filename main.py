@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse as _JSONResponse
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -224,6 +226,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    asyncio.create_task(save_error_log(
+        exc,
+        action=f"validation:{request.method} {request.url.path}",
+    ))
+    return _JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 @app.get("/admin/login", response_class=HTMLResponse)
