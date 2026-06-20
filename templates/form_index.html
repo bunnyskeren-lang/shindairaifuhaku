@@ -865,7 +865,9 @@
     });
 
     document.getElementById('comment').addEventListener('input', () => {
-      updateCommentFeedback(document.getElementById('comment').value.length);
+      const el = document.getElementById('comment');
+      updateCommentFeedback(el.value.length);
+      if (el.value.trim()) el.classList.remove('ring-2', 'ring-red-400', 'border-red-400');
       saveData();
     });
     function validateName(inputEl, errorEl) {
@@ -1106,10 +1108,6 @@
         document.getElementById('instructorError').classList.remove('hidden');
         valid = false;
       }
-      if (!document.querySelector('[data-group="class_format"].active')) {
-        document.getElementById('classFormatError').classList.remove('hidden');
-        valid = false;
-      }
       if (!document.querySelector('[data-group="attendance"].active')) {
         document.getElementById('attendanceError').classList.remove('hidden');
         valid = false;
@@ -1118,8 +1116,27 @@
         document.getElementById('homeworkError').classList.remove('hidden');
         valid = false;
       }
-      if (!document.querySelector('[data-group="eval"].active')) {
+      // 評価方法：手入力のみ選択 & 何も打っていない場合はエラー
+      const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
+      const evalValues = evalActives.map(b => b.dataset.value === '__custom__'
+        ? document.getElementById('evalCustomInput').value.trim()
+        : b.dataset.value).filter(Boolean);
+      if (evalValues.length === 0) {
         document.getElementById('evalError').classList.remove('hidden');
+        valid = false;
+      }
+      // 授業形式：手入力のみ選択 & 何も打っていない場合はエラー
+      const fmtActives = [...document.querySelectorAll('[data-group="class_format"].active')];
+      const fmtValues = fmtActives.map(b => b.dataset.value === '__format_custom__'
+        ? document.getElementById('formatCustomInput').value.trim()
+        : b.dataset.value).filter(Boolean);
+      if (fmtValues.length === 0) {
+        document.getElementById('classFormatError').classList.remove('hidden');
+        valid = false;
+      }
+      // コメント必須
+      if (!document.getElementById('comment').value.trim()) {
+        document.getElementById('comment').classList.add('ring-2', 'ring-red-400', 'border-red-400');
         valid = false;
       }
       if (!valid) {
