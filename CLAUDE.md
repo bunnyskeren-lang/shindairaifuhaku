@@ -46,11 +46,28 @@ git push origin dev:shindairaifuhaku-prod
 echo yes | python -X utf8 setup_richmenu.py --env prod
 ```
 
-### DBの科目データを dev → prod に同期する場合
-レビュー・ログ・ユーザー系テーブルは**絶対に触らないこと**。同期対象は以下3テーブルのみ：
+### DBの同期（デプロイ時に必ず実施）
+
+**本番デプロイ時は、コードのプッシュに加えて必ず dev → prod のDB同期も行うこと。**
+
+同期対象（この3テーブルのみ）：
 - `classification_orders`
 - `courses`
 - `course_instructors`
+
+絶対に同期しないテーブル（ユーザーデータ・ログ・レビュー・利用履歴）：
+- `pending_reviews`
+- `message_logs`
+- `user_profiles`
+- `user_activity`
+- `error_logs`
+- `push_subscriptions`
+- `richmenu_taps`
+
+同期方法（Python スクリプトで dev → prod にコピー）：
+1. dev DBから3テーブルのデータを取得
+2. prod DBの3テーブルをTRUNCATEしてINSERT
+3. レビュー等への外部キー制約に注意（`course_instructors` → `courses` の順で削除、逆順でINSERT）
 
 ### LIFF ID の固定ルール
 
@@ -80,3 +97,10 @@ echo yes | python -X utf8 setup_richmenu.py --env prod
 |---|---|
 | `programing files/.env.dev` | **dev** ボット用トークン |
 | `programing files/.env` | **本番** ボット用トークン |
+
+## データベース接続情報
+
+| 環境 | DATABASE_URL |
+|---|---|
+| **dev** | `postgresql://postgres.ofsvkcptzngbsxtdbqzj:Developerr6363st@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres` |
+| **本番** | `postgresql://postgres.sagubqrhjnzrtcvlmzqy:Linebot6363st@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres` |
