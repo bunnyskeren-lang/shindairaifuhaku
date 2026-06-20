@@ -254,17 +254,6 @@
           <label class="text-sm font-semibold text-gray-700">📋 成績評価方法</label>
         </div>
 
-        <!-- 出席確認 -->
-        <div class="rounded-xl bg-teal-50 border border-teal-100 p-3 mb-3">
-          <p class="text-xs font-bold text-teal-700 mb-2">🏫 出席確認 <span class="text-red-500">*</span></p>
-          <div class="flex flex-wrap gap-2">
-            <button type="button" class="chip-btn single" data-group="attendance" data-value="毎回あり">毎回あり</button>
-            <button type="button" class="chip-btn single" data-group="attendance" data-value="たまにあり">たまにあり</button>
-            <button type="button" class="chip-btn single" data-group="attendance" data-value="なし">なし</button>
-          </div>
-          <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
-        </div>
-
         <!-- 授業形式 -->
         <div class="rounded-xl bg-purple-50 border border-purple-100 p-3 mb-3">
           <p class="text-xs font-bold text-purple-700 mb-2">🎓 授業形式 <span class="text-red-500">*</span> <span class="font-normal text-purple-400">複数選択可</span></p>
@@ -278,6 +267,17 @@
             class="hidden w-full mt-2 border border-purple-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition bg-white"
             placeholder="例：ハイブリッド形式など" maxlength="30">
           <p id="classFormatError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
+        </div>
+
+        <!-- 出席確認 -->
+        <div class="rounded-xl bg-teal-50 border border-teal-100 p-3 mb-3">
+          <p class="text-xs font-bold text-teal-700 mb-2">🏫 出席確認 <span class="text-red-500">*</span></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="chip-btn single" data-group="attendance" data-value="毎回あり">毎回あり</button>
+            <button type="button" class="chip-btn single" data-group="attendance" data-value="たまにあり">たまにあり</button>
+            <button type="button" class="chip-btn single" data-group="attendance" data-value="なし">なし</button>
+          </div>
+          <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
         <!-- 課題の量 -->
