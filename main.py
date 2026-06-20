@@ -649,12 +649,11 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> F
     suffix_str = " / ".join(_variant_suffix(base_name, n) for n in variant_names)
     rows = []
     for name in variant_names:
-        suffix = _variant_suffix(base_name, name).strip() or "通常"
         rows.append(
             FlexBox(
                 layout="vertical",
-                action=MessageAction(label=suffix[:40], text=name),
-                contents=[FlexText(text=suffix, wrap=True, size="sm", color="#4f46e5")],
+                action=MessageAction(label=name[:40], text=name),
+                contents=[FlexText(text=name, wrap=True, size="sm", color="#4f46e5")],
                 padding_top="sm",
                 padding_bottom="sm",
             )
