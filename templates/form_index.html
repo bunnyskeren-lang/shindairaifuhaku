@@ -617,7 +617,7 @@
 
     function _showCourseDropdown(items, q) {
       if (items.length === 0) {
-        dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する科目はありません</div>`;
+        dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">候補がありません</div>`;
         dropdown.classList.remove('hidden');
         return;
       }
@@ -764,7 +764,7 @@
 
     function _showInstrDropdown(items, q) {
       if (items.length === 0) {
-        instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(q)}」に一致する先生が見つかりませんでした</div>`;
+        instrSearchDropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">候補がありません</div>`;
         instrSearchDropdown.classList.remove('hidden');
         return;
       }
