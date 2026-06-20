@@ -59,7 +59,7 @@ VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
-STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZ])$')
+STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
