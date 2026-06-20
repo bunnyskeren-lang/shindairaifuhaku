@@ -21,7 +21,25 @@
 
 {% block content %}
 
-<!-- ① リッチメニュー URIタップ合計 -->
+<!-- ① 科目詳細 閲覧数 -->
+<div class="card">
+  <div class="section-title">👁 科目詳細画面 閲覧数（累計）</div>
+  {% if course_view_rows %}
+    {% for row in course_view_rows %}
+    <div class="bar-row">
+      <div class="bar-label" title="{{ row.course_name }}">{{ row.course_name }}</div>
+      <div class="bar-wrap">
+        <div class="bar-fill" style="width:{{ (row.view_count / (course_view_rows[0].view_count or 1) * 100) | int }}%;background:#8b5cf6"></div>
+      </div>
+      <div class="bar-count" style="color:#7c3aed">{{ row.view_count }}回</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p style="color:#9ca3af;font-size:13px">まだ閲覧データがありません</p>
+  {% endif %}
+</div>
+
+<!-- ② リッチメニュー URIタップ合計 -->
 <div class="card">
   <div class="section-title">🔗 リッチメニュー URIタップ合計</div>
   {% if uri_stats %}
@@ -54,7 +72,7 @@
   {% endif %}
 </div>
 
-<!-- ② 全体メッセージランキング -->
+<!-- ③ 全体メッセージランキング -->
 <div class="card">
   <div class="section-title">📨 送信メッセージ 全体ランキング（上位20件）</div>
   {% if msg_ranking %}
@@ -72,7 +90,7 @@
   {% endif %}
 </div>
 
-<!-- ③ ユーザー別利用履歴 -->
+<!-- ④ ユーザー別利用履歴 -->
 <h2>👤 ユーザー別 利用履歴</h2>
 {% set ns = namespace(current_user=None, total=0) %}
 {% for r in activity_rows %}

@@ -1979,18 +1979,6 @@ async def admin_activity(request: Request, _: str = Depends(check_admin)):
 
 
 
-@app.get("/admin/course-views", response_class=HTMLResponse)
-async def admin_course_views(request: Request, _: str = Depends(check_admin)):
-    async with AsyncSessionLocal() as session:
-        rows = (await session.execute(
-            select(CourseView).order_by(CourseView.view_count.desc())
-        )).scalars().all()
-    return templates.TemplateResponse("admin/course_views.html", {
-        "request": request,
-        "rows": rows,
-        "IS_DEV": IS_DEV,
-        "VAPID_PUBLIC_KEY": VAPID_PUBLIC_KEY,
-    })
 
 
 @app.post("/admin/courses/classification/rename")
@@ -2353,29 +2341,38 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin)):
         "ヘルプ":         "ヘルプ",
     }
     async with AsyncSessionLocal() as session:
-        uri_rows = (await session.execute(
-            select(RichMenuTap.button, func.count(RichMenuTap.id).label("cnt"))
-            .group_by(RichMenuTap.button)
-            .order_by(func.count(RichMenuTap.id).desc())
-        )).all()
-        msg_btn_rows = (await session.execute(
-            select(UserActivity.action, func.sum(UserActivity.count).label("cnt"))
-            .where(UserActivity.action.in_(list(MSG_BTN_LABELS.keys())))
-            .group_by(UserActivity.action)
-            .order_by(func.sum(UserActivity.count).desc())
-        )).all()
-        activity_joined = (await session.execute(
-            select(
-                UserActivity.user_id,
-                UserProfile.name,
-                UserProfile.student_id,
-                UserActivity.action,
-                UserActivity.count,
-                UserActivity.last_at,
-            )
-            .outerjoin(UserProfile, UserProfile.line_user_id == UserActivity.user_id)
-            .order_by(UserActivity.user_id, UserActivity.count.desc())
-        )).all()
+        uri_rows, msg_btn_rows, activity_joined, course_view_rows = await asyncio.gather(
+            session.execute(
+                select(RichMenuTap.button, func.count(RichMenuTap.id).label("cnt"))
+                .group_by(RichMenuTap.button)
+                .order_by(func.count(RichMenuTap.id).desc())
+            ),
+            session.execute(
+                select(UserActivity.action, func.sum(UserActivity.count).label("cnt"))
+                .where(UserActivity.action.in_(list(MSG_BTN_LABELS.keys())))
+                .group_by(UserActivity.action)
+                .order_by(func.sum(UserActivity.count).desc())
+            ),
+            session.execute(
+                select(
+                    UserActivity.user_id,
+                    UserProfile.name,
+                    UserProfile.student_id,
+                    UserActivity.action,
+                    UserActivity.count,
+                    UserActivity.last_at,
+                )
+                .outerjoin(UserProfile, UserProfile.line_user_id == UserActivity.user_id)
+                .order_by(UserActivity.user_id, UserActivity.count.desc())
+            ),
+            session.execute(
+                select(CourseView).order_by(CourseView.view_count.desc())
+            ),
+        )
+        uri_rows = uri_rows.all()
+        msg_btn_rows = msg_btn_rows.all()
+        activity_joined = activity_joined.all()
+        course_view_rows = course_view_rows.scalars().all()
 
     uri_stats = [
         {"label": RICHMENU_LABELS.get(r.button, r.button), "count": r.cnt}
@@ -2400,6 +2397,7 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin)):
         "msg_btn_stats": msg_btn_stats,
         "msg_ranking": msg_ranking,
         "activity_rows": activity_joined,
+        "course_view_rows": course_view_rows,
         "max_bar": max_bar,
         "IS_DEV": IS_DEV,
         "VAPID_PUBLIC_KEY": VAPID_PUBLIC_KEY,
