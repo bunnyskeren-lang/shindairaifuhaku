@@ -647,37 +647,35 @@ def _variant_suffix(base: str, full: str) -> str:
 
 def make_variant_selection_bubble(base_name: str, variant_names: list[str]) -> FlexMessage:
     suffix_str = " / ".join(_variant_suffix(base_name, n) for n in variant_names)
-    btns = []
-    for i, name in enumerate(variant_names):
-        icon = VARIANT_ICONS.get(i, "▶")
-        color = VARIANT_COLORS[i % len(VARIANT_COLORS)]
+    rows = []
+    for name in variant_names:
         suffix = _variant_suffix(base_name, name).strip() or "通常"
-        label = f"{icon} {suffix}"[:40]
-        btns.append(
-            FlexButton(
-                action=MessageAction(label=label, text=name),
-                style="primary",
-                color=color,
-                height="sm",
+        rows.append(
+            FlexBox(
+                layout="vertical",
+                action=MessageAction(label=suffix[:40], text=name),
+                contents=[FlexText(text=suffix, wrap=True, size="sm", color="#4f46e5")],
+                padding_top="sm",
+                padding_bottom="sm",
             )
         )
     return FlexMessage(
         alt_text=f"📚 {base_name} — {suffix_str} どれを見ますか？",
         contents=FlexBubble(
+            size="kilo",
             header=FlexBox(
                 layout="vertical",
                 contents=[
-                    FlexText(text=base_name, weight="bold", color="#ffffff", size="lg", wrap=True),
-                    FlexText(text=f"{suffix_str}  どれを見ますか？", color="#c7d2fe", size="sm"),
+                    FlexText(text=base_name, weight="bold", color="#ffffff", size="sm", wrap=True),
                 ],
                 background_color="#6366f1",
-                padding_all="lg",
+                padding_all="md",
             ),
             body=FlexBox(
                 layout="vertical",
-                contents=btns,
-                spacing="md",
-                padding_all="lg",
+                contents=rows,
+                spacing="xs",
+                padding_all="md",
             ),
         ),
     )
