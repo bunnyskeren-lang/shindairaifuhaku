@@ -904,7 +904,7 @@
 
     const studentIdInput = document.getElementById('student_id');
     const studentIdError = document.getElementById('studentIdError');
-    const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZ])$/;
+    const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
     const NAME_RE = /^[a-zA-Z0-9぀-ヿ一-鿿\s　]+$/;
     let _autofillTimer;
     async function tryAutofill(sid) {

@@ -521,7 +521,7 @@ CONTACT_EMAIL = "bunnyskeren@gmail.com"
 def make_help_flex() -> FlexMessage:
     def section_label(text: str) -> FlexText:
         return FlexText(text=text, size="xxs", weight="bold", color="#6366f1",
-                        margin="lg", letter_spacing="2px")
+                        margin="lg")
 
     def card(icon: str, title: str, desc: str, bg: str = "#f5f3ff", icon_color: str = "#6366f1") -> FlexBox:
         return FlexBox(
