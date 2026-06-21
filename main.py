@@ -1058,12 +1058,12 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [make_help_flex()]
 
-    async with AsyncSessionLocal() as session:
-        if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
-            _rk = _ranking_cache.get("popular")
-            if _rk and time.monotonic() - _rk[1] < _RANKING_TTL:
-                return _rk[0]
-            rows = (await session.execute(
+    if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
+        _rk = _ranking_cache.get("popular")
+        if _rk and time.monotonic() - _rk[1] < _RANKING_TTL:
+            return _rk[0]
+        async with AsyncSessionLocal() as _s:
+            rows = (await _s.execute(
                 select(PendingReview.course_name, func.avg(PendingReview.rating).label("avg"))
                 .where(
                     PendingReview.is_approved == True,
@@ -1073,21 +1073,22 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 .order_by(func.avg(PendingReview.rating).desc())
                 .limit(5)
             )).all()
-            if not rows:
-                return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-            items = [
-                {"rank": i, "name": name, "stars": stars(round(float(avg)))}
-                for i, (name, avg) in enumerate(rows, 1)
-            ]
-            _res = [FlexMessage(alt_text="🏆 人気の授業 TOP5", contents=make_ranking_bubble("🏆 人気の授業 TOP5", items))]
-            _ranking_cache["popular"] = (_res, time.monotonic())
-            return _res
+        if not rows:
+            return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+        items = [
+            {"rank": i, "name": name, "stars": stars(round(float(avg)))}
+            for i, (name, avg) in enumerate(rows, 1)
+        ]
+        _res = [FlexMessage(alt_text="🏆 人気の授業 TOP5", contents=make_ranking_bubble("🏆 人気の授業 TOP5", items))]
+        _ranking_cache["popular"] = (_res, time.monotonic())
+        return _res
 
-        if t in ["楽単ランキング", "楽単", "楽"]:
-            _rk = _ranking_cache.get("rakutan")
-            if _rk and time.monotonic() - _rk[1] < _RANKING_TTL:
-                return _rk[0]
-            rows = (await session.execute(
+    if t in ["楽単ランキング", "楽単", "楽"]:
+        _rk = _ranking_cache.get("rakutan")
+        if _rk and time.monotonic() - _rk[1] < _RANKING_TTL:
+            return _rk[0]
+        async with AsyncSessionLocal() as _s:
+            rows = (await _s.execute(
                 select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id))
                 .where(
                     PendingReview.is_approved == True,
@@ -1095,139 +1096,127 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 )
                 .group_by(PendingReview.course_name, PendingReview.ease_rating)
             )).all()
-            if not rows:
-                return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-            course_ease: dict[str, str] = {}
-            for name, ease, _ in rows:
-                if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
-                    course_ease[name] = ease
-            top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
-            items = [
-                {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
-                for i, (name, ease) in enumerate(top5, 1)
-            ]
-            _res = [FlexMessage(alt_text="😴 楽単ランキング TOP5", contents=make_ranking_bubble("😴 楽単ランキング TOP5", items))]
-            _ranking_cache["rakutan"] = (_res, time.monotonic())
-            return _res
+        if not rows:
+            return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+        course_ease: dict[str, str] = {}
+        for name, ease, _ in rows:
+            if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
+                course_ease[name] = ease
+        top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
+        items = [
+            {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
+            for i, (name, ease) in enumerate(top5, 1)
+        ]
+        _res = [FlexMessage(alt_text="😴 楽単ランキング TOP5", contents=make_ranking_bubble("😴 楽単ランキング TOP5", items))]
+        _ranking_cache["rakutan"] = (_res, time.monotonic())
+        return _res
 
-        # キャッシュから取得（DBクエリ不要）
-        _reviewed_names, (cbn, call) = await asyncio.gather(
-            _get_reviewed_cached(),
-            _get_courses_cached(),
+    # 全操作をキャッシュから（DBアクセスなし）
+    _reviewed_names, (cbn, call) = await asyncio.gather(
+        _get_reviewed_cached(),
+        _get_courses_cached(),
+    )
+
+    # Exact course name match
+    exact = cbn.get(t)
+    if exact:
+        if exact.name not in _reviewed_names:
+            return [make_no_review_flex(exact, user_id)]
+        return [await get_course_flex(exact, user_id)]
+
+    # Seminar group e.g. 外国語セミナー(英語) → 外国語セミナーA(英語), B(英語)...
+    _vsem_m = _re.match(r'^(.*?セミナー)(\([^)]+\))$', t)
+    if _vsem_m:
+        _sem_prefix, _sem_lang = _vsem_m.group(1), _vsem_m.group(2)
+        _sem_pat = _re.compile(
+            r'^' + _re.escape(_sem_prefix) + r'.+' + _re.escape(_sem_lang) + r'$', _re.IGNORECASE
         )
+        _sem_courses = sorted([c for c in call if _sem_pat.match(c.name)], key=lambda c: c.name)
+        if len(_sem_courses) == 1:
+            return [await get_course_flex(_sem_courses[0], user_id)]
+        if len(_sem_courses) >= 2:
+            return [make_variant_selection_bubble(t, [c.name for c in _sem_courses], _reviewed_names)]
 
-        # Exact course name match
-        exact = cbn.get(t)
-        if exact:
-            if exact.name not in _reviewed_names:
-                return [make_no_review_flex(exact, user_id)]
-            return [await get_course_flex(exact, user_id)]
+    # Variant group (A/B/C/D...)
+    _variant_names_set = {t + s for s in ('A', 'B', 'C', 'D')}
+    variant_courses = sorted([c for c in call if c.name in _variant_names_set], key=lambda c: c.name)
+    if len(variant_courses) >= 2:
+        return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
 
-        # Seminar group e.g. 外国語セミナー(英語) → 外国語セミナーA(英語), B(英語)...
-        _vsem_m = _re.match(r'^(.*?セミナー)(\([^)]+\))$', t)
-        if _vsem_m:
-            _sem_prefix, _sem_lang = _vsem_m.group(1), _vsem_m.group(2)
-            _sem_pat = _re.compile(
-                r'^' + _re.escape(_sem_prefix) + r'.+' + _re.escape(_sem_lang) + r'$', _re.IGNORECASE
-            )
-            _sem_courses = sorted([c for c in call if _sem_pat.match(c.name)], key=lambda c: c.name)
-            if len(_sem_courses) == 1:
-                return [await get_course_flex(_sem_courses[0], user_id)]
-            if len(_sem_courses) >= 2:
-                return [make_variant_selection_bubble(t, [c.name for c in _sem_courses], _reviewed_names)]
+    # Numeric variant group (e.g. 「英語1」「英語2」or「第三外国語(ドイツ語)T1」)
+    _num_pat = _re.compile(r'^' + _re.escape(t) + r'(?<!\d)[\s　]*[A-Z]?\d+$')
+    _num_variants = sorted(
+        [c for c in call if c.name.startswith(t) and _num_pat.match(c.name)],
+        key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
+    )
+    if len(_num_variants) >= 2:
+        return [make_variant_selection_bubble(t, [c.name for c in _num_variants], _reviewed_names)]
 
-        # Variant group (A/B/C/D...)
-        _variant_names_set = {t + s for s in ('A', 'B', 'C', 'D')}
-        variant_courses = sorted([c for c in call if c.name in _variant_names_set], key=lambda c: c.name)
-        if len(variant_courses) >= 2:
-            return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
+    # インメモリキーワード検索（DBアクセスなし）
+    _PUNCT = '・･、。「」『』【】（）()／/〜~'
+    def _normalize_q(s: str) -> str:
+        for ch in _PUNCT:
+            s = s.replace(ch, '')
+        return s
 
-        # Numeric variant group (e.g. 「英語1」「英語2」or「第三外国語(ドイツ語)T1」)
-        _num_pat = _re.compile(r'^' + _re.escape(t) + r'(?<!\d)[\s　]*[A-Z]?\d+$')
-        _num_variants = sorted(
-            [c for c in call if c.name.startswith(t) and _num_pat.match(c.name)],
-            key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
-        )
-        if len(_num_variants) >= 2:
-            return [make_variant_selection_bubble(t, [c.name for c in _num_variants], _reviewed_names)]
+    tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
+    _toks_lower = [tok.lower() for tok in tokens]
+    courses = [c for c in call if all(
+        tok in (c.name or '').lower() or tok in (c.reading or '').lower()
+        for tok in _toks_lower
+    )][:6]
 
-        # Keyword search
-        _PUNCT = '・･、。「」『』【】（）()／/〜~'
-        def _normalize_q(s: str) -> str:
-            for ch in _PUNCT:
-                s = s.replace(ch, '')
-            return s
+    # 句読点を除去した正規化検索（フォールバック）
+    if not courses:
+        _norm_t = _normalize_q(t).lower()
+        courses = [c for c in call if _norm_t in _normalize_q(c.name or '').lower()][:6]
 
-        tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
-        def _escape(tok: str) -> str:
-            return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-        stmt = select(Course)
-        for tok in tokens:
-            e = _escape(tok)
-            stmt = stmt.where(or_(
-                Course.name.ilike(f"%{e}%", escape="\\"),
-                Course.reading.ilike(f"%{e}%", escape="\\"),
-            ))
-        courses = (await session.execute(stmt.limit(6))).scalars().all()
+    if courses:
+        # Letter variants (A/B/C/D) - インメモリ
+        _all_names = {c.name for c in call}
+        potential_bases = {
+            c.name[:-1] for c in courses
+            if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
+        }
+        base_variants: dict[str, list[str]] = defaultdict(list)
+        for _b in potential_bases:
+            for _s in ('A', 'B', 'C', 'D'):
+                if _b + _s in _all_names:
+                    base_variants[_b].append(_b + _s)
 
-        # 句読点を除去した正規化検索（フォールバック）
-        # ユーザーが・などを省略 → DB側の科目名を正規化して比較
-        if not courses:
-            norm_col = Course.name
-            for ch in ('・', '･', '（', '）', '(', ')'):
-                norm_col = func.replace(norm_col, ch, '')
-            e_norm = _escape(_normalize_q(t))
-            courses = (await session.execute(
-                select(Course).where(norm_col.ilike(f"%{e_norm}%", escape="\\")).limit(6)
-            )).scalars().all()
-        if courses:
-            # Letter variants (A/B/C/D)
-            potential_bases = {
-                c.name[:-1] for c in courses
-                if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
-            }
-            base_variants: dict[str, list[str]] = defaultdict(list)
-            if potential_bases:
-                all_variant_names = [b + s for b in potential_bases for s in ('A', 'B', 'C', 'D')]
-                variant_rows = (await session.execute(
-                    select(Course.name).where(Course.name.in_(all_variant_names)).order_by(Course.name)
-                )).scalars().all()
-                for vname in variant_rows:
-                    base_variants[vname[:-1]].append(vname)
+        # Numeric variants
+        _kw_num_bases: dict[str, list[str]] = defaultdict(list)
+        for c in courses:
+            _m = _re.match(r'^(.*?)[\s　]*(\d+)$', c.name)
+            if _m:
+                _kw_num_bases[_m.group(1).strip()].append(c.name)
 
-            # Numeric variants
-            _kw_num_bases: dict[str, list[str]] = defaultdict(list)
-            for c in courses:
-                _m = _re.match(r'^(.*?)[\s　]*(\d+)$', c.name)
-                if _m:
-                    _kw_num_bases[_m.group(1).strip()].append(c.name)
-
-            seen_base: set[str] = set()
-            seen_num_base: set[str] = set()
-            result = []
-            for c in courses:
-                name = c.name
-                if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
-                    base = name[:-1]
-                    if base in seen_base:
-                        continue
-                    variants = base_variants.get(base, [])
-                    if len(variants) >= 2:
-                        seen_base.add(base)
-                        result.append(make_variant_selection_bubble(base, variants, _reviewed_names))
-                        continue
-                _m2 = _re.match(r'^(.*?)[\s　]*[A-Z]?\d+$', name)
-                if _m2:
-                    base = _m2.group(1).strip()
-                    if base in seen_num_base:
-                        continue
-                    num_vs = _kw_num_bases.get(base, [])
-                    if len(num_vs) >= 2:
-                        seen_num_base.add(base)
-                        result.append(make_variant_selection_bubble(base, sorted(num_vs), _reviewed_names))
-                        continue
-                result.append(await get_course_flex(c, user_id))
-            return result[:5]
+        seen_base: set[str] = set()
+        seen_num_base: set[str] = set()
+        result = []
+        for c in courses:
+            name = c.name
+            if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
+                base = name[:-1]
+                if base in seen_base:
+                    continue
+                variants = base_variants.get(base, [])
+                if len(variants) >= 2:
+                    seen_base.add(base)
+                    result.append(make_variant_selection_bubble(base, variants, _reviewed_names))
+                    continue
+            _m2 = _re.match(r'^(.*?)[\s　]*[A-Z]?\d+$', name)
+            if _m2:
+                base = _m2.group(1).strip()
+                if base in seen_num_base:
+                    continue
+                num_vs = _kw_num_bases.get(base, [])
+                if len(num_vs) >= 2:
+                    seen_num_base.add(base)
+                    result.append(make_variant_selection_bubble(base, sorted(num_vs), _reviewed_names))
+                    continue
+            result.append(await get_course_flex(c, user_id))
+        return result[:5]
 
     return [TextMessage(
         text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
