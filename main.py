@@ -519,11 +519,14 @@ PRIVACY_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 CONTACT_EMAIL = "bunnyskeren@gmail.com"
 
 def make_help_flex() -> FlexMessage:
+    def section_label(text: str) -> FlexText:
+        return FlexText(text=text, size="xs", weight="bold", color="#6366f1", margin="lg")
+
     def row(icon: str, title: str, desc: str) -> FlexBox:
         return FlexBox(
             layout="horizontal",
             contents=[
-                FlexText(text=icon, size="lg", flex=0),
+                FlexText(text=icon, size="md", flex=0),
                 FlexBox(
                     layout="vertical",
                     contents=[
@@ -534,11 +537,11 @@ def make_help_flex() -> FlexMessage:
                     margin="md",
                 ),
             ],
-            margin="lg",
+            margin="md",
         )
 
     return FlexMessage(
-        alt_text="📖 神大ライフハック 使い方ガイド",
+        alt_text="神大ライフハック 使い方ガイド",
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
@@ -552,13 +555,13 @@ def make_help_flex() -> FlexMessage:
             body=FlexBox(
                 layout="vertical",
                 contents=[
-                    row("🔍", "科目を検索", '科目名をそのまま送ってください\n例：「英語」「データサイエンス」'),
+                    section_label("📱 リッチメニュー"),
+                    row("📚", "教養", "教養科目を分類別に一覧表示します"),
+                    row("✏️", "レビュー投稿", "レビュー投稿フォームを開きます"),
                     FlexSeparator(margin="lg"),
-                    row("📚", "科目一覧", '「科目一覧」と送ると\n全科目を分類別に表示'),
-                    FlexSeparator(margin="lg"),
-                    row("✏️", "レビュー投稿", '「レビュー投稿」と送ると\n投稿フォームのURLが届きます'),
-                    FlexSeparator(margin="lg"),
-                    row("🏆", "ランキング", '「人気」→ 高評価 TOP5\n「楽単」→ 楽単 TOP5'),
+                    section_label("💬 チャット機能"),
+                    row("🔍", "科目名を送る", "授業情報とレビューを表示します\n例：「英語」「データサイエンス」"),
+                    row("🏆", "人気 / 楽単", "「人気」→ 高評価 TOP5\n「楽単」→ 楽単 TOP5"),
                 ],
                 padding_all="lg",
             ),
@@ -569,7 +572,6 @@ def make_help_flex() -> FlexMessage:
                         action=URIAction(label="📬 問い合わせ", uri=f"mailto:{CONTACT_EMAIL}"),
                         style="secondary",
                         height="sm",
-                        color="#f3f4f6",
                     ),
                     FlexButton(
                         action=URIAction(label="📋 プライバシーポリシー", uri=PRIVACY_URL),
