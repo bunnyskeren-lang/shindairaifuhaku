@@ -520,24 +520,38 @@ CONTACT_EMAIL = "bunnyskeren@gmail.com"
 
 def make_help_flex() -> FlexMessage:
     def section_label(text: str) -> FlexText:
-        return FlexText(text=text, size="xs", weight="bold", color="#6366f1", margin="lg")
+        return FlexText(text=text, size="xxs", weight="bold", color="#6366f1",
+                        margin="lg", letter_spacing="2px")
 
-    def row(icon: str, title: str, desc: str) -> FlexBox:
+    def card(icon: str, title: str, desc: str, bg: str = "#f5f3ff", icon_color: str = "#6366f1") -> FlexBox:
         return FlexBox(
             layout="horizontal",
+            background_color=bg,
+            corner_radius="10px",
+            padding_all="md",
+            margin="sm",
             contents=[
-                FlexText(text=icon, size="md", flex=0),
                 FlexBox(
                     layout="vertical",
-                    contents=[
-                        FlexText(text=title, weight="bold", size="sm", color="#1f2937"),
-                        FlexText(text=desc, size="xs", color="#6b7280", wrap=True),
-                    ],
+                    contents=[FlexText(text=icon, size="lg", align="center", gravity="center")],
+                    width="36px",
+                    height="36px",
+                    background_color="#ffffff",
+                    corner_radius="8px",
+                    flex=0,
+                    justify_content="center",
+                    align_items="center",
+                ),
+                FlexBox(
+                    layout="vertical",
                     flex=1,
                     margin="md",
+                    contents=[
+                        FlexText(text=title, weight="bold", size="sm", color="#1e1b4b"),
+                        FlexText(text=desc, size="xs", color="#6b7280", wrap=True, margin="xs"),
+                    ],
                 ),
             ],
-            margin="md",
         )
 
     return FlexMessage(
@@ -546,35 +560,54 @@ def make_help_flex() -> FlexMessage:
             header=FlexBox(
                 layout="vertical",
                 contents=[
-                    FlexText(text="神大ライフハック", weight="bold", color="#ffffff", size="xl"),
-                    FlexText(text="使い方ガイド", color="#c7d2fe", size="sm"),
+                    FlexBox(
+                        layout="horizontal",
+                        contents=[
+                            FlexText(text="🎓", size="xxl", flex=0),
+                            FlexBox(
+                                layout="vertical",
+                                flex=1,
+                                margin="md",
+                                contents=[
+                                    FlexText(text="神大ライフハック", weight="bold",
+                                             color="#ffffff", size="lg"),
+                                    FlexText(text="使い方ガイド", color="#c7d2fe", size="xs"),
+                                ],
+                            ),
+                        ],
+                    ),
                 ],
-                background_color="#6366f1",
+                background_color="#4f46e5",
                 padding_all="xl",
             ),
             body=FlexBox(
                 layout="vertical",
                 contents=[
-                    section_label("📱 リッチメニュー"),
-                    row("📚", "教養", "教養科目を分類別に一覧表示します"),
-                    row("✏️", "レビュー投稿", "レビュー投稿フォームを開きます"),
-                    FlexSeparator(margin="lg"),
-                    section_label("💬 チャット機能"),
-                    row("🔍", "科目名を送る", "授業情報とレビューを表示します\n例：「英語」「データサイエンス」"),
-                    row("🏆", "人気 / 楽単", "「人気」→ 高評価 TOP5\n「楽単」→ 楽単 TOP5"),
+                    section_label("📱  リッチメニュー"),
+                    card("📚", "教養", "教養科目を分類別に一覧表示", bg="#f5f3ff"),
+                    card("✏️", "レビュー投稿", "レビュー投稿フォームを開く", bg="#f5f3ff"),
+                    section_label("💬  チャット"),
+                    card("🔍", "科目名を送る",
+                         "授業情報・レビューを表示\n例：「英語」「データサイエンス」",
+                         bg="#eff6ff"),
+                    card("🏆", "人気 / 楽単",
+                         "「人気」→ 高評価 TOP5\n「楽単」→ 楽単 TOP5",
+                         bg="#eff6ff"),
                 ],
                 padding_all="lg",
+                background_color="#fafafa",
             ),
             footer=FlexBox(
                 layout="vertical",
                 contents=[
                     FlexButton(
-                        action=URIAction(label="📬 問い合わせ", uri=f"mailto:{CONTACT_EMAIL}"),
-                        style="secondary",
+                        action=URIAction(label="📬 お問い合わせ", uri=f"mailto:{CONTACT_EMAIL}"),
+                        style="primary",
+                        color="#6366f1",
                         height="sm",
                     ),
                     FlexButton(
-                        action=URIAction(label="📋 プライバシーポリシー", uri=PRIVACY_URL),
+                        action=URIAction(label="プライバシーポリシー", uri=PRIVACY_URL),
                         style="link",
                         height="sm",
                     ),
