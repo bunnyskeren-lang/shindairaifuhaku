@@ -308,6 +308,11 @@ _COURSE_FLEX_TTL = 120
 _COURSE_LIST_TTL = 120
 _RANKING_TTL = 120
 
+_all_instructors_cache: dict[int, list] = {}
+_all_instructors_cache_at: float = 0.0
+_all_review_stats_cache: dict[str, tuple] = {}
+_all_review_stats_cache_at: float = 0.0
+
 async def _get_courses_cached():
     global _course_by_name, _course_list_all, _course_cache_at
     if _course_by_name and time.monotonic() - _course_cache_at < _COURSE_CACHE_TTL:
@@ -335,9 +340,62 @@ async def _get_reviewed_cached() -> set[str]:
     return _reviewed_cache
 
 
+async def _get_all_instructors_cached() -> dict[int, list]:
+    global _all_instructors_cache, _all_instructors_cache_at
+    if _all_instructors_cache and time.monotonic() - _all_instructors_cache_at < _COURSE_CACHE_TTL:
+        return _all_instructors_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(select(CourseInstructor))).scalars().all()
+    d: dict[int, list] = {}
+    for r in rows:
+        d.setdefault(r.course_id, []).append(r)
+    _all_instructors_cache = d
+    _all_instructors_cache_at = time.monotonic()
+    return _all_instructors_cache
+
+
+async def _get_all_review_stats_cached() -> dict[str, tuple]:
+    global _all_review_stats_cache, _all_review_stats_cache_at
+    if _all_review_stats_cache and time.monotonic() - _all_review_stats_cache_at < _COURSE_CACHE_TTL:
+        return _all_review_stats_cache
+    async with AsyncSessionLocal() as s:
+        count_rows, ease_rows = await asyncio.gather(
+            s.execute(
+                select(PendingReview.course_name, func.count(PendingReview.id).label("cnt"))
+                .where(PendingReview.is_approved == True)
+                .group_by(PendingReview.course_name)
+            ),
+            s.execute(
+                select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
+                .where(PendingReview.is_approved == True, PendingReview.ease_rating.isnot(None))
+                .group_by(PendingReview.course_name, PendingReview.ease_rating)
+            ),
+        )
+        count_rows = count_rows.all()
+        ease_rows = ease_rows.all()
+    ease_map: dict[str, list] = {}
+    for name, ease, cnt in ease_rows:
+        ease_map.setdefault(name, []).append((ease, cnt))
+    result = {}
+    for name, cnt in count_rows:
+        top_ease = None
+        if name in ease_map:
+            top_ease = sorted(ease_map[name], key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
+        result[name] = (cnt, top_ease)
+    _all_review_stats_cache = result
+    _all_review_stats_cache_at = time.monotonic()
+    return _all_review_stats_cache
+
+
 async def _prewarm_caches():
     try:
-        await asyncio.gather(_get_cls_order_map(), _get_courses_cached(), _get_reviewed_cached())
+        await asyncio.gather(
+            _get_cls_order_map(),
+            _get_courses_cached(),
+            _get_reviewed_cached(),
+            _get_all_instructors_cached(),
+            _get_all_review_stats_cached(),
+        )
         print("Cache pre-warmed", flush=True)
     except Exception as e:
         print(f"Prewarm failed: {e}", flush=True)
@@ -405,36 +463,16 @@ async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
     _cfx = _course_flex_cache.get(course.id)
     if _cfx and time.monotonic() - _cfx[1] < _COURSE_FLEX_TTL:
         return _cfx[0]
-    async def _instrs():
-        async with AsyncSessionLocal() as s:
-            return (await s.execute(
-                select(CourseInstructor).where(CourseInstructor.course_id == course.id)
-            )).scalars().all()
 
-    async def _count():
-        async with AsyncSessionLocal() as s:
-            return (await s.execute(
-                select(func.count(PendingReview.id).label("cnt"))
-                .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-            )).one()
-
-    async def _ease():
-        async with AsyncSessionLocal() as s:
-            return (await s.execute(
-                select(PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
-                .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                .where(PendingReview.ease_rating.isnot(None))
-                .group_by(PendingReview.ease_rating)
-            )).all()
-
-    instructors, count_row, ease_rows = await asyncio.gather(_instrs(), _count(), _ease())
+    all_instrs, all_stats = await asyncio.gather(
+        _get_all_instructors_cached(),
+        _get_all_review_stats_cached(),
+    )
+    instructors = all_instrs.get(course.id, [])
+    review_count, top_ease_flex = all_stats.get(course.name, (0, None))
 
     instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
     liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
-    review_count = count_row.cnt or 0
-    top_ease_flex: Optional[str] = None
-    if ease_rows:
-        top_ease_flex = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
     meta_parts = []
     if getattr(course, "term", None):
