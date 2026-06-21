@@ -133,11 +133,20 @@ def _cls_order(name: str) -> int:
     return len(_CLS_ORDER_KEYS)
 
 
-async def _get_cls_order_map(session) -> dict:
-    rows = (await session.execute(
-        select(ClassificationOrder).order_by(ClassificationOrder.sort_order)
-    )).scalars().all()
-    return {r.name: r.sort_order for r in rows}
+_cls_order_map_cache: dict = {}
+_cls_order_map_at: float = 0.0
+
+async def _get_cls_order_map(session=None) -> dict:
+    global _cls_order_map_cache, _cls_order_map_at
+    if _cls_order_map_cache and time.monotonic() - _cls_order_map_at < _CLS_CACHE_TTL:
+        return _cls_order_map_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(ClassificationOrder).order_by(ClassificationOrder.sort_order)
+        )).scalars().all()
+    _cls_order_map_cache = {r.name: r.sort_order for r in rows}
+    _cls_order_map_at = time.monotonic()
+    return _cls_order_map_cache
 
 
 def _make_cls_sort(cls_map: dict):
@@ -268,7 +277,7 @@ def verify_signature(body: bytes, signature: str) -> bool:
 
 _cls_cache: set[str] = set()
 _cls_cache_at: float = 0.0
-_CLS_CACHE_TTL = 300  # 5分
+_CLS_CACHE_TTL = 300
 
 async def _get_cls_set() -> set[str]:
     global _cls_cache, _cls_cache_at
@@ -279,6 +288,43 @@ async def _get_cls_set() -> set[str]:
     _cls_cache = {r for r in rows if r}
     _cls_cache_at = time.monotonic()
     return _cls_cache
+
+
+# ── In-memory course & review cache (60s TTL) ───────────────────
+_COURSE_CACHE_TTL = 60
+_course_by_name: dict[str, Any] = {}
+_course_list_all: list = []
+_course_cache_at: float = 0.0
+
+_reviewed_cache: set[str] = set()
+_reviewed_cache_at: float = 0.0
+_reviewed_cache_init: bool = False
+
+async def _get_courses_cached():
+    global _course_by_name, _course_list_all, _course_cache_at
+    if _course_by_name and time.monotonic() - _course_cache_at < _COURSE_CACHE_TTL:
+        return _course_by_name, _course_list_all
+    async with AsyncSessionLocal() as s:
+        courses = (await s.execute(
+            select(Course).order_by(Course.sort_order, Course.name)
+        )).scalars().all()
+    _course_list_all = courses
+    _course_by_name = {c.name: c for c in courses}
+    _course_cache_at = time.monotonic()
+    return _course_by_name, _course_list_all
+
+async def _get_reviewed_cached() -> set[str]:
+    global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
+    if _reviewed_cache_init and time.monotonic() - _reviewed_cache_at < _COURSE_CACHE_TTL:
+        return _reviewed_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(PendingReview.course_name).where(PendingReview.is_approved == True).distinct()
+        )).scalars().all()
+    _reviewed_cache = set(rows)
+    _reviewed_cache_at = time.monotonic()
+    _reviewed_cache_init = True
+    return _reviewed_cache
 
 
 async def _save_log_bg(user_id: str, direction: str, message: str) -> None:
@@ -921,24 +967,15 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await handle_course_list()
 
     if t in ["教養", "教養科目", "教養一覧"]:
-        async with AsyncSessionLocal() as session:
-            cls_map = await _get_cls_order_map(session)
-            _cls_sort = _make_cls_sort(cls_map)
-            clss = sorted(
-                [c for c in (await session.execute(
-                    select(Course.classification).distinct()
-                    .where(Course.category == "教養", Course.classification != "")
-                )).scalars().all() if c],
-                key=_cls_sort,
-            )
-            reviewed_names_edu = set((await session.execute(
-                select(PendingReview.course_name).where(PendingReview.is_approved == True).distinct()
-            )).scalars().all())
-            cls_course_rows = (await session.execute(
-                select(Course.classification, Course.name)
-                .where(Course.category == "教養", Course.classification != "")
-            )).all()
-            reviewed_cls = {row.classification for row in cls_course_rows if row.name in reviewed_names_edu}
+        cls_map = await _get_cls_order_map()
+        _cls_sort = _make_cls_sort(cls_map)
+        reviewed_names_edu, (_, _all_courses) = await asyncio.gather(
+            _get_reviewed_cached(),
+            _get_courses_cached(),
+        )
+        edu_courses = [c for c in _all_courses if c.category == "教養" and c.classification]
+        clss = sorted({c.classification for c in edu_courses}, key=_cls_sort)
+        reviewed_cls = {c.classification for c in edu_courses if c.name in reviewed_names_edu}
         if clss:
             return [make_classification_select_flex(clss, reviewed_cls)]
         return await handle_course_list(category="教養")
@@ -1015,21 +1052,16 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 contents=make_ranking_bubble("😴 楽単ランキング TOP5", items),
             )]
 
-        # レビューがある科目名セット（バリアント選択の色分けに使用）
-        _reviewed_names: set[str] = set((await session.execute(
-            select(PendingReview.course_name).where(PendingReview.is_approved == True).distinct()
-        )).scalars().all())
+        # キャッシュから取得（DBクエリ不要）
+        _reviewed_names, (cbn, call) = await asyncio.gather(
+            _get_reviewed_cached(),
+            _get_courses_cached(),
+        )
 
         # Exact course name match
-        exact = (await session.execute(
-            select(Course).where(Course.name == t)
-        )).scalar_one_or_none()
+        exact = cbn.get(t)
         if exact:
-            rc = (await session.execute(
-                select(func.count(PendingReview.id))
-                .where(PendingReview.course_name == exact.name, PendingReview.is_approved == True)
-            )).scalar_one()
-            if rc == 0:
+            if exact.name not in _reviewed_names:
                 return [make_no_review_flex(exact, user_id)]
             return [await get_course_flex(exact, user_id)]
 
@@ -1037,35 +1069,25 @@ async def handle_message(text: str, user_id: str = "") -> list:
         _vsem_m = _re.match(r'^(.*?セミナー)(\([^)]+\))$', t)
         if _vsem_m:
             _sem_prefix, _sem_lang = _vsem_m.group(1), _vsem_m.group(2)
-            def _esc_like(s: str) -> str:
-                return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-            _sem_courses = (await session.execute(
-                select(Course)
-                .where(Course.name.ilike(
-                    f"{_esc_like(_sem_prefix)}%{_esc_like(_sem_lang)}", escape="\\"
-                ))
-                .order_by(Course.name)
-            )).scalars().all()
+            _sem_pat = _re.compile(
+                r'^' + _re.escape(_sem_prefix) + r'.+' + _re.escape(_sem_lang) + r'$', _re.IGNORECASE
+            )
+            _sem_courses = sorted([c for c in call if _sem_pat.match(c.name)], key=lambda c: c.name)
             if len(_sem_courses) == 1:
                 return [await get_course_flex(_sem_courses[0], user_id)]
             if len(_sem_courses) >= 2:
                 return [make_variant_selection_bubble(t, [c.name for c in _sem_courses], _reviewed_names)]
 
         # Variant group (A/B/C/D...)
-        _variant_names = [t + s for s in ('A', 'B', 'C', 'D')]
-        variant_courses = (await session.execute(
-            select(Course).where(Course.name.in_(_variant_names)).order_by(Course.name)
-        )).scalars().all()
+        _variant_names_set = {t + s for s in ('A', 'B', 'C', 'D')}
+        variant_courses = sorted([c for c in call if c.name in _variant_names_set], key=lambda c: c.name)
         if len(variant_courses) >= 2:
             return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
 
         # Numeric variant group (e.g. 「英語1」「英語2」or「第三外国語(ドイツ語)T1」)
-        _num_candidates = (await session.execute(
-            select(Course).where(Course.name.like(f"{t}%")).order_by(Course.name)
-        )).scalars().all()
         _num_pat = _re.compile(r'^' + _re.escape(t) + r'(?<!\d)[\s　]*[A-Z]?\d+$')
         _num_variants = sorted(
-            [c for c in _num_candidates if _num_pat.match(c.name)],
+            [c for c in call if c.name.startswith(t) and _num_pat.match(c.name)],
             key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
         )
         if len(_num_variants) >= 2:
