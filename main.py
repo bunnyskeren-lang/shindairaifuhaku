@@ -225,6 +225,7 @@ async def lifespan(app: FastAPI):
         import traceback
         traceback.print_exc()
         print(f"DB ERROR: {e}", flush=True)
+    asyncio.create_task(_prewarm_caches())
     ping_task = asyncio.create_task(_self_ping())
     yield
     ping_task.cancel()
@@ -300,6 +301,13 @@ _reviewed_cache: set[str] = set()
 _reviewed_cache_at: float = 0.0
 _reviewed_cache_init: bool = False
 
+_course_flex_cache: dict[int, tuple] = {}
+_course_list_cache: dict[str, tuple] = {}
+_ranking_cache: dict[str, tuple] = {}
+_COURSE_FLEX_TTL = 120
+_COURSE_LIST_TTL = 120
+_RANKING_TTL = 120
+
 async def _get_courses_cached():
     global _course_by_name, _course_list_all, _course_cache_at
     if _course_by_name and time.monotonic() - _course_cache_at < _COURSE_CACHE_TTL:
@@ -325,6 +333,14 @@ async def _get_reviewed_cached() -> set[str]:
     _reviewed_cache_at = time.monotonic()
     _reviewed_cache_init = True
     return _reviewed_cache
+
+
+async def _prewarm_caches():
+    try:
+        await asyncio.gather(_get_cls_order_map(), _get_courses_cached(), _get_reviewed_cached())
+        print("Cache pre-warmed", flush=True)
+    except Exception as e:
+        print(f"Prewarm failed: {e}", flush=True)
 
 
 async def _save_log_bg(user_id: str, direction: str, message: str) -> None:
@@ -386,6 +402,9 @@ EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★�
 
 
 async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
+    _cfx = _course_flex_cache.get(course.id)
+    if _cfx and time.monotonic() - _cfx[1] < _COURSE_FLEX_TTL:
+        return _cfx[0]
     async def _instrs():
         async with AsyncSessionLocal() as s:
             return (await s.execute(
@@ -464,7 +483,9 @@ async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
                        style="primary", color="#4f46e5", height="sm")
         ], padding_all="md"),
     )
-    return FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
+    msg = FlexMessage(alt_text=f"📖 {course.name}", contents=bubble)
+    _course_flex_cache[course.id] = (msg, time.monotonic())
+    return msg
 
 
 def make_no_review_flex(course: Course, user_id: str = "") -> FlexMessage:
@@ -821,176 +842,174 @@ def make_classification_select_flex(classifications: list[str], reviewed_cls: se
 
 
 async def handle_course_list(category: str = "", classification: str = "") -> list:
+    _cl_key = f"{category}:{classification}"
+    _cl = _course_list_cache.get(_cl_key)
+    if _cl and time.monotonic() - _cl[1] < _COURSE_LIST_TTL:
+        return _cl[0]
+
     from collections import defaultdict
-    async with AsyncSessionLocal() as session:
-        stmt = select(Course).order_by(Course.sort_order, Course.name)
-        if category:
-            stmt = stmt.where(Course.category == category)
-        if classification:
-            stmt = stmt.where(Course.classification == classification)
-        rows = (await session.execute(stmt)).scalars().all()
-        cls_map = await _get_cls_order_map(session)
-        _cls_sort = _make_cls_sort(cls_map)
-        rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
+    cls_map, (_, _all_c), reviewed_names = await asyncio.gather(
+        _get_cls_order_map(), _get_courses_cached(), _get_reviewed_cached()
+    )
+    _cls_sort = _make_cls_sort(cls_map)
+    rows = [c for c in _all_c if
+            (not category or c.category == category) and
+            (not classification or c.classification == classification)]
+    rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
 
-        reviewed_names: set[str] = set((await session.execute(
-            select(PendingReview.course_name)
-            .where(PendingReview.is_approved == True)
-            .distinct()
-        )).scalars().all())
+    if not rows:
+        label = f"{category}の" if category else ""
+        return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
 
-        if not rows:
-            label = f"{category}の" if category else ""
-            return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
+    course_name_set = {c.name for c in rows}
+    seen_base: set[str] = set()
 
-        course_name_set = {c.name for c in rows}
-        seen_base: set[str] = set()
+    # Pre-compute numeric variant groups (plain digits OR letter+digits e.g. T1)
+    _VNUM = _re.compile(r'^(.*?)[\s　]*([A-Z]?\d+)$')
+    _num_bases: dict[str, list] = defaultdict(list)
+    for _c in rows:
+        _m = _VNUM.match(_c.name)
+        if _m:
+            _b = _m.group(1).strip()
+            _sk = int(_re.search(r'\d+', _m.group(2)).group())
+            _num_bases[_b].append((_c.name, _sk))
+    _num_variant_names = {n for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
+    _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
+    seen_num_base: set[str] = set()
 
-        # Pre-compute numeric variant groups (plain digits OR letter+digits e.g. T1)
-        _VNUM = _re.compile(r'^(.*?)[\s　]*([A-Z]?\d+)$')
-        _num_bases: dict[str, list] = defaultdict(list)
-        for _c in rows:
-            _m = _VNUM.match(_c.name)
-            if _m:
-                _b = _m.group(1).strip()
-                _sk = int(_re.search(r'\d+', _m.group(2)).group())
-                _num_bases[_b].append((_c.name, _sk))
-        _num_variant_names = {n for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
-        _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
-        seen_num_base: set[str] = set()
+    # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
+    _VSEM = _re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
+    _sem_bases: dict[str, list] = defaultdict(list)
+    for _c in rows:
+        _m = _VSEM.match(_c.name)
+        if _m:
+            _base_lang = _m.group(1) + _m.group(3)
+            _sem_bases[_base_lang].append((_c.name, _m.group(2)))
+    _sem_variant_names = {n for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
+    _sem_base_for = {n: _b for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
+    seen_sem_base: set[str] = set()
 
-        # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
-        _VSEM = _re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
-        _sem_bases: dict[str, list] = defaultdict(list)
-        for _c in rows:
-            _m = _VSEM.match(_c.name)
-            if _m:
-                _base_lang = _m.group(1) + _m.group(3)
-                _sem_bases[_base_lang].append((_c.name, _m.group(2)))
-        _sem_variant_names = {n for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
-        _sem_base_for = {n: _b for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
-        seen_sem_base: set[str] = set()
-
-        groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
-        cls_category: dict[str, str] = {}
-        for course in rows:
-            name = course.name
-            classification = course.classification or "その他"
-            cls_category[classification] = course.category or ""
-            if name in _sem_variant_names:
-                base = _sem_base_for[name]
-                if base not in seen_sem_base:
-                    seen_sem_base.add(base)
-                    items_sorted = sorted(_sem_bases[base], key=lambda x: x[1])
-                    suffix = "/".join(sk for _, sk in items_sorted)
+    groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    cls_category: dict[str, str] = {}
+    for course in rows:
+        name = course.name
+        classification = course.classification or "その他"
+        cls_category[classification] = course.category or ""
+        if name in _sem_variant_names:
+            base = _sem_base_for[name]
+            if base not in seen_sem_base:
+                seen_sem_base.add(base)
+                items_sorted = sorted(_sem_bases[base], key=lambda x: x[1])
+                suffix = "/".join(sk for _, sk in items_sorted)
+                groups[classification].append((base, f"variant:{suffix}"))
+            continue
+        if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
+            base = name[:-1]
+            variants = [s for s in 'ABCD' if base + s in course_name_set]
+            if len(variants) >= 2:
+                if base not in seen_base:
+                    seen_base.add(base)
+                    suffix = "/".join(variants)
                     groups[classification].append((base, f"variant:{suffix}"))
                 continue
-            if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
-                base = name[:-1]
-                variants = [s for s in 'ABCD' if base + s in course_name_set]
-                if len(variants) >= 2:
-                    if base not in seen_base:
-                        seen_base.add(base)
-                        suffix = "/".join(variants)
-                        groups[classification].append((base, f"variant:{suffix}"))
-                    continue
-            if name in _num_variant_names:
-                base = _num_base_for[name]
-                if base not in seen_num_base:
-                    seen_num_base.add(base)
-                    nums_sorted = sorted(_num_bases[base], key=lambda x: x[1])
-                    suffix = "/".join(
-                        _m2.group(2) if (_m2 := _VNUM.match(n)) else str(sk)
-                        for n, sk in nums_sorted
-                    )
-                    groups[classification].append((base, f"numvariant:{suffix}"))
-                continue
-            groups[classification].append((name, "single"))
-
-        def _cat_order(cls: str) -> int:
-            return 0 if cls_category.get(cls, "") == "教養" else 1
-        all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), _cls_sort(x[0])))
-
-        def _entry_has_review(name: str, kind: str) -> bool:
-            if kind == "single":
-                return name in reviewed_names
-            if kind.startswith("variant:"):
-                suffixes = kind.split(":", 1)[1].split("/")
-                if any(name + s in reviewed_names for s in suffixes):
-                    return True
-                if name in _sem_bases:
-                    return any(n in reviewed_names for n, _ in _sem_bases[name])
-                return False
-            if kind.startswith("numvariant:"):
-                if name in _num_bases:
-                    return any(n in reviewed_names for n, _ in _num_bases[name])
-                return False
-            return False
-
-        def _make_bubble(classification: str, entries: list) -> FlexBubble:
-            btn_contents = []
-            for name, kind in entries:
-                if kind.startswith("variant:") or kind.startswith("numvariant:"):
-                    suffix = kind.split(":", 1)[1]
-                    display = f"{name} ({suffix})"
-                else:
-                    display = name
-                has_review = _entry_has_review(name, kind)
-                text_color = "#4f46e5" if has_review else "#94a3b8"
-                btn_contents.append(
-                    FlexBox(
-                        layout="vertical",
-                        action=PostbackAction(label=display[:40], data=name),
-                        contents=[FlexText(text=display, wrap=True, size="sm", color=text_color)],
-                        padding_top="sm",
-                        padding_bottom="sm",
-                    )
+        if name in _num_variant_names:
+            base = _num_base_for[name]
+            if base not in seen_num_base:
+                seen_num_base.add(base)
+                nums_sorted = sorted(_num_bases[base], key=lambda x: x[1])
+                suffix = "/".join(
+                    _m2.group(2) if (_m2 := _VNUM.match(n)) else str(sk)
+                    for n, sk in nums_sorted
                 )
-            return FlexBubble(
-                size="kilo",
-                header=FlexBox(
+                groups[classification].append((base, f"numvariant:{suffix}"))
+            continue
+        groups[classification].append((name, "single"))
+
+    def _cat_order(cls: str) -> int:
+        return 0 if cls_category.get(cls, "") == "教養" else 1
+    all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), _cls_sort(x[0])))
+
+    def _entry_has_review(name: str, kind: str) -> bool:
+        if kind == "single":
+            return name in reviewed_names
+        if kind.startswith("variant:"):
+            suffixes = kind.split(":", 1)[1].split("/")
+            if any(name + s in reviewed_names for s in suffixes):
+                return True
+            if name in _sem_bases:
+                return any(n in reviewed_names for n, _ in _sem_bases[name])
+            return False
+        if kind.startswith("numvariant:"):
+            if name in _num_bases:
+                return any(n in reviewed_names for n, _ in _num_bases[name])
+            return False
+        return False
+
+    def _make_bubble(classification: str, entries: list) -> FlexBubble:
+        btn_contents = []
+        for name, kind in entries:
+            if kind.startswith("variant:") or kind.startswith("numvariant:"):
+                suffix = kind.split(":", 1)[1]
+                display = f"{name} ({suffix})"
+            else:
+                display = name
+            has_review = _entry_has_review(name, kind)
+            text_color = "#4f46e5" if has_review else "#94a3b8"
+            btn_contents.append(
+                FlexBox(
                     layout="vertical",
-                    contents=[FlexText(text=classification, weight="bold", color="#ffffff", size="sm")],
-                    background_color="#6366f1",
-                    padding_all="md",
-                ),
-                body=FlexBox(
-                    layout="vertical",
-                    contents=btn_contents,
-                    spacing="xs",
-                    padding_all="md",
-                ),
+                    action=PostbackAction(label=display[:40], data=name),
+                    contents=[FlexText(text=display, wrap=True, size="sm", color=text_color)],
+                    padding_top="sm",
+                    padding_bottom="sm",
+                )
             )
+        return FlexBubble(
+            size="kilo",
+            header=FlexBox(
+                layout="vertical",
+                contents=[FlexText(text=classification, weight="bold", color="#ffffff", size="sm")],
+                background_color="#6366f1",
+                padding_all="md",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=btn_contents,
+                spacing="xs",
+                padding_all="md",
+            ),
+        )
 
-        SPLIT_THRESHOLD = 10
-        bubbles = []
-        for cls, ents in all_groups:
-            if cls == "教養(総合)":
-                others = [(n, k) for n, k in ents if "GCP" not in n]
-                gcps   = [(n, k) for n, k in ents if "GCP" in n]
-                if others:
-                    bubbles.append(_make_bubble("教養(総合)", others))
-                if gcps:
-                    bubbles.append(_make_bubble("教養(総合) GCP", gcps))
-            elif len(ents) > SPLIT_THRESHOLD:
-                mid = (len(ents) + 1) // 2
-                bubbles.append(_make_bubble(cls + "①", ents[:mid]))
-                bubbles.append(_make_bubble(cls + "②", ents[mid:]))
-            else:
-                bubbles.append(_make_bubble(cls, ents))
+    SPLIT_THRESHOLD = 10
+    bubbles = []
+    for cls, ents in all_groups:
+        if cls == "教養(総合)":
+            others = [(n, k) for n, k in ents if "GCP" not in n]
+            gcps   = [(n, k) for n, k in ents if "GCP" in n]
+            if others:
+                bubbles.append(_make_bubble("教養(総合)", others))
+            if gcps:
+                bubbles.append(_make_bubble("教養(総合) GCP", gcps))
+        elif len(ents) > SPLIT_THRESHOLD:
+            mid = (len(ents) + 1) // 2
+            bubbles.append(_make_bubble(cls + "①", ents[:mid]))
+            bubbles.append(_make_bubble(cls + "②", ents[mid:]))
+        else:
+            bubbles.append(_make_bubble(cls, ents))
 
-        alt = f"📚 {category}一覧" if category else "📚 科目一覧"
-        if not bubbles:
-            return [TextMessage(text="科目が登録されていません。")]
+    alt = f"📚 {category}一覧" if category else "📚 科目一覧"
+    if not bubbles:
+        return [TextMessage(text="科目が登録されていません。")]
 
-        # 12バブルずつ複数カルーセルに分割（LINE上限）、最大5メッセージ
-        result = []
-        for chunk in [bubbles[i:i+12] for i in range(0, min(len(bubbles), 60), 12)]:
-            if len(chunk) == 1:
-                result.append(FlexMessage(alt_text=alt, contents=chunk[0]))
-            else:
-                result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=chunk)))
-        return result
+    # 12バブルずつ複数カルーセルに分割（LINE上限）、最大5メッセージ
+    result = []
+    for chunk in [bubbles[i:i+12] for i in range(0, min(len(bubbles), 60), 12)]:
+        if len(chunk) == 1:
+            result.append(FlexMessage(alt_text=alt, contents=chunk[0]))
+        else:
+            result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=chunk)))
+    _course_list_cache[_cl_key] = (result, time.monotonic())
+    return result
 
 
 # ── Message handler ─────────────────────────────────────────────
@@ -1041,6 +1060,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
     async with AsyncSessionLocal() as session:
         if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
+            _rk = _ranking_cache.get("popular")
+            if _rk and time.monotonic() - _rk[1] < _RANKING_TTL:
+                return _rk[0]
             rows = (await session.execute(
                 select(PendingReview.course_name, func.avg(PendingReview.rating).label("avg"))
                 .where(
@@ -1057,12 +1079,14 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 {"rank": i, "name": name, "stars": stars(round(float(avg)))}
                 for i, (name, avg) in enumerate(rows, 1)
             ]
-            return [FlexMessage(
-                alt_text="🏆 人気の授業 TOP5",
-                contents=make_ranking_bubble("🏆 人気の授業 TOP5", items),
-            )]
+            _res = [FlexMessage(alt_text="🏆 人気の授業 TOP5", contents=make_ranking_bubble("🏆 人気の授業 TOP5", items))]
+            _ranking_cache["popular"] = (_res, time.monotonic())
+            return _res
 
         if t in ["楽単ランキング", "楽単", "楽"]:
+            _rk = _ranking_cache.get("rakutan")
+            if _rk and time.monotonic() - _rk[1] < _RANKING_TTL:
+                return _rk[0]
             rows = (await session.execute(
                 select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id))
                 .where(
@@ -1082,10 +1106,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
                 for i, (name, ease) in enumerate(top5, 1)
             ]
-            return [FlexMessage(
-                alt_text="😴 楽単ランキング TOP5",
-                contents=make_ranking_bubble("😴 楽単ランキング TOP5", items),
-            )]
+            _res = [FlexMessage(alt_text="😴 楽単ランキング TOP5", contents=make_ranking_bubble("😴 楽単ランキング TOP5", items))]
+            _ranking_cache["rakutan"] = (_res, time.monotonic())
+            return _res
 
         # キャッシュから取得（DBクエリ不要）
         _reviewed_names, (cbn, call) = await asyncio.gather(
