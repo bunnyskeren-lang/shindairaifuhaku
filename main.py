@@ -14,7 +14,7 @@ import secrets as py_secrets
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query
 from fastapi.exceptions import RequestValidationError
