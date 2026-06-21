@@ -390,6 +390,8 @@
       cursor: pointer;
       transition: all 0.15s;
       white-space: nowrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     .chip-btn:active { transform: scale(0.95); }
     .chip-btn.active {
@@ -408,6 +410,8 @@
       cursor: pointer;
       transition: all 0.15s;
       white-space: nowrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     .prompt-chip:active { transform: scale(0.95); background: #ede9fe; }
   </style>
@@ -444,6 +448,8 @@
         btn.textContent = i <= currentRating ? '★' : '☆';
         btn.className = 'text-5xl transition-all hover:scale-110 active:scale-95 ' +
           (i <= currentRating ? 'text-yellow-400' : 'text-gray-200');
+        btn.style.touchAction = 'manipulation';
+        btn.style.webkitTapHighlightColor = 'transparent';
         btn.onclick = () => {
           currentRating = i;
           document.getElementById('ratingHidden').value = i;
@@ -465,6 +471,8 @@
         btn.textContent = i <= currentEase ? '★' : '☆';
         btn.className = 'text-5xl transition-all hover:scale-110 active:scale-95 ' +
           (i <= currentEase ? 'text-indigo-400' : 'text-gray-200');
+        btn.style.touchAction = 'manipulation';
+        btn.style.webkitTapHighlightColor = 'transparent';
         btn.onclick = () => {
           currentEase = i;
           document.getElementById('easeHidden').value = EASE_VALS[i];
