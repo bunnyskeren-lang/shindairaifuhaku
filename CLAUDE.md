@@ -8,7 +8,7 @@
 
 | Renderサービス | GitHub ブランチ | コマンド |
 |---|---|---|
-| **dev** (shindairaifuhaku-1) | `shindairaifuhaku-dev` | `git push origin dev:shindairaifuhaku-dev` |
+| **dev** (shindairaifuhaku-dev) | `shindairaifuhaku-dev` | `git push origin dev:shindairaifuhaku-dev` |
 | **本番** (shindairaifuhaku) | `shindairaifuhaku-prod` | `git push origin dev:shindairaifuhaku-prod` |
 
 - ローカル作業ブランチは `dev`

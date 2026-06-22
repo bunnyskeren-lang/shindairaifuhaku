@@ -18,6 +18,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -237,6 +238,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://liff.line.me", "https://access.line.me"],
+    allow_origin_regex=r"https://.*\.line\.me",
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
+)
 
 
 @app.exception_handler(RequestValidationError)
