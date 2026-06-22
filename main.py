@@ -47,7 +47,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal
-from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView
+from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -61,6 +61,7 @@ VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
+TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 
@@ -2559,3 +2560,126 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin)):
 @app.head("/health")
 async def health():
     return {"status": "healthy", "version": "88cf130"}
+
+
+# ── 時間割 LIFF ──────────────────────────────────────────────────
+
+@app.get("/liff/timetable", response_class=HTMLResponse)
+async def liff_timetable(request: Request):
+    return templates.TemplateResponse("liff/timetable.html", {
+        "request": request,
+        "liff_id": TIMETABLE_LIFF_ID,
+        "base_url": APP_URL,
+        "IS_DEV": IS_DEV,
+    })
+
+
+@app.get("/api/timetable/slots/{day}/{period}")
+async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
+    async with AsyncSessionLocal() as session:
+        slots = (await session.execute(
+            select(CourseSlot).where(
+                CourseSlot.day_of_week == day,
+                CourseSlot.period == period,
+            )
+        )).scalars().all()
+        course_ids = [s.syllabus_course_id for s in slots]
+        if not course_ids:
+            return {"courses": []}
+
+        courses = (await session.execute(
+            select(SyllabusCourse).where(SyllabusCourse.id.in_(course_ids))
+            .order_by(SyllabusCourse.term, SyllabusCourse.name)
+        )).scalars().all()
+
+        registered_ids: set[int] = set()
+        if user_id:
+            regs = (await session.execute(
+                select(UserCourse.syllabus_course_id).where(
+                    UserCourse.line_user_id == user_id,
+                    UserCourse.syllabus_course_id.in_(course_ids),
+                )
+            )).scalars().all()
+            registered_ids = set(regs)
+
+        return {
+            "courses": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "instructor": c.instructor,
+                    "term": c.term,
+                    "timetable_code": c.timetable_code,
+                    "registered": c.id in registered_ids,
+                }
+                for c in courses
+            ]
+        }
+
+
+@app.get("/api/timetable/my")
+async def api_timetable_my(user_id: str = Query("")):
+    if not user_id:
+        return {"courses": []}
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(UserCourse, SyllabusCourse, CourseSlot)
+            .join(SyllabusCourse, SyllabusCourse.id == UserCourse.syllabus_course_id)
+            .join(CourseSlot, CourseSlot.syllabus_course_id == SyllabusCourse.id)
+            .where(UserCourse.line_user_id == user_id)
+        )).all()
+
+        result = {}
+        for uc, sc, slot in rows:
+            if sc.id not in result:
+                result[sc.id] = {
+                    "id": sc.id,
+                    "name": sc.name,
+                    "instructor": sc.instructor,
+                    "term": sc.term,
+                    "slots": [],
+                }
+            result[sc.id]["slots"].append({"day": slot.day_of_week, "period": slot.period})
+
+        return {"courses": list(result.values())}
+
+
+@app.post("/api/timetable/register/{course_id}")
+async def api_timetable_register(course_id: int, request: Request):
+    body = await request.json()
+    user_id = body.get("user_id", "")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    async with AsyncSessionLocal() as session:
+        course = (await session.execute(
+            select(SyllabusCourse).where(SyllabusCourse.id == course_id)
+        )).scalar_one_or_none()
+        if not course:
+            raise HTTPException(status_code=404, detail="course not found")
+        existing = (await session.execute(
+            select(UserCourse).where(
+                UserCourse.line_user_id == user_id,
+                UserCourse.syllabus_course_id == course_id,
+            )
+        )).scalar_one_or_none()
+        if not existing:
+            session.add(UserCourse(line_user_id=user_id, syllabus_course_id=course_id))
+            await session.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/timetable/register/{course_id}")
+async def api_timetable_unregister(course_id: int, user_id: str = Query("")):
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    async with AsyncSessionLocal() as session:
+        uc = (await session.execute(
+            select(UserCourse).where(
+                UserCourse.line_user_id == user_id,
+                UserCourse.syllabus_course_id == course_id,
+            )
+        )).scalar_one_or_none()
+        if uc:
+            await session.delete(uc)
+            await session.commit()
+    return {"ok": True}

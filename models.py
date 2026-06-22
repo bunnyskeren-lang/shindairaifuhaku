@@ -133,3 +133,34 @@ class PushSubscription(Base):
     p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
     auth: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SyllabusCourse(Base):
+    __tablename__ = "syllabus_courses"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    term: Mapped[str] = mapped_column(String(20), nullable=False)
+    department: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    instructor: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    timetable_code: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+
+
+class CourseSlot(Base):
+    __tablename__ = "course_slots"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    syllabus_course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    day_of_week: Mapped[str] = mapped_column(String(2), nullable=False)
+    period: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class UserCourse(Base):
+    __tablename__ = "user_courses"
+    __table_args__ = (UniqueConstraint("line_user_id", "syllabus_course_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    syllabus_course_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
