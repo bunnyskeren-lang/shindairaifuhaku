@@ -215,7 +215,7 @@ async function init() {
     document.getElementById("loading-screen").style.display = "none";
   } catch (e) {
     document.getElementById("loading-screen").innerHTML =
-      '<p style="color:#ef4444">読み込みに失敗しました。<br>再度お試しください。</p>';
+      `<p style="color:#ef4444;padding:16px;font-size:13px">エラー:<br>${e.code || ''} ${e.message || String(e)}</p>`;
   }
 }
 
