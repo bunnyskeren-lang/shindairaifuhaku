@@ -215,7 +215,12 @@ async function init() {
     document.getElementById("loading-screen").style.display = "none";
   } catch (e) {
     document.getElementById("loading-screen").innerHTML =
-      `<p style="color:#ef4444;padding:16px;font-size:13px">エラー:<br>${e.code || ''} ${e.message || String(e)}</p>`;
+      `<p style="color:#ef4444;padding:16px;font-size:11px;word-break:break-all">
+        code: ${e.code || '(none)'}<br>
+        msg: ${e.message || '(none)'}<br>
+        str: ${String(e)}<br>
+        json: ${JSON.stringify(e)}
+      </p>`;
   }
 }
 
