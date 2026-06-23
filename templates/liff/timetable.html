@@ -206,6 +206,16 @@ let currentSlot = null;
 
 async function init() {
   try {
+    {% if IS_DEV %}
+    const devUid = new URLSearchParams(location.search).get("dev_uid");
+    if (devUid) {
+      userId = devUid;
+      await loadMyCourses();
+      buildGrid();
+      document.getElementById("loading-screen").style.display = "none";
+      return;
+    }
+    {% endif %}
     await liff.init({ liffId: LIFF_ID });
     if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
