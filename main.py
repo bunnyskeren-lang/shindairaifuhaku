@@ -227,6 +227,8 @@ async def lifespan(app: FastAPI):
         import traceback
         traceback.print_exc()
         print(f"DB ERROR: {e}", flush=True)
+        await engine.dispose()
+        print("Engine disposed and reset after startup error", flush=True)
     asyncio.create_task(_prewarm_caches())
     ping_task = asyncio.create_task(_self_ping())
     yield
@@ -398,17 +400,13 @@ async def _get_all_review_stats_cached() -> dict[str, tuple]:
 
 
 async def _prewarm_caches():
-    try:
-        await asyncio.gather(
-            _get_cls_order_map(),
-            _get_courses_cached(),
-            _get_reviewed_cached(),
-            _get_all_instructors_cached(),
-            _get_all_review_stats_cached(),
-        )
-        print("Cache pre-warmed", flush=True)
-    except Exception as e:
-        print(f"Prewarm failed: {e}", flush=True)
+    await asyncio.sleep(2)
+    for fn in [_get_cls_order_map, _get_courses_cached, _get_reviewed_cached, _get_all_instructors_cached, _get_all_review_stats_cached]:
+        try:
+            await fn()
+        except Exception as e:
+            print(f"Prewarm {fn.__name__} failed: {e}", flush=True)
+    print("Cache pre-warm complete", flush=True)
 
 
 async def _save_log_bg(user_id: str, direction: str, message: str) -> None:
