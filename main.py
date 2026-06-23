@@ -371,20 +371,16 @@ async def _get_all_review_stats_cached() -> dict[str, tuple]:
     if _all_review_stats_cache and time.monotonic() - _all_review_stats_cache_at < _COURSE_CACHE_TTL:
         return _all_review_stats_cache
     async with AsyncSessionLocal() as s:
-        count_rows, ease_rows = await asyncio.gather(
-            s.execute(
-                select(PendingReview.course_name, func.count(PendingReview.id).label("cnt"))
-                .where(PendingReview.is_approved == True)
-                .group_by(PendingReview.course_name)
-            ),
-            s.execute(
-                select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
-                .where(PendingReview.is_approved == True, PendingReview.ease_rating.isnot(None))
-                .group_by(PendingReview.course_name, PendingReview.ease_rating)
-            ),
-        )
-        count_rows = count_rows.all()
-        ease_rows = ease_rows.all()
+        count_rows = (await s.execute(
+            select(PendingReview.course_name, func.count(PendingReview.id).label("cnt"))
+            .where(PendingReview.is_approved == True)
+            .group_by(PendingReview.course_name)
+        )).all()
+        ease_rows = (await s.execute(
+            select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
+            .where(PendingReview.is_approved == True, PendingReview.ease_rating.isnot(None))
+            .group_by(PendingReview.course_name, PendingReview.ease_rating)
+        )).all()
     ease_map: dict[str, list] = {}
     for name, ease, cnt in ease_rows:
         ease_map.setdefault(name, []).append((ease, cnt))
