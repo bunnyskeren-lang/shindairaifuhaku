@@ -1095,7 +1095,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 
     if t in ["時間割テスト"] and IS_DEV:
-        liff_url = f"https://liff.line.me/{TIMETABLE_LIFF_ID}"
+        liff_url = f"{APP_URL}/liff/timetable"
         return [FlexMessage(alt_text="時間割テスト", contents=FlexBubble(
             body=FlexBox(layout="vertical", contents=[
                 FlexText(text="時間割LIFFを開く", weight="bold"),
