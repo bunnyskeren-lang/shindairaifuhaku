@@ -47,7 +47,7 @@ from sqlalchemy import select, func, delete, or_, update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import init_db, AsyncSessionLocal
+from database import init_db, AsyncSessionLocal, engine
 from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse
 
 from dotenv import load_dotenv
