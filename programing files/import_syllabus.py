@@ -28,8 +28,11 @@ def parse_slots(slot_str: str) -> list[tuple[str, int]]:
     "月1"     → [("月", 1)]
     "月1,2"   → [("月", 1), ("月", 2)]
     "月3,4"   → [("月", 3), ("月", 4)]
+    "集中"    → [("集", 0)]
     """
     slot_str = slot_str.strip()
+    if slot_str == "集中":
+        return [("集", 0)]
     m = re.match(r'^([月火水木金土日])(.+)$', slot_str)
     if not m:
         return []
@@ -47,6 +50,9 @@ def parse_file(filepath: str) -> list[dict]:
     courses = []
     for line in text.splitlines():
         parts = line.split("\t")
+        if len(parts) < 8:
+            # タブ区切りでない場合は2文字以上の半角スペースで分割（HTMLテーブルのコピペ対応）
+            parts = re.split(r' {2,}', line.strip())
         if len(parts) < 8:
             continue
         # No. が数字であることを確認

@@ -135,6 +135,39 @@ tbody td:first-child {
   color: #94a3b8; font-size: 13px;
 }
 
+/* ── 集中講義セクション ── */
+.intensive-wrap {
+  padding: 12px 12px 20px;
+  border-top: 2px solid #e2e8f0;
+}
+.intensive-header {
+  font-size: 14px; font-weight: 700;
+  color: {% if IS_DEV %}#c2410c{% else %}#4f46e5{% endif %};
+  margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+}
+.intensive-add-btn {
+  margin-left: auto; font-size: 11px; font-weight: 600;
+  padding: 4px 12px; border-radius: 999px; border: none; cursor: pointer;
+  background: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}; color: #fff;
+}
+.intensive-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; margin-bottom: 6px;
+  background: {% if IS_DEV %}#fff7ed{% else %}#eef2ff{% endif %};
+  cursor: pointer; transition: opacity .15s;
+}
+.intensive-item:active { opacity: .7; }
+.intensive-item-info { flex: 1; min-width: 0; }
+.intensive-item-name {
+  font-size: 13px; font-weight: 600;
+  color: {% if IS_DEV %}#9a3412{% else %}#4338ca{% endif %};
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.intensive-item-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.intensive-empty {
+  font-size: 12px; color: #94a3b8; padding: 8px 0;
+}
+
 #loading-screen {
   position: fixed; inset: 0; background: #fff;
   display: flex; flex-direction: column;
@@ -175,6 +208,14 @@ tbody td:first-child {
     </thead>
     <tbody id="grid-body"></tbody>
   </table>
+</div>
+
+<div class="intensive-wrap">
+  <div class="intensive-header">
+    集中講義
+    <button class="intensive-add-btn" onclick="openDrawer('集', 0)">＋ 追加</button>
+  </div>
+  <div id="intensive-list"></div>
 </div>
 
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
@@ -239,11 +280,18 @@ async function loadMyCourses() {
   const data = await res.json();
   myCourseIds = new Set(data.courses.map(c => c.id));
   window._myCourses = {};
+  window._myIntensiveCourses = [];
   for (const c of data.courses) {
     for (const s of c.slots) {
-      const key = `${s.day}-${s.period}`;
-      if (!window._myCourses[key]) window._myCourses[key] = [];
-      window._myCourses[key].push(c);
+      if (s.day === "集") {
+        if (!window._myIntensiveCourses.find(x => x.id === c.id)) {
+          window._myIntensiveCourses.push(c);
+        }
+      } else {
+        const key = `${s.day}-${s.period}`;
+        if (!window._myCourses[key]) window._myCourses[key] = [];
+        window._myCourses[key].push(c);
+      }
     }
   }
 }
@@ -268,6 +316,30 @@ function buildGrid() {
       updateCell(div, day, p);
     }
     tbody.appendChild(tr);
+  }
+  updateIntensiveSection();
+}
+
+function updateIntensiveSection() {
+  const list = document.getElementById("intensive-list");
+  list.innerHTML = "";
+  const courses = window._myIntensiveCourses || [];
+  if (courses.length === 0) {
+    list.innerHTML = '<div class="intensive-empty">登録中の集中講義はありません</div>';
+    return;
+  }
+  for (const c of courses) {
+    const div = document.createElement("div");
+    div.className = "intensive-item";
+    div.onclick = () => openDrawer("集", 0);
+    const info = document.createElement("div");
+    info.className = "intensive-item-info";
+    info.innerHTML = `
+      <div class="intensive-item-name">${esc(c.name)}</div>
+      <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
+    `;
+    div.appendChild(info);
+    list.appendChild(div);
   }
 }
 
@@ -300,7 +372,7 @@ function updateCell(div, day, period) {
 
 async function openDrawer(day, period) {
   currentSlot = { day, period };
-  const dayLabel = `${day}曜${period}限`;
+  const dayLabel = day === "集" ? "集中講義" : `${day}曜${period}限`;
   document.getElementById("drawer-title").textContent = dayLabel;
   document.getElementById("drawer-sub").textContent = "読み込み中...";
   document.getElementById("course-list").innerHTML = "";
@@ -394,7 +466,8 @@ async function toggleRegister(btn, course) {
       myCourseIds.add(course.id);
     }
     await loadMyCourses();
-    if (currentSlot) {
+    updateIntensiveSection();
+    if (currentSlot && currentSlot.day !== "集") {
       const div = document.querySelector(
         `.cell[data-day="${currentSlot.day}"][data-period="${currentSlot.period}"]`
       );
