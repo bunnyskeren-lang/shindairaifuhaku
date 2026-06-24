@@ -50,6 +50,7 @@ from linebot.v3.messaging import (
     RichMenuRequest,
     RichMenuSize,
     MessageAction,
+    PostbackAction,
     URIAction,
 )
 
@@ -74,12 +75,7 @@ SH = H // 4                    # ≈ 211
 
 
 def _timetable_action():
-    if TIMETABLE_LIFF_ID:
-        return URIAction(
-            label="My時間割",
-            uri=f"https://liff.line.me/{TIMETABLE_LIFF_ID}",
-        )
-    return MessageAction(label="My時間割", text="時間割")
+    return PostbackAction(label="My時間割", data="時間割", display_text="📅 My時間割")
 
 
 AREAS = [

@@ -1165,12 +1165,19 @@ async def handle_message(text: str, user_id: str = "") -> list:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 
-    if t in ["時間割テスト"] and IS_DEV:
-        liff_url = f"{APP_URL}/liff/timetable?dev_uid={user_id}"
-        return [FlexMessage(alt_text="時間割テスト", contents=FlexBubble(
-            body=FlexBox(layout="vertical", contents=[
-                FlexText(text="時間割LIFFを開く", weight="bold"),
-                FlexButton(action=URIAction(label="開く", uri=liff_url), style="primary", margin="md"),
+    if t in ["時間割", "my時間割", "マイ時間割", "時間割テスト"]:
+        if IS_DEV:
+            url = f"{APP_URL}/liff/timetable?dev_uid={user_id}" if user_id else f"{APP_URL}/liff/timetable"
+        elif TIMETABLE_LIFF_ID:
+            url = f"https://liff.line.me/{TIMETABLE_LIFF_ID}"
+        else:
+            return [TextMessage(text="時間割機能は現在ご利用いただけません。")]
+        return [FlexMessage(alt_text="📅 My時間割", contents=FlexBubble(
+            body=FlexBox(layout="vertical", spacing="md", contents=[
+                FlexText(text="📅 My時間割", weight="bold", size="lg"),
+                FlexText(text="タップして時間割を開く", size="sm", color="#64748b"),
+                FlexButton(action=URIAction(label="時間割を開く", uri=url),
+                           style="primary", color="#6366f1", margin="md"),
             ])
         ))]
 
