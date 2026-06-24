@@ -277,6 +277,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return _JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    asyncio.create_task(save_error_log(
+        exc,
+        action=f"{request.method} {request.url.path}",
+    ))
+    return _JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+
 @app.get("/admin/login", response_class=HTMLResponse)
 async def admin_login_page(request: Request, next: str = "/admin"):
     return templates.TemplateResponse("admin/login.html", {"request": request, "next": next, "error": False})
