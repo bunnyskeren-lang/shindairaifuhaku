@@ -42,6 +42,9 @@
                placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
       </label>
     </div>
+    <div style="margin-bottom:10px">
+      <label>学部・学科（任意）<input type="text" name="faculty" maxlength="100" placeholder="例：経営学部"></label>
+    </div>
     <div style="display:flex;gap:10px;margin-bottom:10px">
       <label style="flex:1">開講
         <select name="term" style="margin-top:4px">
@@ -282,6 +285,9 @@
       <div style="margin-bottom:10px">
         <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
       </div>
+      <div style="margin-bottom:10px">
+        <label>学部・学科（任意）<input type="text" id="editFaculty" name="faculty" maxlength="100" placeholder="例：経営学部"></label>
+      </div>
       <div style="display:flex;gap:10px;margin-bottom:10px">
         <label style="flex:1">開講
           <select id="editTerm" name="term" style="margin-top:4px">
@@ -344,6 +350,7 @@ function openEdit(id) {
   document.getElementById('editCategory').value = c.category;
   document.getElementById('editTerm').value = c.term || '';
   document.getElementById('editCredits').value = c.credits || 0;
+  document.getElementById('editFaculty').value = c.faculty || '';
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
   document.getElementById('editModal').classList.add('open');
 }

@@ -55,3 +55,6 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE pending_reviews ADD COLUMN IF NOT EXISTS student_id VARCHAR(20)"
         ))
+        await conn.execute(text(
+            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS faculty VARCHAR(100)"
+        ))

@@ -933,10 +933,13 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
 
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
+    cls_faculty: dict[str, str] = {}
     for course in rows:
         name = course.name
         classification = course.classification or "その他"
         cls_category[classification] = course.category or ""
+        if course.faculty:
+            cls_faculty[classification] = course.faculty
         if name in _sem_variant_names:
             base = _sem_base_for[name]
             if base not in seen_sem_base:
@@ -1006,11 +1009,16 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                     padding_bottom="sm",
                 )
             )
+        base_cls = classification.rstrip("①②")
+        faculty_str = cls_faculty.get(base_cls, "")
+        header_contents = [FlexText(text=classification, weight="bold", color="#ffffff", size="sm")]
+        if faculty_str:
+            header_contents.append(FlexText(text=faculty_str, size="xs", color="#c7d2fe", margin="xs"))
         return FlexBubble(
             size="kilo",
             header=FlexBox(
                 layout="vertical",
-                contents=[FlexText(text=classification, weight="bold", color="#ffffff", size="sm")],
+                contents=header_contents,
                 background_color="#6366f1",
                 padding_all="md",
             ),
@@ -1824,6 +1832,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 "classification": c.classification or "",
                 "category": c.category,
                 "syllabus_url": c.syllabus_url or "",
+                "faculty": c.faculty or "",
             }
             for c in courses
         }, ensure_ascii=False)
@@ -2043,6 +2052,7 @@ async def admin_courses_add(
     term: str = Form(""),
     credits: float = Form(0),
     syllabus_url: str = Form(""),
+    faculty: str = Form(""),
 ):
     name_s = name.strip()
     async with AsyncSessionLocal() as session:
@@ -2061,6 +2071,7 @@ async def admin_courses_add(
             term=term.strip() or None,
             credits=credits if credits else None,
             syllabus_url=syllabus_url.strip() or None,
+            faculty=faculty.strip() or None,
         ))
         await session.commit()
     return RedirectResponse(url="/admin/courses", status_code=303)
@@ -2268,6 +2279,7 @@ async def admin_courses_update(
     term: str = Form(""),
     credits: float = Form(0),
     syllabus_url: str = Form(""),
+    faculty: str = Form(""),
 ):
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
@@ -2281,6 +2293,7 @@ async def admin_courses_update(
             course.term = term.strip() or None
             course.credits = credits if credits else None
             course.syllabus_url = syllabus_url.strip() or None
+            course.faculty = faculty.strip() or None
             if old_name != new_name:
                 await session.execute(
                     sa_update(PendingReview)
