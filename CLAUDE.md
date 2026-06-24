@@ -70,7 +70,7 @@ r2 = (await session.execute(q2)).all()
 git push origin dev:shindairaifuhaku-prod
 
 # 2. 本番リッチメニューを更新（programing files/ から実行すること）
-cd "programing files" && python -X utf8 setup_richmenu.py "../picture/ricchimenu.png"
+cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 ```
 
 ### DBの同期（デプロイ時に必ず実施）

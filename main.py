@@ -915,13 +915,14 @@ def make_classification_select_flex(
     title: str = "📚 教養科目",
     subtitle: str = "系統を選んでください",
     header_color: str = "#6366f1",
+    data_prefix: str = "",
 ) -> FlexMessage:
     if reviewed_cls is None:
         reviewed_cls = set()
     btns = [
         FlexBox(
             layout="vertical",
-            action=PostbackAction(label=cls[:40], data=cls),
+            action=PostbackAction(label=cls[:40], data=f"{data_prefix}{cls}"),
             contents=[
                 FlexText(
                     text=cls,
@@ -1214,6 +1215,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         cls = t[len("教養:"):]
         return await handle_course_list(category="教養", classification=cls)
 
+    if t.startswith("専門:"):
+        cls = t[len("専門:"):]
+        return await handle_course_list(category="専門", classification=cls)
+
     # 分類名の直接タップ（例：「教養(社会)」）
     if t in await _get_cls_set():
         return await handle_course_list(classification=t)
@@ -1237,8 +1242,8 @@ async def handle_message(text: str, user_id: str = "") -> list:
         other_clss = sorted(all_cls - keiei_set, key=_cls_sort)
 
         if has_keiei:
-            display_clss = ["経営学部"] + other_clss
-            display_reviewed = (reviewed_cls_sen - keiei_set) | ({"経営学部"} if reviewed_cls_sen & keiei_set else set())
+            display_clss = ["経営学部 ▶"] + other_clss
+            display_reviewed = (reviewed_cls_sen - keiei_set) | ({"経営学部 ▶"} if reviewed_cls_sen & keiei_set else set())
         else:
             display_clss = sorted(all_cls, key=_cls_sort)
             display_reviewed = reviewed_cls_sen
@@ -1252,7 +1257,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             )]
         return await handle_course_list(category="専門")
 
-    if t == "経営学部":
+    if t in ["経営学部", "経営学部 ▶"]:
         reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
             _get_reviewed_cached(),
             _get_courses_cached(),
@@ -1266,6 +1271,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             title="🎓 経営学部 専門科目",
             subtitle="群を選んでください",
             header_color="#0ea5e9",
+            data_prefix="専門:",
         )]
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
