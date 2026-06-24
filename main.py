@@ -1584,12 +1584,8 @@ async def search_courses(q: str = ""):
 @app.get("/api/preload")
 async def api_preload():
     async with AsyncSessionLocal() as session:
-        courses_res, insts_res = await asyncio.gather(
-            session.execute(select(Course).order_by(Course.name)),
-            session.execute(select(CourseInstructor).order_by(CourseInstructor.name)),
-        )
-        courses = courses_res.scalars().all()
-        insts_raw = insts_res.scalars().all()
+        courses = (await session.execute(select(Course).order_by(Course.name))).scalars().all()
+        insts_raw = (await session.execute(select(CourseInstructor).order_by(CourseInstructor.name))).scalars().all()
     insts_by_course: dict = {}
     inst_courses: dict = {}
     course_by_id = {c.id: c.name for c in courses}
