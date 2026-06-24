@@ -114,7 +114,7 @@ AREAS = [
     {
         "label": "食堂",
         "x": 0, "y": ROW3_Y, "w": COL3B_X, "h": H - ROW3_Y,
-        "action": MessageAction(label="食堂", text="食堂"),
+        "action": URIAction(label="食堂メニュー", uri="https://west2-univ.jp/sp/kobe-univ.php"),
     },
     {
         "label": "バイト",
