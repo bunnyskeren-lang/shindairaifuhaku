@@ -148,6 +148,7 @@ class SyllabusCourse(Base):
     timetable_code: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
     target_grades: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     subject_category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    numbering_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
 
 class TimetableProfile(Base):
