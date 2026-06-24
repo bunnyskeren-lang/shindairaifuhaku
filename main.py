@@ -1003,7 +1003,16 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             has_review = _entry_has_review(name, kind)
             text_color = "#4f46e5" if has_review else "#94a3b8"
             syl_url = course_syllabus_urls.get(name, "")
-            liff_url = course_liff_urls.get(name, "") if kind == "single" else ""
+            if kind == "single":
+                liff_url = course_liff_urls.get(name, "")
+            elif kind.startswith("variant:"):
+                first_suffix = kind.split(":", 1)[1].split("/")[0]
+                liff_url = course_liff_urls.get(name + first_suffix, "")
+            elif kind.startswith("numvariant:") and name in _num_bases:
+                first_name = min(_num_bases[name], key=lambda x: x[1])[0]
+                liff_url = course_liff_urls.get(first_name, "")
+            else:
+                liff_url = ""
             name_box = FlexBox(
                 layout="horizontal",
                 action=PostbackAction(label=display[:40], data=name),
