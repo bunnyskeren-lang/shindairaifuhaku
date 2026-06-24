@@ -75,8 +75,8 @@ def parse_file(filepath: str) -> list[dict]:
         slot_str = parts[6].strip()
         timetable_code = parts[7].strip()
 
-        # 第3・第4クォーターおよび後期のみ（前期・第1Q・第2Q・年度はスキップ）
-        if not (term.startswith("第3") or term.startswith("第4") or term == "後期"):
+        # 第3・第4クォーター、後期、集中のみ（前期・第1Q・第2Q・年度はスキップ）
+        if not (term.startswith("第3") or term.startswith("第4") or term == "後期" or term == "集中"):
             continue
 
         slots = parse_slots(slot_str)

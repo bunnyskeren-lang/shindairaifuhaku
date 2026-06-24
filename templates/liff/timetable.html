@@ -360,7 +360,7 @@ function updateIntensiveSection() {
   const courses = (window._myIntensiveCourses || []).filter(c => {
     if (!c.term) return false;
     if (c.term.startsWith("第" + currentQuarter)) return true;
-    if (c.term === "後期" && (currentQuarter === "3" || currentQuarter === "4")) return true;
+    if ((c.term === "後期" || c.term === "集中") && (currentQuarter === "3" || currentQuarter === "4")) return true;
     return false;
   });
   if (courses.length === 0) {
