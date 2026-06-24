@@ -374,7 +374,7 @@ let myCourseIds = new Set();
 let drawerCourses = [];
 let currentFilter = "all";
 let currentSlot = null;
-let currentQuarter = "3";
+let currentQuarter = localStorage.getItem('currentQuarter') || "3";
 
 function makeSyllabusUrl(code) {
   if (!code || code.length < 2) return null;
@@ -453,6 +453,10 @@ async function submitProfile() {
 }
 
 async function init() {
+  // localStorage の Q 選択をボタンに反映
+  document.querySelectorAll(".q-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.q === currentQuarter);
+  });
   try {
     {% if IS_DEV %}
     const devUid = new URLSearchParams(location.search).get("dev_uid");
@@ -505,6 +509,7 @@ async function loadMyCourses() {
 
 function selectQuarter(q) {
   currentQuarter = q;
+  localStorage.setItem('currentQuarter', q);
   document.querySelectorAll(".q-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.q === q);
   });
