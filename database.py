@@ -30,7 +30,7 @@ class Base(DeclarativeBase):
 
 
 async def init_db():
-    from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse  # noqa: F401
+    from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, TimetableProfile  # noqa: F401
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -57,4 +57,10 @@ async def init_db():
         ))
         await conn.execute(text(
             "ALTER TABLE courses ADD COLUMN IF NOT EXISTS faculty VARCHAR(100)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS target_grades VARCHAR(20)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS subject_category VARCHAR(50)"
         ))

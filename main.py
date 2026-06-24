@@ -931,6 +931,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     _sem_base_for = {n: _b for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
     seen_sem_base: set[str] = set()
 
+    course_syllabus_urls: dict[str, str] = {c.name: c.syllabus_url for c in rows if c.syllabus_url}
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
     cls_faculty: dict[str, str] = {}
@@ -1000,11 +1001,29 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                 display = name
             has_review = _entry_has_review(name, kind)
             text_color = "#4f46e5" if has_review else "#94a3b8"
+            review_url = f"{REVIEW_FORM_URL}?course={_url_quote(name)}"
+            syl_url = course_syllabus_urls.get(name, "")
+            link_row = [
+                FlexText(text="レビュー", size="xxs", color="#6366f1", flex=0,
+                         action=URIAction(label="レビュー", uri=review_url)),
+            ]
+            if syl_url:
+                link_row += [
+                    FlexText(text="｜", size="xxs", color="#cbd5e1", flex=0),
+                    FlexText(text="シラバス", size="xxs", color="#64748b", flex=0,
+                             action=URIAction(label="シラバス", uri=syl_url)),
+                ]
             btn_contents.append(
                 FlexBox(
                     layout="vertical",
-                    action=PostbackAction(label=display[:40], data=name),
-                    contents=[FlexText(text=display, wrap=True, size="sm", color=text_color)],
+                    contents=[
+                        FlexBox(
+                            layout="horizontal",
+                            action=PostbackAction(label=display[:40], data=name),
+                            contents=[FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1)],
+                        ),
+                        FlexBox(layout="horizontal", contents=link_row, spacing="xs", margin="xs"),
+                    ],
                     padding_top="sm",
                     padding_bottom="sm",
                 )
@@ -2599,6 +2618,40 @@ async def liff_timetable(request: Request):
     })
 
 
+@app.get("/api/timetable/profile")
+async def api_timetable_profile_get(user_id: str = Query("")):
+    if not user_id:
+        return {"faculty": None, "grade": None}
+    from models import TimetableProfile
+    async with AsyncSessionLocal() as session:
+        p = await session.get(TimetableProfile, user_id)
+        if not p:
+            return {"faculty": None, "grade": None}
+        return {"faculty": p.faculty, "grade": p.grade}
+
+
+@app.post("/api/timetable/profile")
+async def api_timetable_profile_set(request: Request):
+    from models import TimetableProfile
+    data = await request.json()
+    user_id = data.get("user_id", "")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    faculty = data.get("faculty") or None
+    grade = data.get("grade")
+    if grade is not None:
+        grade = int(grade)
+    async with AsyncSessionLocal() as session:
+        p = await session.get(TimetableProfile, user_id)
+        if p:
+            p.faculty = faculty
+            p.grade = grade
+        else:
+            session.add(TimetableProfile(line_user_id=user_id, faculty=faculty, grade=grade))
+        await session.commit()
+    return {"ok": True}
+
+
 @app.get("/api/timetable/slots/{day}/{period}")
 async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
     async with AsyncSessionLocal() as session:
@@ -2636,6 +2689,8 @@ async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
                     "term": c.term,
                     "timetable_code": c.timetable_code,
                     "department": c.department,
+                    "target_grades": c.target_grades,
+                    "subject_category": c.subject_category,
                     "registered": c.id in registered_ids,
                 }
                 for c in courses

@@ -146,6 +146,16 @@ class SyllabusCourse(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     instructor: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     timetable_code: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    target_grades: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    subject_category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+
+class TimetableProfile(Base):
+    __tablename__ = "timetable_profiles"
+
+    line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    faculty: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class CourseSlot(Base):

@@ -210,6 +210,69 @@ tbody td:first-child {
   border-radius: 50%; animation: spin .7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── プロフィールチップ ── */
+.profile-chip {
+  margin-left: auto; font-size: 11px; font-weight: 600;
+  padding: 5px 10px; border-radius: 999px;
+  border: 1px solid #e2e8f0; background: #fff;
+  color: #64748b; cursor: pointer; white-space: nowrap; transition: all .15s;
+}
+.profile-chip.has-profile {
+  background: {% if IS_DEV %}#fff7ed{% else %}#eef2ff{% endif %};
+  border-color: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %};
+  color: {% if IS_DEV %}#9a3412{% else %}#4338ca{% endif %};
+}
+
+/* ── プロフィールモーダル ── */
+.profile-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  z-index: 200; display: flex; align-items: flex-end;
+}
+.profile-modal {
+  background: #fff; width: 100%;
+  border-radius: 16px 16px 0 0; padding: 20px 20px 36px;
+}
+.profile-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.profile-modal-title { font-size: 16px; font-weight: 700; color: #1e293b; }
+.profile-modal-close {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: #f1f5f9; color: #64748b;
+  font-size: 16px; cursor: pointer;
+}
+.profile-field { margin-bottom: 16px; }
+.profile-label { font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 6px; }
+.profile-select {
+  width: 100%; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid #e2e8f0; font-size: 14px; color: #1e293b;
+  background: #f8fafc;
+}
+.grade-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.grade-opt input { display: none; }
+.grade-opt label {
+  display: block; text-align: center; padding: 8px; border-radius: 8px;
+  border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600;
+  color: #64748b; cursor: pointer; transition: all .15s;
+}
+.grade-opt input:checked + label {
+  background: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %};
+  border-color: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %};
+  color: #fff;
+}
+.profile-save-btn {
+  width: 100%; padding: 12px; border-radius: 10px; border: none;
+  background: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %};
+  color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 20px;
+}
+
+/* ── シラバスリンク ── */
+.syllabus-link {
+  font-size: 10px; color: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %};
+  text-decoration: none; display: inline-block; margin-top: 3px;
+}
 </style>
 </head>
 <body>
@@ -230,6 +293,7 @@ tbody td:first-child {
   <span class="year-label">2026年度</span>
   <button class="q-btn active" data-q="3" onclick="selectQuarter('3')">第3Q</button>
   <button class="q-btn" data-q="4" onclick="selectQuarter('4')">第4Q</button>
+  <button class="profile-chip" id="profile-chip" onclick="openProfileModal()">👤 未設定</button>
 </div>
 
 <div class="grid-wrap">
@@ -252,6 +316,41 @@ tbody td:first-child {
   <div id="intensive-list"></div>
 </div>
 
+<div class="profile-modal-overlay" id="profile-modal-overlay" style="display:none" onclick="closeProfileModalOnOverlay(event)">
+  <div class="profile-modal">
+    <div class="profile-modal-header">
+      <span class="profile-modal-title">プロフィール設定</span>
+      <button class="profile-modal-close" onclick="closeProfileModal()">×</button>
+    </div>
+    <div class="profile-field">
+      <div class="profile-label">学部</div>
+      <select class="profile-select" id="profile-faculty-sel">
+        <option value="">選択してください</option>
+        <option value="文学部">文学部</option>
+        <option value="国際人間科学部">国際人間科学部</option>
+        <option value="法学部">法学部</option>
+        <option value="経済学部">経済学部</option>
+        <option value="経営学部">経営学部</option>
+        <option value="理学部">理学部</option>
+        <option value="医学部">医学部</option>
+        <option value="工学部">工学部</option>
+        <option value="農学部">農学部</option>
+        <option value="海事科学部">海事科学部</option>
+      </select>
+    </div>
+    <div class="profile-field">
+      <div class="profile-label">学年</div>
+      <div class="grade-grid">
+        <div class="grade-opt"><input type="radio" id="g1" name="prof-grade" value="1"><label for="g1">1年</label></div>
+        <div class="grade-opt"><input type="radio" id="g2" name="prof-grade" value="2"><label for="g2">2年</label></div>
+        <div class="grade-opt"><input type="radio" id="g3" name="prof-grade" value="3"><label for="g3">3年</label></div>
+        <div class="grade-opt"><input type="radio" id="g4" name="prof-grade" value="4"><label for="g4">4年</label></div>
+      </div>
+    </div>
+    <button class="profile-save-btn" onclick="submitProfile()">保存</button>
+  </div>
+</div>
+
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-handle"></div>
@@ -268,6 +367,7 @@ const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
 const DAYS = ["月","火","水","木","金"];
 const PERIODS = [1,2,3,4,5,6];
+const FACULTY_PATH_JS = { 'U': '20', 'B': '06' };
 
 let userId = "";
 let myCourseIds = new Set();
@@ -276,13 +376,89 @@ let currentFilter = "all";
 let currentSlot = null;
 let currentQuarter = "3";
 
+function makeSyllabusUrl(code) {
+  if (!code || code.length < 2) return null;
+  const path = FACULTY_PATH_JS[code[1].toUpperCase()];
+  if (!path) return null;
+  return `https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/${path}/data/2026_${code}.html`;
+}
+
+window._userProfile = { faculty: null, grade: null };
+
+async function loadProfile() {
+  const cached = localStorage.getItem('timetable_profile');
+  if (cached) {
+    try { window._userProfile = JSON.parse(cached); } catch(e) {}
+  }
+  updateProfileChip();
+  if (!userId) return;
+  try {
+    const res = await fetch(`${BASE_URL}/api/timetable/profile?user_id=${encodeURIComponent(userId)}`);
+    const data = await res.json();
+    if (data.faculty !== undefined || data.grade !== undefined) {
+      window._userProfile = { faculty: data.faculty, grade: data.grade };
+      localStorage.setItem('timetable_profile', JSON.stringify(window._userProfile));
+      updateProfileChip();
+    }
+  } catch(e) {}
+}
+
+function updateProfileChip() {
+  const chip = document.getElementById('profile-chip');
+  if (!chip) return;
+  const p = window._userProfile || {};
+  if (p.faculty || p.grade) {
+    const label = [p.faculty || '', p.grade ? `${p.grade}年` : ''].filter(Boolean).join(' ');
+    chip.textContent = `👤 ${label}`;
+    chip.classList.add('has-profile');
+  } else {
+    chip.textContent = '👤 未設定';
+    chip.classList.remove('has-profile');
+  }
+}
+
+function openProfileModal() {
+  const p = window._userProfile || {};
+  document.getElementById('profile-faculty-sel').value = p.faculty || '';
+  document.querySelectorAll('input[name="prof-grade"]').forEach(r => {
+    r.checked = String(r.value) === String(p.grade);
+  });
+  document.getElementById('profile-modal-overlay').style.display = 'flex';
+}
+
+function closeProfileModal() {
+  document.getElementById('profile-modal-overlay').style.display = 'none';
+}
+
+function closeProfileModalOnOverlay(e) {
+  if (e.target === document.getElementById('profile-modal-overlay')) closeProfileModal();
+}
+
+async function submitProfile() {
+  const faculty = document.getElementById('profile-faculty-sel').value || null;
+  const gradeEl = document.querySelector('input[name="prof-grade"]:checked');
+  const grade = gradeEl ? parseInt(gradeEl.value) : null;
+  window._userProfile = { faculty, grade };
+  localStorage.setItem('timetable_profile', JSON.stringify(window._userProfile));
+  updateProfileChip();
+  closeProfileModal();
+  if (currentSlot) setFilter(currentQuarter);
+  if (userId) {
+    fetch(`${BASE_URL}/api/timetable/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, faculty, grade }),
+    }).catch(() => {});
+  }
+}
+
 async function init() {
   try {
     {% if IS_DEV %}
     const devUid = new URLSearchParams(location.search).get("dev_uid");
     if (devUid) {
       userId = devUid;
-      await loadMyCourses();
+      await Promise.all([loadMyCourses(), loadProfile()]);
       buildGrid();
       document.getElementById("loading-screen").style.display = "none";
       return;
@@ -292,7 +468,7 @@ async function init() {
     if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
     userId = profile.userId;
-    await loadMyCourses();
+    await Promise.all([loadMyCourses(), loadProfile()]);
     buildGrid();
     document.getElementById("loading-screen").style.display = "none";
   } catch (e) {
@@ -463,9 +639,11 @@ function makeCourseItem(c) {
 
   const info = document.createElement("div");
   info.className = "course-info";
+  const sylUrl = makeSyllabusUrl(c.timetable_code);
   info.innerHTML = `
     <div class="course-name">${esc(c.name)}</div>
     <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
+    ${sylUrl ? `<a href="${sylUrl}" target="_blank" class="syllabus-link">シラバス →</a>` : ''}
   `;
 
   const btn = document.createElement("button");
@@ -483,13 +661,32 @@ function makeCourseItem(c) {
 function renderCourseList(courses) {
   const list = document.getElementById("course-list");
   list.innerHTML = "";
-  if (courses.length === 0) {
+
+  const profile = window._userProfile || {};
+  const userGrade = profile.grade ? parseInt(profile.grade) : null;
+  const userFaculty = profile.faculty || null;
+
+  // 学年フィルタ（target_grades が null の科目は表示する）
+  let filtered = courses;
+  if (userGrade) {
+    filtered = courses.filter(c => {
+      if (!c.target_grades) return true;
+      return c.target_grades.split(',').map(Number).includes(userGrade);
+    });
+  }
+
+  const kyoyo = filtered.filter(c => !c.department || !c.department.includes("経営学部"));
+  let senmon = filtered.filter(c => c.department && c.department.includes("経営学部"));
+
+  // 経営学部以外の学生には経営専門科目を非表示
+  if (userFaculty && userFaculty !== "経営学部") {
+    senmon = [];
+  }
+
+  if (kyoyo.length === 0 && senmon.length === 0) {
     list.innerHTML = '<div class="empty-msg">この時間に科目がありません</div>';
     return;
   }
-
-  const kyoyo = courses.filter(c => !c.department || !c.department.includes("経営学部"));
-  const senmon = courses.filter(c => c.department && c.department.includes("経営学部"));
 
   if (kyoyo.length > 0) {
     const h = document.createElement("div");

@@ -13,6 +13,20 @@ import re
 import sys
 from pathlib import Path
 
+SYLLABUS_BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.html"
+FACULTY_PATH: dict[str, str] = {
+    "U": "20",
+    "B": "06",
+}
+
+def make_syllabus_url(code: str) -> str | None:
+    if len(code) < 2:
+        return None
+    path = FACULTY_PATH.get(code[1].upper())
+    if not path:
+        return None
+    return SYLLABUS_BASE.format(path=path, code=code)
+
 def load_env(env: str):
     env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
     if not env_file.exists():
@@ -143,6 +157,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 if existing_c:
                     if not existing_c.term:
                         existing_c.term = c["term"]
+                    if not existing_c.syllabus_url:
+                        existing_c.syllabus_url = make_syllabus_url(c["timetable_code"])
                     c_skipped += 1
                 else:
                     dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
@@ -154,6 +170,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         faculty=dept_faculty or None,
                         reading="",
                         term=c["term"],
+                        syllabus_url=make_syllabus_url(c["timetable_code"]),
                     ))
                     c_added += 1
 
