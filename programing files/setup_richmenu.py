@@ -54,29 +54,21 @@ from linebot.v3.messaging import (
     URIAction,
 )
 
-# ── 画像サイズ ───────────────────────────────────────────────────────────────
-W, H = 2500, 843
+# ── 画像サイズ（元画像の比率をそのまま使用）──────────────────────────────────
+W, H = 1959, 803
 
-# ── レイアウト座標 ───────────────────────────────────────────────────────────
-# 右サイドバー境界
-SIDE_X = 2150       # 右サイドバー左端 (幅 350)
-# 行境界
-ROW2_Y = 281        # Row2 開始
-ROW3_Y = 562        # Row3 開始
-# Row1 左右境界
-REV_W  = 550        # レビュー投稿 右端
-# Row2 列境界 (main area 0〜SIDE_X を 3 等分)
-COL2_X = SIDE_X // 3           # ≈ 717
-COL3_X = SIDE_X * 2 // 3       # ≈ 1433
-# Row3 列境界 (main area を 2 等分)
-COL3B_X = SIDE_X // 2          # ≈ 1075
-# サイドバー行境界 (4 等分)
-SH = H // 4                    # ≈ 211
+# ── レイアウト座標（元画像 1959×803 基準）────────────────────────────────────
+SIDE_X  = 1680   # 右サイドバー左端
+ROW2_Y  = 268    # Row2 開始（1/3H）
+ROW3_Y  = 535    # Row3 開始（2/3H）
+REV_W   = 430    # レビュー投稿 右端
+COL2_X  = SIDE_X // 3        # ≈ 560
+COL3_X  = SIDE_X * 2 // 3    # ≈ 1120
+COL3B_X = SIDE_X // 2        # ≈ 840
+SH      = H // 4              # ≈ 200
 
 
 def _timetable_action():
-    if TIMETABLE_LIFF_ID:
-        return URIAction(label="My時間割", uri=f"https://liff.line.me/{TIMETABLE_LIFF_ID}")
     return PostbackAction(label="My時間割", data="時間割", display_text="📅 My時間割")
 
 
@@ -154,8 +146,7 @@ def load_custom_image(path: str) -> bytes:
         from PIL import Image
         img = Image.open(path).convert("RGB")
         if img.size != (W, H):
-            print(f"  画像サイズ {img.size} → {W}x{H} にリサイズします")
-            img = img.resize((W, H), Image.LANCZOS)
+            print(f"  ⚠ 画像サイズ {img.size} が設定値 {W}x{H} と異なります（リサイズしません）")
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=95)
         return buf.getvalue()
