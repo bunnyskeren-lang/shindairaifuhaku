@@ -274,40 +274,45 @@ tbody td:first-child {
   text-decoration: none; display: inline-block; margin-top: 3px;
 }
 
-/* ── 教養単位チェッカー ── */
-.credits-wrap {
-  display: none;
-  padding: 0 12px 24px;
-  border-top: 2px solid #e2e8f0;
+/* ── 単位チェッカー ── */
+.credits-wrap { display:none; padding:0 12px 24px; border-top:2px solid #e2e8f0; }
+.credits-card { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.credits-title { font-size:14px; font-weight:700; color:#1e293b; margin-bottom:12px; }
+.credits-group-header {
+  font-size:10px; font-weight:700; letter-spacing:.05em;
+  color:{% if IS_DEV %}#c2410c{% else %}#4f46e5{% endif %};
+  background:{% if IS_DEV %}#fff7ed{% else %}#eef2ff{% endif %};
+  padding:3px 8px; margin:8px -4px 4px; border-radius:4px;
 }
-.credits-card {
-  background: #fff; border-radius: 12px; padding: 16px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+.credits-row-item {
+  display:flex; align-items:center; gap:6px; padding:5px 0;
+  border-bottom:1px solid #f8fafc;
 }
-.credits-title {
-  font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 14px;
+.credits-cat-name { flex:1; font-size:11px; color:#374151; min-width:0; line-height:1.3; }
+.credits-inputs { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.credits-mini-field { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.credits-mini-label { font-size:9px; color:#94a3b8; }
+.credits-mini-input {
+  width:40px; padding:4px 2px; border-radius:6px;
+  border:1px solid #e2e8f0; font-size:13px; font-weight:700;
+  text-align:center; color:#1e293b; background:#f8fafc;
 }
-.credits-row { display: flex; gap: 12px; margin-bottom: 14px; }
-.credits-field { flex: 1; }
-.credits-label { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 5px; }
-.credits-input {
-  width: 100%; padding: 8px 4px; border-radius: 8px;
-  border: 1px solid #e2e8f0; font-size: 22px; font-weight: 700;
-  text-align: center; color: #1e293b; background: #f8fafc;
+.credits-mini-input:focus { outline:none; border-color:{% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}; background:#fff; }
+.credits-remain { width:26px; font-size:10px; font-weight:700; text-align:right; color:#cbd5e1; }
+.credits-remain.done { color:#10b981; }
+.credits-divider { height:1px; background:#f1f5f9; margin:10px 0 8px; }
+.credits-total {
+  display:flex; justify-content:space-between; align-items:baseline;
+  font-size:12px; color:#64748b; margin-bottom:8px;
 }
-.credits-input:focus { outline: none; border-color: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}; background: #fff; }
-.credits-progress-wrap {
-  background: #f1f5f9; border-radius: 999px; height: 10px;
-  overflow: hidden; margin-bottom: 10px;
-}
+.credits-total strong { font-size:15px; font-weight:700; color:#1e293b; }
+.credits-progress-wrap { background:#f1f5f9; border-radius:999px; height:8px; overflow:hidden; margin-bottom:6px; }
 .credits-progress-bar {
-  height: 100%; border-radius: 999px; width: 0%;
-  background: linear-gradient(90deg, {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}, {% if IS_DEV %}#fb923c{% else %}#818cf8{% endif %});
-  transition: width .4s ease;
+  height:100%; border-radius:999px; width:0%;
+  background:linear-gradient(90deg, {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}, {% if IS_DEV %}#fb923c{% else %}#818cf8{% endif %});
+  transition:width .4s ease;
 }
-.credits-summary {
-  font-size: 12px; color: #64748b; text-align: center; min-height: 16px;
-}
+.credits-summary { font-size:11px; color:#94a3b8; text-align:center; }
 </style>
 </head>
 <body>
@@ -353,16 +358,12 @@ tbody td:first-child {
 
 <div class="credits-wrap" id="credits-wrap">
   <div class="credits-card">
-    <div class="credits-title">📊 教養単位チェッカー</div>
-    <div class="credits-row">
-      <div class="credits-field">
-        <div class="credits-label">必要単位数</div>
-        <input type="number" class="credits-input" id="credits-required" min="1" max="300">
-      </div>
-      <div class="credits-field">
-        <div class="credits-label">取得済み単位</div>
-        <input type="number" class="credits-input" id="credits-earned" min="0" max="300" value="0">
-      </div>
+    <div class="credits-title">📊 単位チェッカー</div>
+    <div id="credits-rows"></div>
+    <div class="credits-divider"></div>
+    <div class="credits-total">
+      <span>合計</span>
+      <span><strong id="credits-total-earned">0</strong> / <span id="credits-total-req">0</span> 単位</span>
     </div>
     <div class="credits-progress-wrap">
       <div class="credits-progress-bar" id="credits-bar"></div>
@@ -420,7 +421,19 @@ tbody td:first-child {
 <script>
 const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
-const ADMIN_REQUIRED_CREDITS = {{ kyoyo_required_credits }};
+const CREDIT_CATS = [
+  { id:'kyoyo_kei',   group:'教養科目',  name:'系科目（人文・自然・社会・総合）', def:12 },
+  { id:'kyoyo_kiban', group:'教養科目',  name:'基盤系',                          def:4  },
+  { id:'gaigo1',      group:'教養科目',  name:'外国語第1',                       def:4  },
+  { id:'gaigo2',      group:'教養科目',  name:'外国語第2',                       def:4  },
+  { id:'kyotsu',      group:'共通専門',  name:'共通専門基礎科目',               def:6  },
+  { id:'shonen',      group:'専門科目',  name:'初年次セミナー',                 def:1  },
+  { id:'senmon1',     group:'専門科目',  name:'第1群科目',                      def:6  },
+  { id:'senmon2',     group:'専門科目',  name:'第2群科目',                      def:12 },
+  { id:'global',      group:'専門科目',  name:'グローバル科目群',               def:4  },
+  { id:'senmon3',     group:'専門科目',  name:'第3群・その他',                  def:0  },
+];
+let _creditData = {};
 const DAYS = ["月","火","水","木","金"];
 const PERIODS = [1,2,3,4,5,6];
 const FACULTY_PATH_JS = { 'U': '20', 'B': '06' };
@@ -812,38 +825,83 @@ async function toggleRegister(btn, course) {
 }
 
 function loadCredits() {
-  const saved = JSON.parse(localStorage.getItem('kyoyo_credits') || '{}');
-  // ユーザーが上書きしていれば優先、なければ管理デフォルト値
-  document.getElementById('credits-required').value =
-    (saved.required != null) ? saved.required : ADMIN_REQUIRED_CREDITS;
-  document.getElementById('credits-earned').value =
-    (saved.earned != null) ? saved.earned : 0;
-  document.getElementById('credits-required').addEventListener('input', updateCreditsDisplay);
-  document.getElementById('credits-earned').addEventListener('input', updateCreditsDisplay);
-  updateCreditsDisplay();
+  _creditData = JSON.parse(localStorage.getItem('credit_data') || '{}');
+  renderCreditRows();
+  updateCredits();
 }
 
-function updateCreditsDisplay() {
-  const req    = parseInt(document.getElementById('credits-required').value) || 0;
-  const earned = parseInt(document.getElementById('credits-earned').value)   || 0;
+function renderCreditRows() {
+  const container = document.getElementById('credits-rows');
+  container.innerHTML = '';
+  let lastGroup = null;
+  CREDIT_CATS.forEach(cat => {
+    if (cat.group !== lastGroup) {
+      const hdr = document.createElement('div');
+      hdr.className = 'credits-group-header';
+      hdr.textContent = cat.group;
+      container.appendChild(hdr);
+      lastGroup = cat.group;
+    }
+    const req    = (_creditData[cat.id]?.required != null) ? _creditData[cat.id].required : cat.def;
+    const earned = (_creditData[cat.id]?.earned   != null) ? _creditData[cat.id].earned   : 0;
+    const row = document.createElement('div');
+    row.className = 'credits-row-item';
+    row.innerHTML = `
+      <span class="credits-cat-name">${cat.name}</span>
+      <div class="credits-inputs">
+        <div class="credits-mini-field">
+          <div class="credits-mini-label">必要</div>
+          <input type="number" class="credits-mini-input" id="req-${cat.id}" min="0" max="200" value="${req}">
+        </div>
+        <div class="credits-mini-field">
+          <div class="credits-mini-label">取得</div>
+          <input type="number" class="credits-mini-input" id="earn-${cat.id}" min="0" max="200" value="${earned}">
+        </div>
+        <div class="credits-remain" id="remain-${cat.id}"></div>
+      </div>
+    `;
+    container.appendChild(row);
+    document.getElementById(`req-${cat.id}`).addEventListener('input', updateCredits);
+    document.getElementById(`earn-${cat.id}`).addEventListener('input', updateCredits);
+  });
+}
+
+function updateCredits() {
+  let totalReq = 0, totalEarned = 0;
+  CREDIT_CATS.forEach(cat => {
+    const req    = parseInt(document.getElementById(`req-${cat.id}`)?.value)  || 0;
+    const earned = parseInt(document.getElementById(`earn-${cat.id}`)?.value) || 0;
+    const remainEl = document.getElementById(`remain-${cat.id}`);
+    if (remainEl) {
+      if (req === 0) {
+        remainEl.textContent = ''; remainEl.className = 'credits-remain';
+      } else if (earned >= req) {
+        remainEl.textContent = '✓'; remainEl.className = 'credits-remain done';
+      } else {
+        remainEl.textContent = String(req - earned); remainEl.className = 'credits-remain';
+      }
+    }
+    totalReq    += req;
+    totalEarned += earned;
+    if (!_creditData[cat.id]) _creditData[cat.id] = {};
+    _creditData[cat.id].required = req;
+    _creditData[cat.id].earned   = earned;
+  });
+  document.getElementById('credits-total-earned').textContent = totalEarned;
+  document.getElementById('credits-total-req').textContent    = totalReq;
   const bar     = document.getElementById('credits-bar');
   const summary = document.getElementById('credits-summary');
-  if (req <= 0) {
-    bar.style.width = '0%';
-    summary.textContent = '必要単位数を入力してください';
-    return;
-  }
-  const pct       = Math.min(100, Math.round(earned / req * 100));
-  const remaining = Math.max(0, req - earned);
+  const pct     = totalReq > 0 ? Math.min(100, Math.round(totalEarned / totalReq * 100)) : 0;
   bar.style.width = pct + '%';
-  if (remaining === 0) {
+  const remaining = Math.max(0, totalReq - totalEarned);
+  if (totalReq > 0 && remaining === 0) {
     bar.style.background = 'linear-gradient(90deg,#10b981,#34d399)';
-    summary.textContent  = `✅ 達成！ ${earned} / ${req} 単位`;
+    summary.textContent  = '✅ 必要単位すべて達成！';
   } else {
     bar.style.background = '';
-    summary.textContent  = `あと ${remaining} 単位 (${earned} / ${req} 単位 · ${pct}%)`;
+    summary.textContent  = totalReq > 0 ? `あと ${remaining} 単位 · ${pct}%` : '';
   }
-  localStorage.setItem('kyoyo_credits', JSON.stringify({ required: req, earned }));
+  localStorage.setItem('credit_data', JSON.stringify(_creditData));
 }
 
 function updateCreditsVisibility() {
