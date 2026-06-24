@@ -30,6 +30,7 @@ class Course(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     term: Mapped[str] = mapped_column(String(20), nullable=False, server_default="", default="")
     credits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+    faculty: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
 
 
 class PendingReview(Base):

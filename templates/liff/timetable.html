@@ -262,7 +262,7 @@ tbody td:first-child {
 const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
 const DAYS = ["月","火","水","木","金"];
-const PERIODS = [1,2,3,4,5];
+const PERIODS = [1,2,3,4,5,6];
 
 let userId = "";
 let myCourseIds = new Set();
@@ -357,9 +357,12 @@ function buildGrid() {
 function updateIntensiveSection() {
   const list = document.getElementById("intensive-list");
   list.innerHTML = "";
-  const courses = (window._myIntensiveCourses || []).filter(
-    c => c.term && c.term.startsWith("第" + currentQuarter)
-  );
+  const courses = (window._myIntensiveCourses || []).filter(c => {
+    if (!c.term) return false;
+    if (c.term.startsWith("第" + currentQuarter)) return true;
+    if (c.term === "後期" && (currentQuarter === "3" || currentQuarter === "4")) return true;
+    return false;
+  });
   if (courses.length === 0) {
     list.innerHTML = '<div class="intensive-empty">登録中の集中講義はありません</div>';
     return;
@@ -381,9 +384,12 @@ function updateIntensiveSection() {
 
 function updateCell(div, day, period) {
   const key = `${day}-${period}`;
-  const courses = ((window._myCourses || {})[key] || []).filter(
-    c => c.term && c.term.startsWith("第" + currentQuarter)
-  );
+  const courses = ((window._myCourses || {})[key] || []).filter(c => {
+    if (!c.term) return false;
+    if (c.term.startsWith("第" + currentQuarter)) return true;
+    if (c.term === "後期" && (currentQuarter === "3" || currentQuarter === "4")) return true;
+    return false;
+  });
   div.innerHTML = "";
   if (courses.length > 0) {
     div.classList.add("has-course");
