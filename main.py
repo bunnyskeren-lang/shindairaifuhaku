@@ -866,6 +866,49 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str], revi
     )
 
 
+def make_category_select_flex() -> FlexMessage:
+    categories = [
+        ("📚 教養科目", "教養科目の系統を選んで表示します", "教養", "#6366f1", "#eef2ff", "#4f46e5"),
+        ("🎓 専門科目", "経営学部の専門科目を表示します",   "専門", "#0ea5e9", "#e0f2fe", "#0284c7"),
+    ]
+    btns = [
+        FlexBox(
+            layout="vertical",
+            action=MessageAction(label=label[:40], text=text),
+            contents=[
+                FlexText(text=label, size="lg", color=fg, weight="bold", align="center"),
+                FlexText(text=desc,  size="xs", color="#64748b", align="center", wrap=True),
+            ],
+            background_color=bg,
+            border_width="2px",
+            border_color=border,
+            corner_radius="20px",
+            padding_all="md",
+        )
+        for label, desc, text, fg, bg, border in categories
+    ]
+    return FlexMessage(
+        alt_text="📚 科目一覧 — カテゴリを選んでください",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="📚 科目一覧", weight="bold", color="#ffffff", size="lg"),
+                    FlexText(text="カテゴリを選んでください", color="#c7d2fe", size="sm"),
+                ],
+                background_color="#6366f1",
+                padding_all="lg",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=btns,
+                spacing="sm",
+                padding_all="md",
+            ),
+        ),
+    )
+
+
 def make_classification_select_flex(classifications: list[str], reviewed_cls: set | None = None) -> FlexMessage:
     if reviewed_cls is None:
         reviewed_cls = set()
@@ -1142,7 +1185,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
     t = text.strip()
 
     if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
-        return await handle_course_list()
+        return [make_category_select_flex()]
 
     if t in ["教養", "教養科目", "教養一覧"]:
         cls_map = await _get_cls_order_map()
