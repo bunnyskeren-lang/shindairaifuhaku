@@ -35,6 +35,21 @@
 - `--env prod` は**ユーザーから明示的に「本番のリッチメニューを更新して」と言われた場合のみ**実行すること
 - `--env dev` はユーザーの許可のもとで自由に実行してよい
 
+## SQLAlchemy async セッションのルール
+
+**同一 `AsyncSession` オブジェクトで `asyncio.gather` を使った並行クエリは禁止。**
+
+```python
+# NG: 同一 session で並行実行 → InvalidRequestError / Internal Server Error
+results = await asyncio.gather(session.execute(q1), session.execute(q2))
+
+# OK: 順次実行
+r1 = (await session.execute(q1)).all()
+r2 = (await session.execute(q2)).all()
+```
+
+複数クエリを並行したい場合は、クエリごとに別の `async with AsyncSessionLocal() as session:` ブロックを使うこと。
+
 ## モデル変更時のルール
 
 - `models.py` でクラスを追加・削除したら、**必ず `database.py` の `init_db()` 内の import も同時に更新すること**
