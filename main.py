@@ -1185,6 +1185,9 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     return result
 
 
+# 経営学部専門科目の分類グループ
+_KEIEI_CLASSIFICATIONS = ["第1群科目", "第2群科目", "第3群科目", "研究指導・卒業論文", "グローバル科目群"]
+
 # ── Message handler ─────────────────────────────────────────────
 
 async def handle_message(text: str, user_id: str = "") -> list:
@@ -1226,16 +1229,44 @@ async def handle_message(text: str, user_id: str = "") -> list:
             _get_courses_cached(),
         )
         sen_courses = [c for c in _all_courses if c.category == "専門" and c.classification]
-        clss = sorted({c.classification for c in sen_courses}, key=_cls_sort)
+        all_cls = {c.classification for c in sen_courses}
         reviewed_cls_sen = {c.classification for c in sen_courses if c.name in reviewed_names_sen}
-        if clss:
+
+        keiei_set = set(_KEIEI_CLASSIFICATIONS)
+        has_keiei = bool(all_cls & keiei_set)
+        other_clss = sorted(all_cls - keiei_set, key=_cls_sort)
+
+        if has_keiei:
+            display_clss = ["経営学部"] + other_clss
+            display_reviewed = (reviewed_cls_sen - keiei_set) | ({"経営学部"} if reviewed_cls_sen & keiei_set else set())
+        else:
+            display_clss = sorted(all_cls, key=_cls_sort)
+            display_reviewed = reviewed_cls_sen
+
+        if display_clss:
             return [make_classification_select_flex(
-                clss, reviewed_cls_sen,
+                display_clss, display_reviewed,
                 title="🎓 専門科目",
                 subtitle="分類を選んでください",
                 header_color="#0ea5e9",
             )]
         return await handle_course_list(category="専門")
+
+    if t == "経営学部":
+        reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
+            _get_reviewed_cached(),
+            _get_courses_cached(),
+        )
+        keiei_set = set(_KEIEI_CLASSIFICATIONS)
+        keiei_courses = [c for c in _all_courses if c.category == "専門" and c.classification in keiei_set]
+        reviewed_cls = {c.classification for c in keiei_courses if c.name in reviewed_names_sen}
+        return [make_classification_select_flex(
+            _KEIEI_CLASSIFICATIONS,
+            reviewed_cls,
+            title="🎓 経営学部 専門科目",
+            subtitle="群を選んでください",
+            header_color="#0ea5e9",
+        )]
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
