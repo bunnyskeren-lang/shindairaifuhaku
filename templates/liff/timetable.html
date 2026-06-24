@@ -313,6 +313,19 @@ tbody td:first-child {
   transition:width .4s ease;
 }
 .credits-summary { font-size:11px; color:#94a3b8; text-align:center; }
+.credits-pdf-btn {
+  display:flex; align-items:center; gap:5px; width:100%;
+  padding:8px 12px; border-radius:8px; border:1.5px dashed #cbd5e1;
+  background:#f8fafc; color:#64748b; font-size:11px; font-weight:600;
+  cursor:pointer; margin-bottom:10px; justify-content:center;
+  transition:border-color .2s, background .2s;
+}
+.credits-pdf-btn:active { background:#f1f5f9; }
+.credits-gpa-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 0; font-size:12px; color:#64748b; border-top:1px solid #f1f5f9; margin-top:4px;
+}
+.credits-gpa-val { font-size:16px; font-weight:700; color:{% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}; }
 </style>
 </head>
 <body>
@@ -359,6 +372,8 @@ tbody td:first-child {
 <div class="credits-wrap" id="credits-wrap">
   <div class="credits-card">
     <div class="credits-title">📊 単位チェッカー</div>
+    <button class="credits-pdf-btn" id="credits-pdf-btn" onclick="openSeisekiPicker()">📄 成績表PDFから自動入力</button>
+    <input type="file" id="credits-pdf-input" accept=".pdf" style="display:none" onchange="handleSeisekiFile(this.files[0])">
     <div id="credits-rows"></div>
     <div class="credits-divider"></div>
     <div class="credits-total">
@@ -369,6 +384,10 @@ tbody td:first-child {
       <div class="credits-progress-bar" id="credits-bar"></div>
     </div>
     <div class="credits-summary" id="credits-summary"></div>
+    <div class="credits-gpa-row" id="credits-gpa-row" style="display:none">
+      <span>GPA</span>
+      <span class="credits-gpa-val" id="credits-gpa-val">—</span>
+    </div>
   </div>
 </div>
 
@@ -836,6 +855,11 @@ function loadCredits() {
   _creditData = JSON.parse(localStorage.getItem('credit_data') || '{}');
   renderCreditRows();
   updateCredits();
+  // Restore GPA if previously parsed
+  if (_creditData._gpa?.value != null) {
+    document.getElementById('credits-gpa-val').textContent = Number(_creditData._gpa.value).toFixed(2);
+    document.getElementById('credits-gpa-row').style.display = 'flex';
+  }
 }
 
 function renderCreditRows() {
@@ -916,6 +940,52 @@ function updateCreditsVisibility() {
   const wrap = document.getElementById('credits-wrap');
   if (!wrap) return;
   wrap.style.display = ((window._userProfile || {}).faculty === '経営学部') ? 'block' : 'none';
+}
+
+function openSeisekiPicker() {
+  document.getElementById('credits-pdf-input').click();
+}
+
+async function handleSeisekiFile(file) {
+  if (!file) return;
+  const btn = document.getElementById('credits-pdf-btn');
+  btn.textContent = '⏳ 読み込み中…';
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(BASE_URL + '/api/parse_seiseki', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert('エラー: ' + (err.detail || res.status));
+      return;
+    }
+    const data = await res.json();
+    applySeisekiResult(data);
+  } catch(e) {
+    alert('通信エラー: ' + e.message);
+  } finally {
+    btn.innerHTML = '📄 成績表PDFから自動入力';
+    btn.disabled = false;
+    document.getElementById('credits-pdf-input').value = '';
+  }
+}
+
+function applySeisekiResult(data) {
+  if (data.credits) {
+    Object.entries(data.credits).forEach(([id, val]) => {
+      const el = document.getElementById('earn-' + id);
+      if (el) el.value = val;
+    });
+    updateCredits();
+  }
+  if (data.gpa != null) {
+    document.getElementById('credits-gpa-val').textContent = data.gpa.toFixed(2);
+    document.getElementById('credits-gpa-row').style.display = 'flex';
+    if (!_creditData._gpa) _creditData._gpa = {};
+    _creditData._gpa.value = data.gpa;
+    localStorage.setItem('credit_data', JSON.stringify(_creditData));
+  }
 }
 
 function esc(str) {

@@ -1,4 +1,5 @@
 import os
+import io
 import math
 import re as _re
 import json
@@ -16,7 +17,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query
+from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query, UploadFile, File
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
@@ -52,6 +53,12 @@ from models import MessageLog, Course, PendingReview, UserProfile, UserActivity,
 
 from dotenv import load_dotenv
 load_dotenv()
+
+try:
+    import pdfplumber as _pdfplumber
+    _PDFPLUMBER_OK = True
+except ImportError:
+    _PDFPLUMBER_OK = False
 
 CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
@@ -2813,3 +2820,123 @@ async def api_timetable_unregister(course_id: int, user_id: str = Query("")):
             await session.delete(uc)
             await session.commit()
     return {"ok": True}
+
+
+# ── 経営学部 成績表 PDF パース ──────────────────────────────────────────────
+
+_SENMON1 = {'経営学基礎論', '会計学基礎論', '市場システム基礎論'}
+_SENMON2 = {
+    '経営管理', '経営戦略', '経営史', '経営数学', 'コーポレートファイナンス',
+    '簿記', '財務会計', '管理会計', 'マーケティング', '金融システム', '交通論',
+    '経営統計', '人的資源管理', '公益事業経営', 'ゲーム理論', '組織と情報',
+    '監査論', '国際会計', '社会環境会計', '税務会計', '流通システム',
+    '金融機関', 'マーケティング・マネジメント', '証券市場', 'リスク・マネジメント',
+}
+_GLOBAL_PREFIXES = (
+    'Academic Reading and Writing',
+    'International Business',
+    'Introduction to Finance',
+    'Introduction to Marketing',
+    'Introduction to Management',
+    'Introduction to Accounting',
+    'Business Presentation',
+    'Advanced Financial',
+    'Advanced Study',
+    'Portfolio Management',
+    'Portfolio Theory',
+    'Entrepreneurial',
+    'Capstone',
+    'Overview of Corporate',
+    'Foundations of Securities',
+    '外国文献講義',
+    '外国書講読',
+)
+_GAIGO_FOREIGN = ('ロシア語', 'ドイツ語', 'フランス語', '中国語', '韓国語', 'スペイン語',
+                   'アラビア語', 'イタリア語', 'ポルトガル語', '朝鮮語')
+
+
+def _parse_seiseki_pdf(data: bytes) -> dict:
+    if not _PDFPLUMBER_OK:
+        raise RuntimeError("pdfplumber not available")
+    with _pdfplumber.open(io.BytesIO(data)) as pdf:
+        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+
+    def _summary(name: str) -> float:
+        m = _re.search(_re.escape(name) + r'\s+([\d.]+)', text)
+        return float(m.group(1)) if m else 0.0
+
+    gpa = None
+    gpa_m = _re.search(r'G\s*P\s*A\s+[\d.]+\s+\d+\s+([\d.]+)', text)
+    if gpa_m:
+        gpa = float(gpa_m.group(1))
+
+    # Walk lines tracking section headers to categorise courses
+    gaigo1 = gaigo2 = shonen = senmon1 = senmon2 = global_c = 0.0
+    current_sec = ''
+    course_re = _re.compile(
+        r'^(?:＊\s+)?(.+?)\s+(\d+\.\d+)\s+(秀|優|良|可|不可|合格|認定)'
+    )
+    for line in text.splitlines():
+        sec_m = _re.search(r'【(.*?)】', line)
+        if sec_m:
+            current_sec = sec_m.group(1)
+            continue
+        m = course_re.match(line.strip())
+        if not m:
+            continue
+        name = m.group(1).strip()
+        cr = float(m.group(2))
+        if '外国語' in current_sec:
+            if 'Academic English' in name:
+                gaigo1 += cr
+            elif any(name.startswith(p) for p in _GAIGO_FOREIGN):
+                gaigo2 += cr
+        elif '専門科目' in current_sec:
+            if '初年次セミナー' in name:
+                shonen += cr
+            elif name in _SENMON1:
+                senmon1 += cr
+            elif name in _SENMON2:
+                senmon2 += cr
+            elif any(name.startswith(p) for p in _GLOBAL_PREFIXES):
+                global_c += cr
+
+    senmon_total = _summary('専門科目')
+    senmon3 = max(0.0, round(senmon_total - shonen - senmon1 - senmon2 - global_c, 1))
+
+    # 外国語科目の合計が0なら summary 値で半分ずつ
+    gaiko_total = _summary('外国語科目')
+    if gaigo1 + gaigo2 == 0 and gaiko_total > 0:
+        gaigo1 = gaigo2 = round(gaiko_total / 2, 1)
+
+    return {
+        "gpa": gpa,
+        "credits": {
+            "kyoyo_kei":   round(_summary('総合教養科目'), 1),
+            "kyoyo_kiban": round(_summary('基礎教養科目') + _summary('情報科目'), 1),
+            "gaigo1":  round(gaigo1, 1),
+            "gaigo2":  round(gaigo2, 1),
+            "kyotsu":  round(_summary('共通専門基礎科目'), 1),
+            "shonen":  round(shonen, 1),
+            "senmon1": round(senmon1, 1),
+            "senmon2": round(senmon2, 1),
+            "global":  round(global_c, 1),
+            "senmon3": round(senmon3, 1),
+        },
+    }
+
+
+@app.post("/api/parse_seiseki")
+async def api_parse_seiseki(file: UploadFile = File(...)):
+    if not _PDFPLUMBER_OK:
+        raise HTTPException(status_code=503, detail="PDF parsing not available")
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="PDF ファイルを送ってください")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="ファイルサイズが大きすぎます（10MB 以下）")
+    try:
+        result = _parse_seiseki_pdf(data)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"PDF の解析に失敗しました: {e}")
+    return result
