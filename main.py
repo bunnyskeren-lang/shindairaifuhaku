@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Form, Query, UploadFile, File
 from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -270,19 +271,20 @@ app.add_middleware(
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    asyncio.create_task(save_error_log(
-        exc,
-        action=f"validation:{request.method} {request.url.path}",
-    ))
+    await save_error_log(exc, action=f"validation:{request.method} {request.url.path}")
     return _JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code >= 500:
+        await save_error_log(exc, action=f"HTTP{exc.status_code} {request.method} {request.url.path}")
+    return await http_exception_handler(request, exc)
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    asyncio.create_task(save_error_log(
-        exc,
-        action=f"{request.method} {request.url.path}",
-    ))
+    await save_error_log(exc, action=f"{request.method} {request.url.path}")
     return _JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
@@ -1486,9 +1488,13 @@ async def callback(request: Request):
         raise HTTPException(status_code=400, detail="Invalid webhook payload")
 
     task = asyncio.create_task(_process_events(events))
-    task.add_done_callback(
-        lambda t: t.exception() if not t.cancelled() and t.exception() else None
-    )
+
+    def _on_process_done(t: asyncio.Task):
+        if t.cancelled() or not t.exception():
+            return
+        asyncio.create_task(save_error_log(t.exception(), action="process_events_bg"))
+
+    task.add_done_callback(_on_process_done)
     return {"status": "ok"}
 
 

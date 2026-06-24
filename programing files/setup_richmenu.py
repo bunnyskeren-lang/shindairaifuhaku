@@ -120,10 +120,7 @@ AREAS = [
     {
         "label": "市バス",
         "x": SIDE_X, "y": SH, "w": W - SIDE_X, "h": SH,
-        "action": URIAction(
-            label="市バス",
-            uri="https://www.city.kobe.lg.jp/a17842/kurashi/traffic/bus/shiei/",
-        ),
+        "action": URIAction(label="市バス", uri="https://kotsu.city.kobe.lg.jp/"),
     },
     {
         "label": "うりぼーポータル",
