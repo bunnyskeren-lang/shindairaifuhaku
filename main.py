@@ -909,7 +909,13 @@ def make_category_select_flex() -> FlexMessage:
     )
 
 
-def make_classification_select_flex(classifications: list[str], reviewed_cls: set | None = None) -> FlexMessage:
+def make_classification_select_flex(
+    classifications: list[str],
+    reviewed_cls: set | None = None,
+    title: str = "📚 教養科目",
+    subtitle: str = "系統を選んでください",
+    header_color: str = "#6366f1",
+) -> FlexMessage:
     if reviewed_cls is None:
         reviewed_cls = set()
     btns = [
@@ -934,15 +940,15 @@ def make_classification_select_flex(classifications: list[str], reviewed_cls: se
         for cls in classifications
     ]
     return FlexMessage(
-        alt_text="📚 教養科目 — 系統を選んでください",
+        alt_text=f"{title} — {subtitle}",
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
                 contents=[
-                    FlexText(text="📚 教養科目", weight="bold", color="#ffffff", size="lg"),
-                    FlexText(text="系統を選んでください", color="#c7d2fe", size="sm"),
+                    FlexText(text=title, weight="bold", color="#ffffff", size="lg"),
+                    FlexText(text=subtitle, color="#c7d2fe", size="sm"),
                 ],
-                background_color="#6366f1",
+                background_color=header_color,
                 padding_all="lg",
             ),
             body=FlexBox(
@@ -1213,6 +1219,22 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
 
     if t in ["専門科目", "専門", "専門一覧"]:
+        cls_map = await _get_cls_order_map()
+        _cls_sort = _make_cls_sort(cls_map)
+        reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
+            _get_reviewed_cached(),
+            _get_courses_cached(),
+        )
+        sen_courses = [c for c in _all_courses if c.category == "専門" and c.classification]
+        clss = sorted({c.classification for c in sen_courses}, key=_cls_sort)
+        reviewed_cls_sen = {c.classification for c in sen_courses if c.name in reviewed_names_sen}
+        if clss:
+            return [make_classification_select_flex(
+                clss, reviewed_cls_sen,
+                title="🎓 専門科目",
+                subtitle="分類を選んでください",
+                header_color="#0ea5e9",
+            )]
         return await handle_course_list(category="専門")
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
