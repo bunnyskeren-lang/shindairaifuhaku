@@ -1114,9 +1114,9 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     if not bubbles:
         return [TextMessage(text="科目が登録されていません。")]
 
-    # 12バブルずつ複数カルーセルに分割（LINE上限）、最大5メッセージ
+    # 8バブルずつ複数カルーセルに分割（シラバスURL追加後に50KB超え防止）、最大5メッセージ
     result = []
-    for chunk in [bubbles[i:i+12] for i in range(0, min(len(bubbles), 60), 12)]:
+    for chunk in [bubbles[i:i+8] for i in range(0, min(len(bubbles), 40), 8)]:
         if len(chunk) == 1:
             result.append(FlexMessage(alt_text=alt, contents=chunk[0]))
         else:
