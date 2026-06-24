@@ -104,3 +104,54 @@ cd "programing files" && python -X utf8 setup_richmenu.py "../picture/ricchimenu
 |---|---|
 | **dev** | `postgresql://postgres.ofsvkcptzngbsxtdbqzj:Developerr6363st@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres` |
 | **本番** | `postgresql://postgres.sagubqrhjnzrtcvlmzqy:Linebot6363st@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres` |
+
+## シラバスURL生成ルール
+
+神戸大学シラバスサイトのURLは **時間割コード** から一意に決まる。
+
+```
+https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.html
+```
+
+| コードの2文字目 | 学部 | path |
+|---|---|---|
+| `U` | 教養科目（教養教育院） | `20` |
+| `B` | 経営学部 | `06` |
+
+例: `3U020` → `/20/` → `2026_3U020.html` / `3B379` → `/06/` → `2026_3B379.html`
+
+新しい学部のデータを追加する際は、実際のシラバスURLを確認してpathの数字を特定し、
+`programing files/import_syllabus.py` と `programing files/fetch_syllabus_info.py` と
+`templates/liff/timetable.html` の `FACULTY_PATH` / `FACULTY_PATH_JS` に追記すること。
+
+### シラバスページのHTMLパース
+
+神戸大学シラバスページの実際のHTML構造（2026年度確認済み）：
+
+```html
+<tr>
+  <td class="gaibu-syllabus-kihon">科目分類</td>
+  <td width="300">教養科目</td>       ← subject_category
+  <td class="gaibu-syllabus-kihon">開講年次</td>
+  <td width="300">1 ･ 2 ･ 3 ･ 4 年</td>  ← target_grades
+</tr>
+```
+
+- ラベルは `<th>` ではなく `<td>`
+- 開講年次のラベルは **「対象年次」ではなく「開講年次」**（ここを間違えると全件空になる）
+- スクレイピングスクリプト: `programing files/fetch_syllabus_info.py`
+  - `--env dev` で dev DB に書き込み、`--force` で既取得分も上書き
+  - 0.3秒スリープ/件、20件ごとにコミット
+
+### 時間割DBテーブル構成
+
+| テーブル | 用途 |
+|---|---|
+| `syllabus_courses` | 時間割マスタ（timetable_code, term, target_grades, subject_category） |
+| `course_slots` | 曜日・時限（day_of_week, period） |
+| `user_courses` | ユーザーの登録科目 |
+| `timetable_profiles` | ユーザーの学部・学年プロフィール |
+
+インポートスクリプト: `programing files/import_syllabus.py`
+- `--also-courses` を付けると `courses` テーブル（LINE bot用）にも登録
+- `--classification` / `--faculty` で courses の分類・学部名を指定
