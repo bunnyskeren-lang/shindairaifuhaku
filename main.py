@@ -63,6 +63,7 @@ VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
+KYOYO_REQUIRED_CREDITS = int(os.environ.get("KYOYO_REQUIRED_CREDITS", "1"))
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 
@@ -2662,6 +2663,7 @@ async def liff_timetable(request: Request):
         "liff_id": TIMETABLE_LIFF_ID,
         "base_url": APP_URL,
         "IS_DEV": IS_DEV,
+        "kyoyo_required_credits": KYOYO_REQUIRED_CREDITS,
     })
 
 
