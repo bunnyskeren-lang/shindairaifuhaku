@@ -932,6 +932,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     seen_sem_base: set[str] = set()
 
     course_syllabus_urls: dict[str, str] = {c.name: c.syllabus_url for c in rows if c.syllabus_url}
+    course_liff_urls: dict[str, str] = {c.name: f"{APP_URL}/liff/course?course_id={c.id}" for c in rows}
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
     cls_faculty: dict[str, str] = {}
@@ -1002,30 +1003,31 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             has_review = _entry_has_review(name, kind)
             text_color = "#4f46e5" if has_review else "#94a3b8"
             syl_url = course_syllabus_urls.get(name, "")
-            if syl_url:
-                # シラバスリンクがある科目のみ2行レイアウト（50KB制限対策で review URL は省く）
-                btn_contents.append(
-                    FlexBox(
-                        layout="vertical",
-                        contents=[
-                            FlexBox(
-                                layout="horizontal",
-                                action=PostbackAction(label=display[:40], data=name),
-                                contents=[FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1)],
-                            ),
-                            FlexBox(
-                                layout="horizontal",
-                                contents=[
-                                    FlexText(text="シラバス", size="xxs", color="#64748b", flex=0,
-                                             action=URIAction(label="シラバス", uri=syl_url)),
-                                ],
-                                margin="xs",
-                            ),
-                        ],
-                        padding_top="sm",
-                        padding_bottom="sm",
-                    )
-                )
+            liff_url = course_liff_urls.get(name, "") if kind == "single" else ""
+            name_box = FlexBox(
+                layout="horizontal",
+                action=PostbackAction(label=display[:40], data=name),
+                contents=[FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1)],
+            )
+            if liff_url or syl_url:
+                link_items = []
+                if liff_url:
+                    link_items.append(FlexText(text="レビュー", size="xxs", color="#4f46e5", flex=0,
+                                               action=URIAction(label="レビュー", uri=liff_url)))
+                if syl_url:
+                    if link_items:
+                        link_items.append(FlexText(text="  ", size="xxs", color="#cbd5e1", flex=0))
+                    link_items.append(FlexText(text="シラバス", size="xxs", color="#64748b", flex=0,
+                                               action=URIAction(label="シラバス", uri=syl_url)))
+                btn_contents.append(FlexBox(
+                    layout="vertical",
+                    contents=[
+                        name_box,
+                        FlexBox(layout="horizontal", contents=link_items, margin="xs"),
+                    ],
+                    padding_top="sm",
+                    padding_bottom="sm",
+                ))
             else:
                 btn_contents.append(
                     FlexBox(
@@ -1036,7 +1038,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                         padding_bottom="sm",
                     )
                 )
-        base_cls = classification.rstrip("①②")
+        base_cls = classification.rstrip("①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮")
         faculty_str = cls_faculty.get(base_cls, "")
         header_contents = [FlexText(text=classification, weight="bold", color="#ffffff", size="sm")]
         if faculty_str:
@@ -1057,22 +1059,29 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             ),
         )
 
-    SPLIT_THRESHOLD = 10
-    bubbles = []
+    MAX_PER_BUBBLE = 6
+    _ROMAN = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮"
+    bubbles: list = []
+
+    def _split_to_bubbles(cls: str, ents: list) -> None:
+        if not ents:
+            return
+        if len(ents) <= MAX_PER_BUBBLE:
+            bubbles.append(_make_bubble(cls, ents))
+            return
+        chunks = [ents[i:i+MAX_PER_BUBBLE] for i in range(0, len(ents), MAX_PER_BUBBLE)]
+        for i, chunk in enumerate(chunks):
+            suffix = _ROMAN[i] if i < len(_ROMAN) else f"({i+1})"
+            bubbles.append(_make_bubble(cls + suffix, chunk))
+
     for cls, ents in all_groups:
         if cls == "教養(総合)":
             others = [(n, k) for n, k in ents if "GCP" not in n]
             gcps   = [(n, k) for n, k in ents if "GCP" in n]
-            if others:
-                bubbles.append(_make_bubble("教養(総合)", others))
-            if gcps:
-                bubbles.append(_make_bubble("教養(総合) GCP", gcps))
-        elif len(ents) > SPLIT_THRESHOLD:
-            mid = (len(ents) + 1) // 2
-            bubbles.append(_make_bubble(cls + "①", ents[:mid]))
-            bubbles.append(_make_bubble(cls + "②", ents[mid:]))
+            _split_to_bubbles("教養(総合)", others)
+            _split_to_bubbles("教養(総合) GCP", gcps)
         else:
-            bubbles.append(_make_bubble(cls, ents))
+            _split_to_bubbles(cls, ents)
 
     alt = f"📚 {category}一覧" if category else "📚 科目一覧"
     if not bubbles:
