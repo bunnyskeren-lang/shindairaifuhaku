@@ -250,11 +250,7 @@ tbody td:first-child {
     <div class="drawer-title" id="drawer-title"></div>
     <div class="drawer-sub" id="drawer-sub"></div>
   </div>
-  <div class="filter-row" id="filter-row">
-    <button class="filter-btn active" data-q="all" onclick="setFilter('all')">すべて</button>
-    <button class="filter-btn" data-q="3" onclick="setFilter('3')">第3Q</button>
-    <button class="filter-btn" data-q="4" onclick="setFilter('4')">第4Q</button>
-  </div>
+  <div class="filter-row" id="filter-row" style="display:none"></div>
   <div class="course-list" id="course-list"></div>
 </div>
 
@@ -430,8 +426,6 @@ async function openDrawer(day, period) {
   const data = await res.json();
   drawerCourses = data.courses;
 
-  const count = drawerCourses.length;
-  document.getElementById("drawer-sub").textContent = `${count}科目`;
   setFilter(currentQuarter);
 }
 
@@ -442,13 +436,14 @@ function closeDrawer() {
 
 function setFilter(q) {
   currentFilter = q;
-  document.querySelectorAll(".filter-btn").forEach(b => {
-    b.classList.toggle("active", b.dataset.q === q);
-  });
   const filtered = drawerCourses.filter(c => {
     if (q === "all") return true;
-    return c.timetable_code.startsWith(q);
+    if (!c.term) return false;
+    if (c.term.startsWith("第" + q)) return true;
+    if ((c.term === "後期" || c.term === "集中") && (q === "3" || q === "4")) return true;
+    return false;
   });
+  document.getElementById("drawer-sub").textContent = `${filtered.length}科目`;
   renderCourseList(filtered);
 }
 
