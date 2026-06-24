@@ -66,6 +66,16 @@ TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 
+_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06"}
+
+def _make_syllabus_url(timetable_code: str) -> str:
+    if not timetable_code or len(timetable_code) < 2:
+        return ""
+    path = _SYLLABUS_FACULTY_PATH.get(timetable_code[1].upper(), "")
+    if not path:
+        return ""
+    return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
+
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
 JST = timezone(timedelta(hours=9))
@@ -2420,6 +2430,16 @@ async def api_course(course_id: int):
                         .limit(50)
                     )).scalars().all()
 
+            async def _syllabus_code():
+                if course.syllabus_url:
+                    return None
+                async with AsyncSessionLocal() as s:
+                    return (await s.execute(
+                        select(SyllabusCourse.timetable_code)
+                        .where(SyllabusCourse.name == course.name)
+                        .limit(1)
+                    )).scalar_one_or_none()
+
             async def _record_view():
                 async with AsyncSessionLocal() as s:
                     await s.execute(
@@ -2436,9 +2456,10 @@ async def api_course(course_id: int):
                     )
                     await s.commit()
 
-            instructors, agg, ease_rows, reviews_raw, _ = await asyncio.gather(
-                _instrs(), _agg(), _ease(), _reviews(), _record_view()
+            instructors, agg, ease_rows, reviews_raw, sc_code, _ = await asyncio.gather(
+                _instrs(), _agg(), _ease(), _reviews(), _syllabus_code(), _record_view()
             )
+            syllabus_url = course.syllabus_url or _make_syllabus_url(sc_code or "")
             instructor_str = "・".join(i.name for i in instructors) or course.instructor or ""
             avg_rating = float(agg[0]) if agg and agg[0] else None
             top_ease = None
@@ -2457,7 +2478,7 @@ async def api_course(course_id: int):
                 "category": course.category or "",
                 "term": getattr(course, "term", None) or "",
                 "credits": getattr(course, "credits", None) or 0,
-                "syllabus_url": course.syllabus_url or "",
+                "syllabus_url": syllabus_url,
                 "avg_rating": avg_rating,
                 "top_ease": top_ease,
                 "reviews": [
