@@ -436,6 +436,14 @@ const CREDIT_CATS = [
 let _creditData = {};
 const DAYS = ["月","火","水","木","金"];
 const PERIODS = [1,2,3,4,5,6];
+const PERIOD_TIMES = {
+  1: "8:50〜10:20",
+  2: "10:40〜12:10",
+  3: "13:20〜14:50",
+  4: "15:10〜16:40",
+  5: "17:00〜18:30",
+  6: "18:50〜20:20",
+};
 const FACULTY_PATH_JS = { 'U': '20', 'B': '06' };
 
 let userId = "";
@@ -596,7 +604,7 @@ function buildGrid() {
   for (const p of PERIODS) {
     const tr = document.createElement("tr");
     const th = document.createElement("td");
-    th.textContent = `${p}限`;
+    th.innerHTML = `<div>${p}限</div><div style="font-size:7px;font-weight:400;color:#94a3b8;margin-top:1px;line-height:1.4;white-space:nowrap">${(PERIOD_TIMES[p]||'').replace('〜','<br>')}</div>`;
     tr.appendChild(th);
     for (const day of DAYS) {
       const td = document.createElement("td");
