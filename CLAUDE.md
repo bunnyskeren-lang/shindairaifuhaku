@@ -1,5 +1,17 @@
 # デプロイルール
 
+## 環境変数の追加ルール（必須）
+
+**新しい環境変数を追加したときは、必ずコードの変更と同時に以下を案内すること：**
+
+1. `.env.dev` または `.env` に追加した変数名と値を明示する
+2. **Render ダッシュボードへの登録も必ず案内する**（ローカルの .env だけでは Render に反映されない）
+3. dev に追加した変数は dev サービス（shindairaifuhaku-1）へ、本番に追加した変数は本番サービス（shindairaifuhaku）へ
+
+例：「Render dev の Environment に以下を追加してください：`KEY=value`」
+
+---
+
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
 - dev環境（shindairaifuhaku-1.onrender.com）のみ自由に操作してよい
 - `git push` の push先が `origin main` または `origin shindairaifuhaku` の場合は必ず確認を取ること
