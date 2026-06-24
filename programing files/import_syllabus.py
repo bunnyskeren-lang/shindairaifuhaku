@@ -141,6 +141,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     select(Course).where(Course.name == c["name"])
                 )).scalar_one_or_none()
                 if existing_c:
+                    if not existing_c.term:
+                        existing_c.term = c["term"]
                     c_skipped += 1
                 else:
                     dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
@@ -151,6 +153,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         category="専門",
                         faculty=dept_faculty or None,
                         reading="",
+                        term=c["term"],
                     ))
                     c_added += 1
 
