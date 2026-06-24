@@ -1001,33 +1001,41 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                 display = name
             has_review = _entry_has_review(name, kind)
             text_color = "#4f46e5" if has_review else "#94a3b8"
-            review_url = f"{REVIEW_FORM_URL}?course={_url_quote(name)}"
             syl_url = course_syllabus_urls.get(name, "")
-            link_row = [
-                FlexText(text="レビュー", size="xxs", color="#6366f1", flex=0,
-                         action=URIAction(label="レビュー", uri=review_url)),
-            ]
             if syl_url:
-                link_row += [
-                    FlexText(text="｜", size="xxs", color="#cbd5e1", flex=0),
-                    FlexText(text="シラバス", size="xxs", color="#64748b", flex=0,
-                             action=URIAction(label="シラバス", uri=syl_url)),
-                ]
-            btn_contents.append(
-                FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexBox(
-                            layout="horizontal",
-                            action=PostbackAction(label=display[:40], data=name),
-                            contents=[FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1)],
-                        ),
-                        FlexBox(layout="horizontal", contents=link_row, spacing="xs", margin="xs"),
-                    ],
-                    padding_top="sm",
-                    padding_bottom="sm",
+                # シラバスリンクがある科目のみ2行レイアウト（50KB制限対策で review URL は省く）
+                btn_contents.append(
+                    FlexBox(
+                        layout="vertical",
+                        contents=[
+                            FlexBox(
+                                layout="horizontal",
+                                action=PostbackAction(label=display[:40], data=name),
+                                contents=[FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1)],
+                            ),
+                            FlexBox(
+                                layout="horizontal",
+                                contents=[
+                                    FlexText(text="シラバス", size="xxs", color="#64748b", flex=0,
+                                             action=URIAction(label="シラバス", uri=syl_url)),
+                                ],
+                                margin="xs",
+                            ),
+                        ],
+                        padding_top="sm",
+                        padding_bottom="sm",
+                    )
                 )
-            )
+            else:
+                btn_contents.append(
+                    FlexBox(
+                        layout="vertical",
+                        action=PostbackAction(label=display[:40], data=name),
+                        contents=[FlexText(text=display, wrap=True, size="sm", color=text_color)],
+                        padding_top="sm",
+                        padding_bottom="sm",
+                    )
+                )
         base_cls = classification.rstrip("①②")
         faculty_str = cls_faculty.get(base_cls, "")
         header_contents = [FlexText(text=classification, weight="bold", color="#ffffff", size="sm")]
