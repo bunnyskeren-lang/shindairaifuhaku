@@ -135,6 +135,15 @@ tbody td:first-child {
   color: #94a3b8; font-size: 13px;
 }
 
+.course-section-header {
+  font-size: 11px; font-weight: 700;
+  color: {% if IS_DEV %}#c2410c{% else %}#4f46e5{% endif %};
+  background: {% if IS_DEV %}#fff7ed{% else %}#eef2ff{% endif %};
+  padding: 6px 16px; letter-spacing: .04em;
+  border-top: 1px solid #e2e8f0;
+  position: sticky; top: 0;
+}
+
 /* ── クォーターバー ── */
 .quarter-bar {
   display: flex; align-items: center; gap: 6px;
@@ -447,6 +456,30 @@ function setFilter(q) {
   renderCourseList(filtered);
 }
 
+function makeCourseItem(c) {
+  const item = document.createElement("div");
+  item.className = "course-item";
+  item.dataset.id = c.id;
+
+  const info = document.createElement("div");
+  info.className = "course-info";
+  info.innerHTML = `
+    <div class="course-name">${esc(c.name)}</div>
+    <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
+  `;
+
+  const btn = document.createElement("button");
+  btn.className = `reg-btn ${c.registered ? "unregister" : "register"}`;
+  btn.textContent = c.registered ? "登録済" : "登録";
+  btn.dataset.courseId = c.id;
+  btn.dataset.registered = c.registered ? "1" : "0";
+  btn.onclick = () => toggleRegister(btn, c);
+
+  item.appendChild(info);
+  item.appendChild(btn);
+  return item;
+}
+
 function renderCourseList(courses) {
   const list = document.getElementById("course-list");
   list.innerHTML = "";
@@ -454,28 +487,24 @@ function renderCourseList(courses) {
     list.innerHTML = '<div class="empty-msg">この時間に科目がありません</div>';
     return;
   }
-  for (const c of courses) {
-    const item = document.createElement("div");
-    item.className = "course-item";
-    item.dataset.id = c.id;
 
-    const info = document.createElement("div");
-    info.className = "course-info";
-    info.innerHTML = `
-      <div class="course-name">${esc(c.name)}</div>
-      <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
-    `;
+  const kyoyo = courses.filter(c => !c.department || !c.department.includes("経営学部"));
+  const senmon = courses.filter(c => c.department && c.department.includes("経営学部"));
 
-    const btn = document.createElement("button");
-    btn.className = `reg-btn ${c.registered ? "unregister" : "register"}`;
-    btn.textContent = c.registered ? "登録済" : "登録";
-    btn.dataset.courseId = c.id;
-    btn.dataset.registered = c.registered ? "1" : "0";
-    btn.onclick = () => toggleRegister(btn, c);
+  if (kyoyo.length > 0) {
+    const h = document.createElement("div");
+    h.className = "course-section-header";
+    h.textContent = "教養科目";
+    list.appendChild(h);
+    kyoyo.forEach(c => list.appendChild(makeCourseItem(c)));
+  }
 
-    item.appendChild(info);
-    item.appendChild(btn);
-    list.appendChild(item);
+  if (senmon.length > 0) {
+    const h = document.createElement("div");
+    h.className = "course-section-header";
+    h.textContent = "経営学部専門科目";
+    list.appendChild(h);
+    senmon.forEach(c => list.appendChild(makeCourseItem(c)));
   }
 }
 

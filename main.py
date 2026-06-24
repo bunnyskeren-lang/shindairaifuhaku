@@ -2635,6 +2635,7 @@ async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
                     "instructor": c.instructor,
                     "term": c.term,
                     "timetable_code": c.timetable_code,
+                    "department": c.department,
                     "registered": c.id in registered_ids,
                 }
                 for c in courses
