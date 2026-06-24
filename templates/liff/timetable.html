@@ -135,6 +135,25 @@ tbody td:first-child {
   color: #94a3b8; font-size: 13px;
 }
 
+/* ── クォーターバー ── */
+.quarter-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.year-label {
+  font-size: 12px; font-weight: 600; color: #64748b; margin-right: 4px;
+}
+.q-btn {
+  font-size: 13px; font-weight: 600; padding: 6px 18px;
+  border-radius: 999px; border: none; cursor: pointer;
+  background: #f1f5f9; color: #64748b; transition: all .15s;
+}
+.q-btn.active {
+  background: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %};
+  color: #fff;
+}
+
 /* ── 集中講義セクション ── */
 .intensive-wrap {
   padding: 12px 12px 20px;
@@ -198,6 +217,12 @@ tbody td:first-child {
   <p>セルをタップして科目を登録</p>
 </div>
 
+<div class="quarter-bar">
+  <span class="year-label">2026年度</span>
+  <button class="q-btn active" data-q="3" onclick="selectQuarter('3')">第3Q</button>
+  <button class="q-btn" data-q="4" onclick="selectQuarter('4')">第4Q</button>
+</div>
+
 <div class="grid-wrap">
   <table id="timetable">
     <thead>
@@ -244,6 +269,7 @@ let myCourseIds = new Set();
 let drawerCourses = [];
 let currentFilter = "all";
 let currentSlot = null;
+let currentQuarter = "3";
 
 async function init() {
   try {
@@ -296,6 +322,14 @@ async function loadMyCourses() {
   }
 }
 
+function selectQuarter(q) {
+  currentQuarter = q;
+  document.querySelectorAll(".q-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.q === q);
+  });
+  buildGrid();
+}
+
 function buildGrid() {
   const tbody = document.getElementById("grid-body");
   tbody.innerHTML = "";
@@ -323,7 +357,9 @@ function buildGrid() {
 function updateIntensiveSection() {
   const list = document.getElementById("intensive-list");
   list.innerHTML = "";
-  const courses = window._myIntensiveCourses || [];
+  const courses = (window._myIntensiveCourses || []).filter(
+    c => c.term && c.term.startsWith("第" + currentQuarter)
+  );
   if (courses.length === 0) {
     list.innerHTML = '<div class="intensive-empty">登録中の集中講義はありません</div>';
     return;
@@ -345,7 +381,9 @@ function updateIntensiveSection() {
 
 function updateCell(div, day, period) {
   const key = `${day}-${period}`;
-  const courses = (window._myCourses || {})[key] || [];
+  const courses = ((window._myCourses || {})[key] || []).filter(
+    c => c.term && c.term.startsWith("第" + currentQuarter)
+  );
   div.innerHTML = "";
   if (courses.length > 0) {
     div.classList.add("has-course");
@@ -388,7 +426,7 @@ async function openDrawer(day, period) {
 
   const count = drawerCourses.length;
   document.getElementById("drawer-sub").textContent = `${count}科目`;
-  setFilter(currentFilter);
+  setFilter(currentQuarter);
 }
 
 function closeDrawer() {
