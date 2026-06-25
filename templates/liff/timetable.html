@@ -591,7 +591,7 @@ async function init() {
     if (devUid) {
       userId = devUid;
       await Promise.all([loadMyCourses(), loadProfile()]);
-      loadCredits();
+      await loadCredits();
       updateCreditsVisibility();
       buildGrid();
       document.getElementById("loading-screen").style.display = "none";
@@ -896,7 +896,20 @@ document.addEventListener('click', () => {
   document.getElementById('credits-note-popup')?.classList.remove('visible');
 });
 
-function loadCredits() {
+async function loadCreditRequirements() {
+  try {
+    const res = await fetch(BASE_URL + '/api/credit_requirements');
+    if (!res.ok) return;
+    const data = await res.json();
+    data.forEach(({category_id, required_credits}) => {
+      const cat = CREDIT_CATS.find(c => c.id === category_id);
+      if (cat) cat.def = required_credits;
+    });
+  } catch(e) { /* ハードコード値にフォールバック */ }
+}
+
+async function loadCredits() {
+  await loadCreditRequirements();
   _creditData = JSON.parse(localStorage.getItem('credit_data') || '{}');
   renderCreditRows();
   updateCredits();

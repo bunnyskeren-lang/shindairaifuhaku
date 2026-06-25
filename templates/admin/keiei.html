@@ -1,0 +1,108 @@
+{% extends "admin/base.html" %}
+{% block title %}経営学部 管理{% endblock %}
+{% block heading %}🎓 経営学部 管理{% endblock %}
+
+{% block extra_style %}
+.group-badge {
+  display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:bold;
+}
+.g1  { background:#dbeafe; color:#1d4ed8; }
+.g2  { background:#dcfce7; color:#15803d; }
+.g3  { background:#fef9c3; color:#854d0e; }
+.gg  { background:#f3e8ff; color:#7e22ce; }
+.gin { background:#fee2e2; color:#b91c1c; }
+.gna { background:#f1f5f9; color:#94a3b8; }
+select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
+.req-input { width:60px; padding:4px 6px; font-size:13px; text-align:center; margin:0; }
+{% endblock %}
+
+{% block content %}
+
+<!-- 単位要件 -->
+<div class="card">
+  <h2 style="margin-top:0">📊 単位要件（必要単位数）</h2>
+  <form method="post" action="/admin/keiei/credit_requirements/update">
+    <table>
+      <tr><th>カテゴリ</th><th>必要単位</th></tr>
+      {% set labels = {
+        'kyoyo_kei':'系科目（人文・自然・社会・総合）',
+        'kyoyo_kiban':'基盤系',
+        'gaigo1':'外国語第1',
+        'gaigo2':'外国語第2',
+        'kyotsu':'共通専門基礎科目',
+        'shonen':'初年次セミナー',
+        'senmon1':'第1群科目',
+        'senmon2':'第2群科目',
+        'global':'グローバル科目群',
+        'senmon3':'第3群・その他',
+      } %}
+      {% for cat_id, label in labels.items() %}
+      <tr>
+        <td>{{ label }}</td>
+        <td><input type="number" class="req-input" name="req_{{ cat_id }}" value="{{ req_map.get(cat_id, 0) }}" min="0" max="200"></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <button type="submit" class="btn btn-primary" style="margin-top:12px">保存</button>
+  </form>
+</div>
+
+<!-- 科目群マッピング -->
+<div class="card">
+  <h2 style="margin-top:0">📚 専門科目 群設定
+    <span style="font-size:11px;font-weight:normal;color:#6b7280">（空白 = コードの自動分類を使用）</span>
+  </h2>
+  <table>
+    <tr><th>科目名</th><th>担当教員</th><th>群</th></tr>
+    {% for c in courses %}
+    <tr>
+      <td style="font-size:13px">{{ c.name }}
+        {% if c.term %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term }}</span>{% endif %}
+      </td>
+      <td style="font-size:12px;color:#6b7280">{{ c.instructor }}</td>
+      <td>
+        <select class="grp-sel" data-id="{{ c.id }}" onchange="setGroup(this)">
+          <option value="">（自動）</option>
+          {% for g in senmon_groups %}
+          <option value="{{ g }}" {% if c.senmon_group == g %}selected{% endif %}>{{ g }}</option>
+          {% endfor %}
+        </select>
+        <span class="group-badge {% if c.senmon_group == '第1群' %}g1{% elif c.senmon_group == '第2群' %}g2{% elif c.senmon_group == '第3群' %}g3{% elif c.senmon_group == 'グローバル' %}gg{% elif c.senmon_group == '初年次' %}gin{% else %}gna{% endif %}"
+              id="badge-{{ c.id }}">
+          {{ c.senmon_group or '自動' }}
+        </span>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" style="color:#999;text-align:center;padding:16px">経営学部の科目がありません</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BADGE_CLASS = {
+  '第1群':'g1', '第2群':'g2', '第3群':'g3', 'グローバル':'gg', '初年次':'gin', '':'gna'
+};
+async function setGroup(sel) {
+  const id = sel.dataset.id;
+  const group = sel.value;
+  const badge = document.getElementById('badge-' + id);
+  try {
+    const res = await fetch('/admin/keiei/courses/' + id + '/senmon_group', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group: group || null }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    badge.textContent = group || '自動';
+    badge.className = 'group-badge ' + (BADGE_CLASS[group] || 'gna');
+  } catch(e) {
+    alert('保存に失敗しました');
+    sel.value = badge.dataset.group || '';
+  }
+}
+</script>
+{% endblock %}

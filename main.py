@@ -50,7 +50,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal, engine
-from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse
+from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, CreditRequirement
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -208,6 +208,23 @@ def _invalidate_courses_cache():
     _course_list_cache = {}
     _ranking_cache = {}
 
+# senmon_group キャッシュ（PDFパーサーが同期的に参照する）
+_senmon_name_to_group: dict[str, str] = {}
+
+async def _reload_senmon_cache():
+    global _senmon_name_to_group
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(Course.name, Course.senmon_group).where(Course.senmon_group.isnot(None))
+        )).all()
+    _senmon_name_to_group = {r[0]: r[1] for r in rows}
+
+def _invalidate_senmon_cache():
+    global _senmon_name_to_group
+    _senmon_name_to_group = {}
+    asyncio.ensure_future(_reload_senmon_cache())
+
+
 def _invalidate_review_cache():
     global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
     global _all_review_stats_cache, _all_review_stats_cache_at
@@ -299,6 +316,7 @@ async def lifespan(app: FastAPI):
         print(f"DB ERROR: {e}", flush=True)
         await engine.dispose()
         print("Engine disposed and reset after startup error", flush=True)
+    asyncio.create_task(_reload_senmon_cache())
     asyncio.create_task(_prewarm_caches())
     ping_task = asyncio.create_task(_self_ping())
     yield
@@ -3130,6 +3148,22 @@ def _is_senmon2(name: str) -> bool:
     return name in _SENMON2_EXACT or any(name.startswith(p) for p in _SENMON2_PREFIX)
 
 
+def _classify_senmon(name: str) -> str:
+    """専門科目を群に分類する。DBに登録があればそちらを優先。"""
+    db = _senmon_name_to_group.get(name)
+    if db:
+        return db
+    if '初年次セミナー' in name:
+        return '初年次'
+    if name in _SENMON1:
+        return '第1群'
+    if _is_senmon2(name):
+        return '第2群'
+    if any(name.startswith(p) for p in _GLOBAL_PREFIXES):
+        return 'グローバル'
+    return '第3群'
+
+
 def _parse_seiseki_pdf(data: bytes) -> dict:
     if not _PDFPLUMBER_OK:
         raise RuntimeError("pdfplumber not available")
@@ -3167,13 +3201,14 @@ def _parse_seiseki_pdf(data: bytes) -> dict:
             elif any(name.startswith(p) for p in _GAIGO_FOREIGN):
                 gaigo2 += cr
         elif '専門科目' in current_sec:
-            if '初年次セミナー' in name:
+            grp = _classify_senmon(name)
+            if grp == '初年次':
                 shonen += cr
-            elif name in _SENMON1:
+            elif grp == '第1群':
                 senmon1 += cr
-            elif _is_senmon2(name):
+            elif grp == '第2群':
                 senmon2 += cr
-            elif any(name.startswith(p) for p in _GLOBAL_PREFIXES):
+            elif grp == 'グローバル':
                 global_c += cr
 
     senmon_total = _summary('専門科目')
@@ -3215,3 +3250,70 @@ async def api_parse_seiseki(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"PDF の解析に失敗しました: {e}")
     return result
+
+
+@app.get("/api/credit_requirements")
+async def api_credit_requirements():
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(select(CreditRequirement))).scalars().all()
+    return [{"category_id": r.category_id, "required_credits": r.required_credits} for r in rows]
+
+
+# ── 経営学部 管理ページ ────────────────────────────────────────────────────────
+
+_SENMON_GROUPS = ["第1群", "第2群", "第3群", "グローバル", "初年次"]
+
+@app.get("/admin/keiei", response_class=HTMLResponse)
+async def admin_keiei(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        courses = (await session.execute(
+            select(Course)
+            .where(Course.faculty.like("%経営学部%"))
+            .order_by(Course.classification, Course.sort_order, Course.name)
+        )).scalars().all()
+        reqs = (await session.execute(select(CreditRequirement))).scalars().all()
+    req_map = {r.category_id: r.required_credits for r in reqs}
+    return templates.TemplateResponse("admin/keiei.html", {
+        "request": request,
+        "courses": courses,
+        "senmon_groups": _SENMON_GROUPS,
+        "req_map": req_map,
+    })
+
+
+@app.post("/admin/keiei/courses/{course_id}/senmon_group")
+async def admin_keiei_set_group(course_id: int, request: Request, _: str = Depends(check_admin)):
+    from fastapi.responses import JSONResponse
+    body = await request.json()
+    group = body.get("group") or None
+    if group and group not in _SENMON_GROUPS:
+        raise HTTPException(status_code=400, detail="invalid group")
+    async with AsyncSessionLocal() as session:
+        course = await session.get(Course, course_id)
+        if not course:
+            raise HTTPException(status_code=404)
+        course.senmon_group = group
+        await session.commit()
+    _invalidate_senmon_cache()
+    _invalidate_courses_cache()
+    return JSONResponse({"ok": True})
+
+
+@app.post("/admin/keiei/credit_requirements/update")
+async def admin_keiei_update_requirements(request: Request, _: str = Depends(check_admin)):
+    form = await request.form()
+    async with AsyncSessionLocal() as session:
+        for key, val in form.items():
+            if key.startswith("req_"):
+                cat_id = key[4:]
+                try:
+                    credits = int(val)
+                except ValueError:
+                    continue
+                row = await session.get(CreditRequirement, cat_id)
+                if row:
+                    row.required_credits = credits
+                else:
+                    session.add(CreditRequirement(category_id=cat_id, required_credits=credits))
+        await session.commit()
+    return RedirectResponse("/admin/keiei", status_code=303)

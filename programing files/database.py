@@ -30,7 +30,7 @@ class Base(DeclarativeBase):
 
 
 async def init_db():
-    from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, SyllabusCourse, CourseSlot, UserCourse, TimetableProfile  # noqa: F401
+    from models import MessageLog, Course, PendingReview, UserPreference, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, SyllabusCourse, CourseSlot, UserCourse, TimetableProfile, CreditRequirement  # noqa: F401
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -50,8 +50,22 @@ async def init_db():
             "ALTER TABLE courses ADD COLUMN IF NOT EXISTS faculty VARCHAR(100)"
         ))
         await conn.execute(text(
+            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS senmon_group VARCHAR(20)"
+        ))
+        await conn.execute(text(
             "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS target_grades VARCHAR(20)"
         ))
         await conn.execute(text(
             "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS subject_category VARCHAR(50)"
         ))
+        # credit_requirements の初期データ投入（未登録の場合のみ）
+        defaults = [
+            ("kyoyo_kei", 12), ("kyoyo_kiban", 4), ("gaigo1", 4), ("gaigo2", 4),
+            ("kyotsu", 6), ("shonen", 1), ("senmon1", 6), ("senmon2", 12),
+            ("global", 4), ("senmon3", 0),
+        ]
+        for cat_id, req in defaults:
+            await conn.execute(text(
+                "INSERT INTO credit_requirements (category_id, required_credits) "
+                "VALUES (:cat, :req) ON CONFLICT (category_id) DO NOTHING"
+            ), {"cat": cat_id, "req": req})
