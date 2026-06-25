@@ -1237,7 +1237,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         all_cls = {c.classification for c in sen_courses}
         reviewed_cls_sen = {c.classification for c in sen_courses if c.name in reviewed_names_sen}
 
-        keiei_set = set(_KEIEI_CLASSIFICATIONS)
+        keiei_set = set(_KEIEI_CLASSIFICATIONS) | {"経営学部"}
         has_keiei = bool(all_cls & keiei_set)
         other_clss = sorted(all_cls - keiei_set, key=_cls_sort)
 
