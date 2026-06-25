@@ -2526,6 +2526,47 @@ async def admin_cls_set_parent(
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
+@app.get("/admin/migrate-keiei-instructors")
+async def admin_migrate_keiei_instructors(request: Request, _: str = Depends(check_admin), dry_run: str = Query(default="1")):
+    is_dry = dry_run != "0"
+    import re as _re2
+    added = 0
+    skipped_no_inst = 0
+    skipped_exists = 0
+    details = []
+    async with AsyncSessionLocal() as s:
+        courses = (await s.execute(
+            select(Course).where(Course.faculty == "経営学部")
+        )).scalars().all()
+    for c in courses:
+        if not c.instructor or not c.instructor.strip():
+            skipped_no_inst += 1
+            continue
+        async with AsyncSessionLocal() as s:
+            existing = (await s.execute(
+                select(CourseInstructor).where(CourseInstructor.course_id == c.id)
+            )).scalars().first()
+            if existing:
+                skipped_exists += 1
+                continue
+            names = [n.strip() for n in _re2.split(r'[・、,，/]', c.instructor) if n.strip()]
+            if not is_dry:
+                for name in names:
+                    s.add(CourseInstructor(course_id=c.id, name=name, url=c.syllabus_url or None))
+                await s.commit()
+            details.append(f"{c.name} → {', '.join(names)}")
+            added += 1
+    _invalidate_courses_cache()
+    result_lines = [
+        f"{'[DRY-RUN] ' if is_dry else ''}経営学部 instructor migration",
+        f"追加: {added} 件",
+        f"スキップ（担当教員なし）: {skipped_no_inst} 件",
+        f"スキップ（登録済み）: {skipped_exists} 件",
+        "",
+    ] + details
+    return HTMLResponse("<pre>" + "\n".join(result_lines) + "</pre>")
+
+
 @app.post("/admin/courses/{course_id}/move")
 async def admin_course_move(course_id: int, request: Request, _=Depends(check_admin)):
     from fastapi.responses import JSONResponse
