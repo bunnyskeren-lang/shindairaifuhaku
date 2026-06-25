@@ -3164,27 +3164,12 @@ def _classify_senmon(name: str) -> str:
     return '第3群'
 
 
-def _parse_seiseki_pdf(data: bytes) -> dict:
-    if not _PDFPLUMBER_OK:
-        raise RuntimeError("pdfplumber not available")
-    with _pdfplumber.open(io.BytesIO(data)) as pdf:
-        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-
-    def _summary(name: str) -> float:
-        m = _re.search(_re.escape(name) + r'\s+([\d.]+)', text)
-        return float(m.group(1)) if m else 0.0
-
-    gpa = None
-    gpa_m = _re.search(r'G\s*P\s*A\s+[\d.]+\s+\d+\s+([\d.]+)', text)
-    if gpa_m:
-        gpa = float(gpa_m.group(1))
-
-    # Walk lines tracking section headers to categorise courses
-    gaigo1 = gaigo2 = shonen = senmon1 = senmon2 = global_c = 0.0
+def _extract_seiseki_raw(text: str) -> dict:
+    """PDFテキストから生の科目リストとサマリー値を抽出する（分類はしない）。"""
+    gaigo_courses: list[dict] = []
+    senmon_courses: list[dict] = []
     current_sec = ''
-    course_re = _re.compile(
-        r'^(?:＊\s+)?(.+?)\s+(\d+\.\d+)\s+(秀|優|良|可|不可|合格|認定)'
-    )
+    course_re = _re.compile(r'^(?:＊\s+)?(.+?)\s+(\d+\.\d+)\s+(秀|優|良|可|不可|合格|認定)')
     for line in text.splitlines():
         sec_m = _re.search(r'【(.*?)】', line)
         if sec_m:
@@ -3196,44 +3181,78 @@ def _parse_seiseki_pdf(data: bytes) -> dict:
         name = m.group(1).strip()
         cr = float(m.group(2))
         if '外国語' in current_sec:
-            if 'Academic English' in name:
-                gaigo1 += cr
-            elif any(name.startswith(p) for p in _GAIGO_FOREIGN):
-                gaigo2 += cr
+            gaigo_courses.append({
+                "name": name, "credits": cr,
+                "is_english": 'Academic English' in name,
+                "is_foreign": any(name.startswith(p) for p in _GAIGO_FOREIGN),
+            })
         elif '専門科目' in current_sec:
-            grp = _classify_senmon(name)
-            if grp == '初年次':
-                shonen += cr
-            elif grp == '第1群':
-                senmon1 += cr
-            elif grp == '第2群':
-                senmon2 += cr
-            elif grp == 'グローバル':
-                global_c += cr
+            senmon_courses.append({"name": name, "credits": cr})
 
-    senmon_total = _summary('専門科目')
-    senmon3 = max(0.0, round(senmon_total - shonen - senmon1 - senmon2 - global_c, 1))
+    def _summary(label: str) -> float:
+        mt = _re.search(_re.escape(label) + r'\s+([\d.]+)', text)
+        return float(mt.group(1)) if mt else 0.0
 
-    # 外国語科目の合計が0なら summary 値で半分ずつ
-    gaiko_total = _summary('外国語科目')
+    return {
+        "gaigo_courses": gaigo_courses,
+        "senmon_courses": senmon_courses,
+        "summaries": {
+            "総合教養科目":   _summary('総合教養科目'),
+            "基礎教養科目":   _summary('基礎教養科目'),
+            "情報科目":       _summary('情報科目'),
+            "共通専門基礎科目": _summary('共通専門基礎科目'),
+            "専門科目":       _summary('専門科目'),
+            "外国語科目":     _summary('外国語科目'),
+        },
+    }
+
+
+def _classify_seiseki_raw(raw: dict) -> dict:
+    """生データから単位区分の合計を計算する（DB分類を参照）。"""
+    s = raw.get("summaries", {})
+    gaigo1 = gaigo2 = 0.0
+    for c in raw.get("gaigo_courses", []):
+        if c.get("is_english"):
+            gaigo1 += c["credits"]
+        elif c.get("is_foreign"):
+            gaigo2 += c["credits"]
+    gaiko_total = s.get("外国語科目", 0.0)
     if gaigo1 + gaigo2 == 0 and gaiko_total > 0:
         gaigo1 = gaigo2 = round(gaiko_total / 2, 1)
 
+    shonen = senmon1 = senmon2 = global_c = 0.0
+    for c in raw.get("senmon_courses", []):
+        grp = _classify_senmon(c["name"])
+        cr = c["credits"]
+        if grp == '初年次':   shonen   += cr
+        elif grp == '第1群':  senmon1  += cr
+        elif grp == '第2群':  senmon2  += cr
+        elif grp == 'グローバル': global_c += cr
+
+    senmon_total = s.get("専門科目", 0.0)
+    senmon3 = max(0.0, round(senmon_total - shonen - senmon1 - senmon2 - global_c, 1))
     return {
-        "gpa": gpa,
-        "credits": {
-            "kyoyo_kei":   round(_summary('総合教養科目'), 1),
-            "kyoyo_kiban": round(_summary('基礎教養科目') + _summary('情報科目'), 1),
-            "gaigo1":  round(gaigo1, 1),
-            "gaigo2":  round(gaigo2, 1),
-            "kyotsu":  round(_summary('共通専門基礎科目'), 1),
-            "shonen":  round(shonen, 1),
-            "senmon1": round(senmon1, 1),
-            "senmon2": round(senmon2, 1),
-            "global":  round(global_c, 1),
-            "senmon3": round(senmon3, 1),
-        },
+        "kyoyo_kei":   round(s.get("総合教養科目", 0.0), 1),
+        "kyoyo_kiban": round(s.get("基礎教養科目", 0.0) + s.get("情報科目", 0.0), 1),
+        "gaigo1":  round(gaigo1, 1), "gaigo2":  round(gaigo2, 1),
+        "kyotsu":  round(s.get("共通専門基礎科目", 0.0), 1),
+        "shonen":  round(shonen, 1),  "senmon1": round(senmon1, 1),
+        "senmon2": round(senmon2, 1), "global":  round(global_c, 1),
+        "senmon3": round(senmon3, 1),
     }
+
+
+def _parse_seiseki_pdf(data: bytes) -> dict:
+    if not _PDFPLUMBER_OK:
+        raise RuntimeError("pdfplumber not available")
+    with _pdfplumber.open(io.BytesIO(data)) as pdf:
+        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+    gpa = None
+    gpa_m = _re.search(r'G\s*P\s*A\s+[\d.]+\s+\d+\s+([\d.]+)', text)
+    if gpa_m:
+        gpa = float(gpa_m.group(1))
+    raw = _extract_seiseki_raw(text)
+    return {"gpa": gpa, "credits": _classify_seiseki_raw(raw), "raw": raw}
 
 
 @app.post("/api/parse_seiseki")
@@ -3250,6 +3269,15 @@ async def api_parse_seiseki(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"PDF の解析に失敗しました: {e}")
     return result
+
+
+@app.post("/api/reclassify_seiseki")
+async def api_reclassify_seiseki(request: Request):
+    body = await request.json()
+    raw = body.get("raw")
+    if not raw:
+        raise HTTPException(status_code=400, detail="raw data required")
+    return {"credits": _classify_seiseki_raw(raw)}
 
 
 @app.get("/api/credit_requirements")

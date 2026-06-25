@@ -906,6 +906,25 @@ async function loadCreditRequirements() {
       if (cat) cat.def = required_credits;
     });
   } catch(e) { /* ハードコード値にフォールバック */ }
+
+  // PDFが読込済で生データがある場合、最新の分類設定で再計算
+  if (_creditData._pdfLoaded && _creditData._raw) {
+    try {
+      const res = await fetch(BASE_URL + '/api/reclassify_seiseki', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw: _creditData._raw }),
+      });
+      if (res.ok) {
+        const { credits } = await res.json();
+        Object.entries(credits).forEach(([id, val]) => {
+          const el = document.getElementById('earn-' + id);
+          if (el) el.value = val;
+        });
+        updateCredits();
+      }
+    } catch(e) { /* 失敗しても既存データをそのまま表示 */ }
+  }
 }
 
 async function loadCredits() {
@@ -1047,6 +1066,7 @@ function applySeisekiResult(data) {
       if (el) el.value = val;
     });
     _creditData._pdfLoaded = true;
+    if (data.raw) _creditData._raw = data.raw;
     updateCredits();
   }
   if (data.gpa != null) {
