@@ -370,7 +370,7 @@ def verify_signature(body: bytes, signature: str) -> bool:
 
 _cls_cache: set[str] = set()
 _cls_cache_at: float = 0.0
-_CLS_CACHE_TTL = 300
+_CLS_CACHE_TTL = 3600
 
 async def _get_cls_set() -> set[str]:
     global _cls_cache, _cls_cache_at
@@ -383,8 +383,8 @@ async def _get_cls_set() -> set[str]:
     return _cls_cache
 
 
-# ── In-memory course & review cache (60s TTL) ───────────────────
-_COURSE_CACHE_TTL = 60
+# ── In-memory course & review cache ─────────────────────────────
+_COURSE_CACHE_TTL = 3600
 _course_by_name: dict[str, Any] = {}
 _course_list_all: list = []
 _course_cache_at: float = 0.0
@@ -396,9 +396,9 @@ _reviewed_cache_init: bool = False
 _course_flex_cache: dict[int, tuple] = {}
 _course_list_cache: dict[str, tuple] = {}
 _ranking_cache: dict[str, tuple] = {}
-_COURSE_FLEX_TTL = 120
-_COURSE_LIST_TTL = 120
-_RANKING_TTL = 120
+_COURSE_FLEX_TTL = 3600
+_COURSE_LIST_TTL = 3600
+_RANKING_TTL = 3600
 
 _all_instructors_cache: dict[int, list] = {}
 _all_instructors_cache_at: float = 0.0
@@ -477,7 +477,7 @@ async def _get_all_review_stats_cached() -> dict[str, tuple]:
 
 async def _prewarm_caches():
     await asyncio.sleep(2)
-    for fn in [_get_cls_order_map, _get_courses_cached, _get_reviewed_cached, _get_all_instructors_cached, _get_all_review_stats_cached]:
+    for fn in [_get_cls_order_map, _get_cls_parent_map, _get_cls_set, _get_courses_cached, _get_reviewed_cached, _get_all_instructors_cached, _get_all_review_stats_cached]:
         try:
             await fn()
         except Exception as e:
