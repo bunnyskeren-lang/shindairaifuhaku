@@ -622,7 +622,7 @@ function buildGrid() {
   for (const p of PERIODS) {
     const tr = document.createElement("tr");
     const th = document.createElement("td");
-    th.innerHTML = `<div>${p}限</div><div style="font-size:7px;font-weight:400;color:#94a3b8;margin-top:1px;line-height:1.4;white-space:nowrap">${(PERIOD_TIMES[p]||'').replace('〜','<br>')}</div>`;
+    th.innerHTML = `<div>${p}限</div><div style="font-size:7px;font-weight:400;color:#94a3b8;margin-top:1px;line-height:1.4;white-space:nowrap">${(PERIOD_TIMES[p]||'').replace('〜','<br>〜')}</div>`;
     tr.appendChild(th);
     for (const day of DAYS) {
       const td = document.createElement("td");
