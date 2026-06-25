@@ -192,6 +192,31 @@ def _invalidate_cls_caches():
     _cls_parent_map_cache = {}
     _cls_parent_map_at = 0.0
 
+def _invalidate_courses_cache():
+    global _course_by_name, _course_list_all, _course_cache_at
+    global _all_instructors_cache, _all_instructors_cache_at
+    global _course_flex_cache, _course_list_cache, _ranking_cache
+    _course_by_name = {}
+    _course_list_all = []
+    _course_cache_at = 0.0
+    _all_instructors_cache = {}
+    _all_instructors_cache_at = 0.0
+    _course_flex_cache = {}
+    _course_list_cache = {}
+    _ranking_cache = {}
+
+def _invalidate_review_cache():
+    global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
+    global _all_review_stats_cache, _all_review_stats_cache_at
+    global _course_flex_cache, _ranking_cache
+    _reviewed_cache = set()
+    _reviewed_cache_at = 0.0
+    _reviewed_cache_init = False
+    _all_review_stats_cache = {}
+    _all_review_stats_cache_at = 0.0
+    _course_flex_cache = {}
+    _ranking_cache = {}
+
 
 def _make_cls_sort(cls_map: dict):
     def key(name: str) -> int:
@@ -2133,6 +2158,7 @@ async def add_instructor(course_id: int, request: Request, name: str = Form(...)
             session.add(inst)
             await session.commit()
             await session.refresh(inst)
+            _invalidate_courses_cache()
             if is_ajax:
                 return JSONResponse({"ok": True, "id": inst.id, "name": inst.name, "url": inst.url or ""})
     if is_ajax:
@@ -2149,6 +2175,7 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
         if inst:
             await session.delete(inst)
             await session.commit()
+    _invalidate_courses_cache()
     if is_ajax:
         return JSONResponse({"ok": True})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
@@ -2269,6 +2296,7 @@ async def admin_review_approve(review_id: int, _: str = Depends(check_admin)):
         if review:
             review.is_approved = True
             await session.commit()
+    _invalidate_review_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
 
 
@@ -2279,6 +2307,7 @@ async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
         if review:
             await session.delete(review)
             await session.commit()
+    _invalidate_review_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
 
 
@@ -2313,6 +2342,8 @@ async def admin_courses_add(
             faculty=faculty.strip() or None,
         ))
         await session.commit()
+    _invalidate_courses_cache()
+    _invalidate_cls_caches()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -2563,6 +2594,8 @@ async def admin_courses_update(
                     .values(course_name=new_name)
                 )
             await session.commit()
+    _invalidate_courses_cache()
+    _invalidate_cls_caches()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -2575,6 +2608,8 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
             await session.execute(delete(CourseInstructor).where(CourseInstructor.course_id == course_id))
             await session.delete(course)
             await session.commit()
+    _invalidate_courses_cache()
+    _invalidate_cls_caches()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
