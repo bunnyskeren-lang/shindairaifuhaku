@@ -31,6 +31,7 @@ class Course(Base):
     term: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     faculty: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
+    senmon_group: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
 
 
 class ClassificationOrder(Base):
@@ -167,6 +168,13 @@ class CourseSlot(Base):
     syllabus_course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     day_of_week: Mapped[str] = mapped_column(String(2), nullable=False)
     period: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class CreditRequirement(Base):
+    __tablename__ = "credit_requirements"
+
+    category_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    required_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class UserCourse(Base):
