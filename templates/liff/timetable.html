@@ -327,6 +327,25 @@ tbody td:first-child {
   padding:6px 0; font-size:12px; color:#64748b; border-top:1px solid #f1f5f9; margin-top:4px;
 }
 .credits-gpa-val { font-size:16px; font-weight:700; color:{% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}; }
+.credits-info-btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:14px; height:14px; border-radius:50%;
+  border:1.5px solid #94a3b8; color:#94a3b8;
+  font-size:9px; font-weight:700; line-height:1;
+  background:none; cursor:pointer; margin-left:3px;
+  vertical-align:middle; flex-shrink:0;
+}
+.credits-info-btn:active { background:#f1f5f9; }
+.credits-note-popup {
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:80px; width:calc(100% - 40px); max-width:360px;
+  background:#1e293b; color:#f1f5f9;
+  border-radius:12px; padding:12px 14px;
+  font-size:12px; line-height:1.6;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+  z-index:9999; display:none;
+}
+.credits-note-popup.visible { display:block; }
 </style>
 </head>
 <body>
@@ -370,6 +389,7 @@ tbody td:first-child {
   <div id="intensive-list"></div>
 </div>
 
+<div class="credits-note-popup" id="credits-note-popup"></div>
 <div class="credits-wrap" id="credits-wrap">
   <div class="credits-card">
     <div class="credits-title">📊 単位チェッカー</div>
@@ -442,16 +462,26 @@ tbody td:first-child {
 const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
 const CREDIT_CATS = [
-  { id:'kyoyo_kei',   group:'教養科目',  name:'系科目（人文・自然・社会・総合）', def:12 },
-  { id:'kyoyo_kiban', group:'教養科目',  name:'基盤系',                          def:4  },
-  { id:'gaigo1',      group:'教養科目',  name:'外国語第1',                       def:4  },
-  { id:'gaigo2',      group:'教養科目',  name:'外国語第2',                       def:4  },
-  { id:'kyotsu',      group:'共通専門',  name:'共通専門基礎科目',               def:6  },
-  { id:'shonen',      group:'専門科目',  name:'初年次セミナー',                 def:1  },
-  { id:'senmon1',     group:'専門科目',  name:'第1群科目',                      def:6  },
-  { id:'senmon2',     group:'専門科目',  name:'第2群科目',                      def:12 },
-  { id:'global',      group:'専門科目',  name:'グローバル科目群',               def:4  },
-  { id:'senmon3',     group:'専門科目',  name:'第3群・その他',                  def:0  },
+  { id:'kyoyo_kei',   group:'教養科目',  name:'系科目（人文・自然・社会・総合）', def:12,
+    note:'人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。' },
+  { id:'kyoyo_kiban', group:'教養科目',  name:'基盤系',                          def:4,
+    note:'基礎教養科目（情報リテラシー等）と情報科目を合算したもの。' },
+  { id:'gaigo1',      group:'教養科目',  name:'外国語第1',                       def:4,
+    note:'Academic English Communication / Literacy など英語科目が対象。' },
+  { id:'gaigo2',      group:'教養科目',  name:'外国語第2',                       def:4,
+    note:'ドイツ語・フランス語・中国語・韓国語・ロシア語など第二外国語が対象。' },
+  { id:'kyotsu',      group:'共通専門',  name:'共通専門基礎科目',               def:6,
+    note:'全学部共通の専門基礎科目。成績表の「共通専門基礎科目」欄の合計。' },
+  { id:'shonen',      group:'専門科目',  name:'初年次セミナー',                 def:1,
+    note:'1年次必修の初年次セミナー（2単位）。必要単位数は1科目=2単位。' },
+  { id:'senmon1',     group:'専門科目',  name:'第1群科目',                      def:6,
+    note:'経営学基礎論・会計学基礎論・市場システム基礎論の3科目（各2単位・計6単位）。' },
+  { id:'senmon2',     group:'専門科目',  name:'第2群科目',                      def:12,
+    note:'経営管理・経営戦略・簿記・財務会計・マーケティングなど第2群の専門科目。' },
+  { id:'global',      group:'専門科目',  name:'グローバル科目群',               def:4,
+    note:'英語で開講される専門科目・外国書講読・外国文献講義が対象。' },
+  { id:'senmon3',     group:'専門科目',  name:'第3群・その他',                  def:0,
+    note:'第1・2群・グローバル以外の専門科目（人的資源管理・証券市場など）。PDFから自動計算。' },
 ];
 let _creditData = {};
 const DAYS = ["月","火","水","木","金"];
@@ -851,6 +881,21 @@ async function toggleRegister(btn, course) {
   }
 }
 
+function showCreditNote(e, text) {
+  e.stopPropagation();
+  const popup = document.getElementById('credits-note-popup');
+  if (popup.classList.contains('visible') && popup.dataset.note === text) {
+    popup.classList.remove('visible');
+    return;
+  }
+  popup.textContent = text;
+  popup.dataset.note = text;
+  popup.classList.add('visible');
+}
+document.addEventListener('click', () => {
+  document.getElementById('credits-note-popup')?.classList.remove('visible');
+});
+
 function loadCredits() {
   _creditData = JSON.parse(localStorage.getItem('credit_data') || '{}');
   renderCreditRows();
@@ -887,7 +932,7 @@ function renderCreditRows() {
     const item = document.createElement('div');
     item.className = 'credits-row-item';
     item.innerHTML = `
-      <span class="credits-cat-name">${cat.name}</span>
+      <span class="credits-cat-name">${cat.name}${cat.note ? `<button class="credits-info-btn" onclick="showCreditNote(event,'${cat.note.replace(/'/g,"&#39;")}')">!</button>` : ''}</span>
       <div class="credits-inputs">
         <div class="credits-mini-field">
           <div class="credits-mini-label">必要</div>
