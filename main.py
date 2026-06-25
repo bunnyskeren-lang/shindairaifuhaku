@@ -156,6 +156,8 @@ def _cls_order(name: str) -> int:
 
 _cls_order_map_cache: dict = {}
 _cls_order_map_at: float = 0.0
+_cls_parent_map_cache: dict = {}
+_cls_parent_map_at: float = 0.0
 
 async def _get_cls_order_map(session=None) -> dict:
     global _cls_order_map_cache, _cls_order_map_at
@@ -168,6 +170,27 @@ async def _get_cls_order_map(session=None) -> dict:
     _cls_order_map_cache = {r.name: r.sort_order for r in rows}
     _cls_order_map_at = time.monotonic()
     return _cls_order_map_cache
+
+async def _get_cls_parent_map() -> dict[str, str]:
+    global _cls_parent_map_cache, _cls_parent_map_at
+    if _cls_parent_map_cache is not None and time.monotonic() - _cls_parent_map_at < _CLS_CACHE_TTL:
+        return _cls_parent_map_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(ClassificationOrder.name, ClassificationOrder.parent_group)
+            .where(ClassificationOrder.parent_group.isnot(None))
+            .where(ClassificationOrder.parent_group != "")
+        )).all()
+    _cls_parent_map_cache = {r.name: r.parent_group for r in rows}
+    _cls_parent_map_at = time.monotonic()
+    return _cls_parent_map_cache
+
+def _invalidate_cls_caches():
+    global _cls_order_map_cache, _cls_order_map_at, _cls_parent_map_cache, _cls_parent_map_at
+    _cls_order_map_cache = {}
+    _cls_order_map_at = 0.0
+    _cls_parent_map_cache = {}
+    _cls_parent_map_at = 0.0
 
 
 def _make_cls_sort(cls_map: dict):
@@ -1186,9 +1209,6 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     return result
 
 
-# 経営学部専門科目の分類グループ
-_KEIEI_CLASSIFICATIONS = ["第1群科目", "第2群科目", "第3群科目", "研究指導・卒業論文", "グローバル科目群"]
-
 # ── Message handler ─────────────────────────────────────────────
 
 async def handle_message(text: str, user_id: str = "") -> list:
@@ -1228,6 +1248,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
     if t in ["専門科目", "専門", "専門一覧"]:
         cls_map = await _get_cls_order_map()
+        parent_map = await _get_cls_parent_map()
         _cls_sort = _make_cls_sort(cls_map)
         reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
             _get_reviewed_cached(),
@@ -1237,16 +1258,24 @@ async def handle_message(text: str, user_id: str = "") -> list:
         all_cls = {c.classification for c in sen_courses}
         reviewed_cls_sen = {c.classification for c in sen_courses if c.name in reviewed_names_sen}
 
-        keiei_set = set(_KEIEI_CLASSIFICATIONS) | {"経営学部"}
-        has_keiei = bool(all_cls & keiei_set)
-        other_clss = sorted(all_cls - keiei_set, key=_cls_sort)
+        # DB駆動のグループ化: parent_groupが設定されている分類 + 親名自体を除外
+        child_cls_set = {cls for cls in parent_map if cls in all_cls}
+        parent_names = set(parent_map.values())
+        all_excluded = child_cls_set | (parent_names & all_cls)
 
-        if has_keiei:
-            display_clss = ["経営学部 ▶"] + other_clss
-            display_reviewed = (reviewed_cls_sen - keiei_set) | ({"経営学部 ▶"} if reviewed_cls_sen & keiei_set else set())
-        else:
-            display_clss = sorted(all_cls, key=_cls_sort)
-            display_reviewed = reviewed_cls_sen
+        other_clss = sorted(all_cls - all_excluded, key=_cls_sort)
+
+        # 親グループボタンを生成
+        parent_buttons = []
+        display_reviewed = set(other_clss) & reviewed_cls_sen
+        for parent in sorted(parent_names):
+            children = {cls for cls in child_cls_set if parent_map[cls] == parent}
+            if children & all_cls or parent in all_cls:
+                parent_buttons.append(f"{parent} ▶")
+                if reviewed_cls_sen & (children | {parent}):
+                    display_reviewed.add(f"{parent} ▶")
+
+        display_clss = parent_buttons + other_clss
 
         if display_clss:
             return [make_classification_select_flex(
@@ -1257,22 +1286,28 @@ async def handle_message(text: str, user_id: str = "") -> list:
             )]
         return await handle_course_list(category="専門")
 
-    if t in ["経営学部", "経営学部 ▶"]:
+    # 親グループ ▶ タップ（例: "経営学部 ▶"）
+    if t.endswith(" ▶"):
+        parent = t[:-2].strip()
+        cls_map = await _get_cls_order_map()
+        parent_map = await _get_cls_parent_map()
+        _cls_sort = _make_cls_sort(cls_map)
         reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
             _get_reviewed_cached(),
             _get_courses_cached(),
         )
-        keiei_set = set(_KEIEI_CLASSIFICATIONS)
-        keiei_courses = [c for c in _all_courses if c.category == "専門" and c.classification in keiei_set]
-        reviewed_cls = {c.classification for c in keiei_courses if c.name in reviewed_names_sen}
-        return [make_classification_select_flex(
-            _KEIEI_CLASSIFICATIONS,
-            reviewed_cls,
-            title="🎓 経営学部 専門科目",
-            subtitle="群を選んでください",
-            header_color="#0ea5e9",
-            data_prefix="専門:",
-        )]
+        child_clss = sorted([cls for cls, pg in parent_map.items() if pg == parent], key=_cls_sort)
+        if child_clss:
+            child_set = set(child_clss)
+            child_courses = [c for c in _all_courses if c.category == "専門" and c.classification in child_set]
+            reviewed_cls = {c.classification for c in child_courses if c.name in reviewed_names_sen}
+            return [make_classification_select_flex(
+                child_clss, reviewed_cls,
+                title=f"🎓 {parent} 専門科目",
+                subtitle="分類を選んでください",
+                header_color="#0ea5e9",
+                data_prefix="専門:",
+            )]
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
@@ -2033,14 +2068,35 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         reviews_by_course[r.course_name].append(r)
 
     # groupby順を保持するため事前グループ化
-    grouped_courses: dict = defaultdict(list)
+    cls_parent_map = await _get_cls_parent_map()
+    child_cls_set = set(cls_parent_map.keys())
+    parent_names_set = set(cls_parent_map.values())
+
+    parent_subgroups: dict = defaultdict(lambda: defaultdict(list))
+    regular_grouped: dict = defaultdict(list)
     for c in courses:
-        grouped_courses[c.classification or "（未分類）"].append(c)
+        cls = c.classification or "（未分類）"
+        if cls in child_cls_set:
+            parent_subgroups[cls_parent_map[cls]][cls].append(c)
+        elif cls in parent_names_set:
+            parent_subgroups[cls]["（未分類）"].append(c)
+        else:
+            regular_grouped[cls].append(c)
+
+    # parent_subgroups を並び順に整形
+    cls_order_map = await _get_cls_order_map()
+    _cls_sort = _make_cls_sort(cls_order_map)
+    parent_subgroups_sorted = {
+        pg: sorted(sub.items(), key=lambda x: _cls_sort(x[0]))
+        for pg, sub in sorted(parent_subgroups.items())
+    }
 
     return templates.TemplateResponse("admin/courses.html", {
         "request": request,
         "courses": courses,
-        "grouped_courses": list(grouped_courses.items()),
+        "grouped_courses": list(regular_grouped.items()),
+        "parent_subgroups": parent_subgroups_sorted,
+        "cls_parent_map": cls_parent_map,
         "active_category": category,
         "classifications": existing,
         "class_counts": class_counts,
@@ -2355,6 +2411,7 @@ async def rename_classification(
         for course in courses:
             course.classification = new_name
         await session.commit()
+    _invalidate_cls_caches()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -2370,6 +2427,7 @@ async def delete_classification(
         for course in courses_in_class:
             course.classification = ""
         await session.commit()
+    _invalidate_cls_caches()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -2413,7 +2471,28 @@ async def admin_cls_move(request: Request, _=Depends(check_admin)):
             else:
                 session.add(ClassificationOrder(name=cls_name, sort_order=i))
         await session.commit()
+    _invalidate_cls_caches()
     return JSONResponse({"ok": True})
+
+
+@app.post("/admin/courses/classification/set_parent")
+async def admin_cls_set_parent(
+    _: str = Depends(check_admin),
+    classification: str = Form(...),
+    parent_group: str = Form(default=""),
+):
+    parent_group = parent_group.strip()
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(ClassificationOrder).where(ClassificationOrder.name == classification)
+        )).scalar_one_or_none()
+        if row:
+            row.parent_group = parent_group or None
+        else:
+            session.add(ClassificationOrder(name=classification, sort_order=0, parent_group=parent_group or None))
+        await session.commit()
+    _invalidate_cls_caches()
+    return RedirectResponse(url="/admin/courses", status_code=303)
 
 
 @app.post("/admin/courses/{course_id}/move")

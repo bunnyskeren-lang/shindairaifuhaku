@@ -64,3 +64,9 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS subject_category VARCHAR(50)"
         ))
+        await conn.execute(text(
+            "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS numbering_code VARCHAR(20)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE classification_orders ADD COLUMN IF NOT EXISTS parent_group VARCHAR(100)"
+        ))

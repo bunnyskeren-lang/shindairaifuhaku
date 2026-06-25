@@ -72,10 +72,8 @@
 <div class="card" style="margin-top:16px">
   <h2 style="margin-top:0">分類一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可）</span></h2>
   <table style="margin-top:0">
-    <tr><th>順番</th><th>分類名</th><th>科目数</th><th></th></tr>
+    <tr><th>順番</th><th>分類名</th><th>グループ</th><th>科目数</th><th></th></tr>
     {% for cl, cnt in class_counts.items() %}
-    {% set loop_first = loop.first %}
-    {% set loop_last = loop.last %}
     <tr>
       <td style="white-space:nowrap;width:64px">
         <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
@@ -92,6 +90,15 @@
           <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:12px;white-space:nowrap">保存</button>
         </form>
       </td>
+      <td>
+        <form method="post" action="/admin/courses/classification/set_parent" style="display:flex;gap:4px;align-items:center;margin:0">
+          <input type="hidden" name="classification" value="{{ cl }}">
+          <input type="text" name="parent_group" value="{{ cls_parent_map.get(cl, '') }}"
+                 placeholder="（なし）" maxlength="100"
+                 style="width:110px;padding:3px 6px;font-size:12px;margin-top:0">
+          <button type="submit" class="btn" style="padding:2px 8px;font-size:11px;background:#f0fdf4;color:#15803d;white-space:nowrap">設定</button>
+        </form>
+      </td>
       <td style="color:#666">{{ cnt }}科目</td>
       <td>
         <form method="post" action="/admin/courses/classification/delete" style="margin:0"
@@ -102,7 +109,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="4" style="color:#999;text-align:center;padding:12px">分類なし</td></tr>
+    <tr><td colspan="5" style="color:#999;text-align:center;padding:12px">分類なし</td></tr>
     {% endfor %}
   </table>
 </div>
@@ -137,6 +144,122 @@
 <table>
   <tr><th>科目名</th><th>カテゴリ</th><th style="white-space:nowrap">順番</th><th></th></tr>
   {% if courses %}
+  {% for pg, sub_items in parent_subgroups.items() %}
+  {% set pgid = "pg-" ~ loop.index %}
+  {% set pg_total = sub_items | sum(attribute=1) | length if false else namespace(n=0) %}
+  <tr onclick="toggleParentGrp('{{ pgid }}', this)" style="background:#bfdbfe;cursor:pointer;user-select:none">
+    <td colspan="4" style="font-weight:bold;padding:10px 14px;color:#1d4ed8">
+      <span class="grp-arrow">▶</span>
+      {{ pg }}
+      <span style="font-weight:normal;color:#6b7280;font-size:12px">（{% set ns = namespace(total=0) %}{% for _, crs in sub_items %}{% set ns.total = ns.total + (crs | length) %}{% endfor %}{{ ns.total }}科目）</span>
+    </td>
+  </tr>
+  {% for sub_cls, sub_courses in sub_items %}
+  {% set sgid = pgid ~ "-sg-" ~ loop.index %}
+  {% set sub_list = sub_courses | list %}
+  <tr class="{{ pgid }}" onclick="toggleSubGrp('{{ sgid }}', '{{ pgid }}', this)" style="background:#e0e7ff;cursor:pointer;user-select:none;display:none">
+    <td colspan="4" style="font-weight:bold;padding:8px 28px;color:#4338ca">
+      <span class="sub-arrow-{{ pgid }}">▶</span>
+      {{ sub_cls }}
+      <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ sub_list | length }}科目）</span>
+    </td>
+  </tr>
+  {% for c in sub_list %}
+  {% set reviews = reviews_by_course[c.name] %}
+  {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
+  <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
+    <td>
+      {{ c.name }}
+      {% if c.term %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term }}</span>{% endif %}
+      {% if c.credits %}<span style="font-size:10px;color:#059669;background:#ecfdf5;padding:1px 5px;border-radius:4px;margin-left:2px">{{ c.credits }}単位</span>{% endif %}
+    </td>
+    <td><span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">{{ c.category }}</span></td>
+    <td style="white-space:nowrap;width:64px">
+      <button type="button" class="btn" style="padding:2px 6px;background:#e0e7ff;color:#4338ca;font-size:13px"
+              onclick="event.stopPropagation();moveCourse({{ c.id }},'up')" {% if loop.first %}disabled{% endif %}>↑</button>
+      <button type="button" class="btn" style="padding:2px 6px;background:#e0e7ff;color:#4338ca;font-size:13px"
+              onclick="event.stopPropagation();moveCourse({{ c.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
+    </td>
+    <td style="white-space:nowrap">
+      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#eef2ff;color:#4338ca"
+              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
+        👨‍🏫 担当教員{% if instructors_by_course[c.id] %} {{ instructors_by_course[c.id] | length }}人{% endif %}
+      </button>
+      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#f3f4f6;color:#374151"
+              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
+        レビュー {{ reviews | length }}件{% if pending_count %} <span style="background:#f59e0b;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px">未承認{{ pending_count }}</span>{% endif %}
+      </button>
+      <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
+              onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
+      <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
+            onsubmit="return confirm('削除しますか？')">
+        <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
+      </form>
+    </td>
+  </tr>
+  <tr id="inst-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="inst-row" style="display:none">
+    <td colspan="4" style="padding:12px 16px;background:#eef2ff;border-bottom:1px solid #c7d2fe">
+      <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
+      <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        {% for inst in instructors_by_course[c.id] %}
+        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
+          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
+          <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
+                  style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
+        </span>
+        {% else %}
+        <span id="inst-empty-{{ c.id }}" style="color:#9ca3af;font-size:12px">まだ登録なし</span>
+        {% endfor %}
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
+               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px">
+        <input type="url" id="inst-url-{{ c.id }}" placeholder="シラバスURL（任意）" maxlength="500"
+               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:200px">
+        <button type="button" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap"
+                onclick="addInstructor({{ c.id }})">追加</button>
+      </div>
+      <div id="inst-err-{{ c.id }}" style="display:none;color:#dc2626;font-size:11px;margin-top:4px">重複または空欄です</div>
+    </td>
+  </tr>
+  <tr id="rv-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="review-row" style="display:none">
+    <td colspan="4" style="padding:0;background:#f9fafb">
+      {% if reviews %}
+      <table style="margin:0;border-radius:0;font-size:12px">
+        <tr style="background:#e5e7eb">
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">成績評価</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
+        </tr>
+        {% for r in reviews %}
+        <tr style="background:{{ '#fffbeb' if not r.is_approved else '#fff' }}">
+          <td style="padding:6px 12px">{% if r.is_approved %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>{% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">未承認</span>{% endif %}</td>
+          <td style="padding:6px 12px">{{ r.submitter_name }}</td>
+          <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
+          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:#818cf8">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
+          <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method or '―' }}</td>
+          <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
+          <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
+          <td style="padding:6px 12px;white-space:nowrap">
+            {% if not r.is_approved %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
+            <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" onsubmit="return confirm('削除しますか？')"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">削除</button></form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  {% endfor %}
+  {% endfor %}
   {% for classification, group_courses in grouped_courses %}
   {% set gid = "grp-" ~ loop.index %}
   {% set group_list = group_courses | list %}
@@ -321,6 +444,34 @@
 <script>
 const COURSES = {{ courses_data | safe }};
 {% raw %}
+function toggleParentGrp(pgid, headerTr) {
+  var subHdrs = document.querySelectorAll('tr.' + pgid);
+  var isExpanded = subHdrs.length > 0 && subHdrs[0].style.display !== 'none';
+  if (isExpanded) {
+    subHdrs.forEach(function(tr) { tr.style.display = 'none'; });
+    document.querySelectorAll('[data-pg="' + pgid + '"]').forEach(function(tr) { tr.style.display = 'none'; });
+    document.querySelectorAll('.sub-arrow-' + pgid).forEach(function(a) { a.textContent = '▶'; });
+  } else {
+    subHdrs.forEach(function(tr) { tr.style.display = 'table-row'; });
+  }
+  var arrow = headerTr.querySelector('.grp-arrow');
+  if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
+}
+function toggleSubGrp(sgid, pgid, headerTr) {
+  event.stopPropagation();
+  var rows = document.querySelectorAll('[data-sg="' + sgid + '"]');
+  var courseRows = Array.from(rows).filter(function(tr) { return !tr.classList.contains('review-row') && !tr.classList.contains('inst-row'); });
+  var isExpanded = courseRows.length > 0 && courseRows[0].style.display !== 'none';
+  rows.forEach(function(tr) {
+    if (tr.classList.contains('review-row') || tr.classList.contains('inst-row')) {
+      tr.style.display = 'none';
+    } else {
+      tr.style.display = isExpanded ? 'none' : 'table-row';
+    }
+  });
+  var arrow = headerTr.querySelector('.sub-arrow-' + pgid);
+  if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
+}
 function toggleGroup(id, headerTr) {
   var allRows = document.querySelectorAll('tr.' + id);
   var courseRows = document.querySelectorAll('tr.' + id + ':not(.review-row):not(.inst-row)');
