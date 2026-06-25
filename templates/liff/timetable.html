@@ -568,9 +568,8 @@ async function init() {
     }
     {% endif %}
     await liff.init({ liffId: LIFF_ID });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
-    const profile = await liff.getProfile();
-    userId = profile.userId;
+    userId = liff.getContext()?.userId || "";
+    if (!userId) throw new Error("LINE アプリから開いてください");
     await Promise.all([loadMyCourses(), loadProfile()]);
     loadCredits();
     updateCreditsVisibility();
