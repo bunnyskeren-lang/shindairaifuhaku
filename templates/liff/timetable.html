@@ -859,6 +859,10 @@ function loadCredits() {
     document.getElementById('credits-gpa-val').textContent = Number(_creditData._gpa.value).toFixed(2);
     document.getElementById('credits-gpa-row').style.display = 'flex';
   }
+  if (_creditData._pdfLoaded) {
+    const btn = document.getElementById('credits-pdf-btn');
+    if (btn) btn.innerHTML = '✅ PDF読込済（再読込）';
+  }
 }
 
 function renderCreditRows() {
@@ -964,7 +968,7 @@ async function handleSeisekiFile(file) {
   } catch(e) {
     alert('通信エラー: ' + e.message);
   } finally {
-    btn.innerHTML = '📄 成績表PDFから自動入力';
+    btn.innerHTML = _creditData._pdfLoaded ? '✅ PDF読込済（再読込）' : '📄 成績表PDFから自動入力';
     btn.disabled = false;
     document.getElementById('credits-pdf-input').value = '';
   }
@@ -976,6 +980,7 @@ function applySeisekiResult(data) {
       const el = document.getElementById('earn-' + id);
       if (el) el.value = val;
     });
+    _creditData._pdfLoaded = true;
     updateCredits();
   }
   if (data.gpa != null) {
