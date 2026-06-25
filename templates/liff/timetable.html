@@ -284,12 +284,13 @@ tbody td:first-child {
   background:{% if IS_DEV %}#fff7ed{% else %}#eef2ff{% endif %};
   padding:3px 8px; margin:8px -4px 4px; border-radius:4px;
 }
+.credits-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:4px; }
 .credits-row-item {
-  display:flex; align-items:center; gap:6px; padding:5px 0;
-  border-bottom:1px solid #f8fafc;
+  background:#f8fafc; border-radius:8px; padding:7px 8px;
+  display:flex; flex-direction:column; gap:4px;
 }
-.credits-cat-name { flex:1; font-size:11px; color:#374151; min-width:0; line-height:1.3; }
-.credits-inputs { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.credits-cat-name { font-size:10px; color:#374151; font-weight:600; line-height:1.3; }
+.credits-inputs { display:flex; align-items:center; gap:4px; }
 .credits-mini-field { display:flex; flex-direction:column; align-items:center; gap:1px; }
 .credits-mini-label { font-size:9px; color:#94a3b8; }
 .credits-mini-input {
@@ -868,20 +869,24 @@ function loadCredits() {
 function renderCreditRows() {
   const container = document.getElementById('credits-rows');
   container.innerHTML = '';
-  let lastGroup = null;
+  let currentGroup = null;
+  let currentGrid  = null;
   CREDIT_CATS.forEach(cat => {
-    if (cat.group !== lastGroup) {
+    if (cat.group !== currentGroup) {
       const hdr = document.createElement('div');
       hdr.className = 'credits-group-header';
       hdr.textContent = cat.group;
       container.appendChild(hdr);
-      lastGroup = cat.group;
+      currentGrid = document.createElement('div');
+      currentGrid.className = 'credits-grid';
+      container.appendChild(currentGrid);
+      currentGroup = cat.group;
     }
     const req    = (_creditData[cat.id]?.required != null) ? _creditData[cat.id].required : cat.def;
     const earned = (_creditData[cat.id]?.earned   != null) ? _creditData[cat.id].earned   : 0;
-    const row = document.createElement('div');
-    row.className = 'credits-row-item';
-    row.innerHTML = `
+    const item = document.createElement('div');
+    item.className = 'credits-row-item';
+    item.innerHTML = `
       <span class="credits-cat-name">${cat.name}</span>
       <div class="credits-inputs">
         <div class="credits-mini-field">
@@ -895,8 +900,8 @@ function renderCreditRows() {
         <div class="credits-remain" id="remain-${cat.id}"></div>
       </div>
     `;
-    container.appendChild(row);
-    document.getElementById(`req-${cat.id}`).addEventListener('input', updateCredits);
+    currentGrid.appendChild(item);
+    item.querySelector(`#req-${cat.id}`).addEventListener('input', updateCredits);
   });
 }
 
