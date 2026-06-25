@@ -65,6 +65,11 @@ def parse_slots(slot_str: str) -> list[tuple[str, int]]:
             slots.append((current_day, int(part)))
     return slots
 
+def _is_timetable_term(term: str) -> bool:
+    """My時間割対象学期（第3Q・第4Q・後期・集中）かどうか"""
+    return term.startswith("第3") or term.startswith("第4") or term in ("後期", "集中")
+
+
 def parse_file(filepath: str) -> list[dict]:
     text = Path(filepath).read_text(encoding="utf-8", errors="ignore")
     courses = []
@@ -88,10 +93,6 @@ def parse_file(filepath: str) -> list[dict]:
         instructor = parts[5].strip()
         slot_str = parts[6].strip()
         timetable_code = parts[7].strip()
-
-        # 第3・第4クォーター、後期、集中のみ（前期・第1Q・第2Q・年度はスキップ）
-        if not (term.startswith("第3") or term.startswith("第4") or term == "後期" or term == "集中"):
-            continue
 
         slots = parse_slots(slot_str)
         if not slots:
@@ -123,31 +124,32 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
 
     async with AsyncSessionLocal() as session:
         for c in courses:
-            # ── syllabus_courses / course_slots ──
-            existing = (await session.execute(
-                select(SyllabusCourse).where(SyllabusCourse.timetable_code == c["timetable_code"])
-            )).scalar_one_or_none()
-            if existing:
-                tt_skipped += 1
-            else:
-                sc = SyllabusCourse(
-                    year=c["year"],
-                    term=c["term"],
-                    department=c["department"],
-                    name=c["name"],
-                    instructor=c["instructor"],
-                    timetable_code=c["timetable_code"],
-                )
-                session.add(sc)
-                await session.flush()
+            # ── syllabus_courses / course_slots（第3Q・第4Q・後期・集中のみ）──
+            if _is_timetable_term(c["term"]):
+                existing = (await session.execute(
+                    select(SyllabusCourse).where(SyllabusCourse.timetable_code == c["timetable_code"])
+                )).scalar_one_or_none()
+                if existing:
+                    tt_skipped += 1
+                else:
+                    sc = SyllabusCourse(
+                        year=c["year"],
+                        term=c["term"],
+                        department=c["department"],
+                        name=c["name"],
+                        instructor=c["instructor"],
+                        timetable_code=c["timetable_code"],
+                    )
+                    session.add(sc)
+                    await session.flush()
 
-                for day, period in c["slots"]:
-                    session.add(CourseSlot(
-                        syllabus_course_id=sc.id,
-                        day_of_week=day,
-                        period=period,
-                    ))
-                tt_added += 1
+                    for day, period in c["slots"]:
+                        session.add(CourseSlot(
+                            syllabus_course_id=sc.id,
+                            day_of_week=day,
+                            period=period,
+                        ))
+                    tt_added += 1
 
             # ── courses テーブル（LINE bot 用）──
             if also_courses:
@@ -197,7 +199,8 @@ def main():
     load_env(args.env)
 
     courses = parse_file(args.file)
-    print(f"パース結果: {len(courses)}件（第3・第4Q および後期）")
+    tt_courses = [c for c in courses if _is_timetable_term(c["term"])]
+    print(f"パース結果: {len(courses)}件全学期 / うち時間割対象（第3・第4Q・後期・集中）: {len(tt_courses)}件")
 
     if args.dry_run:
         for c in courses[:5]:
