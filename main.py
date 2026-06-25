@@ -161,7 +161,7 @@ _cls_parent_map_at: float = 0.0
 
 async def _get_cls_order_map(session=None) -> dict:
     global _cls_order_map_cache, _cls_order_map_at
-    if _cls_order_map_cache and time.monotonic() - _cls_order_map_at < _CLS_CACHE_TTL:
+    if _cls_order_map_cache is not None and time.monotonic() - _cls_order_map_at < _CLS_CACHE_TTL:
         return _cls_order_map_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
@@ -187,10 +187,13 @@ async def _get_cls_parent_map() -> dict[str, str]:
 
 def _invalidate_cls_caches():
     global _cls_order_map_cache, _cls_order_map_at, _cls_parent_map_cache, _cls_parent_map_at
+    global _cls_cache, _cls_cache_at
     _cls_order_map_cache = {}
     _cls_order_map_at = 0.0
     _cls_parent_map_cache = {}
     _cls_parent_map_at = 0.0
+    _cls_cache = set()
+    _cls_cache_at = 0.0
 
 def _invalidate_courses_cache():
     global _course_by_name, _course_list_all, _course_cache_at
@@ -2441,8 +2444,14 @@ async def rename_classification(
         )).scalars().all()
         for course in courses:
             course.classification = new_name
+        cls_row = (await session.execute(
+            select(ClassificationOrder).where(ClassificationOrder.name == old_name)
+        )).scalar_one_or_none()
+        if cls_row:
+            cls_row.name = new_name
         await session.commit()
     _invalidate_cls_caches()
+    _invalidate_courses_cache()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -2457,8 +2466,14 @@ async def delete_classification(
         )).scalars().all()
         for course in courses_in_class:
             course.classification = ""
+        cls_row = (await session.execute(
+            select(ClassificationOrder).where(ClassificationOrder.name == classification)
+        )).scalar_one_or_none()
+        if cls_row:
+            await session.delete(cls_row)
         await session.commit()
     _invalidate_cls_caches()
+    _invalidate_courses_cache()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -2503,6 +2518,7 @@ async def admin_cls_move(request: Request, _=Depends(check_admin)):
                 session.add(ClassificationOrder(name=cls_name, sort_order=i))
         await session.commit()
     _invalidate_cls_caches()
+    _invalidate_courses_cache()
     return JSONResponse({"ok": True})
 
 
@@ -2523,6 +2539,7 @@ async def admin_cls_set_parent(
             session.add(ClassificationOrder(name=classification, sort_order=0, parent_group=parent_group or None))
         await session.commit()
     _invalidate_cls_caches()
+    _invalidate_courses_cache()
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -2559,6 +2576,7 @@ async def admin_course_move(course_id: int, request: Request, _=Depends(check_ad
         for i, c in enumerate(all_in_cls):
             c.sort_order = i
         await session.commit()
+    _invalidate_courses_cache()
     return JSONResponse({"ok": True})
 
 
