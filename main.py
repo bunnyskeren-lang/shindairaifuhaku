@@ -3123,6 +3123,16 @@ _GAIGO_FOREIGN = ('ロシア語', 'ドイツ語', 'フランス語', '中国語'
                    'アラビア語', 'イタリア語', 'ポルトガル語', '朝鮮語')
 
 
+def _is_senmon2(name: str) -> bool:
+    for p in _SENMON2:
+        if name.startswith(p):
+            rest = name[len(p):]
+            # '・' で続く場合は別科目（例: マーケティング・マネジメント）
+            if not rest or rest[0] != '・':
+                return True
+    return False
+
+
 def _parse_seiseki_pdf(data: bytes) -> dict:
     if not _PDFPLUMBER_OK:
         raise RuntimeError("pdfplumber not available")
@@ -3164,7 +3174,7 @@ def _parse_seiseki_pdf(data: bytes) -> dict:
                 shonen += cr
             elif name in _SENMON1:
                 senmon1 += cr
-            elif any(name.startswith(p) for p in _SENMON2):
+            elif _is_senmon2(name):
                 senmon2 += cr
             elif any(name.startswith(p) for p in _GLOBAL_PREFIXES):
                 global_c += cr
