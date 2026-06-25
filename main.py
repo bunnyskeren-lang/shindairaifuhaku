@@ -3071,19 +3071,22 @@ async def api_timetable_unregister(course_id: int, user_id: str = Query("")):
 # ── 経営学部 成績表 PDF パース ──────────────────────────────────────────────
 
 _SENMON1 = {'経営学基礎論', '会計学基礎論', '市場システム基礎論'}
-# 前方一致で判定。picture/経営.pdf の公式リストをベースに設定
-_SENMON2 = (
-    # 公式第2群科目（経営.pdf 掲載12科目・前方一致）
+
+# 完全一致で判定する第2群科目
+# 「会計学特殊講義」「経営学入門演習」等の3群科目と区別するため完全一致のみ使用
+_SENMON2_EXACT = {
+    # 公式第2群科目（経営.pdf 掲載12科目）
     '経営管理', '経営戦略', '経営史', '経営数学', '経営統計',
-    'コーポレートファイナンス',
-    '簿記', '財務会計', '管理会計',
-    'マーケティング',
-    '金融システム', '交通論',
+    'コーポレートファイナンス', '財務会計', '管理会計',
+    'マーケティング', '金融システム', '交通論',
     # 2026年度カリキュラム追加（ナンバリングコード B1BB202 確認済み）
-    '経済学', '統計学', '民法', '数学Ⅰ', '数学Ⅱ', '数学（',
+    '経済学', '統計学', '民法', '数学Ⅰ', '数学Ⅱ',
     '経営学入門', '会計学', '国際経営', '経営組織', '財務管理',
     '生産管理', '経営情報', 'ビジネス法',
-)
+}
+# 前方一致が必要な科目（旧カリ「簿記」・新カリ「簿記Ⅰ」等のバリアントを同一視）
+_SENMON2_PREFIX = ('簿記', '数学（')
+
 _GLOBAL_PREFIXES = (
     'Academic Reading and Writing',
     'International Business',
@@ -3124,13 +3127,7 @@ _GAIGO_FOREIGN = ('ロシア語', 'ドイツ語', 'フランス語', '中国語'
 
 
 def _is_senmon2(name: str) -> bool:
-    for p in _SENMON2:
-        if name.startswith(p):
-            rest = name[len(p):]
-            # '・' で続く場合は別科目（例: マーケティング・マネジメント）
-            if not rest or rest[0] != '・':
-                return True
-    return False
+    return name in _SENMON2_EXACT or any(name.startswith(p) for p in _SENMON2_PREFIX)
 
 
 def _parse_seiseki_pdf(data: bytes) -> dict:
