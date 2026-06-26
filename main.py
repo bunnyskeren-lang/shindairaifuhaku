@@ -3309,7 +3309,7 @@ async def admin_timetable_check(request: Request, _: str = Depends(check_admin))
     syllabus_name_set = {name for name, _ in syllabus_rows}
 
     import re as _re
-    _TERM_PAT = _re.compile(r'前期|後期|通年|集中|[1-4]Q|第[1-4]クオーター|第[1-4]Q')
+    _TERM_PAT = _re.compile(r'前期|後期|[12]Q|第[12]クオーター|第[12]Q')
 
     # courses にあるが syllabus_courses にない（科目名に学期語句を含む科目は除外）
     only_in_courses = [
