@@ -958,6 +958,20 @@ async function loadCredits() {
       }
     } catch(e) {}
   }
+  // 時間割登録済みの認定科目から自動集計（PDFなしの場合のみ）
+  if (!_creditData._pdfLoaded && userId) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/credit_auto_count?uid=${encodeURIComponent(userId)}`);
+      if (res.ok) {
+        const counts = await res.json();
+        Object.entries(counts).forEach(([catId, credits]) => {
+          const el = document.getElementById('earn-' + catId);
+          if (el) el.value = credits;
+        });
+        updateCredits();
+      }
+    } catch(e) {}
+  }
 }
 
 function renderCreditRows() {

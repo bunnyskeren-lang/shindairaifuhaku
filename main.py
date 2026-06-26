@@ -45,12 +45,12 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, PostbackEvent
 
-from sqlalchemy import select, func, delete, or_, update as sa_update
+from sqlalchemy import select, func, delete, or_, and_, update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal, engine
-from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, CreditRequirement
+from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, CreditRequirement, CategoryCourse
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -3280,6 +3280,12 @@ async def api_credit_requirements():
         rows = (await session.execute(
             select(CreditRequirement).order_by(CreditRequirement.sort_order)
         )).scalars().all()
+        cc_rows = (await session.execute(
+            select(CategoryCourse.category_id, CategoryCourse.course_name)
+        )).all()
+    courses_by_cat: dict[str, list[str]] = {}
+    for cat_id, course_name in cc_rows:
+        courses_by_cat.setdefault(cat_id, []).append(course_name)
     return [
         {
             "category_id":      r.category_id,
@@ -3288,9 +3294,25 @@ async def api_credit_requirements():
             "sort_order":       r.sort_order,
             "required_credits": r.required_credits,
             "note":             r.note or "",
+            "approved_courses": courses_by_cat.get(r.category_id, []),
         }
         for r in rows
     ]
+
+
+@app.get("/api/credit_auto_count")
+async def api_credit_auto_count(uid: str):
+    async with AsyncSessionLocal() as session:
+        results = (await session.execute(
+            select(CategoryCourse.category_id, func.sum(CategoryCourse.credits).label("total"))
+            .join(SyllabusCourse, SyllabusCourse.name == CategoryCourse.course_name)
+            .join(UserCourse, and_(
+                UserCourse.syllabus_course_id == SyllabusCourse.id,
+                UserCourse.line_user_id == uid,
+            ))
+            .group_by(CategoryCourse.category_id)
+        )).all()
+    return {cat_id: float(total) for cat_id, total in results}
 
 
 # ── 時間割照合ページ ──────────────────────────────────────────────────────────
@@ -3349,6 +3371,17 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
         reqs = (await session.execute(
             select(CreditRequirement).order_by(CreditRequirement.sort_order)
         )).scalars().all()
+        kyotsu_candidates = (await session.execute(
+            select(Course.name, Course.credits)
+            .where(Course.classification.like("%共通専門基礎%"))
+            .order_by(Course.sort_order, Course.name)
+        )).all()
+        approved_rows = (await session.execute(
+            select(CategoryCourse.category_id, CategoryCourse.course_name)
+        )).all()
+    approved_by_cat: dict[str, set[str]] = {}
+    for cat_id, course_name in approved_rows:
+        approved_by_cat.setdefault(cat_id, set()).add(course_name)
     auto_groups = {c.id: _classify_senmon(c.name) for c in courses}
     return templates.TemplateResponse("admin/keiei.html", {
         "request": request,
@@ -3356,7 +3389,31 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
         "senmon_groups": _SENMON_GROUPS,
         "reqs": reqs,
         "auto_groups": auto_groups,
+        "kyotsu_candidates": kyotsu_candidates,
+        "approved_by_cat": approved_by_cat,
     })
+
+
+@app.post("/admin/keiei/category_courses/{cat_id}")
+async def admin_save_category_courses(cat_id: str, request: Request, _: str = Depends(check_admin)):
+    from fastapi.responses import JSONResponse as _JSONResponse
+    form = await request.form()
+    checked = form.getlist("courses")
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(CategoryCourse).where(CategoryCourse.category_id == cat_id)
+        )
+        for name in checked:
+            cr = (await session.execute(
+                select(Course.credits).where(Course.name == name)
+            )).scalar_one_or_none()
+            session.add(CategoryCourse(
+                category_id=cat_id,
+                course_name=name,
+                credits=float(cr) if cr else 2.0,
+            ))
+        await session.commit()
+    return _JSONResponse({"ok": True})
 
 
 @app.post("/admin/keiei/courses/{course_id}/senmon_group")

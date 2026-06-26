@@ -182,6 +182,16 @@ class CreditRequirement(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
 
 
+class CategoryCourse(Base):
+    __tablename__ = "category_courses"
+    __table_args__ = (UniqueConstraint("category_id", "course_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    category_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    course_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    credits: Mapped[float] = mapped_column(Float, nullable=False, default=2.0)
+
+
 class UserCourse(Base):
     __tablename__ = "user_courses"
     __table_args__ = (UniqueConstraint("line_user_id", "syllabus_course_id"),)

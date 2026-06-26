@@ -96,6 +96,35 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
   </details>
 </div>
 
+<!-- 認定科目リスト -->
+<div class="card">
+  <h2 style="margin-top:0">📋 認定科目リスト設定</h2>
+  <p style="font-size:12px;color:#6b7280;margin:0 0 14px">チェックした科目が学生の時間割に登録されていると、単位チェッカーで自動集計されます。</p>
+
+  <details open>
+    <summary style="font-weight:600;cursor:pointer;padding:4px 0;font-size:13px">共通専門基礎科目（kyotsu）</summary>
+    <div style="margin-top:10px">
+      {% if kyotsu_candidates %}
+      <div style="display:flex;flex-direction:column;gap:4px">
+        {% for name, credits in kyotsu_candidates %}
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox"
+                 value="{{ name }}"
+                 data-cat="kyotsu"
+                 {% if name in approved_by_cat.get('kyotsu', set()) %}checked{% endif %}
+                 onchange="saveCatCourse(this)">
+          <span>{{ name }}{% if credits %}<span style="color:#9ca3af;font-size:11px;margin-left:4px">（{{ credits | int }}単位）</span>{% endif %}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:#9ca3af;font-size:13px;margin:0">「共通専門基礎科目」の科目が見つかりません。<br>科目管理画面で classification を確認してください。</p>
+      {% endif %}
+      <p id="kyotsu-status" style="font-size:12px;margin-top:10px;color:#6b7280"></p>
+    </div>
+  </details>
+</div>
+
 <!-- 科目群マッピング -->
 <div class="card">
   <h2 style="margin-top:0">📚 専門科目 群設定
@@ -175,6 +204,25 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
     save();
   });
 })();
+
+async function saveCatCourse(cb) {
+  const catId = cb.dataset.cat;
+  const status = document.getElementById(catId + '-status');
+  status.textContent = '保存中...';
+  status.style.color = '#6b7280';
+  const checked = [...document.querySelectorAll(`input[data-cat="${catId}"]:checked`)].map(el => el.value);
+  const body = new URLSearchParams();
+  checked.forEach(name => body.append('courses', name));
+  try {
+    const res = await fetch(`/admin/keiei/category_courses/${encodeURIComponent(catId)}`, { method: 'POST', body });
+    if (!res.ok) throw new Error(res.status);
+    status.textContent = '✓ 保存済み';
+    status.style.color = '#15803d';
+  } catch(e) {
+    status.textContent = '⚠ 保存に失敗しました';
+    status.style.color = '#b91c1c';
+  }
+}
 
 async function deleteReq(btn) {
   const id    = btn.dataset.id;
