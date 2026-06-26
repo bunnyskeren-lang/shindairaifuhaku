@@ -54,10 +54,10 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
         <td><input type="number" class="req-input" name="req_{{ r.category_id }}" value="{{ r.required_credits }}" min="0" max="200"></td>
         <td><textarea class="note-input" name="note_{{ r.category_id }}" placeholder="（注記なし）">{{ r.note or '' }}</textarea></td>
         <td>
-          <form method="post" action="/admin/keiei/credit_requirements/{{ r.category_id }}/delete"
-                onsubmit="return confirm('「{{ r.label }}」を削除しますか？')">
-            <button type="submit" class="btn-del">🗑</button>
-          </form>
+          <button class="btn-del"
+                  data-id="{{ r.category_id }}"
+                  data-label="{{ r.label }}"
+                  onclick="deleteReq(this)">🗑</button>
         </td>
       </tr>
       {% endfor %}
@@ -134,6 +134,21 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 
 {% block scripts %}
 <script>
+async function deleteReq(btn) {
+  const id    = btn.dataset.id;
+  const label = btn.dataset.label;
+  if (!confirm(`「${label}」を削除しますか？`)) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/admin/keiei/credit_requirements/${encodeURIComponent(id)}/delete`, { method: 'POST' });
+    if (!res.ok) throw new Error(res.status);
+    location.reload();
+  } catch(e) {
+    alert('削除に失敗しました');
+    btn.disabled = false;
+  }
+}
+
 const BADGE_CLASS = {
   '第1群':'g1', '第2群':'g2', '第3群':'g3', 'グローバル':'gg', '初年次':'gin', '':'gna'
 };

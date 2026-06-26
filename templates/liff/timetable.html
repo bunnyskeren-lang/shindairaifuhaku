@@ -463,6 +463,7 @@ const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
 let CREDIT_CATS = [];
 let _creditData = {};
+let _totalReqListenerAdded = false;
 const DAYS = ["月","火","水","木","金"];
 const PERIODS = [1,2,3,4,5,6];
 const PERIOD_TIMES = {
@@ -582,7 +583,7 @@ async function init() {
     userId = liff.getContext()?.userId || "";
     if (!userId) throw new Error("LINE アプリから開いてください");
     await Promise.all([loadMyCourses(), loadProfile()]);
-    loadCredits();
+    await loadCredits();
     updateCreditsVisibility();
     buildGrid();
     document.getElementById("loading-screen").style.display = "none";
@@ -726,13 +727,21 @@ async function openDrawer(day, period) {
   } else {
     document.getElementById("drawer-sub").textContent = "読み込み中...";
     document.getElementById("course-list").innerHTML = "";
-    const res = await fetch(
-      `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?user_id=${encodeURIComponent(userId)}`
-    );
-    const data = await res.json();
-    drawerCourses = data.courses;
-    _slotCache.set(cacheKey, drawerCourses);
-    document.getElementById("drawer-sub").textContent = "";
+    try {
+      const res = await fetch(
+        `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?user_id=${encodeURIComponent(userId)}`
+      );
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      drawerCourses = data.courses || [];
+      _slotCache.set(cacheKey, drawerCourses);
+      document.getElementById("drawer-sub").textContent = "";
+    } catch(e) {
+      drawerCourses = [];
+      document.getElementById("drawer-sub").textContent = "読み込みに失敗しました";
+      setFilter(currentQuarter);
+      return;
+    }
   }
 
   setFilter(currentQuarter);
@@ -834,20 +843,22 @@ async function toggleRegister(btn, course) {
   const isRegistered = btn.dataset.registered === "1";
   try {
     if (isRegistered) {
-      await fetch(`${BASE_URL}/api/timetable/register/${course.id}?user_id=${encodeURIComponent(userId)}`, {
+      const res = await fetch(`${BASE_URL}/api/timetable/register/${course.id}?user_id=${encodeURIComponent(userId)}`, {
         method: "DELETE"
       });
+      if (!res.ok) throw new Error(res.status);
       btn.dataset.registered = "0";
       btn.className = "reg-btn register";
       btn.textContent = "登録";
       course.registered = false;
       myCourseIds.delete(course.id);
     } else {
-      await fetch(`${BASE_URL}/api/timetable/register/${course.id}`, {
+      const res = await fetch(`${BASE_URL}/api/timetable/register/${course.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId }),
       });
+      if (!res.ok) throw new Error(res.status);
       btn.dataset.registered = "1";
       btn.className = "reg-btn unregister";
       btn.textContent = "登録済";
@@ -870,8 +881,9 @@ async function toggleRegister(btn, course) {
   }
 }
 
-function showCreditNote(e, text) {
+function showCreditNote(e) {
   e.stopPropagation();
+  const text = e.currentTarget.dataset.note || '';
   const popup = document.getElementById('credits-note-popup');
   if (popup.classList.contains('visible') && popup.dataset.note === text) {
     popup.classList.remove('visible');
@@ -888,7 +900,7 @@ document.addEventListener('click', () => {
 async function loadCreditRequirements() {
   try {
     const res = await fetch(BASE_URL + '/api/credit_requirements');
-    if (!res.ok) return;
+    if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     CREDIT_CATS = data.map(r => ({
       id:    r.category_id,
@@ -897,7 +909,12 @@ async function loadCreditRequirements() {
       def:   r.required_credits,
       note:  r.note || '',
     }));
-  } catch(e) { /* CREDIT_CATS stays as-is */ }
+  } catch(e) {
+    if (CREDIT_CATS.length === 0) {
+      const rows = document.getElementById('credits-rows');
+      if (rows) rows.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:8px">単位要件の読み込みに失敗しました。再度開いてください。</p>';
+    }
+  }
 }
 
 async function loadCredits() {
@@ -908,7 +925,10 @@ async function loadCredits() {
   const totalReqEl = document.getElementById('credits-total-req');
   if (totalReqEl) {
     totalReqEl.value = _creditData._totalReq != null ? _creditData._totalReq : 124;
-    totalReqEl.addEventListener('input', updateCredits);
+    if (!_totalReqListenerAdded) {
+      totalReqEl.addEventListener('input', updateCredits);
+      _totalReqListenerAdded = true;
+    }
   }
   updateCredits();
   // Restore GPA if previously parsed
@@ -961,7 +981,7 @@ function renderCreditRows() {
     const item = document.createElement('div');
     item.className = 'credits-row-item';
     item.innerHTML = `
-      <span class="credits-cat-name">${cat.name}${cat.note ? `<button class="credits-info-btn" onclick="showCreditNote(event,'${cat.note.replace(/'/g,"&#39;")}')">!</button>` : ''}</span>
+      <span class="credits-cat-name">${cat.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}${cat.note ? '<button class="credits-info-btn">!</button>' : ''}</span>
       <div class="credits-inputs">
         <div class="credits-mini-field">
           <div class="credits-mini-label">必要</div>
@@ -969,13 +989,21 @@ function renderCreditRows() {
         </div>
         <div class="credits-mini-field">
           <div class="credits-mini-label">取得</div>
-          <input type="number" class="credits-mini-input" id="earn-${cat.id}" min="0" max="200" value="${earned}" readonly>
+          <input type="number" class="credits-mini-input" id="earn-${cat.id}" min="0" max="200" value="${earned}">
         </div>
         <div class="credits-remain" id="remain-${cat.id}"></div>
       </div>
     `;
     currentGrid.appendChild(item);
+    if (cat.note) {
+      const infoBtn = item.querySelector('.credits-info-btn');
+      if (infoBtn) {
+        infoBtn.dataset.note = cat.note;
+        infoBtn.addEventListener('click', showCreditNote);
+      }
+    }
     item.querySelector(`#req-${cat.id}`).addEventListener('input', updateCredits);
+    item.querySelector(`#earn-${cat.id}`).addEventListener('input', updateCredits);
   });
 }
 
