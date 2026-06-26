@@ -159,9 +159,9 @@ _cls_order_map_at: float = 0.0
 _cls_parent_map_cache: dict = {}
 _cls_parent_map_at: float = 0.0
 
-async def _get_cls_order_map(session=None) -> dict:
+async def _get_cls_order_map() -> dict:
     global _cls_order_map_cache, _cls_order_map_at
-    if _cls_order_map_cache is not None and time.monotonic() - _cls_order_map_at < _CLS_CACHE_TTL:
+    if _cls_order_map_cache and time.monotonic() - _cls_order_map_at < _CLS_CACHE_TTL:
         return _cls_order_map_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
@@ -173,7 +173,7 @@ async def _get_cls_order_map(session=None) -> dict:
 
 async def _get_cls_parent_map() -> dict[str, str]:
     global _cls_parent_map_cache, _cls_parent_map_at
-    if _cls_parent_map_cache is not None and time.monotonic() - _cls_parent_map_at < _CLS_CACHE_TTL:
+    if _cls_parent_map_cache and time.monotonic() - _cls_parent_map_at < _CLS_CACHE_TTL:
         return _cls_parent_map_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
@@ -222,7 +222,7 @@ async def _reload_senmon_cache():
 def _invalidate_senmon_cache():
     global _senmon_name_to_group
     _senmon_name_to_group = {}
-    asyncio.ensure_future(_reload_senmon_cache())
+    asyncio.create_task(_reload_senmon_cache())
 
 
 def _invalidate_review_cache():
@@ -1821,17 +1821,18 @@ async def search_instructors(q: str = ""):
             insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))
 
         result = []
-        for name in insts:
-            courses = (await session.execute(
-                select(Course)
-                .join(CourseInstructor, CourseInstructor.course_id == Course.id)
-                .where(CourseInstructor.name == name)
-                .order_by(Course.name)
-            )).scalars().all()
-            result.append({
-                "name": name,
-                "courses": [{"id": c.id, "name": c.name} for c in courses],
-            })
+        if insts:
+            all_rows = (await session.execute(
+                select(CourseInstructor.name, Course.id, Course.name)
+                .join(Course, CourseInstructor.course_id == Course.id)
+                .where(CourseInstructor.name.in_(insts))
+                .order_by(CourseInstructor.name, Course.name)
+            )).all()
+            courses_by_inst: dict[str, list] = {name: [] for name in insts}
+            for inst_name, c_id, c_name in all_rows:
+                courses_by_inst[inst_name].append({"id": c_id, "name": c_name})
+            for name in insts:
+                result.append({"name": name, "courses": courses_by_inst[name]})
 
         if not result:
             # Course.instructor フィールドからも検索
@@ -2053,7 +2054,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         courses = (await session.execute(
             base_stmt.order_by(Course.sort_order, Course.name)
         )).scalars().all()
-        cls_map = await _get_cls_order_map(session)
+        cls_map = await _get_cls_order_map()
         _cls_sort = _make_cls_sort(cls_map)
         courses = sorted(courses, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
         total = len(courses)
@@ -2510,7 +2511,7 @@ async def admin_cls_move(request: Request, _=Depends(check_admin)):
                 select(Course.classification).distinct()
             )).scalars().all() if c],
         )
-        cls_map = await _get_cls_order_map(session)
+        cls_map = await _get_cls_order_map()
         _cls_sort = _make_cls_sort(cls_map)
         sorted_cls = sorted(all_cls, key=_cls_sort)
 
