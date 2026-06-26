@@ -111,3 +111,8 @@ async def init_db():
                 "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order "
                 "WHERE credit_requirements.label = ''"
             ), {"cat": cat_id, "req": req, "note": note, "label": label, "gname": group_name, "sort": sort_order})
+        await conn.execute(text(
+            "INSERT INTO courses (name, classification, category, reading, term, credits, faculty, sort_order) "
+            "SELECT '研究指導', '専門科目', '専門', 'けんきゅうしどう', '通年', 8, '経営学部', 0 "
+            "WHERE NOT EXISTS (SELECT 1 FROM courses WHERE name = '研究指導')"
+        ))
