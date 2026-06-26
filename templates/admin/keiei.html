@@ -31,10 +31,8 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 <!-- 単位要件 -->
 <div class="card">
   <h2 style="margin-top:0">📊 単位要件（必要単位数）</h2>
-  {% if request.query_params.get('error') == 'duplicate' %}
-  <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin-bottom:12px">⚠ そのIDはすでに存在します</div>
-  {% elif request.query_params.get('error') == 'invalid' %}
-  <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin-bottom:12px">⚠ IDと表示名は必須です</div>
+  {% if request.query_params.get('error') == 'invalid' %}
+  <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin-bottom:12px">⚠ 表示名は必須です</div>
   {% endif %}
   <form method="post" action="/admin/keiei/credit_requirements/update">
     <table>
@@ -76,18 +74,18 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
     <form method="post" action="/admin/keiei/credit_requirements/add" style="margin-top:12px">
       <table>
         <tr>
-          <th>ID（英数字・_）</th>
           <th>表示名</th>
-          <th>グループ</th>
-          <th>並び</th>
-          <th>必要単位</th>
+          <th style="width:90px">グループ</th>
+          <th style="width:60px">並び</th>
+          <th style="width:70px">必要単位</th>
+          <th>ⓘ 注記テキスト</th>
         </tr>
         <tr>
-          <td><input type="text" class="label-input" name="new_category_id" placeholder="例: senmon4" pattern="[a-zA-Z0-9_\-]+" required></td>
           <td><input type="text" class="label-input" name="new_label" placeholder="例: 第4群科目" required></td>
           <td><input type="text" class="group-input" name="new_group" placeholder="専門科目" list="group-list"></td>
           <td><input type="number" class="sort-input" name="new_sort" value="999" min="0" max="9999"></td>
           <td><input type="number" class="req-input" name="new_req" value="0" min="0" max="200"></td>
+          <td><textarea class="note-input" name="new_note" placeholder="（注記なし）"></textarea></td>
         </tr>
       </table>
       <button type="submit" class="btn btn-primary" style="margin-top:10px">追加</button>

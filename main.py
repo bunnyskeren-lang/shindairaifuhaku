@@ -3414,26 +3414,25 @@ async def admin_keiei_update_requirements(request: Request, _: str = Depends(che
 @app.post("/admin/keiei/credit_requirements/add")
 async def admin_keiei_add_requirement(request: Request, _: str = Depends(check_admin)):
     form = await request.form()
-    cat_id = _re.sub(r"[^a-zA-Z0-9_\-]", "_", form.get("new_category_id", "").strip())
     label  = form.get("new_label", "").strip()
     group  = form.get("new_group", "").strip()
-    if not cat_id or not label:
+    note   = form.get("new_note", "").strip() or None
+    if not label:
         return RedirectResponse("/admin/keiei?error=invalid", status_code=303)
     try:
-        req    = int(form.get("new_req", "0"))
+        req    = max(0, int(form.get("new_req", "0")))
         sort_v = int(form.get("new_sort", "999"))
     except ValueError:
         req, sort_v = 0, 999
+    cat_id = f"cat_{int(time.time() * 1000)}"
     async with AsyncSessionLocal() as session:
-        existing = await session.get(CreditRequirement, cat_id)
-        if existing:
-            return RedirectResponse("/admin/keiei?error=duplicate", status_code=303)
         session.add(CreditRequirement(
             category_id=cat_id,
             label=label,
             group_name=group,
             sort_order=sort_v,
             required_credits=req,
+            note=note,
         ))
         await session.commit()
     return RedirectResponse("/admin/keiei", status_code=303)
