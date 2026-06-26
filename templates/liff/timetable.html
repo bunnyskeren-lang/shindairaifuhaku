@@ -466,6 +466,13 @@ tbody td:first-child {
 <script>
 const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
+const KYOTSU_KEIEI_APPROVED = new Set([
+  "情報科学１","情報科学２",
+  "線形代数入門1","線形代数入門2",
+  "線形代数1","線形代数2","線形代数3","線形代数4",
+  "微分積分入門1","微分積分入門2",
+  "微分積分1","微分積分2","微分積分3","微分積分4",
+]);
 let CREDIT_CATS = [];
 let _creditData = {};
 let _totalReqListenerAdded = false;
@@ -811,6 +818,13 @@ function renderCourseList(courses) {
       if (!c.target_grades) return true;
       return c.target_grades.split(',').map(Number).includes(userGrade);
     });
+  }
+
+  // 経営学部生：承認されていない共通専門基礎科目を除外
+  if (userFaculty === "経営学部") {
+    filtered = filtered.filter(c =>
+      !(c.subject_category === "共通専門基礎科目" && !KYOTSU_KEIEI_APPROVED.has(c.name))
+    );
   }
 
   const kyoyo = filtered.filter(c => !c.department || !c.department.includes("経営学部"));
