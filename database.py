@@ -101,7 +101,7 @@ async def init_db():
             ("global",       4, "英語で開講される専門科目・外国書講読・外国文献講義が対象。",                      "グローバル科目群",                "専門科目", 90),
             ("senmon3",      0, "第1・2群・グローバル以外の専門科目（人的資源管理・証券市場など）。PDFから自動計算。", "第3群・その他",                  "専門科目", 100),
             ("kanren",       0, "", "関連科目",                          "", 110),
-            ("sonota",       0, "", "その他必要と認める科目",            "", 120),
+            ("sonota",      12, "", "その他必要と認める科目",            "", 120),
         ]
         for cat_id, req, note, label, group_name, sort_order in defaults:
             await conn.execute(text(
@@ -111,6 +111,10 @@ async def init_db():
                 "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order "
                 "WHERE credit_requirements.label = ''"
             ), {"cat": cat_id, "req": req, "note": note, "label": label, "gname": group_name, "sort": sort_order})
+        await conn.execute(text(
+            "UPDATE credit_requirements SET required_credits = 12 "
+            "WHERE category_id = 'sonota' AND required_credits = 0"
+        ))
         await conn.execute(text(
             "INSERT INTO courses (name, classification, category, reading, term, credits, faculty, sort_order) "
             "SELECT '研究指導', '専門科目', '専門', 'けんきゅうしどう', '通年', 8, '経営学部', 0 "
