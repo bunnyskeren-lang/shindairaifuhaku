@@ -103,7 +103,7 @@
       <td style="color:#666">{{ cnt }}科目</td>
       <td>
         <form method="post" action="/admin/courses/classification/delete" style="margin:0"
-              onsubmit="return confirm('削除しますか？')">
+              data-confirm="削除しますか？">
           <input type="hidden" name="classification" value="{{ cl }}">
           <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
         </form>
@@ -193,7 +193,7 @@
       <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
-            onsubmit="return confirm('削除しますか？')">
+            data-confirm="削除しますか？">
         <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
       </form>
     </td>
@@ -248,7 +248,7 @@
           <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
           <td style="padding:6px 12px;white-space:nowrap">
             {% if not r.is_approved %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
-            <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" onsubmit="return confirm('削除しますか？')"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">削除</button></form>
+            <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" data-confirm="削除しますか？"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">削除</button></form>
           </td>
         </tr>
         {% endfor %}
@@ -304,7 +304,7 @@
       <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
-            onsubmit="return confirm('削除しますか？')">
+            data-confirm="削除しますか？">
         <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
       </form>
     </td>
@@ -372,7 +372,7 @@
             </form>
             {% endif %}
             <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0"
-                  onsubmit="return confirm('削除しますか？')">
+                  data-confirm="削除しますか？">
               <button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">削除</button>
             </form>
           </td>

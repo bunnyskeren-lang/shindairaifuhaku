@@ -199,7 +199,7 @@ async function saveCatCourse(cb) {
 async function deleteReq(btn) {
   const id    = btn.dataset.id;
   const label = btn.dataset.label;
-  if (!confirm(`「${label}」を削除しますか？`)) return;
+  if (!await askConfirm(`「${label}」を削除しますか？`)) return;
   btn.disabled = true;
   try {
     const res = await fetch(`/admin/keiei/credit_requirements/${encodeURIComponent(id)}/delete`, { method: 'POST' });

@@ -144,7 +144,7 @@
     {{ review_body(r) }}
     <div class="review-footer">
       <form method="post" action="/admin/reviews/reject/{{ r.id }}"
-            onsubmit="return confirm('削除しますか？')">
+            data-confirm="削除しますか？">
         <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🗑 却下</button>
       </form>
       <form method="post" action="/admin/reviews/approve/{{ r.id }}">
@@ -170,7 +170,7 @@
     {{ review_body(r) }}
     <div class="review-footer">
       <form method="post" action="/admin/reviews/reject/{{ r.id }}"
-            onsubmit="return confirm('承認済みレビューを削除しますか？')">
+            data-confirm="承認済みレビューを削除しますか？">
         <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🗑 削除</button>
       </form>
     </div>
