@@ -3380,10 +3380,12 @@ async def admin_keiei_set_group(course_id: int, request: Request, _: str = Depen
 @app.post("/admin/keiei/credit_requirements/update")
 async def admin_keiei_update_requirements(request: Request, _: str = Depends(check_admin)):
     form = await request.form()
+    print(f"[keiei_update] form keys: {list(form.keys())}", flush=True)
     async with AsyncSessionLocal() as session:
         existing_ids = {
             r for (r,) in (await session.execute(select(CreditRequirement.category_id))).all()
         }
+        print(f"[keiei_update] existing_ids: {existing_ids}", flush=True)
         for cat_id in existing_ids:
             values: dict = {}
             if f"req_{cat_id}" in form:
@@ -3403,13 +3405,16 @@ async def admin_keiei_update_requirements(request: Request, _: str = Depends(che
                     values["sort_order"] = int(form[f"sort_{cat_id}"])
                 except ValueError:
                     pass
+            print(f"[keiei_update] {cat_id}: note={values.get('note')!r}", flush=True)
             if values:
-                await session.execute(
+                result = await session.execute(
                     sa_update(CreditRequirement)
                     .where(CreditRequirement.category_id == cat_id)
                     .values(**values)
                 )
+                print(f"[keiei_update] {cat_id}: rowcount={result.rowcount}", flush=True)
         await session.commit()
+        print("[keiei_update] committed", flush=True)
     return RedirectResponse("/admin/keiei", status_code=303)
 
 

@@ -57,15 +57,19 @@ from linebot.v3.messaging import (
 # ── 画像サイズ（元画像の比率をそのまま使用）──────────────────────────────────
 W, H = 1738, 905
 
-# ── レイアウト座標（元画像 1738×905 基準）────────────────────────────────────
-SIDE_X  = 1490   # 右サイドバー左端
-ROW2_Y  = 302    # Row2 開始（1/3H）
-ROW3_Y  = 603    # Row3 開始（2/3H）
-REV_W   = 381    # レビュー投稿 右端
-COL2_X  = SIDE_X // 3        # ≈ 497
-COL3_X  = SIDE_X * 2 // 3    # ≈ 993
-COL3B_X = SIDE_X // 2        # ≈ 745
-SH      = H // 4              # ≈ 226
+# ── レイアウト座標（元画像 1738×905 基準、ピクセル実測値）──────────────────────
+SIDE_X  = 1514   # 右サイドバー左端（x=1514 で白帯開始）
+ROW2_Y  = 399    # Row1/2 境界（y=391-406 白帯の中心）
+ROW3_Y  = 645    # Row2/3 境界（y=638-651 白帯の中心）
+REV_W   = 424    # レビュー投稿 右端（x=418-431 白帯の中心）
+COL2_X  = 518    # My時間割/教養 境界（Row2 輝度谷 x=507-530 の中心）
+COL3_X  = 1000   # 教養/専門 境界（Row2 輝度谷 x=988-1011 の中心）
+COL3B_X = 757    # 食堂/バイト 境界（SIDE_X // 2）
+
+# サイドバー行区切り（x=1626 の色変化から実測）
+SY1 = 185   # 図書館 / 市バス 境界
+SY2 = 381   # 市バス / うりぼーポータル 境界
+SY3 = 578   # うりぼーポータル / ヘルプ 境界
 
 
 def _timetable_action():
@@ -116,17 +120,17 @@ AREAS = [
     # ── 右サイドバー (4 段) ───────────────────────────────────────
     {
         "label": "図書館",
-        "x": SIDE_X, "y": 0, "w": W - SIDE_X, "h": SH,
+        "x": SIDE_X, "y": 0, "w": W - SIDE_X, "h": SY1,
         "action": URIAction(label="図書館", uri="https://lib.kobe-u.ac.jp/"),
     },
     {
         "label": "市バス",
-        "x": SIDE_X, "y": SH, "w": W - SIDE_X, "h": SH,
+        "x": SIDE_X, "y": SY1, "w": W - SIDE_X, "h": SY2 - SY1,
         "action": URIAction(label="市バス", uri="https://kotsu.city.kobe.lg.jp/"),
     },
     {
         "label": "うりぼーポータル",
-        "x": SIDE_X, "y": SH * 2, "w": W - SIDE_X, "h": SH,
+        "x": SIDE_X, "y": SY2, "w": W - SIDE_X, "h": SY3 - SY2,
         "action": URIAction(
             label="うりぼーポータル",
             uri="https://www.uriboportal.ofc.kobe-u.ac.jp/",
@@ -134,7 +138,7 @@ AREAS = [
     },
     {
         "label": "ヘルプ",
-        "x": SIDE_X, "y": SH * 3, "w": W - SIDE_X, "h": H - SH * 3,
+        "x": SIDE_X, "y": SY3, "w": W - SIDE_X, "h": H - SY3,
         "action": MessageAction(label="ヘルプ", text="ヘルプ"),
     },
 ]
