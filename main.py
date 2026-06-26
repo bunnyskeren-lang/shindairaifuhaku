@@ -63,7 +63,9 @@ except ImportError:
 
 CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or ""
+if not ADMIN_PASSWORD:
+    raise RuntimeError("環境変数 ADMIN_PASSWORD が未設定です")
 REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku.onrender.com")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
@@ -71,7 +73,10 @@ VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
-KYOYO_REQUIRED_CREDITS = int(os.environ.get("KYOYO_REQUIRED_CREDITS", "1"))
+try:
+    KYOYO_REQUIRED_CREDITS = int(os.environ.get("KYOYO_REQUIRED_CREDITS", "1"))
+except ValueError:
+    KYOYO_REQUIRED_CREDITS = 1
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 
@@ -111,7 +116,7 @@ def _verify_admin_token(token: str) -> bool:
 
 def check_admin(request: Request):
     if not _verify_admin_token(request.cookies.get(ADMIN_COOKIE, "")):
-        raise HTTPException(status_code=307, headers={"Location": f"/admin/login?next={request.url.path}"})
+        raise HTTPException(status_code=302, headers={"Location": f"/admin/login?next={request.url.path}"})
 
 templates = Jinja2Templates(directory="templates")
 
@@ -222,7 +227,6 @@ async def _reload_senmon_cache():
 def _invalidate_senmon_cache():
     global _senmon_name_to_group
     _senmon_name_to_group = {}
-    asyncio.create_task(_reload_senmon_cache())
 
 
 def _invalidate_review_cache():
@@ -283,8 +287,10 @@ async def send_push_notification(course_name: str, rating: int, ease_rating: str
         except WebPushException as e:
             if e.response is not None and e.response.status_code == 410:
                 expired_ids.append(sub.id)
-        except Exception:
-            pass
+            else:
+                await save_error_log(e, action="push_notification")
+        except Exception as e:
+            await save_error_log(e, action="push_notification")
     if expired_ids:
         async with AsyncSessionLocal() as session:
             await session.execute(_sa_delete(PushSubscription).where(PushSubscription.id.in_(expired_ids)))
@@ -366,7 +372,7 @@ async def admin_login_page(request: Request, next: str = "/admin"):
 async def admin_login(request: Request, password: str = Form(...), next: str = Form(default="/admin")):
     if not py_secrets.compare_digest(password.encode(), ADMIN_PASSWORD.encode()):
         return templates.TemplateResponse("admin/login.html", {"request": request, "next": next, "error": True})
-    safe_next = next if next.startswith("/admin") else "/admin"
+    safe_next = next if (next.startswith("/admin") and ".." not in next) else "/admin"
     response = RedirectResponse(safe_next, status_code=303)
     response.set_cookie(ADMIN_COOKIE, _make_admin_token(), httponly=True, samesite="strict")
     return response
@@ -522,21 +528,6 @@ async def _save_log_bg(user_id: str, direction: str, message: str) -> None:
     except Exception as exc:
         await save_error_log(exc, user_id=user_id, action=f"save_log_{direction}")
 
-
-async def save_log(session: AsyncSession, user_id: str, direction: str, message: str):
-    session.add(MessageLog(user_id=user_id, direction=direction, message=message))
-    if direction == "in":
-        now = datetime.now(timezone.utc)
-        stmt = (
-            pg_insert(UserActivity)
-            .values(user_id=user_id, action=message[:200], count=1, last_at=now)
-            .on_conflict_do_update(
-                index_elements=["user_id", "action"],
-                set_={"count": UserActivity.count + 1, "last_at": now},
-            )
-        )
-        await session.execute(stmt)
-    await session.commit()
 
 
 async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None):
@@ -891,12 +882,12 @@ VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
 
 
 def _variant_suffix(base: str, full: str) -> str:
-    if full.startswith(base):
+    if full.startswith(base) and len(full) > len(base):
         return full[len(base):]
     for b_ch, f_ch in zip(base, full):
         if b_ch != f_ch:
             return f_ch
-    return full[-1]
+    return full[-1] if full else ""
 
 
 def make_variant_selection_bubble(base_name: str, variant_names: list[str], reviewed_names: set[str] = frozenset()) -> FlexMessage:
@@ -1086,17 +1077,17 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     cls_faculty: dict[str, str] = {}
     for course in rows:
         name = course.name
-        classification = course.classification or "その他"
-        cls_category[classification] = course.category or ""
+        cls = course.classification or "その他"
+        cls_category[cls] = course.category or ""
         if course.faculty:
-            cls_faculty[classification] = course.faculty
+            cls_faculty[cls] = course.faculty
         if name in _sem_variant_names:
             base = _sem_base_for[name]
             if base not in seen_sem_base:
                 seen_sem_base.add(base)
                 items_sorted = sorted(_sem_bases[base], key=lambda x: x[1])
                 suffix = "/".join(sk for _, sk in items_sorted)
-                groups[classification].append((base, f"variant:{suffix}"))
+                groups[cls].append((base, f"variant:{suffix}"))
             continue
         if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
             base = name[:-1]
@@ -1105,7 +1096,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                 if base not in seen_base:
                     seen_base.add(base)
                     suffix = "/".join(variants)
-                    groups[classification].append((base, f"variant:{suffix}"))
+                    groups[cls].append((base, f"variant:{suffix}"))
                 continue
         if name in _num_variant_names:
             base = _num_base_for[name]
@@ -1116,9 +1107,9 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                     _m2.group(2) if (_m2 := _VNUM.match(n)) else str(sk)
                     for n, sk in nums_sorted
                 )
-                groups[classification].append((base, f"numvariant:{suffix}"))
+                groups[cls].append((base, f"numvariant:{suffix}"))
             continue
-        groups[classification].append((name, "single"))
+        groups[cls].append((name, "single"))
 
     def _cat_order(cls: str) -> int:
         return 0 if cls_category.get(cls, "") == "教養" else 1
@@ -1399,7 +1390,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         if not rows:
             return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
         items = [
-            {"rank": i, "name": name, "stars": stars(round(float(avg)))}
+            {"rank": i, "name": name, "stars": stars(math.floor(float(avg) + 0.5))}
             for i, (name, avg) in enumerate(rows, 1)
         ]
         _res = [FlexMessage(alt_text="🏆 人気の授業 TOP5", contents=make_ranking_bubble("🏆 人気の授業 TOP5", items))]
@@ -1673,9 +1664,11 @@ async def callback(request: Request):
     task = asyncio.create_task(_process_events(events))
 
     def _on_process_done(t: asyncio.Task):
-        if t.cancelled() or not t.exception():
+        if t.cancelled():
             return
-        asyncio.create_task(save_error_log(t.exception(), action="process_events_bg"))
+        exc = t.exception()
+        if exc:
+            asyncio.create_task(save_error_log(exc, action="process_events_bg"))
 
     task.add_done_callback(_on_process_done)
     return {"status": "ok"}
@@ -1947,7 +1940,7 @@ async def submit(
                     return _form_error("学籍番号が登録情報と一致しません")
 
         review = PendingReview(
-            submitter_name=submitter_name.strip()[:20],
+            submitter_name=submitter_name.strip()[:100],
             course_name=course_name.strip()[:200],
             rating=rating,
             ease_rating=ease_rating,
@@ -2084,7 +2077,6 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 select(PendingReview)
                 .where(PendingReview.course_name.in_(course_names))
                 .order_by(PendingReview.is_approved, PendingReview.created_at.desc())
-                .limit(500)
             )).scalars().all()
         else:
             reviews_raw = []
@@ -2206,10 +2198,14 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
 
 @app.post("/admin/reviews/cleanup")
 async def admin_reviews_cleanup(_: str = Depends(check_admin)):
+    # データ保護ルール: 承認済みレビューは削除しない。未承認レビューのみ孤立分を削除。
     async with AsyncSessionLocal() as session:
         course_names = (await session.execute(select(Course.name))).scalars().all()
         await session.execute(
-            delete(PendingReview).where(PendingReview.course_name.not_in(course_names))
+            delete(PendingReview).where(
+                PendingReview.course_name.not_in(course_names),
+                PendingReview.is_approved == False,
+            )
         )
         await session.commit()
     return RedirectResponse("/admin/courses", status_code=303)
@@ -2224,7 +2220,7 @@ async def migrate_third_language(_: str = Depends(check_admin)):
             select(Course).where(Course.name.contains("第三外国語"))
         )).scalars().all()
         for c in to_delete:
-            await session.execute(delete(PendingReview).where(PendingReview.course_name == c.name))
+            # データ保護ルール: レビューは削除せず course_name を新科目名にリダイレクトしない（孤立のまま保持）
             await session.execute(delete(CourseInstructor).where(CourseInstructor.course_id == c.id))
             await session.delete(c)
         for lang in LANGS:
@@ -2641,7 +2637,7 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
         if course:
-            await session.execute(delete(PendingReview).where(PendingReview.course_name == course.name))
+            # データ保護ルール: レビューは削除しない（孤立したレビューはDBに残す）
             await session.execute(delete(CourseInstructor).where(CourseInstructor.course_id == course_id))
             await session.delete(course)
             await session.commit()
@@ -2706,6 +2702,7 @@ async def api_course(course_id: int):
                     return (await s.execute(
                         select(PendingReview)
                         .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
+                        .order_by(PendingReview.created_at.desc())
                         .limit(50)
                     )).scalars().all()
 
@@ -2721,16 +2718,17 @@ async def api_course(course_id: int):
 
             async def _record_view():
                 async with AsyncSessionLocal() as s:
+                    _now = datetime.now(timezone.utc)
                     await s.execute(
                         pg_insert(CourseView).values(
                             course_id=course.id,
                             course_name=course.name,
                             view_count=1,
-                            last_viewed_at=datetime.now(timezone.utc),
+                            last_viewed_at=_now,
                         ).on_conflict_do_update(
                             index_elements=["course_id"],
                             set_={"view_count": CourseView.view_count + 1,
-                                  "last_viewed_at": datetime.now(timezone.utc)},
+                                  "last_viewed_at": _now},
                         )
                     )
                     await s.commit()
@@ -3178,7 +3176,7 @@ def _extract_seiseki_raw(text: str) -> dict:
     gaigo_courses: list[dict] = []
     senmon_courses: list[dict] = []
     current_sec = ''
-    course_re = _re.compile(r'^(?:＊\s+)?(.+?)\s+(\d+\.\d+)\s+(秀|優|良|可|不可|合格|認定)')
+    course_re = _re.compile(r'^(?:＊\s+)?(.+?)\s+(\d+(?:\.\d+)?)\s+(秀|優|良|可|不可|合格|認定)')
     for line in text.splitlines():
         sec_m = _re.search(r'【(.*?)】', line)
         if sec_m:
@@ -3469,6 +3467,7 @@ async def admin_keiei_set_group(course_id: int, request: Request, _: str = Depen
         course.senmon_group = group
         await session.commit()
     _invalidate_senmon_cache()
+    asyncio.create_task(_reload_senmon_cache())
     _invalidate_courses_cache()
     return JSONResponse({"ok": True})
 
