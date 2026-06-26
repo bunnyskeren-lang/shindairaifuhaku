@@ -117,6 +117,10 @@ async def init_db():
         ))
         await conn.execute(text(
             "INSERT INTO courses (name, classification, category, reading, term, credits, faculty, sort_order) "
-            "SELECT '研究指導', '専門科目', '専門', 'けんきゅうしどう', '通年', 8, '経営学部', 0 "
+            "SELECT '研究指導', '第3群科目', '専門', 'けんきゅうしどう', '通年', 8, '経営学部', 0 "
             "WHERE NOT EXISTS (SELECT 1 FROM courses WHERE name = '研究指導')"
+        ))
+        await conn.execute(text(
+            "UPDATE courses SET classification = '第3群科目', senmon_group = '第3群' "
+            "WHERE name = '研究指導' AND (classification = '専門科目' OR senmon_group IS NULL)"
         ))
