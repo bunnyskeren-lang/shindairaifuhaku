@@ -979,10 +979,12 @@ async function loadCredits() {
             const el = document.getElementById('earn-' + cat.id);
             if (el) el.textContent = 0;
           });
+          _creditData.sonota_base = 0;
           Object.entries(data.credits).forEach(([id, val]) => {
             const el = document.getElementById('earn-' + id);
             if (el) el.textContent = val;
           });
+          _creditData.sonota_base = data.credits.sonota || 0;
           _creditData._pdfLoaded = true;
           updateCredits();
           const btn = document.getElementById('credits-pdf-btn');
@@ -1042,9 +1044,14 @@ function renderCreditRows() {
 
 function updateCredits() {
   let totalEarned = 0;
+  let kyotsuEarned = 0;
   CREDIT_CATS.forEach(cat => {
-    const req    = parseInt(document.getElementById(`req-${cat.id}`)?.value)  || 0;
-    const earned = parseInt(document.getElementById(`earn-${cat.id}`)?.textContent) || 0;
+    const req = parseInt(document.getElementById(`req-${cat.id}`)?.value) || 0;
+    // sonota は DOM 値でなく base 値を使う（overflow の二重加算を防ぐ）
+    const earned = cat.id === 'sonota'
+      ? (_creditData.sonota_base || 0)
+      : (parseInt(document.getElementById(`earn-${cat.id}`)?.textContent) || 0);
+    if (cat.id === 'kyotsu') kyotsuEarned = earned;
     const remainEl = document.getElementById(`remain-${cat.id}`);
     if (remainEl) {
       if (req === 0) {
@@ -1060,6 +1067,23 @@ function updateCredits() {
     _creditData[cat.id].required = req;
     _creditData[cat.id].earned   = earned;
   });
+  // 共通専門基礎科目が6単位超えた分（上限2）をその他必要と認める科目へ
+  const kyotsuOverflow = Math.min(Math.max(0, kyotsuEarned - 6), 2);
+  if (kyotsuOverflow > 0) {
+    const sonotaBase = _creditData.sonota_base || 0;
+    const sonotaAdj  = sonotaBase + kyotsuOverflow;
+    const sonotaEl   = document.getElementById('earn-sonota');
+    if (sonotaEl) sonotaEl.textContent = sonotaAdj;
+    const sonotaReq  = parseInt(document.getElementById('req-sonota')?.value) || 0;
+    const sonotaRem  = document.getElementById('remain-sonota');
+    if (sonotaRem) {
+      if (sonotaReq === 0) { sonotaRem.textContent = ''; sonotaRem.className = 'credits-remain'; }
+      else if (sonotaAdj >= sonotaReq) { sonotaRem.textContent = '✓'; sonotaRem.className = 'credits-remain done'; }
+      else { sonotaRem.textContent = String(sonotaReq - sonotaAdj); sonotaRem.className = 'credits-remain'; }
+    }
+    totalEarned += kyotsuOverflow;
+    if (_creditData.sonota) _creditData.sonota.earned = sonotaAdj;
+  }
   document.getElementById('credits-total-earned').textContent = totalEarned;
   const totalReqEl = document.getElementById('credits-total-req');
   const totalReq   = parseInt(totalReqEl.value) || 0;
@@ -1128,6 +1152,7 @@ function applySeisekiResult(data) {
       if (el) el.textContent = val;
     });
     _creditData._pdfLoaded = true;
+    _creditData.sonota_base = data.credits.sonota || 0;
     if (data.raw) _creditData._raw = data.raw;
     updateCredits();
   }
