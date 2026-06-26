@@ -3339,20 +3339,6 @@ async def api_credit_requirements():
     ]
 
 
-@app.get("/api/credit_auto_count")
-async def api_credit_auto_count(uid: str):
-    async with AsyncSessionLocal() as session:
-        results = (await session.execute(
-            select(CategoryCourse.category_id, func.sum(CategoryCourse.credits).label("total"))
-            .join(SyllabusCourse, SyllabusCourse.name == CategoryCourse.course_name)
-            .join(UserCourse, and_(
-                UserCourse.syllabus_course_id == SyllabusCourse.id,
-                UserCourse.line_user_id == uid,
-            ))
-            .group_by(CategoryCourse.category_id)
-        )).all()
-    return {cat_id: float(total) for cat_id, total in results}
-
 
 # ── 時間割照合ページ ──────────────────────────────────────────────────────────
 
