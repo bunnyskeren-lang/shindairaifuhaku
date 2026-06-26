@@ -1001,6 +1001,7 @@ function renderCreditRows() {
   container.innerHTML = '';
   let currentGroup = null;
   let currentGrid  = null;
+  let senmonGrid   = null;
   CREDIT_CATS.forEach(cat => {
     if (cat.group !== currentGroup) {
       const hdr = document.createElement('div');
@@ -1011,6 +1012,7 @@ function renderCreditRows() {
       currentGrid.className = 'credits-grid';
       container.appendChild(currentGrid);
       currentGroup = cat.group;
+      if (cat.group === '専門科目') senmonGrid = currentGrid;
     }
     const req    = (_creditData[cat.id]?.required != null) ? _creditData[cat.id].required : cat.def;
     const earned = (_creditData[cat.id]?.earned   != null) ? _creditData[cat.id].earned   : 0;
@@ -1040,6 +1042,46 @@ function renderCreditRows() {
     }
     item.querySelector(`#req-${cat.id}`).addEventListener('input', updateCredits);
   });
+  // 第2群＋第3群＋グローバル＋初年次＋第1群＋関連科目＋その他 計98単位行
+  const row98 = document.createElement('div');
+  row98.className = 'credits-row-item';
+  row98.style.cssText = 'border-top:2px solid #c7d2fe;margin-top:8px;padding-top:8px';
+  row98.innerHTML = `
+    <span class="credits-cat-name" style="font-weight:600;font-size:11px;color:#4338ca">専門98単位（選択必修）合計</span>
+    <div class="credits-inputs">
+      <div class="credits-mini-field">
+        <div class="credits-mini-label">必要</div>
+        <div class="credits-earn-val">98</div>
+      </div>
+      <div class="credits-mini-field">
+        <div class="credits-mini-label">取得</div>
+        <div class="credits-earn-val" id="earn-combined-98">0</div>
+      </div>
+      <div class="credits-remain" id="remain-combined-98"></div>
+    </div>
+  `;
+  container.appendChild(row98);
+  // 第2群＋第3群＋グローバル 合計行
+  if (senmonGrid) {
+    const row = document.createElement('div');
+    row.className = 'credits-row-item';
+    row.style.cssText = 'border-top:1px dashed #e2e8f0;margin-top:4px;padding-top:8px;grid-column:1/-1';
+    row.innerHTML = `
+      <span class="credits-cat-name" style="font-weight:600;font-size:11px;color:#475569">第2群＋第3群＋グローバル計</span>
+      <div class="credits-inputs">
+        <div class="credits-mini-field">
+          <div class="credits-mini-label">必要</div>
+          <div class="credits-earn-val">55</div>
+        </div>
+        <div class="credits-mini-field">
+          <div class="credits-mini-label">取得</div>
+          <div class="credits-earn-val" id="earn-combined-senmon">0</div>
+        </div>
+        <div class="credits-remain" id="remain-combined-senmon"></div>
+      </div>
+    `;
+    senmonGrid.appendChild(row);
+  }
 }
 
 function updateCredits() {
@@ -1083,6 +1125,27 @@ function updateCredits() {
     }
     totalEarned += kyotsuOverflow;
     if (_creditData.sonota) _creditData.sonota.earned = sonotaAdj;
+  }
+  // 第2群＋第3群＋グローバル 合計チェック（totalEarned には加算しない）
+  const combinedEarned = (_creditData.senmon2?.earned || 0) + (_creditData.senmon3?.earned || 0) + (_creditData.global?.earned || 0);
+  const combinedEl = document.getElementById('earn-combined-senmon');
+  if (combinedEl) combinedEl.textContent = combinedEarned;
+  const combinedRem = document.getElementById('remain-combined-senmon');
+  if (combinedRem) {
+    if (combinedEarned >= 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain done'; }
+    else { combinedRem.textContent = String(55 - combinedEarned); combinedRem.className = 'credits-remain'; }
+  }
+  // 専門98単位合計チェック（初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他）
+  const combined98 = (_creditData.shonen?.earned || 0) + (_creditData.senmon1?.earned || 0)
+    + (_creditData.senmon2?.earned || 0) + (_creditData.global?.earned || 0)
+    + (_creditData.senmon3?.earned || 0) + (_creditData.kanren?.earned || 0)
+    + (_creditData.sonota?.earned || 0);
+  const el98 = document.getElementById('earn-combined-98');
+  if (el98) el98.textContent = combined98;
+  const rem98 = document.getElementById('remain-combined-98');
+  if (rem98) {
+    if (combined98 >= 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain done'; }
+    else { rem98.textContent = String(98 - combined98); rem98.className = 'credits-remain'; }
   }
   document.getElementById('credits-total-earned').textContent = totalEarned;
   const totalReqEl = document.getElementById('credits-total-req');
