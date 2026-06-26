@@ -501,6 +501,7 @@ let myCourseIds = new Set();
 let drawerCourses = [];
 let currentFilter = "all";
 let currentSlot = null;
+const _slotCache = new Map();
 let currentQuarter = localStorage.getItem('currentQuarter') || "3";
 
 function makeSyllabusUrl(code) {
@@ -735,17 +736,25 @@ async function openDrawer(day, period) {
   currentSlot = { day, period };
   const dayLabel = day === "集" ? "集中講義" : `${day}曜${period}限`;
   document.getElementById("drawer-title").textContent = dayLabel;
-  document.getElementById("drawer-sub").textContent = "読み込み中...";
-  document.getElementById("course-list").innerHTML = "";
-
   document.getElementById("overlay").classList.add("open");
   document.getElementById("drawer").classList.add("open");
 
-  const res = await fetch(
-    `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?user_id=${encodeURIComponent(userId)}`
-  );
-  const data = await res.json();
-  drawerCourses = data.courses;
+  const cacheKey = `${day}_${period}`;
+  if (_slotCache.has(cacheKey)) {
+    drawerCourses = _slotCache.get(cacheKey);
+    document.getElementById("drawer-sub").textContent = "";
+    document.getElementById("course-list").innerHTML = "";
+  } else {
+    document.getElementById("drawer-sub").textContent = "読み込み中...";
+    document.getElementById("course-list").innerHTML = "";
+    const res = await fetch(
+      `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?user_id=${encodeURIComponent(userId)}`
+    );
+    const data = await res.json();
+    drawerCourses = data.courses;
+    _slotCache.set(cacheKey, drawerCourses);
+    document.getElementById("drawer-sub").textContent = "";
+  }
 
   setFilter(currentQuarter);
 }
@@ -866,6 +875,7 @@ async function toggleRegister(btn, course) {
       course.registered = true;
       myCourseIds.add(course.id);
     }
+    _slotCache.clear();
     await loadMyCourses();
     updateIntensiveSection();
     if (currentSlot && currentSlot.day !== "集") {

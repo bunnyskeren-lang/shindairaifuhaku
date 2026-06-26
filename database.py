@@ -76,6 +76,9 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS note TEXT"
         ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_course_slots_day_period ON course_slots (day_of_week, period)"
+        ))
         defaults = [
             ("kyoyo_kei",   12, "人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。"),
             ("kyoyo_kiban",  4, "基礎教養科目（情報リテラシー等）と情報科目を合算したもの。"),

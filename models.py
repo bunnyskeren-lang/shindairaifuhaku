@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, func, UniqueConstraint
+from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, func, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -163,6 +163,7 @@ class TimetableProfile(Base):
 
 class CourseSlot(Base):
     __tablename__ = "course_slots"
+    __table_args__ = (Index("ix_course_slots_day_period", "day_of_week", "period"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     syllabus_course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

@@ -2975,21 +2975,17 @@ async def api_timetable_profile_set(request: Request):
 @app.get("/api/timetable/slots/{day}/{period}")
 async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
     async with AsyncSessionLocal() as session:
-        slots = (await session.execute(
-            select(CourseSlot).where(
-                CourseSlot.day_of_week == day,
-                CourseSlot.period == period,
-            )
-        )).scalars().all()
-        course_ids = [s.syllabus_course_id for s in slots]
-        if not course_ids:
-            return {"courses": []}
-
         courses = (await session.execute(
-            select(SyllabusCourse).where(SyllabusCourse.id.in_(course_ids))
+            select(SyllabusCourse)
+            .join(CourseSlot, CourseSlot.syllabus_course_id == SyllabusCourse.id)
+            .where(CourseSlot.day_of_week == day, CourseSlot.period == period)
             .order_by(SyllabusCourse.term, SyllabusCourse.name)
         )).scalars().all()
 
+        if not courses:
+            return {"courses": []}
+
+        course_ids = [c.id for c in courses]
         registered_ids: set[int] = set()
         if user_id:
             regs = (await session.execute(
