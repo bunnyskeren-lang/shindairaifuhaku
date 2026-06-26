@@ -12,6 +12,7 @@
 .gg  { background:#f3e8ff; color:#7e22ce; }
 .gin { background:#fee2e2; color:#b91c1c; }
 .gna { background:#f1f5f9; color:#94a3b8; }
+.auto-badge { font-style:italic; opacity:.75; }
 select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 .req-input { width:60px; padding:4px 6px; font-size:13px; text-align:center; margin:0; }
 .note-input { width:100%; padding:5px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px;
@@ -54,26 +55,29 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 <!-- 科目群マッピング -->
 <div class="card">
   <h2 style="margin-top:0">📚 専門科目 群設定
-    <span style="font-size:11px;font-weight:normal;color:#6b7280">（空白 = コードの自動分類を使用）</span>
+    <span style="font-size:11px;font-weight:normal;color:#6b7280">（斜体 = 自動分類、手動設定で上書き可）</span>
   </h2>
   <table>
     <tr><th>科目名</th><th>担当教員</th><th>群</th></tr>
     {% for c in courses %}
+    {% set effective = c.senmon_group or auto_groups.get(c.id, '') %}
+    {% set is_auto = not c.senmon_group %}
     <tr>
       <td style="font-size:13px">{{ c.name }}
         {% if c.term %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term }}</span>{% endif %}
       </td>
       <td style="font-size:12px;color:#6b7280">{{ c.instructor }}</td>
       <td>
-        <select class="grp-sel" data-id="{{ c.id }}" onchange="setGroup(this)">
-          <option value="">（自動）</option>
+        <select class="grp-sel" data-id="{{ c.id }}" data-auto="{{ 'true' if is_auto else 'false' }}" onchange="setGroup(this)">
+          <option value="">（自動に戻す）</option>
           {% for g in senmon_groups %}
-          <option value="{{ g }}" {% if c.senmon_group == g %}selected{% endif %}>{{ g }}</option>
+          <option value="{{ g }}" {% if effective == g %}selected{% endif %}>{{ g }}</option>
           {% endfor %}
         </select>
-        <span class="group-badge {% if c.senmon_group == '第1群' %}g1{% elif c.senmon_group == '第2群' %}g2{% elif c.senmon_group == '第3群' %}g3{% elif c.senmon_group == 'グローバル' %}gg{% elif c.senmon_group == '初年次' %}gin{% else %}gna{% endif %}"
-              id="badge-{{ c.id }}">
-          {{ c.senmon_group or '自動' }}
+        {% set bc = {'第1群':'g1','第2群':'g2','第3群':'g3','グローバル':'gg','初年次':'gin'} %}
+        <span class="group-badge {{ bc.get(effective, 'gna') }}{% if is_auto %} auto-badge{% endif %}"
+              id="badge-{{ c.id }}" data-group="{{ c.senmon_group or '' }}">
+          {{ effective or '不明' }}
         </span>
       </td>
     </tr>
@@ -101,8 +105,15 @@ async function setGroup(sel) {
       body: JSON.stringify({ group: group || null }),
     });
     if (!res.ok) throw new Error(res.status);
-    badge.textContent = group || '自動';
-    badge.className = 'group-badge ' + (BADGE_CLASS[group] || 'gna');
+    badge.dataset.group = group;
+    sel.dataset.auto = group ? 'false' : 'true';
+    if (group) {
+      badge.textContent = group;
+      badge.className = 'group-badge ' + (BADGE_CLASS[group] || 'gna');
+    } else {
+      // 自動に戻す → ページをリロードして最新の自動分類を反映
+      location.reload();
+    }
   } catch(e) {
     alert('保存に失敗しました');
     sel.value = badge.dataset.group || '';

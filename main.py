@@ -3298,12 +3298,14 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
         reqs = (await session.execute(select(CreditRequirement))).scalars().all()
     req_map       = {r.category_id: r.required_credits for r in reqs}
     req_map_notes = {r.category_id: (r.note or "") for r in reqs}
+    auto_groups   = {c.id: _classify_senmon(c.name) for c in courses}
     return templates.TemplateResponse("admin/keiei.html", {
         "request": request,
         "courses": courses,
         "senmon_groups": _SENMON_GROUPS,
         "req_map": req_map,
         "req_map_notes": req_map_notes,
+        "auto_groups": auto_groups,
     })
 
 
