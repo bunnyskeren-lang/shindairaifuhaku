@@ -115,6 +115,12 @@ tbody td:first-child {
 .course-info { flex: 1; min-width: 0; }
 .course-name { font-size: 13px; font-weight: 600; color: #1e293b; }
 .course-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.earned-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  color: #15803d; background: #dcfce7; border: 1px solid #bbf7d0;
+  padding: 1px 6px; border-radius: 4px; margin-left: 6px;
+  vertical-align: middle;
+}
 
 .reg-btn {
   flex-shrink: 0; font-size: 12px; font-weight: 600;
@@ -801,16 +807,26 @@ function setFilter(q) {
   renderCourseList(filtered);
 }
 
+function _getPdfCourseNames() {
+  const raw = _creditData._raw;
+  if (!raw) return new Set();
+  const names = new Set();
+  (raw.gaigo_courses || []).forEach(c => names.add(c.name));
+  (raw.senmon_courses || []).forEach(c => names.add(c.name));
+  return names;
+}
+
 function makeCourseItem(c) {
   const item = document.createElement("div");
   item.className = "course-item";
   item.dataset.id = c.id;
 
+  const isEarned = _getPdfCourseNames().has(c.name);
   const info = document.createElement("div");
   info.className = "course-info";
   const sylUrl = makeSyllabusUrl(c.timetable_code);
   info.innerHTML = `
-    <div class="course-name">${esc(c.name)}</div>
+    <div class="course-name">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
     <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
     ${sylUrl ? `<a href="${sylUrl}" target="_blank" class="syllabus-link">シラバス →</a>` : ''}
   `;
