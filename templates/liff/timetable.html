@@ -163,6 +163,21 @@ tbody td:first-child {
   color: #fff;
 }
 
+/* ── CAP バー ── */
+.cap-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px 8px;
+  font-size: 14px; color: #374151;
+}
+.cap-label {
+  font-weight: 700; font-size: 13px;
+  color: {% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %};
+  background: {% if IS_DEV %}#fff7ed{% else %}#eef2ff{% endif %};
+  padding: 2px 8px; border-radius: 999px;
+}
+.cap-count { font-weight: 700; font-size: 16px; }
+.cap-slash { color: #9ca3af; font-size: 14px; }
+
 /* ── 集中講義セクション ── */
 .intensive-wrap {
   padding: 12px 12px 20px;
@@ -384,6 +399,11 @@ tbody td:first-child {
     </thead>
     <tbody id="grid-body"></tbody>
   </table>
+</div>
+
+<div class="cap-bar">
+  <span class="cap-label">CAP</span>
+  <span class="cap-count" id="cap-count">0</span><span class="cap-slash">/49</span>
 </div>
 
 <div class="intensive-wrap">
@@ -616,7 +636,9 @@ async function loadMyCourses() {
   myCourseIds = new Set(data.courses.map(c => c.id));
   window._myCourses = {};
   window._myIntensiveCourses = [];
+  let capTotal = 0;
   for (const c of data.courses) {
+    capTotal += (c.credits || 2);
     for (const s of c.slots) {
       if (s.day === "集") {
         if (!window._myIntensiveCourses.find(x => x.id === c.id)) {
@@ -629,6 +651,8 @@ async function loadMyCourses() {
       }
     }
   }
+  const capEl = document.getElementById("cap-count");
+  if (capEl) capEl.textContent = capTotal;
 }
 
 function selectQuarter(q) {

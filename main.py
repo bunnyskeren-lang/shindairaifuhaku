@@ -3014,6 +3014,18 @@ async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
         }
 
 
+def _credits_from_term(term: str | None) -> int:
+    if not term:
+        return 2
+    if "クォーター" in term:
+        return 1
+    if term in ("前期", "後期") or "セメスター" in term:
+        return 2
+    if "通年" in term:
+        return 4
+    return 2
+
+
 @app.get("/api/timetable/my")
 async def api_timetable_my(user_id: str = Query("")):
     if not user_id:
@@ -3034,6 +3046,7 @@ async def api_timetable_my(user_id: str = Query("")):
                     "name": sc.name,
                     "instructor": sc.instructor,
                     "term": sc.term,
+                    "credits": _credits_from_term(sc.term),
                     "slots": [],
                 }
             result[sc.id]["slots"].append({"day": slot.day_of_week, "period": slot.period})
