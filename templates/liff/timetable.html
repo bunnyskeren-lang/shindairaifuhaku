@@ -945,21 +945,35 @@ async function loadCredits() {
     const btn = document.getElementById('credits-pdf-btn');
     if (btn) btn.innerHTML = '✅ PDF読込済（再読込）';
   }
-  // PDFが読込済で生データがある場合、最新の分類設定で再計算
-  if (_creditData._pdfLoaded && _creditData._raw) {
+  // サーバーに保存された raw から最新ロジックで再分類（バグ修正時に自動反映される）
+  if (userId) {
     try {
-      const res = await fetch(BASE_URL + '/api/reclassify_seiseki', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw: _creditData._raw }),
-      });
+      // 既存ユーザーの移行: localStorage に _raw があれば DB に保存して削除
+      if (_creditData._raw) {
+        fetch(BASE_URL + '/api/seiseki/save_raw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: userId, raw: _creditData._raw }),
+        }).catch(() => {});
+        delete _creditData._raw;
+      }
+      const res = await fetch(`${BASE_URL}/api/seiseki/credits?uid=${encodeURIComponent(userId)}`);
       if (res.ok) {
-        const { credits } = await res.json();
-        Object.entries(credits).forEach(([id, val]) => {
-          const el = document.getElementById('earn-' + id);
-          if (el) el.textContent = val;
-        });
-        updateCredits();
+        const data = await res.json();
+        if (data.credits) {
+          CREDIT_CATS.forEach(cat => {
+            const el = document.getElementById('earn-' + cat.id);
+            if (el) el.textContent = 0;
+          });
+          Object.entries(data.credits).forEach(([id, val]) => {
+            const el = document.getElementById('earn-' + id);
+            if (el) el.textContent = val;
+          });
+          _creditData._pdfLoaded = true;
+          updateCredits();
+          const btn = document.getElementById('credits-pdf-btn');
+          if (btn) btn.innerHTML = '✅ PDF読込済（再読込）';
+        }
       }
     } catch(e) {}
   }
@@ -1069,7 +1083,10 @@ async function handleSeisekiFile(file) {
   try {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(BASE_URL + '/api/parse_seiseki', { method: 'POST', body: fd });
+    const res = await fetch(BASE_URL + '/api/parse_seiseki', {
+      method: 'POST', body: fd,
+      headers: userId ? { 'X-Line-User-Id': userId } : {},
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       alert('エラー: ' + (err.detail || res.status));

@@ -182,6 +182,14 @@ class CreditRequirement(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
 
 
+class UserSeisekiRaw(Base):
+    __tablename__ = "user_seiseki_raw"
+
+    line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    raw_json: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class CategoryCourse(Base):
     __tablename__ = "category_courses"
     __table_args__ = (UniqueConstraint("category_id", "course_name"),)

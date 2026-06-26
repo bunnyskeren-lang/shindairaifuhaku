@@ -50,7 +50,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal, engine
-from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, CreditRequirement, CategoryCourse
+from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, CreditRequirement, CategoryCourse, UserSeisekiRaw
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -3250,7 +3250,7 @@ def _parse_seiseki_pdf(data: bytes) -> dict:
 
 
 @app.post("/api/parse_seiseki")
-async def api_parse_seiseki(file: UploadFile = File(...)):
+async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
     if not _PDFPLUMBER_OK:
         raise HTTPException(status_code=503, detail="PDF parsing not available")
     if not file.filename.lower().endswith(".pdf"):
@@ -3262,6 +3262,16 @@ async def api_parse_seiseki(file: UploadFile = File(...)):
         result = _parse_seiseki_pdf(data)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"PDF の解析に失敗しました: {e}")
+    uid = request.headers.get("X-Line-User-Id", "").strip()
+    if uid:
+        async with AsyncSessionLocal() as session:
+            existing = await session.get(UserSeisekiRaw, uid)
+            raw_json = json.dumps(result["raw"], ensure_ascii=False)
+            if existing:
+                existing.raw_json = raw_json
+            else:
+                session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_json))
+            await session.commit()
     return result
 
 
@@ -3272,6 +3282,34 @@ async def api_reclassify_seiseki(request: Request):
     if not raw:
         raise HTTPException(status_code=400, detail="raw data required")
     return {"credits": _classify_seiseki_raw(raw)}
+
+
+@app.get("/api/seiseki/credits")
+async def api_seiseki_credits(uid: str):
+    async with AsyncSessionLocal() as session:
+        row = await session.get(UserSeisekiRaw, uid)
+    if not row:
+        return {}
+    raw = json.loads(row.raw_json)
+    return {"credits": _classify_seiseki_raw(raw)}
+
+
+@app.post("/api/seiseki/save_raw")
+async def api_seiseki_save_raw(request: Request):
+    body = await request.json()
+    uid = body.get("uid", "").strip()
+    raw = body.get("raw")
+    if not uid or not raw:
+        raise HTTPException(status_code=400, detail="uid and raw required")
+    async with AsyncSessionLocal() as session:
+        existing = await session.get(UserSeisekiRaw, uid)
+        raw_json = json.dumps(raw, ensure_ascii=False)
+        if existing:
+            existing.raw_json = raw_json
+        else:
+            session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_json))
+        await session.commit()
+    return {"ok": True}
 
 
 @app.get("/api/credit_requirements")

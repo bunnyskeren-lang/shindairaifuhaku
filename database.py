@@ -30,7 +30,7 @@ class Base(DeclarativeBase):
 
 
 async def init_db():
-    from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, TimetableProfile, CreditRequirement, CategoryCourse  # noqa: F401
+    from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, TimetableProfile, CreditRequirement, CategoryCourse, UserSeisekiRaw  # noqa: F401
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
