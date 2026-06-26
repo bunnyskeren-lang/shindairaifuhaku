@@ -73,13 +73,23 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE courses ADD COLUMN IF NOT EXISTS senmon_group VARCHAR(20)"
         ))
+        await conn.execute(text(
+            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS note TEXT"
+        ))
         defaults = [
-            ("kyoyo_kei", 12), ("kyoyo_kiban", 4), ("gaigo1", 4), ("gaigo2", 4),
-            ("kyotsu", 6), ("shonen", 1), ("senmon1", 6), ("senmon2", 12),
-            ("global", 4), ("senmon3", 0),
+            ("kyoyo_kei",   12, "人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。"),
+            ("kyoyo_kiban",  4, "基礎教養科目（情報リテラシー等）と情報科目を合算したもの。"),
+            ("gaigo1",       4, "Academic English Communication / Literacy など英語科目が対象。"),
+            ("gaigo2",       4, "ドイツ語・フランス語・中国語・韓国語・ロシア語など第二外国語が対象。"),
+            ("kyotsu",       6, "全学部共通の専門基礎科目。成績表の「共通専門基礎科目」欄の合計。"),
+            ("shonen",       1, "1年次必修の初年次セミナー（2単位）。必要単位数は1科目=2単位。"),
+            ("senmon1",      6, "経営学基礎論・会計学基礎論・市場システム基礎論の3科目（各2単位・計6単位）。"),
+            ("senmon2",     12, "経営管理・経営戦略・簿記・財務会計・マーケティングなど第2群の専門科目。"),
+            ("global",       4, "英語で開講される専門科目・外国書講読・外国文献講義が対象。"),
+            ("senmon3",      0, "第1・2群・グローバル以外の専門科目（人的資源管理・証券市場など）。PDFから自動計算。"),
         ]
-        for cat_id, req in defaults:
+        for cat_id, req, note in defaults:
             await conn.execute(text(
-                "INSERT INTO credit_requirements (category_id, required_credits) "
-                "VALUES (:cat, :req) ON CONFLICT (category_id) DO NOTHING"
-            ), {"cat": cat_id, "req": req})
+                "INSERT INTO credit_requirements (category_id, required_credits, note) "
+                "VALUES (:cat, :req, :note) ON CONFLICT (category_id) DO NOTHING"
+            ), {"cat": cat_id, "req": req, "note": note})

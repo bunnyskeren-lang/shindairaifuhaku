@@ -399,7 +399,7 @@ tbody td:first-child {
     <div class="credits-divider"></div>
     <div class="credits-total">
       <span>合計</span>
-      <span><strong id="credits-total-earned">0</strong> / <span id="credits-total-req">0</span> 単位</span>
+      <span><strong id="credits-total-earned">0</strong> / <input type="number" id="credits-total-req" class="credits-mini-input" style="width:46px;display:inline-block;vertical-align:baseline;font-size:13px;font-weight:700" min="0" max="999" value="0"> 単位</span>
     </div>
     <div class="credits-progress-wrap">
       <div class="credits-progress-bar" id="credits-bar"></div>
@@ -901,9 +901,12 @@ async function loadCreditRequirements() {
     const res = await fetch(BASE_URL + '/api/credit_requirements');
     if (!res.ok) return;
     const data = await res.json();
-    data.forEach(({category_id, required_credits}) => {
+    data.forEach(({category_id, required_credits, note}) => {
       const cat = CREDIT_CATS.find(c => c.id === category_id);
-      if (cat) cat.def = required_credits;
+      if (cat) {
+        cat.def = required_credits;
+        if (note !== undefined) cat.note = note;
+      }
     });
   } catch(e) { /* ハードコード値にフォールバック */ }
 
@@ -931,6 +934,12 @@ async function loadCredits() {
   await loadCreditRequirements();
   _creditData = JSON.parse(localStorage.getItem('credit_data') || '{}');
   renderCreditRows();
+  // Restore or default total required credits
+  const totalReqEl = document.getElementById('credits-total-req');
+  if (totalReqEl) {
+    totalReqEl.value = _creditData._totalReq != null ? _creditData._totalReq : 124;
+    totalReqEl.addEventListener('input', updateCredits);
+  }
   updateCredits();
   // Restore GPA if previously parsed
   if (_creditData._gpa?.value != null) {
@@ -983,7 +992,7 @@ function renderCreditRows() {
 }
 
 function updateCredits() {
-  let totalReq = 0, totalEarned = 0;
+  let totalEarned = 0;
   CREDIT_CATS.forEach(cat => {
     const req    = parseInt(document.getElementById(`req-${cat.id}`)?.value)  || 0;
     const earned = parseInt(document.getElementById(`earn-${cat.id}`)?.value) || 0;
@@ -997,14 +1006,15 @@ function updateCredits() {
         remainEl.textContent = String(req - earned); remainEl.className = 'credits-remain';
       }
     }
-    totalReq    += req;
     totalEarned += earned;
     if (!_creditData[cat.id]) _creditData[cat.id] = {};
     _creditData[cat.id].required = req;
     _creditData[cat.id].earned   = earned;
   });
   document.getElementById('credits-total-earned').textContent = totalEarned;
-  document.getElementById('credits-total-req').textContent    = totalReq;
+  const totalReqEl = document.getElementById('credits-total-req');
+  const totalReq   = parseInt(totalReqEl.value) || 0;
+  _creditData._totalReq = totalReq;
   const bar     = document.getElementById('credits-bar');
   const summary = document.getElementById('credits-summary');
   const pct     = totalReq > 0 ? Math.min(100, Math.round(totalEarned / totalReq * 100)) : 0;

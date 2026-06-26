@@ -175,6 +175,7 @@ class CreditRequirement(Base):
 
     category_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     required_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
 
 
 class UserCourse(Base):

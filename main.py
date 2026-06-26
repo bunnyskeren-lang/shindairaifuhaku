@@ -3284,7 +3284,7 @@ async def api_reclassify_seiseki(request: Request):
 async def api_credit_requirements():
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(select(CreditRequirement))).scalars().all()
-    return [{"category_id": r.category_id, "required_credits": r.required_credits} for r in rows]
+    return [{"category_id": r.category_id, "required_credits": r.required_credits, "note": r.note or ""} for r in rows]
 
 
 # ── 経営学部 管理ページ ────────────────────────────────────────────────────────
@@ -3300,12 +3300,14 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
             .order_by(Course.classification, Course.sort_order, Course.name)
         )).scalars().all()
         reqs = (await session.execute(select(CreditRequirement))).scalars().all()
-    req_map = {r.category_id: r.required_credits for r in reqs}
+    req_map       = {r.category_id: r.required_credits for r in reqs}
+    req_map_notes = {r.category_id: (r.note or "") for r in reqs}
     return templates.TemplateResponse("admin/keiei.html", {
         "request": request,
         "courses": courses,
         "senmon_groups": _SENMON_GROUPS,
         "req_map": req_map,
+        "req_map_notes": req_map_notes,
     })
 
 
@@ -3343,5 +3345,10 @@ async def admin_keiei_update_requirements(request: Request, _: str = Depends(che
                     row.required_credits = credits
                 else:
                     session.add(CreditRequirement(category_id=cat_id, required_credits=credits))
+            elif key.startswith("note_"):
+                cat_id = key[5:]
+                row = await session.get(CreditRequirement, cat_id)
+                if row:
+                    row.note = val.strip() or None
         await session.commit()
     return RedirectResponse("/admin/keiei", status_code=303)

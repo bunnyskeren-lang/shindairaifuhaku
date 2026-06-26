@@ -14,6 +14,9 @@
 .gna { background:#f1f5f9; color:#94a3b8; }
 select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 .req-input { width:60px; padding:4px 6px; font-size:13px; text-align:center; margin:0; }
+.note-input { width:100%; padding:5px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px;
+  resize:vertical; min-height:48px; font-family:inherit; color:#374151; }
+.note-input:focus { outline:none; border-color:#6366f1; }
 {% endblock %}
 
 {% block content %}
@@ -23,7 +26,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
   <h2 style="margin-top:0">📊 単位要件（必要単位数）</h2>
   <form method="post" action="/admin/keiei/credit_requirements/update">
     <table>
-      <tr><th>カテゴリ</th><th>必要単位</th></tr>
+      <tr><th>カテゴリ</th><th style="width:80px">必要単位</th><th>ⓘ 注記テキスト</th></tr>
       {% set labels = {
         'kyoyo_kei':'系科目（人文・自然・社会・総合）',
         'kyoyo_kiban':'基盤系',
@@ -40,6 +43,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
       <tr>
         <td>{{ label }}</td>
         <td><input type="number" class="req-input" name="req_{{ cat_id }}" value="{{ req_map.get(cat_id, 0) }}" min="0" max="200"></td>
+        <td><textarea class="note-input" name="note_{{ cat_id }}" placeholder="（注記なし）">{{ req_map_notes.get(cat_id, '') }}</textarea></td>
       </tr>
       {% endfor %}
     </table>
