@@ -31,10 +31,6 @@
 | **dev** (shindairaifuhaku-dev) | `shindairaifuhaku-dev` | `git push origin dev:shindairaifuhaku-dev` |
 | **本番** (shindairaifuhaku) | `shindairaifuhaku-prod` | `git push origin dev:shindairaifuhaku-prod` |
 
-- ローカル作業ブランチは `dev`
-- devへのデプロイは必ず `git push origin dev:shindairaifuhaku-dev`
-- 本番へのデプロイは必ず `git push origin dev:shindairaifuhaku-prod`（明示的な指示がある時のみ）
-
 ## setup_richmenu.py の実行ルール
 
 - **必ず `--env` 引数を指定して実行すること**
@@ -42,21 +38,6 @@
   - 本番: `python setup_richmenu.py --env prod`  → `programing files/.env` を使用（確認プロンプトあり）
 - `--env prod` は**ユーザーから明示的に「本番のリッチメニューを更新して」と言われた場合のみ**実行すること
 - `--env dev` はユーザーの許可のもとで自由に実行してよい
-
-## SQLAlchemy async セッションのルール
-
-**同一 `AsyncSession` オブジェクトで `asyncio.gather` を使った並行クエリは禁止。**
-
-```python
-# NG: 同一 session で並行実行 → InvalidRequestError / Internal Server Error
-results = await asyncio.gather(session.execute(q1), session.execute(q2))
-
-# OK: 順次実行
-r1 = (await session.execute(q1)).all()
-r2 = (await session.execute(q2)).all()
-```
-
-複数クエリを並行したい場合は、クエリごとに別の `async with AsyncSessionLocal() as session:` ブロックを使うこと。
 
 ## モデル変更時のルール
 
@@ -198,24 +179,143 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 - `--also-courses` を付けると `courses` テーブル（LINE bot用）にも登録
 - `--classification` / `--faculty` で courses の分類・学部名を指定
 
-## 経営学部 科目ナンバリングコード（2026年度）
+---
 
-経営学部のナンバリングコードは `B1BB___` の形式（1-2桁=B1, 3-4桁=BB, 5-7桁=分類コード）。
+## プロジェクト構成
 
-5-7桁の値と科目分類の対応：
+### 技術スタック
 
-| 5-7桁 | 分類 |
-|-------|------|
-| `100` | 第1群科目 |
-| `101` | 第1群科目（初年次セミナー） |
-| `202` | 第2群科目 |
-| `300` | 第3群科目（①〜⑥を除く一般） |
-| `103` | 第3群科目（⑤会計プロフェッショナル育成プログラム / ⑥経営データ科学特別学修プログラム） |
-| `203` | グローバル科目群 / 他学部生向け専門科目 |
-| `303` | グローバル科目群 / 他学部生向け専門科目 |
-| `204` | 経営学部専門科目（他学部生向け区分） |
-| `400` | 研究指導 |
-| `403` | 卒業論文 / 上級科目 |
+| 分類 | 技術 |
+|------|------|
+| 言語 | Python 3.12 |
+| Webフレームワーク | FastAPI + Uvicorn |
+| ORM | SQLAlchemy 2.0（async / asyncpg） |
+| DB | PostgreSQL（Supabase） |
+| テンプレート | Jinja2 |
+| LINE連携 | line-bot-sdk v3（`linebot.v3`） |
+| PDF解析 | pdfplumber（成績表パース） |
+| よみがな生成 | pykakasi |
+| プッシュ通知 | pywebpush（VAPID） |
+| ホスティング | Render（Web Service） |
 
-- 高度教養科目はナンバリングコードから判定不可（シラバス上は「高度教養」と記載されるが、コードに一対一対応なし）
-- `syllabus_courses` テーブルの `numbering_code` カラムにコードが格納されている
+### ディレクトリ構成
+
+```
+shindairaifuhaku/          ← Renderがデプロイするルート
+├── main.py                ← アプリ本体（約3500行、全ルートを含む）
+├── models.py              ← SQLAlchemy ORMモデル定義（17テーブル）
+├── database.py            ← DBエンジン生成・init_db()（マイグレーション含む）
+├── requirements.txt
+├── Procfile               ← "web: uvicorn main:app ..."
+├── runtime.txt            ← "python-3.12.0"
+├── templates/
+│   ├── admin/
+│   │   ├── base.html      ← 管理画面共通レイアウト（ナビ・ローディング・確認モーダル）
+│   │   ├── courses.html   ← 科目管理（追加・編集・削除・教員管理）
+│   │   ├── reviews.html   ← レビュー承認・却下
+│   │   ├── keiei.html     ← 経営学部専用（単位要件・専門群分類）
+│   │   ├── logs.html      ← メッセージログ
+│   │   ├── users.html     ← ユーザー一覧
+│   │   ├── errors.html    ← エラーログ
+│   │   ├── activity.html  ← アクティビティ統計
+│   │   ├── usage_stats.html   ← 利用統計
+│   │   ├── richmenu.html      ← リッチメニュータップ統計
+│   │   ├── timetable_check.html ← 時間割照合
+│   │   ├── course_views.html  ← 科目閲覧数
+│   │   └── login.html
+│   ├── liff/
+│   │   ├── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
+│   │   └── timetable.html ← マイ時間割（LIFFページ）
+│   ├── form_index.html    ← レビュー投稿フォーム
+│   ├── form_success.html
+│   ├── form_error.html
+│   └── privacy.html
+├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
+├── docs/                  ← ドキュメント類
+└── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
+    ├── import_syllabus.py         ← 時間割データをDB投入
+    ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング
+    ├── import_kyoyo_courses.py    ← 教養科目インポート
+    ├── import_keiei_instructors.py← 経営学部教員インポート
+    ├── setup_richmenu.py          ← LINEリッチメニュー設定
+    ├── sync_db_to_prod.py         ← dev→本番DBの3テーブル同期
+    ├── seed_courses.py / cleanup_*.py / fix_dupes.py 等
+    └── .env / .env.dev            ← 環境変数（本番・dev）
+```
+
+### DBテーブル一覧（models.py）
+
+| テーブル | 用途 |
+|----------|------|
+| `courses` | 科目マスタ（name, classification, category, term, credits, faculty, senmon_group） |
+| `course_instructors` | 科目↔教員の多対多（course_id, name, url） |
+| `classification_orders` | 分類の表示順・親グループ設定 |
+| `pending_reviews` | レビュー投稿（is_approved で承認管理） |
+| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号） |
+| `user_activity` | LINEアクション統計（user_id, action, count） |
+| `message_logs` | LINEメッセージ送受信ログ |
+| `error_logs` | サーバーエラーログ |
+| `push_subscriptions` | Web Push VAPID 購読情報 |
+| `richmenu_taps` | リッチメニュークリックログ |
+| `course_views` | 科目詳細の閲覧数 |
+| `syllabus_courses` | 時間割マスタ（timetable_code で一意） |
+| `course_slots` | 曜日・時限（syllabus_course_id, day_of_week, period） |
+| `user_courses` | ユーザーの時間割登録（line_user_id, syllabus_course_id） |
+| `timetable_profiles` | ユーザーの学部・学年設定 |
+| `credit_requirements` | 単位要件定義（category_id, required_credits, label） |
+| `category_courses` | 単位カテゴリ↔科目の紐付け |
+| `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |
+
+### アーキテクチャ概要
+
+**main.py の構成（単一ファイル）**
+
+```
+環境変数読み込み → LINE SDK初期化 → キャッシュ変数定義
+→ FastAPI app 生成 → lifespan（init_db + prewarm + self-ping）
+→ ルート定義（以下のグループ）
+  - /callback          LINE Webhookエントリポイント
+  - /submit, /api/*    レビューフォーム・LIFF用API
+  - /liff/*            LIFFページ HTML返却
+  - /r/{name}          リッチメニューリダイレクト（クリック計測付き）
+  - /admin/*           管理画面（HMAC cookie認証）
+  - /health            死活監視
+```
+
+**キャッシュ設計（モジュールレベルグローバル変数）**
+
+- TTL 3600秒のインメモリキャッシュを複数保持
+- `_get_*_cached()` → TTL切れ or 空のとき DB取得、それ以外はキャッシュ返却
+- `_invalidate_*_cache()` → DB更新後に呼び出してキャッシュ即時無効化
+- `_prewarm_caches()` → サーバー起動2秒後に全キャッシュをウォームアップ
+- **注意**: 初期値は空コレクション（`{}`/`set()`）のため、truthy チェックでキャッシュヒット判定する
+
+**LINE Bot フロー**
+
+```
+POST /callback → 署名検証 → parser.parse() → create_task(_process_events())
+  → FollowEvent  : ウェルカムFlexMessage
+  → MessageEvent : handle_message(text, user_id) → FlexMessage or TextMessage
+  → PostbackEvent: handle_message(data, user_id)（科目一覧タップ等）
+```
+
+**管理画面認証**
+
+- ログイン: `ADMIN_PASSWORD` と POST フォーム、`py_secrets.compare_digest` で比較
+- トークン: `HMAC-SHA256(CHANNEL_SECRET + ADMIN_PASSWORD, "admin:{timestamp}")` をCookieに保存
+- TTL: 4時間（`ADMIN_TOKEN_TTL = 4 * 3600`）
+
+**非同期クエリのルール**
+
+- 同一 `AsyncSession` では `asyncio.gather` による並行クエリ禁止（InterfaceError）
+- 並行したい場合は各コルーチン内で `async with AsyncSessionLocal() as s:` を個別に開く
+
+---
+
+## 開発ワークフロー
+
+- 作業は機能追加・バグ修正などの単位で小さく区切って進める。1つの作業が完了するごとに必ずgit commitする。
+- コミットメッセージは「何を」「なぜ」変更したかが分かるように具体的に書く（例：「LINE Webhookの署名検証を追加。不正リクエストを拒否するため」のように、変更内容と理由をセットで記載）。
+- 1コミットに複数の無関係な変更を混在させない。
+- 新しいセッションで作業を再開する際は、まず `git log --oneline -20` と `git diff` でこれまでの変更内容を確認し、チャット履歴に頼らず現在の状態を把握すること。
+- 作業途中で次にやるべきことが明確な場合は、コミットメッセージの末尾や別途TODOコメントに次のステップを簡潔に記録する。
