@@ -2040,6 +2040,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             Course.name.ilike(f"%{q_safe}%", escape="\\"),
             Course.instructor.ilike(f"%{q_safe}%", escape="\\"),
             Course.reading.ilike(f"%{q_safe}%", escape="\\"),
+            Course.faculty.ilike(f"%{q_safe}%", escape="\\"),
         )
 
     async with AsyncSessionLocal() as session:

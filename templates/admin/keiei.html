@@ -111,7 +111,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
           <input type="checkbox"
                  value="{{ name }}"
                  data-cat="kyotsu"
-                 {% if name in approved_by_cat.get('kyotsu', set()) %}checked{% endif %}
+                 {% if name in (approved_by_cat.get('kyotsu') or []) %}checked{% endif %}
                  onchange="saveCatCourse(this)">
           <span>{{ name }}{% if credits %}<span style="color:#9ca3af;font-size:11px;margin-left:4px">（{{ credits | int }}単位）</span>{% endif %}</span>
         </label>
