@@ -3300,30 +3300,39 @@ async def api_credit_requirements():
 @app.get("/admin/timetable/check", response_class=HTMLResponse)
 async def admin_timetable_check(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        # courses テーブルの全科目名
         course_rows = (await session.execute(select(Course.id, Course.name, Course.faculty))).all()
-        # syllabus_courses テーブルの全科目名（重複なし）
-        syllabus_names_raw = (await session.execute(
-            select(SyllabusCourse.name).distinct()
-        )).scalars().all()
+        syllabus_rows = (await session.execute(
+            select(SyllabusCourse.name, SyllabusCourse.department).distinct()
+        )).all()
 
-    syllabus_name_set = set(syllabus_names_raw)
+    course_name_set   = {name for _, name, _ in course_rows}
+    syllabus_name_set = {name for name, _ in syllabus_rows}
 
-    matched   = []  # courses に登録済み かつ syllabus_courses に存在
-    unmatched = []  # courses に登録済み だが syllabus_courses に存在しない
-
-    for cid, name, faculty in course_rows:
-        if name in syllabus_name_set:
-            matched.append({"id": cid, "name": name, "faculty": faculty or ""})
-        else:
-            unmatched.append({"id": cid, "name": name, "faculty": faculty or ""})
+    # courses にあるが syllabus_courses にない
+    only_in_courses = [
+        {"id": cid, "name": name, "faculty": faculty or ""}
+        for cid, name, faculty in course_rows
+        if name not in syllabus_name_set
+    ]
+    # syllabus_courses にあるが courses にない（重複除去済み名前一覧）
+    only_in_syllabus = sorted(
+        {(name, dept) for name, dept in syllabus_rows if name not in course_name_set},
+        key=lambda x: x[0]
+    )
+    # 両方に存在
+    matched = [
+        {"id": cid, "name": name, "faculty": faculty or ""}
+        for cid, name, faculty in course_rows
+        if name in syllabus_name_set
+    ]
 
     return templates.TemplateResponse("admin/timetable_check.html", {
         "request": request,
-        "matched":   matched,
-        "unmatched": unmatched,
-        "total_courses":  len(course_rows),
-        "total_syllabus": len(syllabus_names_raw),
+        "matched":          matched,
+        "only_in_courses":  only_in_courses,
+        "only_in_syllabus": only_in_syllabus,
+        "total_courses":    len(course_rows),
+        "total_syllabus":   len(syllabus_name_set),
     })
 
 
