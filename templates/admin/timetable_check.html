@@ -1,0 +1,67 @@
+{% extends "admin/base.html" %}
+{% block title %}時間割照合{% endblock %}
+{% block heading %}🔍 時間割照合チェック{% endblock %}
+
+{% block extra_style %}
+.match-ok  { color:#15803d; font-weight:bold; }
+.match-ng  { color:#b91c1c; font-weight:bold; }
+.tag { display:inline-block; padding:1px 7px; border-radius:999px; font-size:11px; }
+.tag-ok { background:#dcfce7; color:#15803d; }
+.tag-ng { background:#fee2e2; color:#b91c1c; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <p style="margin:0 0 8px;font-size:13px;color:#374151">
+    科目管理画面（<strong>courses</strong>）の科目名と、神戸大シラバスのスクレイプデータ（<strong>syllabus_courses</strong>）の科目名を照合した結果です。<br>
+    My時間割では <strong>名前が一致した科目だけ</strong> 表示されます。<strong style="color:#b91c1c">⚠ 不一致の科目はMy時間割に表示されません。</strong>
+  </p>
+  <div style="display:flex;gap:16px;font-size:13px;margin-top:12px">
+    <span>courses 総数: <strong>{{ total_courses }}</strong></span>
+    <span>syllabus 総数: <strong>{{ total_syllabus }}</strong></span>
+    <span class="match-ok">✅ 一致: {{ matched | length }}</span>
+    <span class="match-ng">❌ 不一致: {{ unmatched | length }}</span>
+  </div>
+</div>
+
+{% if unmatched %}
+<div class="card" style="border:2px solid #fca5a5">
+  <h2 style="margin-top:0;color:#b91c1c">❌ 不一致の科目（My時間割に表示されません）</h2>
+  <p style="font-size:12px;color:#6b7280;margin:0 0 10px">
+    以下の科目は courses テーブルには登録されていますが、syllabus_courses に同名の科目が見つかりませんでした。<br>
+    科目名の表記揺れ（全角/半角、スペース、ローマ数字など）が原因の場合があります。
+  </p>
+  <table>
+    <tr><th>#</th><th>科目名（courses）</th><th>学部</th></tr>
+    {% for c in unmatched %}
+    <tr>
+      <td style="color:#9ca3af;width:30px">{{ loop.index }}</td>
+      <td><strong style="color:#b91c1c">{{ c.name }}</strong></td>
+      <td style="color:#6b7280;font-size:12px">{{ c.faculty or '―' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% else %}
+<div class="card" style="border:2px solid #86efac">
+  <p style="margin:0;color:#15803d;font-weight:bold">✅ 不一致なし。全科目が syllabus_courses と一致しています。</p>
+</div>
+{% endif %}
+
+{% if matched %}
+<div class="card">
+  <h2 style="margin-top:0;color:#15803d">✅ 一致した科目（My時間割に表示されます）</h2>
+  <table>
+    <tr><th>#</th><th>科目名</th><th>学部</th></tr>
+    {% for c in matched %}
+    <tr>
+      <td style="color:#9ca3af;width:30px">{{ loop.index }}</td>
+      <td>{{ c.name }}</td>
+      <td style="color:#6b7280;font-size:12px">{{ c.faculty or '―' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -3295,6 +3295,38 @@ async def api_credit_requirements():
     ]
 
 
+# ── 時間割照合ページ ──────────────────────────────────────────────────────────
+
+@app.get("/admin/timetable/check", response_class=HTMLResponse)
+async def admin_timetable_check(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        # courses テーブルの全科目名
+        course_rows = (await session.execute(select(Course.id, Course.name, Course.faculty))).all()
+        # syllabus_courses テーブルの全科目名（重複なし）
+        syllabus_names_raw = (await session.execute(
+            select(SyllabusCourse.name).distinct()
+        )).scalars().all()
+
+    syllabus_name_set = set(syllabus_names_raw)
+
+    matched   = []  # courses に登録済み かつ syllabus_courses に存在
+    unmatched = []  # courses に登録済み だが syllabus_courses に存在しない
+
+    for cid, name, faculty in course_rows:
+        if name in syllabus_name_set:
+            matched.append({"id": cid, "name": name, "faculty": faculty or ""})
+        else:
+            unmatched.append({"id": cid, "name": name, "faculty": faculty or ""})
+
+    return templates.TemplateResponse("admin/timetable_check.html", {
+        "request": request,
+        "matched":   matched,
+        "unmatched": unmatched,
+        "total_courses":  len(course_rows),
+        "total_syllabus": len(syllabus_names_raw),
+    })
+
+
 # ── 経営学部 管理ページ ────────────────────────────────────────────────────────
 
 _SENMON_GROUPS = ["第1群", "第2群", "第3群", "グローバル", "初年次"]
