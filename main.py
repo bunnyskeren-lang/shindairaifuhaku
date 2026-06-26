@@ -3279,8 +3279,20 @@ async def api_reclassify_seiseki(request: Request):
 @app.get("/api/credit_requirements")
 async def api_credit_requirements():
     async with AsyncSessionLocal() as session:
-        rows = (await session.execute(select(CreditRequirement))).scalars().all()
-    return [{"category_id": r.category_id, "required_credits": r.required_credits, "note": r.note or ""} for r in rows]
+        rows = (await session.execute(
+            select(CreditRequirement).order_by(CreditRequirement.sort_order)
+        )).scalars().all()
+    return [
+        {
+            "category_id":      r.category_id,
+            "label":            r.label,
+            "group_name":       r.group_name,
+            "sort_order":       r.sort_order,
+            "required_credits": r.required_credits,
+            "note":             r.note or "",
+        }
+        for r in rows
+    ]
 
 
 # ── 経営学部 管理ページ ────────────────────────────────────────────────────────
@@ -3295,16 +3307,15 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
             .where(Course.faculty.like("%経営学部%"))
             .order_by(Course.classification, Course.sort_order, Course.name)
         )).scalars().all()
-        reqs = (await session.execute(select(CreditRequirement))).scalars().all()
-    req_map       = {r.category_id: r.required_credits for r in reqs}
-    req_map_notes = {r.category_id: (r.note or "") for r in reqs}
-    auto_groups   = {c.id: _classify_senmon(c.name) for c in courses}
+        reqs = (await session.execute(
+            select(CreditRequirement).order_by(CreditRequirement.sort_order)
+        )).scalars().all()
+    auto_groups = {c.id: _classify_senmon(c.name) for c in courses}
     return templates.TemplateResponse("admin/keiei.html", {
         "request": request,
         "courses": courses,
         "senmon_groups": _SENMON_GROUPS,
-        "req_map": req_map,
-        "req_map_notes": req_map_notes,
+        "reqs": reqs,
         "auto_groups": auto_groups,
     })
 
@@ -3330,23 +3341,71 @@ async def admin_keiei_set_group(course_id: int, request: Request, _: str = Depen
 @app.post("/admin/keiei/credit_requirements/update")
 async def admin_keiei_update_requirements(request: Request, _: str = Depends(check_admin)):
     form = await request.form()
+    # Collect all category_ids from form keys
+    cat_ids: set[str] = set()
+    for key in form.keys():
+        for prefix in ("req_", "note_", "label_", "group_", "sort_"):
+            if key.startswith(prefix):
+                cat_ids.add(key[len(prefix):])
     async with AsyncSessionLocal() as session:
-        for key, val in form.items():
-            if key.startswith("req_"):
-                cat_id = key[4:]
+        for cat_id in cat_ids:
+            row = await session.get(CreditRequirement, cat_id)
+            if not row:
+                continue
+            if f"req_{cat_id}" in form:
                 try:
-                    credits = int(val)
+                    row.required_credits = int(form[f"req_{cat_id}"])
                 except ValueError:
-                    continue
-                row = await session.get(CreditRequirement, cat_id)
-                if row:
-                    row.required_credits = credits
-                else:
-                    session.add(CreditRequirement(category_id=cat_id, required_credits=credits))
-            elif key.startswith("note_"):
-                cat_id = key[5:]
-                row = await session.get(CreditRequirement, cat_id)
-                if row:
-                    row.note = val.strip() or None
+                    pass
+            if f"note_{cat_id}" in form:
+                row.note = form[f"note_{cat_id}"].strip() or None
+            if f"label_{cat_id}" in form:
+                row.label = form[f"label_{cat_id}"].strip()
+            if f"group_{cat_id}" in form:
+                row.group_name = form[f"group_{cat_id}"].strip()
+            if f"sort_{cat_id}" in form:
+                try:
+                    row.sort_order = int(form[f"sort_{cat_id}"])
+                except ValueError:
+                    pass
         await session.commit()
+    return RedirectResponse("/admin/keiei", status_code=303)
+
+
+@app.post("/admin/keiei/credit_requirements/add")
+async def admin_keiei_add_requirement(request: Request, _: str = Depends(check_admin)):
+    import re
+    form = await request.form()
+    cat_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", form.get("new_category_id", "").strip())
+    label  = form.get("new_label", "").strip()
+    group  = form.get("new_group", "").strip()
+    if not cat_id or not label:
+        return RedirectResponse("/admin/keiei?error=invalid", status_code=303)
+    try:
+        req    = int(form.get("new_req", "0"))
+        sort_v = int(form.get("new_sort", "999"))
+    except ValueError:
+        req, sort_v = 0, 999
+    async with AsyncSessionLocal() as session:
+        existing = await session.get(CreditRequirement, cat_id)
+        if existing:
+            return RedirectResponse("/admin/keiei?error=duplicate", status_code=303)
+        session.add(CreditRequirement(
+            category_id=cat_id,
+            label=label,
+            group_name=group,
+            sort_order=sort_v,
+            required_credits=req,
+        ))
+        await session.commit()
+    return RedirectResponse("/admin/keiei", status_code=303)
+
+
+@app.post("/admin/keiei/credit_requirements/{cat_id}/delete")
+async def admin_keiei_delete_requirement(cat_id: str, request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        row = await session.get(CreditRequirement, cat_id)
+        if row:
+            await session.delete(row)
+            await session.commit()
     return RedirectResponse("/admin/keiei", status_code=303)

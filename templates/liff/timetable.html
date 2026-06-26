@@ -461,28 +461,7 @@ tbody td:first-child {
 <script>
 const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
-const CREDIT_CATS = [
-  { id:'kyoyo_kei',   group:'教養科目',  name:'系科目（人文・自然・社会・総合）', def:12,
-    note:'人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。' },
-  { id:'kyoyo_kiban', group:'教養科目',  name:'基盤系',                          def:4,
-    note:'基礎教養科目（情報リテラシー等）と情報科目を合算したもの。' },
-  { id:'gaigo1',      group:'教養科目',  name:'外国語第1',                       def:4,
-    note:'Academic English Communication / Literacy など英語科目が対象。' },
-  { id:'gaigo2',      group:'教養科目',  name:'外国語第2',                       def:4,
-    note:'ドイツ語・フランス語・中国語・韓国語・ロシア語など第二外国語が対象。' },
-  { id:'kyotsu',      group:'共通専門',  name:'共通専門基礎科目',               def:6,
-    note:'全学部共通の専門基礎科目。成績表の「共通専門基礎科目」欄の合計。' },
-  { id:'shonen',      group:'専門科目',  name:'初年次セミナー',                 def:1,
-    note:'1年次必修の初年次セミナー（2単位）。必要単位数は1科目=2単位。' },
-  { id:'senmon1',     group:'専門科目',  name:'第1群科目',                      def:6,
-    note:'経営学基礎論・会計学基礎論・市場システム基礎論の3科目（各2単位・計6単位）。' },
-  { id:'senmon2',     group:'専門科目',  name:'第2群科目',                      def:12,
-    note:'経営管理・経営戦略・簿記・財務会計・マーケティングなど第2群の専門科目。' },
-  { id:'global',      group:'専門科目',  name:'グローバル科目群',               def:4,
-    note:'英語で開講される専門科目・外国書講読・外国文献講義が対象。' },
-  { id:'senmon3',     group:'専門科目',  name:'第3群・その他',                  def:0,
-    note:'第1・2群・グローバル以外の専門科目（人的資源管理・証券市場など）。PDFから自動計算。' },
-];
+let CREDIT_CATS = [];
 let _creditData = {};
 const DAYS = ["月","火","水","木","金"];
 const PERIODS = [1,2,3,4,5,6];
@@ -911,38 +890,19 @@ async function loadCreditRequirements() {
     const res = await fetch(BASE_URL + '/api/credit_requirements');
     if (!res.ok) return;
     const data = await res.json();
-    data.forEach(({category_id, required_credits, note}) => {
-      const cat = CREDIT_CATS.find(c => c.id === category_id);
-      if (cat) {
-        cat.def = required_credits;
-        if (note !== undefined) cat.note = note;
-      }
-    });
-  } catch(e) { /* ハードコード値にフォールバック */ }
-
-  // PDFが読込済で生データがある場合、最新の分類設定で再計算
-  if (_creditData._pdfLoaded && _creditData._raw) {
-    try {
-      const res = await fetch(BASE_URL + '/api/reclassify_seiseki', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw: _creditData._raw }),
-      });
-      if (res.ok) {
-        const { credits } = await res.json();
-        Object.entries(credits).forEach(([id, val]) => {
-          const el = document.getElementById('earn-' + id);
-          if (el) el.value = val;
-        });
-        updateCredits();
-      }
-    } catch(e) { /* 失敗しても既存データをそのまま表示 */ }
-  }
+    CREDIT_CATS = data.map(r => ({
+      id:    r.category_id,
+      group: r.group_name,
+      name:  r.label,
+      def:   r.required_credits,
+      note:  r.note || '',
+    }));
+  } catch(e) { /* CREDIT_CATS stays as-is */ }
 }
 
 async function loadCredits() {
-  await loadCreditRequirements();
   _creditData = JSON.parse(localStorage.getItem('credit_data') || '{}');
+  await loadCreditRequirements();
   renderCreditRows();
   // Restore or default total required credits
   const totalReqEl = document.getElementById('credits-total-req');
@@ -959,6 +919,24 @@ async function loadCredits() {
   if (_creditData._pdfLoaded) {
     const btn = document.getElementById('credits-pdf-btn');
     if (btn) btn.innerHTML = '✅ PDF読込済（再読込）';
+  }
+  // PDFが読込済で生データがある場合、最新の分類設定で再計算
+  if (_creditData._pdfLoaded && _creditData._raw) {
+    try {
+      const res = await fetch(BASE_URL + '/api/reclassify_seiseki', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw: _creditData._raw }),
+      });
+      if (res.ok) {
+        const { credits } = await res.json();
+        Object.entries(credits).forEach(([id, val]) => {
+          const el = document.getElementById('earn-' + id);
+          if (el) el.value = val;
+        });
+        updateCredits();
+      }
+    } catch(e) {}
   }
 }
 

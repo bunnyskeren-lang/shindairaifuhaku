@@ -175,6 +175,9 @@ class CreditRequirement(Base):
     __tablename__ = "credit_requirements"
 
     category_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    group_name: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     required_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
 

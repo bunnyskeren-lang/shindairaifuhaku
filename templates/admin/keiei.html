@@ -14,10 +14,16 @@
 .gna { background:#f1f5f9; color:#94a3b8; }
 .auto-badge { font-style:italic; opacity:.75; }
 select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
-.req-input { width:60px; padding:4px 6px; font-size:13px; text-align:center; margin:0; }
-.note-input { width:100%; padding:5px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px;
-  resize:vertical; min-height:48px; font-family:inherit; color:#374151; }
-.note-input:focus { outline:none; border-color:#6366f1; }
+.req-input   { width:60px;  padding:4px 6px; font-size:13px; text-align:center; margin:0; border:1px solid #e2e8f0; border-radius:6px; }
+.sort-input  { width:54px;  padding:4px 6px; font-size:13px; text-align:center; margin:0; border:1px solid #e2e8f0; border-radius:6px; }
+.label-input { width:100%;  padding:4px 7px; font-size:13px; border:1px solid #e2e8f0; border-radius:6px; }
+.group-input { width:100%;  padding:4px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px; }
+.note-input  { width:100%;  padding:5px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px;
+  resize:vertical; min-height:44px; font-family:inherit; color:#374151; }
+.note-input:focus, .label-input:focus, .group-input:focus, .req-input:focus, .sort-input:focus {
+  outline:none; border-color:#6366f1; }
+.btn-del { background:none; border:none; cursor:pointer; font-size:15px; padding:2px 4px; opacity:.6; }
+.btn-del:hover { opacity:1; }
 {% endblock %}
 
 {% block content %}
@@ -25,31 +31,68 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 <!-- 単位要件 -->
 <div class="card">
   <h2 style="margin-top:0">📊 単位要件（必要単位数）</h2>
+  {% if request.query_params.get('error') == 'duplicate' %}
+  <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin-bottom:12px">⚠ そのIDはすでに存在します</div>
+  {% elif request.query_params.get('error') == 'invalid' %}
+  <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin-bottom:12px">⚠ IDと表示名は必須です</div>
+  {% endif %}
   <form method="post" action="/admin/keiei/credit_requirements/update">
     <table>
-      <tr><th>カテゴリ</th><th style="width:80px">必要単位</th><th>ⓘ 注記テキスト</th></tr>
-      {% set labels = {
-        'kyoyo_kei':'系科目（人文・自然・社会・総合）',
-        'kyoyo_kiban':'基盤系',
-        'gaigo1':'外国語第1',
-        'gaigo2':'外国語第2',
-        'kyotsu':'共通専門基礎科目',
-        'shonen':'初年次セミナー',
-        'senmon1':'第1群科目',
-        'senmon2':'第2群科目',
-        'global':'グローバル科目群',
-        'senmon3':'第3群・その他',
-      } %}
-      {% for cat_id, label in labels.items() %}
       <tr>
-        <td>{{ label }}</td>
-        <td><input type="number" class="req-input" name="req_{{ cat_id }}" value="{{ req_map.get(cat_id, 0) }}" min="0" max="200"></td>
-        <td><textarea class="note-input" name="note_{{ cat_id }}" placeholder="（注記なし）">{{ req_map_notes.get(cat_id, '') }}</textarea></td>
+        <th>表示名</th>
+        <th style="width:90px">グループ</th>
+        <th style="width:60px">並び</th>
+        <th style="width:70px">必要単位</th>
+        <th>ⓘ 注記テキスト</th>
+        <th style="width:48px"></th>
+      </tr>
+      {% for r in reqs %}
+      <tr>
+        <td><input type="text" class="label-input" name="label_{{ r.category_id }}" value="{{ r.label }}"></td>
+        <td><input type="text" class="group-input" name="group_{{ r.category_id }}" value="{{ r.group_name }}" list="group-list"></td>
+        <td><input type="number" class="sort-input" name="sort_{{ r.category_id }}" value="{{ r.sort_order }}" min="0" max="9999"></td>
+        <td><input type="number" class="req-input" name="req_{{ r.category_id }}" value="{{ r.required_credits }}" min="0" max="200"></td>
+        <td><textarea class="note-input" name="note_{{ r.category_id }}" placeholder="（注記なし）">{{ r.note or '' }}</textarea></td>
+        <td>
+          <form method="post" action="/admin/keiei/credit_requirements/{{ r.category_id }}/delete"
+                onsubmit="return confirm('「{{ r.label }}」を削除しますか？')">
+            <button type="submit" class="btn-del">🗑</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </table>
     <button type="submit" class="btn btn-primary" style="margin-top:12px">保存</button>
   </form>
+  <datalist id="group-list">
+    <option value="教養科目">
+    <option value="共通専門">
+    <option value="専門科目">
+  </datalist>
+
+  <!-- 新規追加 -->
+  <details style="margin-top:20px">
+    <summary style="cursor:pointer;font-weight:600;color:#6366f1">＋ カテゴリを追加</summary>
+    <form method="post" action="/admin/keiei/credit_requirements/add" style="margin-top:12px">
+      <table>
+        <tr>
+          <th>ID（英数字・_）</th>
+          <th>表示名</th>
+          <th>グループ</th>
+          <th>並び</th>
+          <th>必要単位</th>
+        </tr>
+        <tr>
+          <td><input type="text" class="label-input" name="new_category_id" placeholder="例: senmon4" pattern="[a-zA-Z0-9_\-]+" required></td>
+          <td><input type="text" class="label-input" name="new_label" placeholder="例: 第4群科目" required></td>
+          <td><input type="text" class="group-input" name="new_group" placeholder="専門科目" list="group-list"></td>
+          <td><input type="number" class="sort-input" name="new_sort" value="999" min="0" max="9999"></td>
+          <td><input type="number" class="req-input" name="new_req" value="0" min="0" max="200"></td>
+        </tr>
+      </table>
+      <button type="submit" class="btn btn-primary" style="margin-top:10px">追加</button>
+    </form>
+  </details>
 </div>
 
 <!-- 科目群マッピング -->

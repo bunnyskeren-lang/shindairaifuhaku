@@ -79,20 +79,33 @@ async def init_db():
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_course_slots_day_period ON course_slots (day_of_week, period)"
         ))
+        await conn.execute(text(
+            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS label VARCHAR(100) NOT NULL DEFAULT ''"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS group_name VARCHAR(50) NOT NULL DEFAULT ''"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
+        ))
+        # (cat_id, req, note, label, group_name, sort_order)
         defaults = [
-            ("kyoyo_kei",   12, "人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。"),
-            ("kyoyo_kiban",  4, "基礎教養科目（情報リテラシー等）と情報科目を合算したもの。"),
-            ("gaigo1",       4, "Academic English Communication / Literacy など英語科目が対象。"),
-            ("gaigo2",       4, "ドイツ語・フランス語・中国語・韓国語・ロシア語など第二外国語が対象。"),
-            ("kyotsu",       6, "全学部共通の専門基礎科目。成績表の「共通専門基礎科目」欄の合計。"),
-            ("shonen",       1, "1年次必修の初年次セミナー（2単位）。必要単位数は1科目=2単位。"),
-            ("senmon1",      6, "経営学基礎論・会計学基礎論・市場システム基礎論の3科目（各2単位・計6単位）。"),
-            ("senmon2",     12, "経営管理・経営戦略・簿記・財務会計・マーケティングなど第2群の専門科目。"),
-            ("global",       4, "英語で開講される専門科目・外国書講読・外国文献講義が対象。"),
-            ("senmon3",      0, "第1・2群・グローバル以外の専門科目（人的資源管理・証券市場など）。PDFから自動計算。"),
+            ("kyoyo_kei",   12, "人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。", "系科目（人文・自然・社会・総合）", "教養科目", 10),
+            ("kyoyo_kiban",  4, "基礎教養科目（情報リテラシー等）と情報科目を合算したもの。",                       "基盤系",                          "教養科目", 20),
+            ("gaigo1",       4, "Academic English Communication / Literacy など英語科目が対象。",                  "外国語第1",                       "教養科目", 30),
+            ("gaigo2",       4, "ドイツ語・フランス語・中国語・韓国語・ロシア語など第二外国語が対象。",             "外国語第2",                       "教養科目", 40),
+            ("kyotsu",       6, "全学部共通の専門基礎科目。成績表の「共通専門基礎科目」欄の合計。",                 "共通専門基礎科目",                "共通専門",  50),
+            ("shonen",       1, "1年次必修の初年次セミナー（2単位）。必要単位数は1科目=2単位。",                    "初年次セミナー",                  "専門科目", 60),
+            ("senmon1",      6, "経営学基礎論・会計学基礎論・市場システム基礎論の3科目（各2単位・計6単位）。",     "第1群科目",                       "専門科目", 70),
+            ("senmon2",     12, "経営管理・経営戦略・簿記・財務会計・マーケティングなど第2群の専門科目。",          "第2群科目",                       "専門科目", 80),
+            ("global",       4, "英語で開講される専門科目・外国書講読・外国文献講義が対象。",                      "グローバル科目群",                "専門科目", 90),
+            ("senmon3",      0, "第1・2群・グローバル以外の専門科目（人的資源管理・証券市場など）。PDFから自動計算。", "第3群・その他",                  "専門科目", 100),
         ]
-        for cat_id, req, note in defaults:
+        for cat_id, req, note, label, group_name, sort_order in defaults:
             await conn.execute(text(
-                "INSERT INTO credit_requirements (category_id, required_credits, note) "
-                "VALUES (:cat, :req, :note) ON CONFLICT (category_id) DO NOTHING"
-            ), {"cat": cat_id, "req": req, "note": note})
+                "INSERT INTO credit_requirements (category_id, required_credits, note, label, group_name, sort_order) "
+                "VALUES (:cat, :req, :note, :label, :gname, :sort) "
+                "ON CONFLICT (category_id) DO UPDATE SET "
+                "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order "
+                "WHERE credit_requirements.label = ''"
+            ), {"cat": cat_id, "req": req, "note": note, "label": label, "gname": group_name, "sort": sort_order})
