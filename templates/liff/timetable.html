@@ -299,6 +299,11 @@ tbody td:first-child {
   text-align:center; color:#1e293b; background:#f8fafc;
 }
 .credits-mini-input:focus { outline:none; border-color:{% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}; background:#fff; }
+.credits-earn-val {
+  width:40px; padding:4px 2px; border-radius:6px;
+  font-size:13px; font-weight:700; text-align:center;
+  color:#475569; background:#e2e8f0; line-height:1.5;
+}
 .credits-remain { width:26px; font-size:10px; font-weight:700; text-align:right; color:#cbd5e1; }
 .credits-remain.done { color:#10b981; }
 .credits-divider { height:1px; background:#f1f5f9; margin:10px 0 8px; }
@@ -952,7 +957,7 @@ async function loadCredits() {
         const { credits } = await res.json();
         Object.entries(credits).forEach(([id, val]) => {
           const el = document.getElementById('earn-' + id);
-          if (el) el.value = val;
+          if (el) el.textContent = val;
         });
         updateCredits();
       }
@@ -990,7 +995,7 @@ function renderCreditRows() {
         </div>
         <div class="credits-mini-field">
           <div class="credits-mini-label">取得</div>
-          <input type="number" class="credits-mini-input" id="earn-${cat.id}" min="0" max="200" value="${earned}">
+          <div class="credits-earn-val" id="earn-${cat.id}">${earned}</div>
         </div>
         <div class="credits-remain" id="remain-${cat.id}"></div>
       </div>
@@ -1004,7 +1009,6 @@ function renderCreditRows() {
       }
     }
     item.querySelector(`#req-${cat.id}`).addEventListener('input', updateCredits);
-    item.querySelector(`#earn-${cat.id}`).addEventListener('input', updateCredits);
   });
 }
 
@@ -1012,7 +1016,7 @@ function updateCredits() {
   let totalEarned = 0;
   CREDIT_CATS.forEach(cat => {
     const req    = parseInt(document.getElementById(`req-${cat.id}`)?.value)  || 0;
-    const earned = parseInt(document.getElementById(`earn-${cat.id}`)?.value) || 0;
+    const earned = parseInt(document.getElementById(`earn-${cat.id}`)?.textContent) || 0;
     const remainEl = document.getElementById(`remain-${cat.id}`);
     if (remainEl) {
       if (req === 0) {
@@ -1086,11 +1090,11 @@ function applySeisekiResult(data) {
   if (data.credits) {
     CREDIT_CATS.forEach(cat => {
       const el = document.getElementById('earn-' + cat.id);
-      if (el) el.value = 0;
+      if (el) el.textContent = 0;
     });
     Object.entries(data.credits).forEach(([id, val]) => {
       const el = document.getElementById('earn-' + id);
-      if (el) el.value = val;
+      if (el) el.textContent = val;
     });
     _creditData._pdfLoaded = true;
     if (data.raw) _creditData._raw = data.raw;
