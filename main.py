@@ -3308,11 +3308,14 @@ async def admin_timetable_check(request: Request, _: str = Depends(check_admin))
     course_name_set   = {name for _, name, _ in course_rows}
     syllabus_name_set = {name for name, _ in syllabus_rows}
 
-    # courses にあるが syllabus_courses にない
+    import re as _re
+    _TERM_PAT = _re.compile(r'前期|後期|通年|集中|[1-4]Q|第[1-4]クオーター|第[1-4]Q')
+
+    # courses にあるが syllabus_courses にない（科目名に学期語句を含む科目は除外）
     only_in_courses = [
         {"id": cid, "name": name, "faculty": faculty or ""}
         for cid, name, faculty in course_rows
-        if name not in syllabus_name_set
+        if name not in syllabus_name_set and not _TERM_PAT.search(name)
     ]
     # syllabus_courses にあるが courses にない（重複除去済み名前一覧）
     only_in_syllabus = sorted(
