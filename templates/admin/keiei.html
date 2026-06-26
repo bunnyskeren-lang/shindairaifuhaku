@@ -52,7 +52,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
         <td><input type="number" class="req-input" name="req_{{ r.category_id }}" value="{{ r.required_credits }}" min="0" max="200"></td>
         <td><textarea class="note-input" name="note_{{ r.category_id }}" placeholder="（注記なし）">{{ r.note or '' }}</textarea></td>
         <td>
-          <button class="btn-del"
+          <button type="button" class="btn-del"
                   data-id="{{ r.category_id }}"
                   data-label="{{ r.label }}"
                   onclick="deleteReq(this)">🗑</button>

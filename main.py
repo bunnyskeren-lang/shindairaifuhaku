@@ -3380,33 +3380,35 @@ async def admin_keiei_set_group(course_id: int, request: Request, _: str = Depen
 @app.post("/admin/keiei/credit_requirements/update")
 async def admin_keiei_update_requirements(request: Request, _: str = Depends(check_admin)):
     form = await request.form()
-    # Collect all category_ids from form keys
-    cat_ids: set[str] = set()
-    for key in form.keys():
-        for prefix in ("req_", "note_", "label_", "group_", "sort_"):
-            if key.startswith(prefix):
-                cat_ids.add(key[len(prefix):])
     async with AsyncSessionLocal() as session:
-        for cat_id in cat_ids:
-            row = await session.get(CreditRequirement, cat_id)
-            if not row:
-                continue
+        existing_ids = {
+            r for (r,) in (await session.execute(select(CreditRequirement.category_id))).all()
+        }
+        for cat_id in existing_ids:
+            values: dict = {}
             if f"req_{cat_id}" in form:
                 try:
-                    row.required_credits = max(0, int(form[f"req_{cat_id}"]))
+                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
                 except ValueError:
                     pass
             if f"note_{cat_id}" in form:
-                row.note = form[f"note_{cat_id}"].strip() or None
+                note_val = form[f"note_{cat_id}"].strip()
+                values["note"] = note_val or None
             if f"label_{cat_id}" in form:
-                row.label = form[f"label_{cat_id}"].strip()
+                values["label"] = form[f"label_{cat_id}"].strip()
             if f"group_{cat_id}" in form:
-                row.group_name = form[f"group_{cat_id}"].strip()
+                values["group_name"] = form[f"group_{cat_id}"].strip()
             if f"sort_{cat_id}" in form:
                 try:
-                    row.sort_order = int(form[f"sort_{cat_id}"])
+                    values["sort_order"] = int(form[f"sort_{cat_id}"])
                 except ValueError:
                     pass
+            if values:
+                await session.execute(
+                    sa_update(CreditRequirement)
+                    .where(CreditRequirement.category_id == cat_id)
+                    .values(**values)
+                )
         await session.commit()
     return RedirectResponse("/admin/keiei", status_code=303)
 
