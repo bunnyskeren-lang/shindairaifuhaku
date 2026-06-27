@@ -79,6 +79,7 @@ except ValueError:
     KYOYO_REQUIRED_CREDITS = 1
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
+_LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
 _SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06"}
 
@@ -100,16 +101,20 @@ _HMAC_KEY = hashlib.sha256((CHANNEL_SECRET + ADMIN_PASSWORD).encode()).digest()
 
 def _make_admin_token() -> str:
     ts = int(datetime.now(timezone.utc).timestamp())
-    sig = hmac.new(_HMAC_KEY, f"admin:{ts}".encode(), hashlib.sha256).hexdigest()
-    return f"{ts}:{sig}"
+    nonce = py_secrets.token_hex(8)
+    sig = hmac.new(_HMAC_KEY, f"admin:{ts}:{nonce}".encode(), hashlib.sha256).hexdigest()
+    return f"{ts}:{nonce}:{sig}"
 
 def _verify_admin_token(token: str) -> bool:
     try:
-        ts_str, sig = token.split(":", 1)
+        parts = token.split(":")
+        if len(parts) != 3:
+            return False
+        ts_str, nonce, sig = parts
         ts = int(ts_str)
         if datetime.now(timezone.utc).timestamp() - ts > ADMIN_TOKEN_TTL:
             return False
-        expected = hmac.new(_HMAC_KEY, f"admin:{ts_str}".encode(), hashlib.sha256).hexdigest()
+        expected = hmac.new(_HMAC_KEY, f"admin:{ts_str}:{nonce}".encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(sig, expected)
     except Exception:
         return False
@@ -232,7 +237,7 @@ def _invalidate_senmon_cache():
 def _invalidate_review_cache():
     global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
     global _all_review_stats_cache, _all_review_stats_cache_at
-    global _course_flex_cache, _ranking_cache
+    global _course_flex_cache, _ranking_cache, _course_list_cache
     _reviewed_cache = set()
     _reviewed_cache_at = 0.0
     _reviewed_cache_init = False
@@ -240,6 +245,7 @@ def _invalidate_review_cache():
     _all_review_stats_cache_at = 0.0
     _course_flex_cache = {}
     _ranking_cache = {}
+    _course_list_cache = {}
 
 
 def _make_cls_sort(cls_map: dict):
@@ -316,14 +322,14 @@ async def lifespan(app: FastAPI):
     try:
         await init_db()
         print("DB OK", flush=True)
+        asyncio.create_task(_reload_senmon_cache())
+        asyncio.create_task(_prewarm_caches())
     except Exception as e:
         import traceback
         traceback.print_exc()
         print(f"DB ERROR: {e}", flush=True)
         await engine.dispose()
         print("Engine disposed and reset after startup error", flush=True)
-    asyncio.create_task(_reload_senmon_cache())
-    asyncio.create_task(_prewarm_caches())
     ping_task = asyncio.create_task(_self_ping())
     yield
     ping_task.cancel()
@@ -1039,7 +1045,12 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
 
     if not rows:
-        label = f"{category}の" if category else ""
+        if classification:
+            label = f"{classification}の"
+        elif category:
+            label = f"{category}の"
+        else:
+            label = ""
         return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
 
     course_name_set = {c.name for c in rows}
@@ -1561,6 +1572,7 @@ async def _process_events(events) -> None:
                                 messages=[make_welcome_flex()],
                             )
                         )
+                        asyncio.create_task(_save_log_bg(event.source.user_id, "in", "[follow]"))
                     except Exception as exc:
                         await save_error_log(exc, action="follow")
                     continue
@@ -1867,7 +1879,9 @@ async def autofill_profile(uid: str = Query(default=""), student_id: str = Query
             return {"found": False}
         taken = (await session.execute(
             select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
-        )).scalar_one_or_none()
+        )).scalars().first()
+        if taken is not None and taken != uid:
+            return {"found": False}
         if not taken:
             try:
                 session.add(UserProfile(line_user_id=uid, name=row, student_id=sid))
@@ -1920,6 +1934,8 @@ async def submit(
 
         uid = line_user_id.strip()
         if uid:
+            if not _LINE_USER_ID_RE.match(uid):
+                return _form_error("LINE ユーザー ID の形式が不正です")
             existing = (await session.execute(
                 select(UserProfile).where(UserProfile.line_user_id == uid)
             )).scalar_one_or_none()
@@ -1935,6 +1951,7 @@ async def submit(
                     await session.flush()
                 except Exception:
                     await session.rollback()
+                    return _form_error("プロフィールの保存に失敗しました")
             else:
                 if existing.student_id != sid:
                     return _form_error("学籍番号が登録情報と一致しません")
@@ -1990,14 +2007,20 @@ self.addEventListener('notificationclick', function(e) {
 @app.post("/admin/push/subscribe")
 async def admin_push_subscribe(request: Request, _: str = Depends(check_admin)):
     data = await request.json()
+    try:
+        endpoint = data["endpoint"]
+        p256dh = data["keys"]["p256dh"]
+        auth = data["keys"]["auth"]
+    except (KeyError, TypeError):
+        raise HTTPException(status_code=400, detail="invalid subscription payload")
     async with AsyncSessionLocal() as session:
         stmt = pg_insert(PushSubscription).values(
-            endpoint=data["endpoint"],
-            p256dh=data["keys"]["p256dh"],
-            auth=data["keys"]["auth"],
+            endpoint=endpoint,
+            p256dh=p256dh,
+            auth=auth,
         ).on_conflict_do_update(
             index_elements=["endpoint"],
-            set_={"p256dh": data["keys"]["p256dh"], "auth": data["keys"]["auth"]},
+            set_={"p256dh": p256dh, "auth": auth},
         )
         await session.execute(stmt)
         await session.commit()
@@ -2200,10 +2223,9 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
 async def admin_reviews_cleanup(_: str = Depends(check_admin)):
     # データ保護ルール: 承認済みレビューは削除しない。未承認レビューのみ孤立分を削除。
     async with AsyncSessionLocal() as session:
-        course_names = (await session.execute(select(Course.name))).scalars().all()
         await session.execute(
             delete(PendingReview).where(
-                PendingReview.course_name.not_in(course_names),
+                ~PendingReview.course_name.in_(select(Course.name)),
                 PendingReview.is_approved == False,
             )
         )
@@ -2702,8 +2724,8 @@ async def api_course(course_id: int):
                     return (await s.execute(
                         select(PendingReview)
                         .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                        .order_by(PendingReview.created_at.desc())
-                        .limit(50)
+                        .order_by(PendingReview.selected_instructor.nulls_last(), PendingReview.academic_year.desc())
+                        .limit(20)
                     )).scalars().all()
 
             async def _syllabus_code():
@@ -2742,10 +2764,7 @@ async def api_course(course_id: int):
             top_ease = None
             if ease_rows:
                 top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
-            reviews = sorted(
-                reviews_raw,
-                key=lambda r: (r.selected_instructor or "￿", -(r.academic_year or 0))
-            )[:20]
+            reviews = reviews_raw
 
             return {
                 "id": course.id,
@@ -2954,12 +2973,14 @@ async def api_timetable_profile_set(request: Request):
     from models import TimetableProfile
     data = await request.json()
     user_id = data.get("user_id", "")
-    if not user_id:
+    if not user_id or not _LINE_USER_ID_RE.match(user_id):
         raise HTTPException(status_code=400, detail="user_id required")
     faculty = data.get("faculty") or None
     grade = data.get("grade")
     if grade is not None:
         grade = int(grade)
+        if not (1 <= grade <= 6):
+            raise HTTPException(status_code=400, detail="grade must be between 1 and 6")
     async with AsyncSessionLocal() as session:
         p = await session.get(TimetableProfile, user_id)
         if p:
@@ -2971,8 +2992,12 @@ async def api_timetable_profile_set(request: Request):
     return {"ok": True}
 
 
+_VALID_DAYS = {"月", "火", "水", "木", "金", "土", "日"}
+
 @app.get("/api/timetable/slots/{day}/{period}")
 async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
+    if day not in _VALID_DAYS:
+        raise HTTPException(status_code=400, detail="invalid day")
     async with AsyncSessionLocal() as session:
         courses = (await session.execute(
             select(SyllabusCourse)
@@ -3057,7 +3082,7 @@ async def api_timetable_my(user_id: str = Query("")):
 async def api_timetable_register(course_id: int, request: Request):
     body = await request.json()
     user_id = body.get("user_id", "")
-    if not user_id:
+    if not user_id or not _LINE_USER_ID_RE.match(user_id):
         raise HTTPException(status_code=400, detail="user_id required")
     async with AsyncSessionLocal() as session:
         course = (await session.execute(
@@ -3076,7 +3101,7 @@ async def api_timetable_register(course_id: int, request: Request):
 
 @app.delete("/api/timetable/register/{course_id}")
 async def api_timetable_unregister(course_id: int, user_id: str = Query("")):
-    if not user_id:
+    if not user_id or not _LINE_USER_ID_RE.match(user_id):
         raise HTTPException(status_code=400, detail="user_id required")
     async with AsyncSessionLocal() as session:
         uc = (await session.execute(
@@ -3276,7 +3301,7 @@ async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"PDF の解析に失敗しました: {e}")
     uid = request.headers.get("X-Line-User-Id", "").strip()
-    if uid:
+    if uid and _LINE_USER_ID_RE.match(uid):
         async with AsyncSessionLocal() as session:
             existing = await session.get(UserSeisekiRaw, uid)
             raw_json = json.dumps(result["raw"], ensure_ascii=False)
@@ -3292,13 +3317,15 @@ async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
 async def api_reclassify_seiseki(request: Request):
     body = await request.json()
     raw = body.get("raw")
-    if not raw:
+    if not isinstance(raw, dict):
         raise HTTPException(status_code=400, detail="raw data required")
     return {"credits": _classify_seiseki_raw(raw)}
 
 
 @app.get("/api/seiseki/credits")
 async def api_seiseki_credits(uid: str):
+    if not uid or not _LINE_USER_ID_RE.match(uid):
+        return {}
     async with AsyncSessionLocal() as session:
         row = await session.get(UserSeisekiRaw, uid)
     if not row:
@@ -3312,7 +3339,7 @@ async def api_seiseki_save_raw(request: Request):
     body = await request.json()
     uid = body.get("uid", "").strip()
     raw = body.get("raw")
-    if not uid or not raw:
+    if not uid or not _LINE_USER_ID_RE.match(uid) or not raw:
         raise HTTPException(status_code=400, detail="uid and raw required")
     async with AsyncSessionLocal() as session:
         existing = await session.get(UserSeisekiRaw, uid)
