@@ -1,0 +1,445 @@
+No.	年度	開講区分	所属	科目名	成績入力担当	曜日・時限	時間割コード
+1	2026	第1クォーター	教養教育院	論理学	三輪　秦之	月1	1U004
+2	2026	第1クォーター	教養教育院	倫理学	田中　祐理子	月1	1U011
+3	2026	第1クォーター	教養教育院	文学Ａ	濱田　麻矢	月1	1U013
+4	2026	第1クォーター	教養教育院	文学Ｂ	昆野　伸幸	月1	1U014
+5	2026	第1クォーター	教養教育院	言語科学Ａ	南　佑亮	月1	1U017
+6	2026	第1クォーター	教養教育院	芸術と文化Ａ	岸本 吉弘	月1	1U018
+7	2026	第1クォーター	教養教育院	芸術と文化Ｂ	寺内　直子	月1	1U021
+8	2026	第1クォーター	教養教育院	日本史Ａ	仲田　侑加	月1	1U024
+9	2026	第1クォーター	教養教育院	西洋史Ａ	小澤　卓也	月1	1U030
+10	2026	第1クォーター	教養教育院	芸術史Ａ	上田　香	月1	1U034
+11	2026	第1クォーター	教養教育院	科学史Ａ	塚原 東吾	月1	1U036
+12	2026	第1クォーター	教養教育院	科学技術と倫理	丸山　栄治	月1	1U037
+13	2026	第1クォーター	教養教育院	生物学Ｂ	横井　雅幸	月1	1U072
+14	2026	第1クォーター	教養教育院	Academic English Communication A1	Cakebread Andrews Oliver Patrick	月1	1U151
+15	2026	第1クォーター	教養教育院	Academic English Communication A1	韋　恩琦	月1	1U152
+16	2026	第1クォーター	教養教育院	Academic English Communication A1	岩井 麻紀	月1	1U153
+17	2026	第1クォーター	教養教育院	Academic English Communication A1	大槻　有佳子	月1	1U154
+18	2026	第1クォーター	教養教育院	Academic English Communication A1	山中　司	月1	1U155
+19	2026	第1クォーター	教養教育院	Academic English Communication A1	木原　恵美子	月1	1U157
+20	2026	第1クォーター	教養教育院	Academic English Literacy A1	張　応謙	月1	1U221
+21	2026	第1クォーター	教養教育院	Academic English Literacy A1	南本　徹	月1	1U222
+22	2026	第1クォーター	教養教育院	Academic English Literacy A1	池田　直樹	月1	1U223
+23	2026	第1クォーター	教養教育院	Academic English Literacy A1	Stephen Horn	月1	1U224
+24	2026	第1クォーター	教養教育院	Academic English Literacy A1	武内 正美	月1	1U225
+25	2026	第1クォーター	教養教育院	Academic English Literacy A1	団野 恵美子	月1	1U226
+26	2026	第1クォーター	教養教育院	Academic English Literacy A1	島津 厚久	月1	1U227
+27	2026	第1クォーター	教養教育院	Academic English Literacy A1	中村　麻美	月1	1U228
+28	2026	前期	教養教育院	健康・スポーツ科学実習基礎	武村 政徳	月1	1U666
+29	2026	前期	教養教育院	健康・スポーツ科学実習基礎	港野　恵美	月1	1U667
+30	2026	前期	教養教育院	健康・スポーツ科学実習基礎	中野　大輝	月1	1U668
+31	2026	第1クォーター	教養教育院	心と行動	林 敦子	月1,2	1U726
+32	2026	第1クォーター	教養教育院	基礎無機化学１	木村 行宏	月1	1U821
+33	2026	第1クォーター	教養教育院	基礎無機化学１	梶並　昭彦	月1	1U822
+34	2026	第2クォーター	教養教育院	論理学	三輪　秦之	月1	2U004
+35	2026	第2クォーター	教養教育院	倫理学	田中　祐理子	月1	2U010
+36	2026	第2クォーター	教養教育院	文学Ａ	濱田　麻矢	月1	2U013
+37	2026	第2クォーター	教養教育院	文学Ｂ	昆野　伸幸	月1	2U014
+38	2026	第2クォーター	教養教育院	言語科学Ａ	南　佑亮	月1	2U017
+39	2026	第2クォーター	教養教育院	芸術と文化Ａ	岸本 吉弘	月1	2U018
+40	2026	第2クォーター	教養教育院	日本史Ｂ	仲田　侑加	月1	2U025
+41	2026	第2クォーター	教養教育院	西洋史Ｂ	小澤　卓也	月1	2U031
+42	2026	第2クォーター	教養教育院	芸術史Ａ	上田　香	月1	2U034
+43	2026	第2クォーター	教養教育院	科学史Ｂ	塚原 東吾	月1	2U036
+44	2026	第2クォーター	教養教育院	科学技術と倫理	丸山　栄治	月1	2U037
+45	2026	第2クォーター	教養教育院	社会生活と法	藤井　真一	月1	2U058
+46	2026	第2クォーター	教養教育院	Academic English Communication A2	Cakebread Andrews Oliver Patrick	月1	2U151
+47	2026	第2クォーター	教養教育院	Academic English Communication A2	韋　恩琦	月1	2U152
+48	2026	第2クォーター	教養教育院	Academic English Communication A2	岩井 麻紀	月1	2U153
+49	2026	第2クォーター	教養教育院	Academic English Communication A2	大槻　有佳子	月1	2U154
+50	2026	第2クォーター	教養教育院	Academic English Communication A2	山中　司	月1	2U155
+51	2026	第2クォーター	教養教育院	Academic English Communication A2	木原　恵美子	月1	2U157
+52	2026	第2クォーター	教養教育院	Academic English Literacy A2	張　応謙	月1	2U221
+53	2026	第2クォーター	教養教育院	Academic English Literacy A2	南本　徹	月1	2U222
+54	2026	第2クォーター	教養教育院	Academic English Literacy A2	池田　直樹	月1	2U223
+55	2026	第2クォーター	教養教育院	Academic English Literacy A2	Stephen Horn	月1	2U224
+56	2026	第2クォーター	教養教育院	Academic English Literacy A2	武内 正美	月1	2U225
+57	2026	第2クォーター	教養教育院	Academic English Literacy A2	団野 恵美子	月1	2U226
+58	2026	第2クォーター	教養教育院	Academic English Literacy A2	島津 厚久	月1	2U227
+59	2026	第2クォーター	教養教育院	Academic English Literacy A2	中村　麻美	月1	2U228
+60	2026	第2クォーター	教養教育院	基礎無機化学２	木村 行宏	月1	2U821
+61	2026	第2クォーター	教養教育院	基礎無機化学２	梶並　昭彦	月1	2U822
+62	2026	第3クォーター	教養教育院	論理学	佐々木 崇	月1	3U007
+63	2026	第3クォーター	教養教育院	芸術と文化Ａ	峯　恭子	月1	3U020
+64	2026	第3クォーター	教養教育院	法学Ａ	松山　沙織	月1	3U035
+65	2026	第3クォーター	教養教育院	法学Ｂ	中田　達也	月1	3U037
+66	2026	第3クォーター	教養教育院	政治学Ａ	赤星　聖	月1	3U038
+67	2026	第3クォーター	教養教育院	政治学Ｂ	安岡 正晴	月1	3U039
+68	2026	第3クォーター	教養教育院	経済学Ｂ	橋本　賢一	月1	3U041
+69	2026	第3クォーター	教養教育院	社会学	大川内　晋	月1	3U043
+70	2026	第3クォーター	教養教育院	地理学	菊地　真	月1	3U045
+71	2026	第3クォーター	教養教育院	文化人類学	岡田 浩樹	月1	3U047
+72	2026	第3クォーター	教養教育院	経済社会の発展	綿貫　友子	月1	3U061
+73	2026	第3クォーター	教養教育院	生物資源と農業Ｃ	鈴木 武志	月1	3U092
+74	2026	第3クォーター	教養教育院	Academic English Communication B1	岩井 麻紀	月1	3U151
+75	2026	第3クォーター	教養教育院	Academic English Communication B1	大槻　有佳子	月1	3U152
+76	2026	第3クォーター	教養教育院	Academic English Communication B1	多賀谷 真吾	月1	3U153
+77	2026	第3クォーター	教養教育院	Academic English Communication B1	土田　千愛	月1	3U154
+78	2026	第3クォーター	教養教育院	Academic English Communication B1	Stephen Horn	月1	3U155
+79	2026	第3クォーター	教養教育院	Academic English Communication B1	木原　恵美子	月1	3U156
+80	2026	第3クォーター	教養教育院	Academic English Communication B1	山中　司	月1	3U157
+81	2026	第3クォーター	教養教育院	Academic English Literacy B1	中村　麻美	月1	3U221
+82	2026	第3クォーター	教養教育院	Academic English Literacy B1	教員未定	月1	3U222
+83	2026	第3クォーター	教養教育院	Academic English Literacy B1	鈴木　朋子	月1	3U223
+84	2026	第3クォーター	教養教育院	Academic English Literacy B1	南本　徹	月1	3U224
+85	2026	第3クォーター	教養教育院	Academic English Literacy B1	池澤　匠	月1	3U225
+86	2026	第3クォーター	教養教育院	Academic English Literacy B1	池田　直樹	月1	3U226
+87	2026	第3クォーター	教養教育院	Academic English Literacy B1	武内 正美	月1	3U227
+88	2026	第3クォーター	教養教育院	Academic English Literacy B1	団野 恵美子	月1	3U228
+89	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	Cakebread Andrews Oliver Patrick	月1	3U301
+90	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	張　応謙	月1	3U302
+91	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	Gabriel TOMA	月1	3U303
+92	2026	第3クォーター	教養教育院	基礎物理化学１	木村 行宏	月1	3U821
+93	2026	第3クォーター	教養教育院	基礎物理化学１	福味　幸平	月1	3U822
+94	2026	第3クォーター	教養教育院	基礎有機化学１	今田　泰嗣	月1	3U824
+95	2026	第3クォーター	教養教育院	情報科学１	大寺　亮	月1	3U862
+96	2026	第3クォーター	教養教育院	情報科学１	清光 英成	月1	3U863
+97	2026	第4クォーター	教養教育院	論理学	佐々木 崇	月1	4U007
+98	2026	第4クォーター	教養教育院	芸術と文化Ａ	峯　恭子	月1	4U020
+99	2026	第4クォーター	教養教育院	法学Ｂ	中田　達也	月1	4U035
+100	2026	第4クォーター	教養教育院	政治学Ｂ	安岡 正晴	月1	4U037
+101	2026	第4クォーター	教養教育院	社会学	大川内　晋	月1	4U041
+102	2026	第4クォーター	教養教育院	地理学	菊地　真	月1	4U043
+103	2026	第4クォーター	教養教育院	文化人類学	岡田 浩樹	月1	4U045
+104	2026	第4クォーター	教養教育院	経済社会の発展	藤岡　秀英	月1	4U058
+105	2026	第4クォーター	教養教育院	生物資源と農業Ｄ	鈴木 武志	月1	4U086
+106	2026	第4クォーター	教養教育院	Academic English Communication B2	岩井 麻紀	月1	4U151
+107	2026	第4クォーター	教養教育院	Academic English Communication B2	大槻　有佳子	月1	4U152
+108	2026	第4クォーター	教養教育院	Academic English Communication B2	多賀谷 真吾	月1	4U153
+109	2026	第4クォーター	教養教育院	Academic English Communication B2	土田　千愛	月1	4U154
+110	2026	第4クォーター	教養教育院	Academic English Communication B2	Stephen Horn	月1	4U155
+111	2026	第4クォーター	教養教育院	Academic English Communication B2	木原　恵美子	月1	4U156
+112	2026	第4クォーター	教養教育院	Academic English Communication B2	山中　司	月1	4U157
+113	2026	第4クォーター	教養教育院	Academic English Literacy B2	中村　麻美	月1	4U221
+114	2026	第4クォーター	教養教育院	Academic English Literacy B2	教員未定	月1	4U222
+115	2026	第4クォーター	教養教育院	Academic English Literacy B2	鈴木　朋子	月1	4U223
+116	2026	第4クォーター	教養教育院	Academic English Literacy B2	南本　徹	月1	4U224
+117	2026	第4クォーター	教養教育院	Academic English Literacy B2	池澤　匠	月1	4U225
+118	2026	第4クォーター	教養教育院	Academic English Literacy B2	池田　直樹	月1	4U226
+119	2026	第4クォーター	教養教育院	Academic English Literacy B2	武内 正美	月1	4U227
+120	2026	第4クォーター	教養教育院	Academic English Literacy B2	団野 恵美子	月1	4U228
+121	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	Cakebread Andrews Oliver Patrick	月1	4U301
+122	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	張　応謙	月1	4U302
+123	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	Gabriel TOMA	月1	4U303
+124	2026	第4クォーター	教養教育院	基礎物理化学２	木村 行宏	月1	4U821
+125	2026	第4クォーター	教養教育院	基礎物理化学２	福味　幸平	月1	4U822
+126	2026	第4クォーター	教養教育院	基礎有機化学２	今田　泰嗣	月1	4U824
+127	2026	第4クォーター	教養教育院	情報科学２	大寺　亮	月1	4U862
+128	2026	第4クォーター	教養教育院	情報科学２	清光 英成	月1	4U863
+129	2026	第1クォーター	教養教育院	外国語セミナーＡ（英語）(主：外国語セミナーＡ（英語）)	中村　麻美	月2	1G310
+130	2026	第1クォーター	教養教育院	論理学	三輪　秦之	月2	1U005
+131	2026	第1クォーター	教養教育院	日本史Ｂ	長 志珠絵	月2	1U025
+132	2026	第1クォーター	教養教育院	西洋史Ａ	西又　悠	月2	1U031
+133	2026	第1クォーター	教養教育院	政治学Ａ	太田 和宏	月2	1U040
+134	2026	第1クォーター	教養教育院	政治学Ｂ	中村 覚	月2	1U043
+135	2026	第1クォーター	教養教育院	社会学	田村　豪	月2	1U046
+136	2026	第1クォーター	教養教育院	地理学	原　将也	月2	1U047
+137	2026	第1クォーター	教養教育院	経営学	八杉　裕美子	月2	1U049
+138	2026	第1クォーター	教養教育院	社会思想史	上野 成利	月2	1U051
+139	2026	第1クォーター	教養教育院	文化人類学	ラミレズ　亜望	月2	1U052
+140	2026	第1クォーター	教養教育院	政治と社会	井口　克郎	月2	1U058
+141	2026	第1クォーター	教養教育院	現代の経済Ｂ	柴本 昌彦	月2	1U065
+142	2026	第1クォーター	教養教育院	科学技術と社会Ｃ	山内 知也	月2	1U106
+143	2026	第1クォーター	教養教育院	Academic English Communication A1	木原　恵美子	月2	1U158
+144	2026	第1クォーター	教養教育院	Academic English Communication A1	岩井 麻紀	月2	1U159
+145	2026	第1クォーター	教養教育院	Academic English Communication A1	Cakebread Andrews Oliver Patrick	月2	1U160
+146	2026	第1クォーター	教養教育院	Academic English Communication A1	大槻　有佳子	月2	1U161
+147	2026	第1クォーター	教養教育院	Academic English Communication A1	韋　恩琦	月2	1U162
+148	2026	第1クォーター	教養教育院	Academic English Communication A1	山中　司	月2	1U163
+149	2026	第1クォーター	教養教育院	Academic English Communication A1	柏木 治美	月2	1U164
+150	2026	第1クォーター	教養教育院	Academic English Communication A1	石川 慎一郎	月2	1U165
+151	2026	第1クォーター	教養教育院	Academic English Literacy A1	団野 恵美子	月2	1U229
+152	2026	第1クォーター	教養教育院	Academic English Literacy A1	南本　徹	月2	1U230
+153	2026	第1クォーター	教養教育院	Academic English Literacy A1	横川 博一	月2	1U231
+154	2026	第1クォーター	教養教育院	Academic English Literacy A1	武内 正美	月2	1U232
+155	2026	第1クォーター	教養教育院	Academic English Literacy A1	張　応謙	月2	1U233
+156	2026	第1クォーター	教養教育院	Academic English Literacy A1	Stephen Horn	月2	1U234
+157	2026	第1クォーター	教養教育院	Academic English Literacy A1	島津 厚久	月2	1U235
+158	2026	第1クォーター	教養教育院	Academic English Literacy A1	池田　直樹	月2	1U236
+159	2026	第1クォーター	教養教育院	外国語セミナーＡ（英語）(副：外国語セミナーＡ（英語）)	中村　麻美	月2	1U310
+160	2026	前期	教養教育院	健康・スポーツ科学実習基礎	木村 哲也	月2	1U669
+161	2026	前期	教養教育院	健康・スポーツ科学実習基礎	武村 政徳	月2	1U670
+162	2026	前期	教養教育院	健康・スポーツ科学実習基礎	港野　恵美	月2	1U671
+163	2026	前期	教養教育院	健康・スポーツ科学実習基礎	中野　大輝	月2	1U672
+164	2026	第1クォーター	教養教育院	情報基礎	清光 英成	月2	1U8H2
+165	2026	第2クォーター	教養教育院	外国語セミナーＡ（英語）(主：外国語セミナーＡ（英語）)	中村　麻美	月2	2G310
+166	2026	第2クォーター	教養教育院	論理学	三輪　秦之	月2	2U005
+167	2026	第2クォーター	教養教育院	芸術と文化Ｂ	寺内　直子	月2	2U021
+168	2026	第2クォーター	教養教育院	法学Ａ	柴田　潤子	月2	2U038
+169	2026	第2クォーター	教養教育院	社会学	田村　豪	月2	2U043
+170	2026	第2クォーター	教養教育院	地理学	原　将也	月2	2U044
+171	2026	第2クォーター	教養教育院	経営学	八杉　裕美子	月2	2U046
+172	2026	第2クォーター	教養教育院	社会思想史	上野 成利	月2	2U048
+173	2026	第2クォーター	教養教育院	文化人類学	齋藤 剛	月2	2U049
+174	2026	第2クォーター	教養教育院	政治と社会	安岡 正晴	月2	2U055
+175	2026	第2クォーター	教養教育院	現代の経済Ｂ	柴本 昌彦	月2	2U062
+176	2026	第2クォーター	教養教育院	神戸大学史	菊地　真	月2	2U110
+177	2026	第2クォーター	教養教育院	科学技術と社会Ｄ	劉 秋生	月2	2U116
+178	2026	第2クォーター	教養教育院	Academic English Communication A2	木原　恵美子	月2	2U158
+179	2026	第2クォーター	教養教育院	Academic English Communication A2	岩井 麻紀	月2	2U159
+180	2026	第2クォーター	教養教育院	Academic English Communication A2	Cakebread Andrews Oliver Patrick	月2	2U160
+181	2026	第2クォーター	教養教育院	Academic English Communication A2	大槻　有佳子	月2	2U161
+182	2026	第2クォーター	教養教育院	Academic English Communication A2	韋　恩琦	月2	2U162
+183	2026	第2クォーター	教養教育院	Academic English Communication A2	山中　司	月2	2U163
+184	2026	第2クォーター	教養教育院	Academic English Communication A2	柏木 治美	月2	2U164
+185	2026	第2クォーター	教養教育院	Academic English Communication A2	石川 慎一郎	月2	2U165
+186	2026	第2クォーター	教養教育院	Academic English Literacy A2	団野 恵美子	月2	2U229
+187	2026	第2クォーター	教養教育院	Academic English Literacy A2	南本　徹	月2	2U230
+188	2026	第2クォーター	教養教育院	Academic English Literacy A2	横川 博一	月2	2U231
+189	2026	第2クォーター	教養教育院	Academic English Literacy A2	武内 正美	月2	2U232
+190	2026	第2クォーター	教養教育院	Academic English Literacy A2	張　応謙	月2	2U233
+191	2026	第2クォーター	教養教育院	Academic English Literacy A2	Stephen Horn	月2	2U234
+192	2026	第2クォーター	教養教育院	Academic English Literacy A2	島津 厚久	月2	2U235
+193	2026	第2クォーター	教養教育院	Academic English Literacy A2	池田　直樹	月2	2U236
+194	2026	第2クォーター	教養教育院	外国語セミナーＡ（英語）(副：外国語セミナーＡ（英語）)	中村　麻美	月2	2U310
+195	2026	第3クォーター	教養教育院	外国語セミナーＡ（英語）(主：外国語セミナーＡ（英語）)	中村　麻美	月2	3G310
+196	2026	第3クォーター	教養教育院	哲学	李　明哲	月2	3U001
+197	2026	第3クォーター	教養教育院	心理学Ａ	松本 絵理子	月2	3U003
+198	2026	第3クォーター	教養教育院	心理学Ｂ	林　創	月2	3U004
+199	2026	第3クォーター	教養教育院	教育学Ａ	北野　幸子	月2	3U008
+200	2026	第3クォーター	教養教育院	教育学Ｂ	教員未定	月2	3U009
+201	2026	第3クォーター	教養教育院	文学Ｂ	昆野　伸幸	月2	3U014
+202	2026	第3クォーター	教養教育院	言語科学Ａ	石山　裕慈	月2	3U017
+203	2026	第3クォーター	教養教育院	アジア史Ａ	貞好 康志	月2	3U028
+204	2026	第3クォーター	教養教育院	社会生活と法	藤井　真一	月2	3U053
+205	2026	第3クォーター	教養教育院	Academic English Communication B1	岩井 麻紀	月2	3U158
+206	2026	第3クォーター	教養教育院	Academic English Communication B1	大槻　有佳子	月2	3U159
+207	2026	第3クォーター	教養教育院	Academic English Communication B1	多賀谷 真吾	月2	3U160
+208	2026	第3クォーター	教養教育院	Academic English Communication B1	南本　徹	月2	3U161
+209	2026	第3クォーター	教養教育院	Academic English Communication B1	木原　恵美子	月2	3U162
+210	2026	第3クォーター	教養教育院	Academic English Communication B1	柏木 治美	月2	3U163
+211	2026	第3クォーター	教養教育院	Academic English Communication B1	土田　千愛	月2	3U164
+212	2026	第3クォーター	教養教育院	Academic English Communication B1	山中　司	月2	3U165
+213	2026	第3クォーター	教養教育院	Academic English Literacy B1	武内 正美	月2	3U229
+214	2026	第3クォーター	教養教育院	Academic English Literacy B1	張　応謙	月2	3U230
+215	2026	第3クォーター	教養教育院	Academic English Literacy B1	池田　直樹	月2	3U231
+216	2026	第3クォーター	教養教育院	Academic English Literacy B1	団野 恵美子	月2	3U232
+217	2026	第3クォーター	教養教育院	Academic English Literacy B1	教員未定	月2	3U233
+218	2026	第3クォーター	教養教育院	Academic English Literacy B1	鈴木　朋子	月2	3U234
+219	2026	第3クォーター	教養教育院	Academic English Literacy B1	大石　侑香	月2	3U235
+220	2026	第3クォーター	教養教育院	Academic English Literacy B1	Stephen Horn	月2	3U236
+221	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	Cakebread Andrews Oliver Patrick	月2	3U304
+222	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	Brad Colpitts	月2	3U305
+223	2026	第3クォーター	教養教育院	外国語セミナーＡ（英語）(副：外国語セミナーＡ（英語）)	中村　麻美	月2	3U310
+224	2026	第3クォーター	教養教育院	健康・スポーツ科学実習１	武村 政徳	月2	3U668
+225	2026	第3クォーター	教養教育院	健康・スポーツ科学実習１	早田　亘輝	月2	3U669
+226	2026	第3クォーター	教養教育院	生物学各論Ａ１	相馬　寿明	月2	3U841
+227	2026	第4クォーター	教養教育院	外国語セミナーＡ（英語）(主：外国語セミナーＡ（英語）)	中村　麻美	月2	4G310
+228	2026	第4クォーター	教養教育院	哲学	李　明哲	月2	4U001
+229	2026	第4クォーター	教養教育院	心理学Ａ	松本 絵理子	月2	4U003
+230	2026	第4クォーター	教養教育院	心理学Ｂ	林　創	月2	4U004
+231	2026	第4クォーター	教養教育院	教育学Ａ	川地　亜弥子	月2	4U008
+232	2026	第4クォーター	教養教育院	文学Ｂ	昆野　伸幸	月2	4U014
+233	2026	第4クォーター	教養教育院	言語科学Ａ	石山　裕慈	月2	4U017
+234	2026	第4クォーター	教養教育院	アジア史Ｂ	貞好 康志	月2	4U028
+235	2026	第4クォーター	教養教育院	社会生活と法	藤井　真一	月2	4U050
+236	2026	第4クォーター	教養教育院	Academic English Communication B2	岩井 麻紀	月2	4U158
+237	2026	第4クォーター	教養教育院	Academic English Communication B2	大槻　有佳子	月2	4U159
+238	2026	第4クォーター	教養教育院	Academic English Communication B2	多賀谷 真吾	月2	4U160
+239	2026	第4クォーター	教養教育院	Academic English Communication B2	南本　徹	月2	4U161
+240	2026	第4クォーター	教養教育院	Academic English Communication B2	木原　恵美子	月2	4U162
+241	2026	第4クォーター	教養教育院	Academic English Communication B2	柏木 治美	月2	4U163
+242	2026	第4クォーター	教養教育院	Academic English Communication B2	土田　千愛	月2	4U164
+243	2026	第4クォーター	教養教育院	Academic English Communication B2	山中　司	月2	4U165
+244	2026	第4クォーター	教養教育院	Academic English Literacy B2	武内 正美	月2	4U229
+245	2026	第4クォーター	教養教育院	Academic English Literacy B2	張　応謙	月2	4U230
+246	2026	第4クォーター	教養教育院	Academic English Literacy B2	池田　直樹	月2	4U231
+247	2026	第4クォーター	教養教育院	Academic English Literacy B2	団野 恵美子	月2	4U232
+248	2026	第4クォーター	教養教育院	Academic English Literacy B2	教員未定	月2	4U233
+249	2026	第4クォーター	教養教育院	Academic English Literacy B2	鈴木　朋子	月2	4U234
+250	2026	第4クォーター	教養教育院	Academic English Literacy B2	大石　侑香	月2	4U235
+251	2026	第4クォーター	教養教育院	Academic English Literacy B2	Stephen Horn	月2	4U236
+252	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	Cakebread Andrews Oliver Patrick	月2	4U304
+253	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	Brad Colpitts	月2	4U305
+254	2026	第4クォーター	教養教育院	外国語セミナーＡ（英語）(副：外国語セミナーＡ（英語）)	中村　麻美	月2	4U310
+255	2026	第4クォーター	教養教育院	健康・スポーツ科学実習２	武村 政徳	月2	4U668
+256	2026	第4クォーター	教養教育院	健康・スポーツ科学実習２	早田　亘輝	月2	4U669
+257	2026	第4クォーター	教養教育院	生物学各論Ａ２	相馬　寿明	月2	4U841
+258	2026	前期	教養教育院	国際協力アクティブ・ラーニングＢ(主：International Polar Law 2)	柴田 明穂	月3	1G093
+259	2026	前期	教養教育院	国際協力アクティブ・ラーニングＢ(主：International Polar Law 2)	柴田 明穂	月3	1U093
+260	2026	第1クォーター	教養教育院	Academic English Communication A1	長嶺 圭子	月3	1U166
+261	2026	第1クォーター	教養教育院	Academic English Communication A1	山口　征孝	月3	1U167
+262	2026	第1クォーター	教養教育院	Academic English Communication A1	野原　万里	月3	1U168
+263	2026	第1クォーター	教養教育院	Academic English Communication A1	Brad Colpitts	月3	1U169
+264	2026	第1クォーター	教養教育院	Academic English Communication A1	THOMAS,Julian	月3	1U170
+265	2026	第1クォーター	教養教育院	Academic English Communication A1	石川 慎一郎	月3	1U171
+266	2026	第1クォーター	教養教育院	Academic English Communication A1	柏木 治美	月3	1U172
+267	2026	第1クォーター	教養教育院	Academic English Literacy A1	浅野　真也	月3	1U237
+268	2026	第1クォーター	教養教育院	Academic English Literacy A1	保田　幸子	月3	1U238
+269	2026	第1クォーター	教養教育院	Academic English Literacy A1	深町　悟	月3	1U239
+270	2026	第1クォーター	教養教育院	Academic English Literacy A1	池田　直樹	月3	1U240
+271	2026	第1クォーター	教養教育院	Academic English Literacy A1	Chapman-S Ben	月3	1U241
+272	2026	第1クォーター	教養教育院	Academic English Literacy A1	Mullin Bertram	月3	1U242
+273	2026	第1クォーター	教養教育院	Academic English Literacy A1	多賀谷 真吾	月3	1U243
+274	2026	第1クォーター	教養教育院	基礎無機化学１	梶並　昭彦	月3	1U823
+275	2026	第1クォーター	教養教育院	生物学実験１	原山 洋	月3,4	1U846
+276	2026	第1クォーター	教養教育院	情報基礎	西田 健志	月3	1U8T1
+277	2026	第2クォーター	教養教育院	Academic English Communication A2	長嶺 圭子	月3	2U166
+278	2026	第2クォーター	教養教育院	Academic English Communication A2	山口　征孝	月3	2U167
+279	2026	第2クォーター	教養教育院	Academic English Communication A2	野原　万里	月3	2U168
+280	2026	第2クォーター	教養教育院	Academic English Communication A2	Brad Colpitts	月3	2U169
+281	2026	第2クォーター	教養教育院	Academic English Communication A2	THOMAS,Julian	月3	2U170
+282	2026	第2クォーター	教養教育院	Academic English Communication A2	石川 慎一郎	月3	2U171
+283	2026	第2クォーター	教養教育院	Academic English Communication A2	柏木 治美	月3	2U172
+284	2026	第2クォーター	教養教育院	Academic English Literacy A2	浅野　真也	月3	2U237
+285	2026	第2クォーター	教養教育院	Academic English Literacy A2	保田　幸子	月3	2U238
+286	2026	第2クォーター	教養教育院	Academic English Literacy A2	深町　悟	月3	2U239
+287	2026	第2クォーター	教養教育院	Academic English Literacy A2	池田　直樹	月3	2U240
+288	2026	第2クォーター	教養教育院	Academic English Literacy A2	Chapman-S Ben	月3	2U241
+289	2026	第2クォーター	教養教育院	Academic English Literacy A2	Mullin Bertram	月3	2U242
+290	2026	第2クォーター	教養教育院	Academic English Literacy A2	多賀谷 真吾	月3	2U243
+291	2026	第2クォーター	教養教育院	基礎無機化学２	梶並　昭彦	月3	2U823
+292	2026	第2クォーター	教養教育院	生物学実験２	原山 洋	月3,4	2U846
+293	2026	第3クォーター	教養教育院	外国語セミナーＣ（英語）(主：外国語セミナーＣ（英語）)	Jimmy J.Aames	月3	3G312
+294	2026	第3クォーター	教養教育院	大学教育論	近田　政博	月3	3G957
+295	2026	第3クォーター	教養教育院	Academic English Communication B1	THOMAS,Julian	月3	3U166
+296	2026	第3クォーター	教養教育院	Academic English Communication B1	柏木 治美	月3	3U167
+297	2026	第3クォーター	教養教育院	Academic English Communication B1	張　応謙	月3	3U168
+298	2026	第3クォーター	教養教育院	Academic English Communication B1	野原　万里	月3	3U169
+299	2026	第3クォーター	教養教育院	Academic English Communication B1	長嶺 圭子	月3	3U170
+300	2026	第3クォーター	教養教育院	Academic English Communication B1	木原　恵美子	月3	3U171
+301	2026	第3クォーター	教養教育院	Academic English Communication B1	Gabriel TOMA	月3	3U172
+302	2026	第3クォーター	教養教育院	Academic English Communication B1	石川 慎一郎	月3	3U173
+303	2026	第3クォーター	教養教育院	Academic English Literacy B1	Chapman-S Ben	月3	3U237
+304	2026	第3クォーター	教養教育院	Academic English Literacy B1	池田　直樹	月3	3U238
+305	2026	第3クォーター	教養教育院	Academic English Literacy B1	島津 厚久	月3	3U239
+306	2026	第3クォーター	教養教育院	Academic English Literacy B1	浅野　真也	月3	3U240
+307	2026	第3クォーター	教養教育院	Academic English Literacy B1	保田　幸子	月3	3U241
+308	2026	第3クォーター	教養教育院	Academic English Literacy B1	深町　悟	月3	3U242
+309	2026	第3クォーター	教養教育院	Academic English Literacy B1	Mullin Bertram	月3	3U243
+310	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	Cakebread Andrews Oliver Patrick	月3	3U306
+311	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	Brad Colpitts	月3	3U307
+312	2026	第3クォーター	教養教育院	外国語セミナーＣ（英語）(副：外国語セミナーＣ（英語）)	Jimmy J.Aames	月3	3U312
+313	2026	第3クォーター	教養教育院	健康・スポーツ科学講義Ａ	原田　和弘	月3	3U726
+314	2026	第3クォーター	教養教育院	健康・スポーツ科学講義Ｂ	三浦 靖史	月3	3U728
+315	2026	第3クォーター	教養教育院	生物学実験１	酒井 恒	月3,4	3U844
+316	2026	第4クォーター	教養教育院	外国語セミナーＣ（英語）(主：外国語セミナーＣ（英語）)	Jimmy J.Aames	月3	4G312
+317	2026	第4クォーター	教養教育院	Academic English Communication B2	THOMAS,Julian	月3	4U166
+318	2026	第4クォーター	教養教育院	Academic English Communication B2	柏木 治美	月3	4U167
+319	2026	第4クォーター	教養教育院	Academic English Communication B2	張　応謙	月3	4U168
+320	2026	第4クォーター	教養教育院	Academic English Communication B2	野原　万里	月3	4U169
+321	2026	第4クォーター	教養教育院	Academic English Communication B2	長嶺 圭子	月3	4U170
+322	2026	第4クォーター	教養教育院	Academic English Communication B2	木原　恵美子	月3	4U171
+323	2026	第4クォーター	教養教育院	Academic English Communication B2	Gabriel TOMA	月3	4U172
+324	2026	第4クォーター	教養教育院	Academic English Communication B2	石川 慎一郎	月3	4U173
+325	2026	第4クォーター	教養教育院	Academic English Literacy B2	Chapman-S Ben	月3	4U237
+326	2026	第4クォーター	教養教育院	Academic English Literacy B2	池田　直樹	月3	4U238
+327	2026	第4クォーター	教養教育院	Academic English Literacy B2	島津 厚久	月3	4U239
+328	2026	第4クォーター	教養教育院	Academic English Literacy B2	浅野　真也	月3	4U240
+329	2026	第4クォーター	教養教育院	Academic English Literacy B2	保田　幸子	月3	4U241
+330	2026	第4クォーター	教養教育院	Academic English Literacy B2	深町　悟	月3	4U242
+331	2026	第4クォーター	教養教育院	Academic English Literacy B2	Mullin Bertram	月3	4U243
+332	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	Cakebread Andrews Oliver Patrick	月3	4U306
+333	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	Brad Colpitts	月3	4U307
+334	2026	第4クォーター	教養教育院	外国語セミナーＣ（英語）(副：外国語セミナーＣ（英語）)	Jimmy J.Aames	月3	4U312
+335	2026	第4クォーター	教養教育院	生物学実験２	岩﨑 哲史	月3,4	4U844
+336	2026	第1クォーター	教養教育院	Academic English Communication A1	長嶺 圭子	月4	1U174
+337	2026	第1クォーター	教養教育院	Academic English Communication A1	野原　万里	月4	1U175
+338	2026	第1クォーター	教養教育院	Academic English Communication A1	山口　征孝	月4	1U176
+339	2026	第1クォーター	教養教育院	Academic English Communication A1	Brad Colpitts	月4	1U177
+340	2026	第1クォーター	教養教育院	Academic English Communication A1	石川 慎一郎	月4	1U178
+341	2026	第1クォーター	教養教育院	Academic English Communication A1	山中　司	月4	1U179
+342	2026	第1クォーター	教養教育院	Academic English Communication A1	佐藤　健	月4	1U180
+343	2026	第1クォーター	教養教育院	Academic English Communication A1	THOMAS,Julian	月4	1U181
+344	2026	第1クォーター	教養教育院	Academic English Literacy A1	浅野　真也	月4	1U244
+345	2026	第1クォーター	教養教育院	Academic English Literacy A1	保田　幸子	月4	1U245
+346	2026	第1クォーター	教養教育院	Academic English Literacy A1	深町　悟	月4	1U246
+347	2026	第1クォーター	教養教育院	Academic English Literacy A1	Chapman-S Ben	月4	1U247
+348	2026	第1クォーター	教養教育院	Academic English Literacy A1	Mullin Bertram	月4	1U248
+349	2026	第1クォーター	教養教育院	Academic English Literacy A1	多賀谷 真吾	月4	1U249
+350	2026	第1クォーター	教養教育院	Academic English Literacy A1	島津 厚久	月4	1U250
+351	2026	第1クォーター	教養教育院	Academic English Literacy A1	韋　恩琦	月4	1U251
+352	2026	第1クォーター	教養教育院	Academic English Literacy A1	Stephen Horn	月4	1U252
+353	2026	第1クォーター	教養教育院	生物学概論Ａ１	蘆田　弘樹	月4	1U841
+354	2026	第1クォーター	教養教育院	生物学概論Ｂ１	駒井　浩一郎	月4	1U842
+355	2026	第1クォーター	教養教育院	生物学概論Ｃ１	武石　明佳	月4	1U843
+356	2026	第1クォーター	教養教育院	生物学概論Ｄ１	石井 尊生	月4	1U844
+357	2026	第1クォーター	教養教育院	生物学各論Ｅ１	前藤　薫	月4	1U845
+358	2026	第1クォーター	教養教育院	情報基礎	藤井　信忠	月4	1U8E1
+359	2026	第1クォーター	教養教育院	情報基礎	西田 健志	月4	1U8E2
+360	2026	第2クォーター	教養教育院	Academic English Communication A2	長嶺 圭子	月4	2U174
+361	2026	第2クォーター	教養教育院	Academic English Communication A2	野原　万里	月4	2U175
+362	2026	第2クォーター	教養教育院	Academic English Communication A2	山口　征孝	月4	2U176
+363	2026	第2クォーター	教養教育院	Academic English Communication A2	Brad Colpitts	月4	2U177
+364	2026	第2クォーター	教養教育院	Academic English Communication A2	石川 慎一郎	月4	2U178
+365	2026	第2クォーター	教養教育院	Academic English Communication A2	山中　司	月4	2U179
+366	2026	第2クォーター	教養教育院	Academic English Communication A2	佐藤　健	月4	2U180
+367	2026	第2クォーター	教養教育院	Academic English Communication A2	THOMAS,Julian	月4	2U181
+368	2026	第2クォーター	教養教育院	Academic English Literacy A2	浅野　真也	月4	2U244
+369	2026	第2クォーター	教養教育院	Academic English Literacy A2	保田　幸子	月4	2U245
+370	2026	第2クォーター	教養教育院	Academic English Literacy A2	深町　悟	月4	2U246
+371	2026	第2クォーター	教養教育院	Academic English Literacy A2	Chapman-S Ben	月4	2U247
+372	2026	第2クォーター	教養教育院	Academic English Literacy A2	Mullin Bertram	月4	2U248
+373	2026	第2クォーター	教養教育院	Academic English Literacy A2	多賀谷 真吾	月4	2U249
+374	2026	第2クォーター	教養教育院	Academic English Literacy A2	島津 厚久	月4	2U250
+375	2026	第2クォーター	教養教育院	Academic English Literacy A2	韋　恩琦	月4	2U251
+376	2026	第2クォーター	教養教育院	Academic English Literacy A2	Stephen Horn	月4	2U252
+377	2026	第2クォーター	教養教育院	生物学概論Ａ２	丑丸 敦史	月4	2U841
+378	2026	第2クォーター	教養教育院	生物学概論Ｂ２	駒井　浩一郎	月4	2U842
+379	2026	第2クォーター	教養教育院	生物学概論Ｃ２	越智　陽城	月4	2U843
+380	2026	第2クォーター	教養教育院	生物学概論Ｄ２	中屋敷 均	月4	2U844
+381	2026	第2クォーター	教養教育院	生物学各論Ｅ２	前藤　薫	月4	2U845
+382	2026	第3クォーター	教養教育院	データサイエンスPBL演習(主：データサイエンスPBL演習)	中田　匠哉	月4	3G107
+383	2026	第3クォーター	教養教育院	外国語セミナーＡ（中国語）(主：外国語セミナーＡ（中国語）)	高橋　康徳	月4	3G632
+384	2026	第3クォーター	教養教育院	データサイエンスPBL演習(副：データサイエンスPBL演習)	中田　匠哉	月4	3U107
+385	2026	後期	教養教育院	放射線科学(主：放射線科学)	山内 靖雄	月4	3U122
+386	2026	第3クォーター	教養教育院	Academic English Communication B1	山中　司	月4	3U174
+387	2026	第3クォーター	教養教育院	Academic English Communication B1	柏木 治美	月4	3U175
+388	2026	第3クォーター	教養教育院	Academic English Communication B1	Gabriel TOMA	月4	3U176
+389	2026	第3クォーター	教養教育院	Academic English Communication B1	長嶺 圭子	月4	3U177
+390	2026	第3クォーター	教養教育院	Academic English Communication B1	THOMAS,Julian	月4	3U178
+391	2026	第3クォーター	教養教育院	Academic English Communication B1	石川 慎一郎	月4	3U179
+392	2026	第3クォーター	教養教育院	Academic English Communication B1	池澤　匠	月4	3U180
+393	2026	第3クォーター	教養教育院	Academic English Communication B1	野原　万里	月4	3U181
+394	2026	第3クォーター	教養教育院	Academic English Literacy B1	保田　幸子	月4	3U244
+395	2026	第3クォーター	教養教育院	Academic English Literacy B1	深町　悟	月4	3U245
+396	2026	第3クォーター	教養教育院	Academic English Literacy B1	Chapman-S Ben	月4	3U246
+397	2026	第3クォーター	教養教育院	Academic English Literacy B1	島津 厚久	月4	3U247
+398	2026	第3クォーター	教養教育院	Academic English Literacy B1	大石　侑香	月4	3U248
+399	2026	第3クォーター	教養教育院	Academic English Literacy B1	韋　恩琦	月4	3U249
+400	2026	第3クォーター	教養教育院	Academic English Literacy B1	Stephen Horn	月4	3U250
+401	2026	第3クォーター	教養教育院	Academic English Literacy B1	Mullin Bertram	月4	3U251
+402	2026	第3クォーター	教養教育院	Academic English Literacy B1	浅野　真也	月4	3U252
+403	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	張　応謙	月4	3U308
+404	2026	第3クォーター	教養教育院	Academic English Literacy B1（ACE）	Brad Colpitts	月4	3U309
+405	2026	第3クォーター	教養教育院	外国語セミナーＡ（中国語）(副：外国語セミナーＡ（中国語）)	高橋　康徳	月4	3U632
+406	2026	第3クォーター	教養教育院	健康・スポーツ科学講義Ａ	村山　留美子	月4	3U727
+407	2026	第3クォーター	教養教育院	健康・スポーツ科学講義Ｂ	秋末 敏宏	月4	3U729
+408	2026	第3クォーター	教養教育院	生物学各論Ｃ１	森田 光洋	月4	3U842
+409	2026	第4クォーター	教養教育院	データサイエンスPBL演習(主：データサイエンスPBL演習)	陳　思楠	月4	4G099
+410	2026	第4クォーター	教養教育院	外国語セミナーＢ（中国語）(主：外国語セミナーＢ（中国語）)	高橋　康徳	月4	4G632
+411	2026	第4クォーター	教養教育院	データサイエンスPBL演習(副：データサイエンスPBL演習)	陳　思楠	月4	4U099
+412	2026	第4クォーター	教養教育院	Academic English Communication B2	山中　司	月4	4U174
+413	2026	第4クォーター	教養教育院	Academic English Communication B2	柏木 治美	月4	4U175
+414	2026	第4クォーター	教養教育院	Academic English Communication B2	Gabriel TOMA	月4	4U176
+415	2026	第4クォーター	教養教育院	Academic English Communication B2	長嶺 圭子	月4	4U177
+416	2026	第4クォーター	教養教育院	Academic English Communication B2	THOMAS,Julian	月4	4U178
+417	2026	第4クォーター	教養教育院	Academic English Communication B2	石川 慎一郎	月4	4U179
+418	2026	第4クォーター	教養教育院	Academic English Communication B2	池澤　匠	月4	4U180
+419	2026	第4クォーター	教養教育院	Academic English Communication B2	野原　万里	月4	4U181
+420	2026	第4クォーター	教養教育院	Academic English Literacy B2	保田　幸子	月4	4U244
+421	2026	第4クォーター	教養教育院	Academic English Literacy B2	深町　悟	月4	4U245
+422	2026	第4クォーター	教養教育院	Academic English Literacy B2	Chapman-S Ben	月4	4U246
+423	2026	第4クォーター	教養教育院	Academic English Literacy B2	島津 厚久	月4	4U247
+424	2026	第4クォーター	教養教育院	Academic English Literacy B2	大石　侑香	月4	4U248
+425	2026	第4クォーター	教養教育院	Academic English Literacy B2	韋　恩琦	月4	4U249
+426	2026	第4クォーター	教養教育院	Academic English Literacy B2	Stephen Horn	月4	4U250
+427	2026	第4クォーター	教養教育院	Academic English Literacy B2	Mullin Bertram	月4	4U251
+428	2026	第4クォーター	教養教育院	Academic English Literacy B2	浅野　真也	月4	4U252
+429	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	張　応謙	月4	4U308
+430	2026	第4クォーター	教養教育院	Academic English Literacy B2（ACE）	Brad Colpitts	月4	4U309
+431	2026	第4クォーター	教養教育院	外国語セミナーＢ（中国語）(副：外国語セミナーＢ（中国語）)	高橋　康徳	月4	4U632
+432	2026	第4クォーター	教養教育院	生物学各論Ｃ２	大沼　亮	月4	4U842
+433	2026	第1クォーター	教養教育院	海外留学のすすめＡ	西川　太郎	月5	1U108
+434	2026	第1クォーター	教養教育院	データサイエンス基礎学	藤　博之	月5	1U110
+435	2026	第1クォーター	教養教育院	情報基礎	伴　好弘	月5	1U861
+436	2026	第2クォーター	教養教育院	ひょうご神戸学	松下　正和	月5	2U095
+437	2026	第2クォーター	教養教育院	多文化共生のための日本語コミュニケーション	黒田 千晴	月5	2U118
+438	2026	第2クォーター	教養教育院	海外留学のすすめB	余　玟欣	月5	2U122
+439	2026	第3クォーター	教養教育院	ひょうご神戸学	松下　正和	月5	3U098
+440	2026	第3クォーター	教養教育院	データサイエンス基礎演習	陳　思楠	月5	3U103
+441	2026	第3クォーター	教養教育院	価値創造論基礎	鶴田 宏樹	月5	3U117
+442	2026	第3クォーター	教養教育院	国際協力の現状と課題Ａ	李　尚祐	月5	3U128
+443	2026	第3クォーター	教養教育院	情報基礎	伴　好弘	月5	3U861
+444	2026	第4クォーター	教養教育院	データサイエンス基礎演習	中村 匡秀	月5	4U095

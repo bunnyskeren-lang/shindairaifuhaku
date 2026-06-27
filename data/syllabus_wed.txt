@@ -1,0 +1,512 @@
+﻿No.    年度    開講区分    所属    科目名    成績入力担当    曜日・時限    時間割コード
+1    2026    第1クォーター    教養教育院    法学Ｂ    福山　好典    水1    1U038
+2    2026    第1クォーター    教養教育院    政治学Ａ    太田 和宏    水1    1U041
+3    2026    第1クォーター    教養教育院    経済学Ｂ    LUONG Anh Dung    水1    1U045
+4    2026    第1クォーター    教養教育院    地理学    中川　祐希    水1    1U048
+5    2026    第1クォーター    教養教育院    文化人類学    ラミレズ　亜望    水1    1U053
+6    2026    第1クォーター    教養教育院    現代社会論Ａ    山下　泰幸    水1    1U054
+7    2026    第1クォーター    教養教育院    国家と法    吉原　司    水1    1U063
+8    2026    第1クォーター    教養教育院    現代の経済Ｂ    岡島　成治    水1    1U066
+9    2026    第1クォーター    教養教育院    国際協力の現状と課題Ａ    河村　有介    水1    1U091
+10    2026    第1クォーター    教養教育院    Academic English Communication A1    深川　宏樹    水1    1U182
+11    2026    第1クォーター    教養教育院    Academic English Communication A1    伊藤 友美    水1    1U183
+12    2026    第1クォーター    教養教育院    Academic English Communication A1    岡本　佳子    水1    1U184
+13    2026    第1クォーター    教養教育院    Academic English Communication A1    鈴木　朋子    水1    1U185
+14    2026    第1クォーター    教養教育院    Academic English Communication A1    Tim　Greer    水1    1U186
+15    2026    第1クォーター    教養教育院    Academic English Communication A1    土田　千愛    水1    1U187
+16    2026    第1クォーター    教養教育院    Academic English Communication A1    佐藤　健    水1    1U188
+17    2026    第1クォーター    教養教育院    Academic English Communication A1    Beaton Jason    水1    1U189
+18    2026    第1クォーター    教養教育院    Academic English Literacy A1    BELARGA OLIVER    水1    1U253
+19    2026    第1クォーター    教養教育院    Academic English Literacy A1    Stephen Horn    水1    1U254
+20    2026    第1クォーター    教養教育院    Academic English Literacy A1    LIPEDE ADEBOYE OLADIPO GABIOLA    水1    1U255
+21    2026    第1クォーター    教養教育院    Academic English Literacy A1    牧田　快    水1    1U256
+22    2026    第1クォーター    教養教育院    Academic English Literacy A1    池田　直樹    水1    1U257
+23    2026    第1クォーター    教養教育院    Academic English Literacy A1    合原　織部    水1    1U258
+24    2026    第1クォーター    教養教育院    Academic English Literacy A1    Mullin Bertram    水1    1U259
+25    2026    第1クォーター    教養教育院    Academic English Literacy A1    TAN JOY ANN FAITH FRANCISCO    水1    1U260
+26    2026    前期    教養教育院    健康・スポーツ科学実習基礎    伊賀野　大    水1    1U680
+27    2026    前期    教養教育院    健康・スポーツ科学実習基礎    益冨 真子    水1    1U681
+28    2026    前期    教養教育院    健康・スポーツ科学実習基礎    久永　将太    水1    1U682
+29    2026    第1クォーター    教養教育院    基礎地学１    三木 雅子    水1    1U851
+30    2026    第1クォーター    教養教育院    情報基礎    大寺　亮    水1    1U8M1
+31    2026    第1クォーター    教養教育院    情報基礎    副島　尭史    水1    1U8M2
+32    2026    第2クォーター    教養教育院    法学Ａ    柴田　潤子    水1    2U039
+33    2026    第2クォーター    教養教育院    法学Ｂ    福山　好典    水1    2U040
+34    2026    第2クォーター    教養教育院    経済学Ａ    宮川 栄一    水1    2U042
+35    2026    第2クォーター    教養教育院    地理学    中川　祐希    水1    2U045
+36    2026    第2クォーター    教養教育院    文化人類学    齋藤 剛    水1    2U050
+37    2026    第2クォーター    教養教育院    生活環境と技術    内山　愉太    水1    2U054
+38    2026    第2クォーター    教養教育院    政治と社会    井上　弘貴    水1    2U057
+39    2026    第2クォーター    教養教育院    現代の経済Ａ    石黒 一彦    水1    2U061
+40    2026    第2クォーター    教養教育院    経済社会の発展    綿貫　友子    水1    2U065
+41    2026    第2クォーター    教養教育院    教育と社会    葛城　浩一    水1    2U067
+42    2026    第2クォーター    教養教育院    Academic English Communication A2    深川　宏樹    水1    2U182
+43    2026    第2クォーター    教養教育院    Academic English Communication A2    伊藤 友美    水1    2U183
+44    2026    第2クォーター    教養教育院    Academic English Communication A2    岡本　佳子    水1    2U184
+45    2026    第2クォーター    教養教育院    Academic English Communication A2    鈴木　朋子    水1    2U185
+46    2026    第2クォーター    教養教育院    Academic English Communication A2    Tim　Greer    水1    2U186
+47    2026    第2クォーター    教養教育院    Academic English Communication A2    土田　千愛    水1    2U187
+48    2026    第2クォーター    教養教育院    Academic English Communication A2    佐藤　健    水1    2U188
+49    2026    第2クォーター    教養教育院    Academic English Communication A2    Beaton Jason    水1    2U189
+50    2026    第2クォーター    教養教育院    Academic English Literacy A2    BELARGA OLIVER    水1    2U253
+51    2026    第2クォーター    教養教育院    Academic English Literacy A2    Stephen Horn    水1    2U254
+52    2026    第2クォーター    教養教育院    Academic English Literacy A2    LIPEDE ADEBOYE OLADIPO GABIOLA    水1    2U255
+53    2026    第2クォーター    教養教育院    Academic English Literacy A2    牧田　快    水1    2U256
+54    2026    第2クォーター    教養教育院    Academic English Literacy A2    池田　直樹    水1    2U257
+55    2026    第2クォーター    教養教育院    Academic English Literacy A2    合原　織部    水1    2U258
+56    2026    第2クォーター    教養教育院    Academic English Literacy A2    Mullin Bertram    水1    2U259
+57    2026    第2クォーター    教養教育院    Academic English Literacy A2    TAN JOY ANN FAITH FRANCISCO    水1    2U260
+58    2026    第2クォーター    教養教育院    基礎地学２    三木 雅子    水1    2U851
+59    2026    第3クォーター    教養教育院    哲学    新川　拓哉    水1    3U002
+60    2026    第3クォーター    教養教育院    心理学Ｂ    岸田　広平    水1    3U005
+61    2026    第3クォーター    教養教育院    文学Ｂ    都田　康仁    水1    3U015
+62    2026    第3クォーター    教養教育院    言語科学Ａ    曠　景明    水1    3U018
+63    2026    第3クォーター    教養教育院    芸術と文化Ｂ    板倉　史明    水1    3U023
+64    2026    第3クォーター    教養教育院    日本史Ａ    辛島　理人    水1    3U025
+65    2026    第3クォーター    教養教育院    西洋史Ａ    小澤　卓也    水1    3U030
+66    2026    第3クォーター    教養教育院    法学Ａ    松山　沙織    水1    3U036
+67    2026    第3クォーター    教養教育院    政治と社会    佐藤　良輔    水1    3U052
+68    2026    第3クォーター    教養教育院    社会生活と法    幡野　弘樹    水1    3U054
+69    2026    第3クォーター    教養教育院    現代の経済Ａ    小川　景司    水1    3U057
+70    2026    第3クォーター    教養教育院    現代の経済Ｂ    柘植　隆宏    水1    3U105
+71    2026    第3クォーター    教養教育院    Academic English Communication B1    Beaton Jason    水1    3U182
+72    2026    第3クォーター    教養教育院    Academic English Communication B1    Andy Rushton    水1    3U183
+73    2026    第3クォーター    教養教育院    Academic English Communication B1    鈴木　朋子    水1    3U184
+74    2026    第3クォーター    教養教育院    Academic English Communication B1    Jimmy J.Aames    水1    3U185
+75    2026    第3クォーター    教養教育院    Academic English Communication B1    伊藤 友美    水1    3U186
+76    2026    第3クォーター    教養教育院    Academic English Communication B1    岡本　佳子    水1    3U187
+77    2026    第3クォーター    教養教育院    Academic English Communication B1    Mullin Bertram    水1    3U188
+78    2026    第3クォーター    教養教育院    Academic English Communication B1    佐藤　健    水1    3U190
+79    2026    第3クォーター    教養教育院    Academic English Literacy B1    岡田 浩樹    水1    3U253
+80    2026    第3クォーター    教養教育院    Academic English Literacy B1    牧田　快    水1    3U254
+81    2026    第3クォーター    教養教育院    Academic English Literacy B1    合原　織部    水1    3U255
+82    2026    第3クォーター    教養教育院    Academic English Literacy B1    BELARGA OLIVER    水1    3U256
+83    2026    第3クォーター    教養教育院    Academic English Literacy B1    Stephen Horn    水1    3U257
+84    2026    第3クォーター    教養教育院    Academic English Literacy B1    LIPEDE ADEBOYE OLADIPO GABIOLA    水1    3U258
+85    2026    第3クォーター    教養教育院    Academic English Literacy B1    池田　直樹    水1    3U259
+86    2026    第3クォーター    教養教育院    Academic English Literacy B1    土田　千愛    水1    3U260
+87    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    Michael D. Smith    水1    3U291
+88    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    Tim　Greer    水1    3U292
+89    2026    第4クォーター    教養教育院    哲学    新川　拓哉    水1    4U002
+90    2026    第4クォーター    教養教育院    心理学Ｂ    岸田　広平    水1    4U005
+91    2026    第4クォーター    教養教育院    文学Ｂ    都田　康仁    水1    4U015
+92    2026    第4クォーター    教養教育院    言語科学Ａ    曠　景明    水1    4U018
+93    2026    第4クォーター    教養教育院    芸術と文化Ｂ    板倉　史明    水1    4U023
+94    2026    第4クォーター    教養教育院    日本史Ｂ    辛島　理人    水1    4U026
+95    2026    第4クォーター    教養教育院    西洋史Ｂ    小澤　卓也    水1    4U030
+96    2026    第4クォーター    教養教育院    生活環境と技術    井上 真理    水1    4U048
+97    2026    第4クォーター    教養教育院    現代の経済Ａ    八木　浩平    水1    4U055
+98    2026    第4クォーター    教養教育院    Academic English Communication B2    Beaton Jason    水1    4U182
+99    2026    第4クォーター    教養教育院    Academic English Communication B2    Andy Rushton    水1    4U183
+100    2026    第4クォーター    教養教育院    Academic English Communication B2    鈴木　朋子    水1    4U184
+101    2026    第4クォーター    教養教育院    Academic English Communication B2    Jimmy J.Aames    水1    4U185
+102    2026    第4クォーター    教養教育院    Academic English Communication B2    伊藤 友美    水1    4U186
+103    2026    第4クォーター    教養教育院    Academic English Communication B2    岡本　佳子    水1    4U187
+104    2026    第4クォーター    教養教育院    Academic English Communication B2    Mullin Bertram    水1    4U188
+105    2026    第4クォーター    教養教育院    Academic English Communication B2    佐藤　健    水1    4U190
+106    2026    第4クォーター    教養教育院    Academic English Literacy B2    岡田 浩樹    水1    4U253
+107    2026    第4クォーター    教養教育院    Academic English Literacy B2    牧田　快    水1    4U254
+108    2026    第4クォーター    教養教育院    Academic English Literacy B2    合原　織部    水1    4U255
+109    2026    第4クォーター    教養教育院    Academic English Literacy B2    BELARGA OLIVER    水1    4U256
+110    2026    第4クォーター    教養教育院    Academic English Literacy B2    Stephen Horn    水1    4U257
+111    2026    第4クォーター    教養教育院    Academic English Literacy B2    LIPEDE ADEBOYE OLADIPO GABIOLA    水1    4U258
+112    2026    第4クォーター    教養教育院    Academic English Literacy B2    池田　直樹    水1    4U259
+113    2026    第4クォーター    教養教育院    Academic English Literacy B2    土田　千愛    水1    4U260
+114    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    Michael D. Smith    水1    4U291
+115    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    Tim　Greer    水1    4U292
+116    2026    第1クォーター    教養教育院    外国語セミナーＣ（英語）(主：外国語セミナーＣ（英語）)    Jimmy J.Aames    水2    1G312
+117    2026    第1クォーター    教養教育院    心理学Ａ    石川　萌子    水2    1U002
+118    2026    第1クォーター    教養教育院    心理学Ｂ    木下 孝司    水2    1U003
+119    2026    第1クォーター    教養教育院    論理学    佐々木 崇    水2    1U006
+120    2026    第1クォーター    教養教育院    教育学Ａ    目黒 強    水2    1U008
+121    2026    第1クォーター    教養教育院    教育学Ｂ    大山　牧子    水2    1U009
+122    2026    第1クォーター    教養教育院    倫理学    田中　祐理子    水2    1U012
+123    2026    第1クォーター    教養教育院    政治と社会    井上　弘貴    水2    1U060
+124    2026    第1クォーター    教養教育院    教育と社会    葛城　浩一    水2    1U067
+125    2026    第1クォーター    教養教育院    現代物理学が描く世界    大久保 晋    水2    1U086
+126    2026    第1クォーター    教養教育院    身近な物理法則    園田　英徳    水2    1U087
+127    2026    第1クォーター    教養教育院    生物学Ｄ    杉浦 真治    水2    1U088
+128    2026    第1クォーター    教養教育院    カタチの自然学A    鈴木　広隆    水2    1U089
+129    2026    第1クォーター    教養教育院    科学技術と社会Ａ    水島　靖典    水2    1U105
+130    2026    第1クォーター    教養教育院    科学技術と社会Ｃ    荻野　千秋    水2    1U107
+131    2026    第1クォーター    教養教育院    Academic English Communication A1    野原　万里    水2    1U190
+132    2026    第1クォーター    教養教育院    Academic English Communication A1    田中 順子    水2    1U191
+133    2026    第1クォーター    教養教育院    Academic English Communication A1    伊藤 友美    水2    1U192
+134    2026    第1クォーター    教養教育院    Academic English Communication A1    岡本　佳子    水2    1U193
+135    2026    第1クォーター    教養教育院    Academic English Communication A1    Tim　Greer    水2    1U194
+136    2026    第1クォーター    教養教育院    Academic English Communication A1    柏木 治美    水2    1U195
+137    2026    第1クォーター    教養教育院    Academic English Communication A1    佐藤　健    水2    1U196
+138    2026    第1クォーター    教養教育院    Academic English Communication A1    鈴木　朋子    水2    1U197
+139    2026    第1クォーター    教養教育院    Academic English Literacy A1    合原　織部    水2    1U261
+140    2026    第1クォーター    教養教育院    Academic English Literacy A1    Beaton Jason    水2    1U262
+141    2026    第1クォーター    教養教育院    Academic English Literacy A1    Stephen Horn    水2    1U263
+142    2026    第1クォーター    教養教育院    Academic English Literacy A1    LIPEDE ADEBOYE OLADIPO GABIOLA    水2    1U264
+143    2026    第1クォーター    教養教育院    Academic English Literacy A1    牧田　快    水2    1U265
+144    2026    第1クォーター    教養教育院    Academic English Literacy A1    石野 美香    水2    1U266
+145    2026    第1クォーター    教養教育院    Academic English Literacy A1    BELARGA OLIVER    水2    1U267
+146    2026    第1クォーター    教養教育院    外国語セミナーＣ（英語）(副：外国語セミナーＣ（英語）)    Jimmy J.Aames    水2    1U312
+147    2026    前期    教養教育院    健康・スポーツ科学実習基礎    伊賀野　大    水2    1U683
+148    2026    前期    教養教育院    健康・スポーツ科学実習基礎    益冨 真子    水2    1U684
+149    2026    前期    教養教育院    健康・スポーツ科学実習基礎    若林　絵美    水2    1U685
+150    2026    前期    教養教育院    健康・スポーツ科学実習基礎    久永　将太    水2    1U686
+151    2026    第1クォーター    教養教育院    基礎物理化学１    蔵岡 孝治    水2    1U827
+152    2026    第1クォーター    教養教育院    基礎物理化学１    堀田 弘樹    水2    1U828
+153    2026    第1クォーター    教養教育院    情報基礎    大寺　亮    水2    1U8T2
+154    2026    第1クォーター    教養教育院    情報基礎    副島　尭史    水2    1U8T3
+155    2026    第2クォーター    教養教育院    外国語セミナーＣ（英語）(主：外国語セミナーＣ（英語）)    Jimmy J.Aames    水2    2G312
+156    2026    第2クォーター    教養教育院    心理学Ａ    木村　司    水2    2U002
+157    2026    第2クォーター    教養教育院    心理学Ｂ    木下 孝司    水2    2U003
+158    2026    第2クォーター    教養教育院    論理学    佐々木 崇    水2    2U006
+159    2026    第2クォーター    教養教育院    教育学Ａ    田中　伸    水2    2U008
+160    2026    第2クォーター    教養教育院    教育学Ｂ    山本　良太    水2    2U009
+161    2026    第2クォーター    教養教育院    倫理学    田中　祐理子    水2    2U011
+162    2026    第2クォーター    教養教育院    教育と社会    葛城　浩一    水2    2U068
+163    2026    第2クォーター    教養教育院    現代物理学が描く世界    大久保 晋    水2    2U087
+164    2026    第2クォーター    教養教育院    身近な物理法則    園田　英徳    水2    2U088
+165    2026    第2クォーター    教養教育院    カタチの自然学B    鈴木　広隆    水2    2U090
+166    2026    第2クォーター    教養教育院    科学技術と社会Ｂ    阪上　公博    水2    2U115
+167    2026    第2クォーター    教養教育院    科学技術と社会Ｄ    勝田　知尚    水2    2U117
+168    2026    第2クォーター    教養教育院    Academic English Communication A2    野原　万里    水2    2U190
+169    2026    第2クォーター    教養教育院    Academic English Communication A2    田中 順子    水2    2U191
+170    2026    第2クォーター    教養教育院    Academic English Communication A2    伊藤 友美    水2    2U192
+171    2026    第2クォーター    教養教育院    Academic English Communication A2    岡本　佳子    水2    2U193
+172    2026    第2クォーター    教養教育院    Academic English Communication A2    Tim　Greer    水2    2U194
+173    2026    第2クォーター    教養教育院    Academic English Communication A2    柏木 治美    水2    2U195
+174    2026    第2クォーター    教養教育院    Academic English Communication A2    佐藤　健    水2    2U196
+175    2026    第2クォーター    教養教育院    Academic English Communication A2    鈴木　朋子    水2    2U197
+176    2026    第2クォーター    教養教育院    Academic English Literacy A2    合原　織部    水2    2U261
+177    2026    第2クォーター    教養教育院    Academic English Literacy A2    Beaton Jason    水2    2U262
+178    2026    第2クォーター    教養教育院    Academic English Literacy A2    Stephen Horn    水2    2U263
+179    2026    第2クォーター    教養教育院    Academic English Literacy A2    LIPEDE ADEBOYE OLADIPO GABIOLA    水2    2U264
+180    2026    第2クォーター    教養教育院    Academic English Literacy A2    牧田　快    水2    2U265
+181    2026    第2クォーター    教養教育院    Academic English Literacy A2    石野 美香    水2    2U266
+182    2026    第2クォーター    教養教育院    Academic English Literacy A2    BELARGA OLIVER    水2    2U267
+183    2026    第2クォーター    教養教育院    外国語セミナーＣ（英語）(副：外国語セミナーＣ（英語）)    Jimmy J.Aames    水2    2U312
+184    2026    第2クォーター    教養教育院    基礎物理化学２    蔵岡 孝治    水2    2U827
+185    2026    第2クォーター    教養教育院    基礎物理化学２    堀田 弘樹    水2    2U828
+186    2026    後期    教養教育院    国際協力アクティブ・ラーニングＣ(主：Law and State Building)    四本 健二    水2    3G106
+187    2026    第3クォーター    教養教育院    教育学Ｂ    近田　政博    水2    3U011
+188    2026    第3クォーター    教養教育院    言語科学Ｂ    南　佑亮    水2    3U019
+189    2026    第3クォーター    教養教育院    政治学Ｂ    佐藤　良輔    水2    3U040
+190    2026    第3クォーター    教養教育院    社会学    西澤 晃彦    水2    3U044
+191    2026    第3クォーター    教養教育院    社会思想史    教員未定    水2    3U046
+192    2026    第3クォーター    教養教育院    文化人類学    深川　宏樹    水2    3U048
+193    2026    第3クォーター    教養教育院    現代社会論Ｂ    松本　隆志    水2    3U049
+194    2026    第3クォーター    教養教育院    生活環境と技術    佐藤　真行    水2    3U051
+195    2026    第3クォーター    教養教育院    国家と法    堀口　悟郎    水2    3U055
+196    2026    第3クォーター    教養教育院    現代の経済Ａ    石黒 一彦    水2    3U058
+197    2026    第3クォーター    教養教育院    現代の経済Ｂ    岡島　成治    水2    3U059
+198    2026    第3クォーター    教養教育院    教育と社会    葛城　浩一    水2    3U063
+199    2026    第3クォーター    教養教育院    社会と人権Ａ    山内　乾史    水2    3U094
+200    2026    後期    教養教育院    国際協力アクティブ・ラーニングＣ(主：Law and State Building)    四本 健二    水2    3U106
+201    2026    第3クォーター    教養教育院    Academic English Communication B1    田中 順子    水2    3U191
+202    2026    第3クォーター    教養教育院    Academic English Communication B1    伊藤 友美    水2    3U192
+203    2026    第3クォーター    教養教育院    Academic English Communication B1    岡本　佳子    水2    3U193
+204    2026    第3クォーター    教養教育院    Academic English Communication B1    Jimmy J.Aames    水2    3U194
+205    2026    第3クォーター    教養教育院    Academic English Communication B1    Beaton Jason    水2    3U195
+206    2026    第3クォーター    教養教育院    Academic English Communication B1    Andy Rushton    水2    3U196
+207    2026    第3クォーター    教養教育院    Academic English Communication B1    鈴木　朋子    水2    3U197
+208    2026    第3クォーター    教養教育院    Academic English Communication B1    野原　万里    水2    3U198
+209    2026    第3クォーター    教養教育院    Academic English Literacy B1    岡田 浩樹    水2    3U261
+210    2026    第3クォーター    教養教育院    Academic English Literacy B1    石野 美香    水2    3U262
+211    2026    第3クォーター    教養教育院    Academic English Literacy B1    BELARGA OLIVER    水2    3U263
+212    2026    第3クォーター    教養教育院    Academic English Literacy B1    池田　直樹    水2    3U264
+213    2026    第3クォーター    教養教育院    Academic English Literacy B1    LIPEDE ADEBOYE OLADIPO GABIOLA    水2    3U265
+214    2026    第3クォーター    教養教育院    Academic English Literacy B1    Stephen Horn    水2    3U266
+215    2026    第3クォーター    教養教育院    Academic English Literacy B1    牧田　快    水2    3U267
+216    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    ショルト グレゴリー ポール    水2    3U293
+217    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    Tim　Greer    水2    3U294
+218    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    Brad Colpitts    水2    3U295
+219    2026    第3クォーター    教養教育院    健康・スポーツ科学実習１    關　典子    水2    3U672
+220    2026    第3クォーター    教養教育院    健康・スポーツ科学実習１    木伏　紅緒    水2    3U673
+221    2026    第3クォーター    教養教育院    健康・スポーツ科学実習１    谷　めぐみ    水2    3U674
+222    2026    第3クォーター    教養教育院    健康・スポーツ科学実習１    益冨 真子    水2    3U675
+223    2026    第3クォーター    教養教育院    健康・スポーツ科学実習１    久永　将太    水2    3U676
+224    2026    第3クォーター    教養教育院    生物学各論Ｄ１    樋口　里樹    水2    3U843
+225    2026    第3クォーター    教養教育院    情報科学１    西田 健志    水2    3U864
+226    2026    第4クォーター    教養教育院    教育学Ｂ    教員未定    水2    4U010
+227    2026    第4クォーター    教養教育院    教育と人間形成    近田　政博    水2    4U011
+228    2026    第4クォーター    教養教育院    言語科学Ｂ    南　佑亮    水2    4U019
+229    2026    第4クォーター    教養教育院    法学Ｂ    馬場　健一    水2    4U036
+230    2026    第4クォーター    教養教育院    政治学Ｂ    佐藤　良輔    水2    4U038
+231    2026    第4クォーター    教養教育院    経済学Ａ    糟谷　祐介    水2    4U040
+232    2026    第4クォーター    教養教育院    社会学    西澤 晃彦    水2    4U042
+233    2026    第4クォーター    教養教育院    社会思想史    教員未定    水2    4U044
+234    2026    第4クォーター    教養教育院    文化人類学    深川　宏樹    水2    4U046
+235    2026    第4クォーター    教養教育院    生活環境と技術    田畑　智博    水2    4U049
+236    2026    第4クォーター    教養教育院    国家と法    吉原　司    水2    4U053
+237    2026    第4クォーター    教養教育院    現代の経済Ａ    安田　昌平    水2    4U056
+238    2026    第4クォーター    教養教育院    現代の経済Ｂ    川畑 康治    水2    4U057
+239    2026    第4クォーター    教養教育院    社会と人権Ｂ    山内　乾史    水2    4U088
+240    2026    第4クォーター    教養教育院    Academic English Communication B2    田中 順子    水2    4U191
+241    2026    第4クォーター    教養教育院    Academic English Communication B2    伊藤 友美    水2    4U192
+242    2026    第4クォーター    教養教育院    Academic English Communication B2    岡本　佳子    水2    4U193
+243    2026    第4クォーター    教養教育院    Academic English Communication B2    Jimmy J.Aames    水2    4U194
+244    2026    第4クォーター    教養教育院    Academic English Communication B2    Beaton Jason    水2    4U195
+245    2026    第4クォーター    教養教育院    Academic English Communication B2    Andy Rushton    水2    4U196
+246    2026    第4クォーター    教養教育院    Academic English Communication B2    鈴木　朋子    水2    4U197
+247    2026    第4クォーター    教養教育院    Academic English Communication B2    野原　万里    水2    4U198
+248    2026    第4クォーター    教養教育院    Academic English Literacy B2    岡田 浩樹    水2    4U261
+249    2026    第4クォーター    教養教育院    Academic English Literacy B2    石野 美香    水2    4U262
+250    2026    第4クォーター    教養教育院    Academic English Literacy B2    BELARGA OLIVER    水2    4U263
+251    2026    第4クォーター    教養教育院    Academic English Literacy B2    池田　直樹    水2    4U264
+252    2026    第4クォーター    教養教育院    Academic English Literacy B2    LIPEDE ADEBOYE OLADIPO GABIOLA    水2    4U265
+253    2026    第4クォーター    教養教育院    Academic English Literacy B2    Stephen Horn    水2    4U266
+254    2026    第4クォーター    教養教育院    Academic English Literacy B2    牧田　快    水2    4U267
+255    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    ショルト グレゴリー ポール    水2    4U293
+256    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    Tim　Greer    水2    4U294
+257    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    Brad Colpitts    水2    4U295
+258    2026    第4クォーター    教養教育院    健康・スポーツ科学実習２    關　典子    水2    4U672
+259    2026    第4クォーター    教養教育院    健康・スポーツ科学実習２    木伏　紅緒    水2    4U673
+260    2026    第4クォーター    教養教育院    健康・スポーツ科学実習２    谷　めぐみ    水2    4U674
+261    2026    第4クォーター    教養教育院    健康・スポーツ科学実習２    益冨 真子    水2    4U675
+262    2026    第4クォーター    教養教育院    健康・スポーツ科学実習２    久永　将太    水2    4U676
+263    2026    第4クォーター    教養教育院    生物学各論Ｄ２    樋口　里樹    水2    4U843
+264    2026    第4クォーター    教養教育院    情報科学２    西田 健志    水2    4U864
+265    2026    第1クォーター    教養教育院    多文化共修セミナー（日欧比較）(主：多文化共修セミナー（日欧比較）)    Fregonese Pierre    水3    1G113
+266    2026    第1クォーター    教養教育院    外国語セミナーＢ（英語）(主：外国語セミナーＢ（英語）)    佐藤　健    水3    1G311
+267    2026    第1クォーター    教養教育院    多文化共修セミナー（日欧比較）(副：多文化共修セミナー（日欧比較）)    Fregonese Pierre    水3    1U113
+268    2026    第1クォーター    教養教育院    Academic English Communication A1    佐藤 由美    水3    1U198
+269    2026    第1クォーター    教養教育院    Academic English Communication A1    池澤　匠    水3    1U199
+270    2026    第1クォーター    教養教育院    Academic English Communication A1    田中 順子    水3    1U200
+271    2026    第1クォーター    教養教育院    Academic English Communication A1    木原　恵美子    水3    1U201
+272    2026    第1クォーター    教養教育院    Academic English Communication A1    BELARGA OLIVER    水3    1U202
+273    2026    第1クォーター    教養教育院    Academic English Communication A1    TAN JOY ANN FAITH FRANCISCO    水3    1U203
+274    2026    第1クォーター    教養教育院    Academic English Communication A1    北田　亮    水3    1U204
+275    2026    第1クォーター    教養教育院    Academic English Communication A1    柏木 治美    水3    1U205
+276    2026    第1クォーター    教養教育院    Academic English Communication A1    野原　万里    水3    1U206
+277    2026    第1クォーター    教養教育院    Academic English Literacy A1    島津 厚久    水3    1U268
+278    2026    第1クォーター    教養教育院    Academic English Literacy A1    保田　幸子    水3    1U269
+279    2026    第1クォーター    教養教育院    Academic English Literacy A1    池田　直樹    水3    1U270
+280    2026    第1クォーター    教養教育院    Academic English Literacy A1    多賀谷 真吾    水3    1U271
+281    2026    第1クォーター    教養教育院    Academic English Literacy A1    石野 美香    水3    1U272
+282    2026    第1クォーター    教養教育院    Academic English Literacy A1    廣部 昭子    水3    1U273
+283    2026    第1クォーター    教養教育院    Academic English Literacy A1    徐　子程    水3    1U274
+284    2026    第1クォーター    教養教育院    Academic English Literacy A1    Gabriel TOMA    水3    1U275
+285    2026    第1クォーター    教養教育院    外国語セミナーＢ（英語）(副：外国語セミナーＢ（英語）)    佐藤　健    水3    1U311
+286    2026    第1クォーター    教養教育院    物理学実験基礎    日比野　瑠央    水3,4    1U813
+287    2026    前期    教養教育院    物理学実験    日比野　瑠央    水3,4    1U815
+288    2026    第1クォーター    教養教育院    基礎無機化学１    内野 隆司    水3    1U824
+289    2026    第1クォーター    教養教育院    基礎物理化学１    松本　一    水3    1U829
+290    2026    第1クォーター    教養教育院    基礎物理化学１    赤井　智子    水3    1U830
+291    2026    第1クォーター    教養教育院    基礎有機化学１    今田　泰嗣    水3    1U832
+292    2026    第1クォーター    教養教育院    生物学実験１    原山 洋    水3,4    1U847
+293    2026    第1クォーター    教養教育院    情報基礎    清光 英成    水3    1U8L1
+294    2026    第2クォーター    教養教育院    外国語セミナーＢ（英語）(主：外国語セミナーＢ（英語）)    佐藤　健    水3    2G311
+295    2026    第2クォーター    教養教育院    Academic English Communication A2    佐藤 由美    水3    2U198
+296    2026    第2クォーター    教養教育院    Academic English Communication A2    池澤　匠    水3    2U199
+297    2026    第2クォーター    教養教育院    Academic English Communication A2    田中 順子    水3    2U200
+298    2026    第2クォーター    教養教育院    Academic English Communication A2    木原　恵美子    水3    2U201
+299    2026    第2クォーター    教養教育院    Academic English Communication A2    BELARGA OLIVER    水3    2U202
+300    2026    第2クォーター    教養教育院    Academic English Communication A2    TAN JOY ANN FAITH FRANCISCO    水3    2U203
+301    2026    第2クォーター    教養教育院    Academic English Communication A2    北田　亮    水3    2U204
+302    2026    第2クォーター    教養教育院    Academic English Communication A2    柏木 治美    水3    2U205
+303    2026    第2クォーター    教養教育院    Academic English Communication A2    野原　万里    水3    2U206
+304    2026    第2クォーター    教養教育院    Academic English Literacy A2    島津 厚久    水3    2U268
+305    2026    第2クォーター    教養教育院    Academic English Literacy A2    保田　幸子    水3    2U269
+306    2026    第2クォーター    教養教育院    Academic English Literacy A2    池田　直樹    水3    2U270
+307    2026    第2クォーター    教養教育院    Academic English Literacy A2    多賀谷 真吾    水3    2U271
+308    2026    第2クォーター    教養教育院    Academic English Literacy A2    石野 美香    水3    2U272
+309    2026    第2クォーター    教養教育院    Academic English Literacy A2    廣部 昭子    水3    2U273
+310    2026    第2クォーター    教養教育院    Academic English Literacy A2    徐　子程    水3    2U274
+311    2026    第2クォーター    教養教育院    Academic English Literacy A2    Gabriel TOMA    水3    2U275
+312    2026    第2クォーター    教養教育院    外国語セミナーＢ（英語）(副：外国語セミナーＢ（英語）)    佐藤　健    水3    2U311
+313    2026    第2クォーター    教養教育院    基礎無機化学２    内野 隆司    水3    2U824
+314    2026    第2クォーター    教養教育院    基礎物理化学２    松本　一    水3    2U829
+315    2026    第2クォーター    教養教育院    基礎物理化学２    赤井　智子    水3    2U830
+316    2026    第2クォーター    教養教育院    基礎有機化学２    今田　泰嗣    水3    2U832
+317    2026    第2クォーター    教養教育院    生物学実験２    原山 洋    水3,4    2U847
+318    2026    第3クォーター    教養教育院    多言語セミナー１（モンゴル語）(主：多言語セミナー１（モンゴル語）)    アルチャ    水3    3G127
+319    2026    第3クォーター    教養教育院    外国語セミナーＢ（英語）(主：外国語セミナーＢ（英語）)    佐藤　健    水3    3G311
+320    2026    第3クォーター    教養教育院    多言語セミナー１（モンゴル語）(副：多言語セミナー１（モンゴル語）)    アルチャ    水3    3U127
+321    2026    第3クォーター    教養教育院    Academic English Communication B1    石川 慎一郎    水3    3U199
+322    2026    第3クォーター    教養教育院    Academic English Communication B1    北田　亮    水3    3U200
+323    2026    第3クォーター    教養教育院    Academic English Communication B1    佐藤 由美    水3    3U202
+324    2026    第3クォーター    教養教育院    Academic English Communication B1    田中 順子    水3    3U203
+325    2026    第3クォーター    教養教育院    Academic English Communication B1    茂田　文乃    水3    3U204
+326    2026    第3クォーター    教養教育院    Academic English Communication B1    柏木 治美    水3    3U205
+327    2026    第3クォーター    教養教育院    Academic English Communication B1    野原　万里    水3    3U206
+328    2026    第3クォーター    教養教育院    Academic English Literacy B1    多賀谷 真吾    水3    3U268
+329    2026    第3クォーター    教養教育院    Academic English Literacy B1    石野 美香    水3    3U269
+330    2026    第3クォーター    教養教育院    Academic English Literacy B1    廣部 昭子    水3    3U270
+331    2026    第3クォーター    教養教育院    Academic English Literacy B1    井上　弘貴    水3    3U272
+332    2026    第3クォーター    教養教育院    Academic English Literacy B1    合原　織部    水3    3U273
+333    2026    第3クォーター    教養教育院    Academic English Literacy B1    LIPEDE ADEBOYE OLADIPO GABIOLA    水3    3U274
+334    2026    第3クォーター    教養教育院    Academic English Literacy B1    島津 厚久    水3    3U275
+335    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    ショルト グレゴリー ポール    水3    3U296
+336    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    Tim　Greer    水3    3U297
+337    2026    第3クォーター    教養教育院    外国語セミナーＢ（英語）(副：外国語セミナーＢ（英語）)    佐藤　健    水3    3U311
+338    2026    後期    教養教育院    物理学実験    鈴木 州    水3,4    3U813
+339    2026    第3クォーター    教養教育院    基礎物理化学１    和田 昭英    水3    3U823
+340    2026    第3クォーター    教養教育院    基礎有機化学１    今田　泰嗣    水3    3U825
+341    2026    第3クォーター    教養教育院    基礎有機化学１    寺澤　直弘    水3    3U826
+342    2026    第3クォーター    教養教育院    化学実験１    山地 秀樹    水3,4    3U829
+343    2026    第4クォーター    教養教育院    多文化共修セミナー（日欧比較）(主：多文化共修セミナー（日欧比較）)    ZORKO    水3    4G112
+344    2026    第4クォーター    教養教育院    多言語セミナー２（モンゴル語）(主：多言語セミナー２（モンゴル語）)    哈斯高娃    水3    4G113
+345    2026    第4クォーター    教養教育院    外国語セミナーＢ（英語）(主：外国語セミナーＢ（英語）)    佐藤　健    水3    4G311
+346    2026    第4クォーター    教養教育院    多文化共修セミナー（日欧比較）(副：多文化共修セミナー（日欧比較）)    ZORKO    水3    4U112
+347    2026    第4クォーター    教養教育院    多言語セミナー２（モンゴル語）(副：多言語セミナー２（モンゴル語）)    哈斯高娃    水3    4U113
+348    2026    第4クォーター    教養教育院    Academic English Communication B2    石川 慎一郎    水3    4U199
+349    2026    第4クォーター    教養教育院    Academic English Communication B2    北田　亮    水3    4U200
+350    2026    第4クォーター    教養教育院    Academic English Communication B2    佐藤 由美    水3    4U202
+351    2026    第4クォーター    教養教育院    Academic English Communication B2    田中 順子    水3    4U203
+352    2026    第4クォーター    教養教育院    Academic English Communication B2    茂田　文乃    水3    4U204
+353    2026    第4クォーター    教養教育院    Academic English Communication B2    柏木 治美    水3    4U205
+354    2026    第4クォーター    教養教育院    Academic English Communication B2    野原　万里    水3    4U206
+355    2026    第4クォーター    教養教育院    Academic English Literacy B2    多賀谷 真吾    水3    4U268
+356    2026    第4クォーター    教養教育院    Academic English Literacy B2    石野 美香    水3    4U269
+357    2026    第4クォーター    教養教育院    Academic English Literacy B2    廣部 昭子    水3    4U270
+358    2026    第4クォーター    教養教育院    Academic English Literacy B2    井上　弘貴    水3    4U272
+359    2026    第4クォーター    教養教育院    Academic English Literacy B2    合原　織部    水3    4U273
+360    2026    第4クォーター    教養教育院    Academic English Literacy B2    LIPEDE ADEBOYE OLADIPO GABIOLA    水3    4U274
+361    2026    第4クォーター    教養教育院    Academic English Literacy B2    島津 厚久    水3    4U275
+362    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    ショルト グレゴリー ポール    水3    4U296
+363    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    Tim　Greer    水3    4U297
+364    2026    第4クォーター    教養教育院    外国語セミナーＢ（英語）(副：外国語セミナーＢ（英語）)    佐藤　健    水3    4U311
+365    2026    第4クォーター    教養教育院    基礎物理化学２    和田 昭英    水3    4U823
+366    2026    第4クォーター    教養教育院    基礎有機化学２    今田　泰嗣    水3    4U825
+367    2026    第4クォーター    教養教育院    基礎有機化学２    寺澤　直弘    水3    4U826
+368    2026    第1クォーター    教養教育院    多言語セミナー１（スペイン語）(主：多言語セミナー１（スペイン語）)    高橋　可恋    水4    1G094
+369    2026    第1クォーター    教養教育院    多言語セミナー１（スペイン語）(副：多言語セミナー１（スペイン語）)    高橋　可恋    水4    1U094
+370    2026    第1クォーター    教養教育院    Academic English Communication A1    TAN JOY ANN FAITH FRANCISCO    水4    1U207
+371    2026    第1クォーター    教養教育院    Academic English Communication A1    佐藤 由美    水4    1U208
+372    2026    第1クォーター    教養教育院    Academic English Communication A1    北田　亮    水4    1U209
+373    2026    第1クォーター    教養教育院    Academic English Communication A1    Gabriel TOMA    水4    1U210
+374    2026    第1クォーター    教養教育院    Academic English Communication A1    BELARGA OLIVER    水4    1U211
+375    2026    第1クォーター    教養教育院    Academic English Communication A1    木原　恵美子    水4    1U212
+376    2026    第1クォーター    教養教育院    Academic English Communication A1    Tim　Greer    水4    1U213
+377    2026    第1クォーター    教養教育院    Academic English Literacy A1    多賀谷 真吾    水4    1U276
+378    2026    第1クォーター    教養教育院    Academic English Literacy A1    石野 美香    水4    1U277
+379    2026    第1クォーター    教養教育院    Academic English Literacy A1    島津 厚久    水4    1U278
+380    2026    第1クォーター    教養教育院    Academic English Literacy A1    廣部 昭子    水4    1U279
+381    2026    第1クォーター    教養教育院    Academic English Literacy A1    保田　幸子    水4    1U280
+382    2026    第1クォーター    教養教育院    Academic English Literacy A1    池田　直樹    水4    1U281
+383    2026    第1クォーター    教養教育院    Academic English Literacy A1    池澤　匠    水4    1U282
+384    2026    第1クォーター    教養教育院    Academic English Literacy A1    徐　子程    水4    1U283
+385    2026    第1クォーター    教養教育院    基礎無機化学１    松村　大樹    水4    1U825
+386    2026    第1クォーター    教養教育院    基礎無機化学１    松本　一    水4    1U826
+387    2026    第1クォーター    教養教育院    情報基礎    村尾 元    水4    1U8T4
+388    2026    第1クォーター    教養教育院    情報基礎    福島　宙輝    水4    1U8X1
+389    2026    第2クォーター    教養教育院    多言語セミナー２（スペイン語）(主：多言語セミナー２（スペイン語）)    高橋　可恋    水4    2G100
+390    2026    第2クォーター    教養教育院    多言語セミナー２（スペイン語）(副：多言語セミナー２（スペイン語）)    高橋　可恋    水4    2U100
+391    2026    第2クォーター    教養教育院    Academic English Communication A2    TAN JOY ANN FAITH FRANCISCO    水4    2U207
+392    2026    第2クォーター    教養教育院    Academic English Communication A2    佐藤 由美    水4    2U208
+393    2026    第2クォーター    教養教育院    Academic English Communication A2    北田　亮    水4    2U209
+394    2026    第2クォーター    教養教育院    Academic English Communication A2    Gabriel TOMA    水4    2U210
+395    2026    第2クォーター    教養教育院    Academic English Communication A2    BELARGA OLIVER    水4    2U211
+396    2026    第2クォーター    教養教育院    Academic English Communication A2    木原　恵美子    水4    2U212
+397    2026    第2クォーター    教養教育院    Academic English Communication A2    Tim　Greer    水4    2U213
+398    2026    第2クォーター    教養教育院    Academic English Literacy A2    多賀谷 真吾    水4    2U276
+399    2026    第2クォーター    教養教育院    Academic English Literacy A2    石野 美香    水4    2U277
+400    2026    第2クォーター    教養教育院    Academic English Literacy A2    島津 厚久    水4    2U278
+401    2026    第2クォーター    教養教育院    Academic English Literacy A2    廣部 昭子    水4    2U279
+402    2026    第2クォーター    教養教育院    Academic English Literacy A2    保田　幸子    水4    2U280
+403    2026    第2クォーター    教養教育院    Academic English Literacy A2    池田　直樹    水4    2U281
+404    2026    第2クォーター    教養教育院    Academic English Literacy A2    池澤　匠    水4    2U282
+405    2026    第2クォーター    教養教育院    Academic English Literacy A2    徐　子程    水4    2U283
+406    2026    第2クォーター    教養教育院    基礎無機化学２    松村　大樹    水4    2U825
+407    2026    第2クォーター    教養教育院    基礎無機化学２    松本　一    水4    2U826
+408    2026    第3クォーター    教養教育院    Academic English Communication B1    石川 慎一郎    水4    3U207
+409    2026    第3クォーター    教養教育院    Academic English Communication B1    佐藤　健    水4    3U209
+410    2026    第3クォーター    教養教育院    Academic English Communication B1    佐藤 由美    水4    3U210
+411    2026    第3クォーター    教養教育院    Academic English Communication B1    柏木 治美    水4    3U211
+412    2026    第3クォーター    教養教育院    Academic English Communication B1    北田　亮    水4    3U212
+413    2026    第3クォーター    教養教育院    Academic English Communication B1    茂田　文乃    水4    3U213
+414    2026    第3クォーター    教養教育院    Academic English Literacy B1    LIPEDE ADEBOYE OLADIPO GABIOLA    水4    3U276
+415    2026    第3クォーター    教養教育院    Academic English Literacy B1    廣部 昭子    水4    3U277
+416    2026    第3クォーター    教養教育院    Academic English Literacy B1    石野 美香    水4    3U278
+417    2026    第3クォーター    教養教育院    Academic English Literacy B1    多賀谷 真吾    水4    3U279
+418    2026    第3クォーター    教養教育院    Academic English Literacy B1    井上　弘貴    水4    3U280
+419    2026    第3クォーター    教養教育院    Academic English Literacy B1    島津 厚久    水4    3U282
+420    2026    第3クォーター    教養教育院    Academic English Literacy B1    保田　幸子    水4    3U283
+421    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    ショルト グレゴリー ポール    水4    3U298
+422    2026    第3クォーター    教養教育院    Academic English Communication B1（ACE）    Brad Colpitts    水4    3U299
+423    2026    第3クォーター    教養教育院    基礎有機化学１    佐藤　春実    水4    3U827
+424    2026    第4クォーター    教養教育院    Academic English Communication B2    石川 慎一郎    水4    4U207
+425    2026    第4クォーター    教養教育院    Academic English Communication B2    佐藤　健    水4    4U209
+426    2026    第4クォーター    教養教育院    Academic English Communication B2    佐藤 由美    水4    4U210
+427    2026    第4クォーター    教養教育院    Academic English Communication B2    柏木 治美    水4    4U211
+428    2026    第4クォーター    教養教育院    Academic English Communication B2    北田　亮    水4    4U212
+429    2026    第4クォーター    教養教育院    Academic English Communication B2    茂田　文乃    水4    4U213
+430    2026    第4クォーター    教養教育院    Academic English Literacy B2    LIPEDE ADEBOYE OLADIPO GABIOLA    水4    4U276
+431    2026    第4クォーター    教養教育院    Academic English Literacy B2    廣部 昭子    水4    4U277
+432    2026    第4クォーター    教養教育院    Academic English Literacy B2    石野 美香    水4    4U278
+433    2026    第4クォーター    教養教育院    Academic English Literacy B2    多賀谷 真吾    水4    4U279
+434    2026    第4クォーター    教養教育院    Academic English Literacy B2    井上　弘貴    水4    4U280
+435    2026    第4クォーター    教養教育院    Academic English Literacy B2    島津 厚久    水4    4U282
+436    2026    第4クォーター    教養教育院    Academic English Literacy B2    保田　幸子    水4    4U283
+437    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    ショルト グレゴリー ポール    水4    4U298
+438    2026    第4クォーター    教養教育院    Academic English Communication B2（ACE）    Brad Colpitts    水4    4U299
+439    2026    第4クォーター    教養教育院    基礎有機化学２    江原 靖人    水4    4U827
+440    2026    第1クォーター    教養教育院    多言語セミナー１（スペイン語）(主：多言語セミナー１（スペイン語）)    平田　和重    水5    1G095
+441    2026    第1クォーター    教養教育院    多言語セミナー１（ラテン語）(主：多言語セミナー１（ラテン語）)    中村　満耶    水5    1G100
+442    2026    第1クォーター    教養教育院    外国語セミナーＣ（ドイツ語）(主：外国語セミナーＣ（ドイツ語）)    芹澤　円    水5    1G471
+443    2026    第1クォーター    教養教育院    外国語セミナーＣ（フランス語）(主：外国語セミナーＣ（フランス語）)    Christophe Garrabet    水5    1G541
+444    2026    第1クォーター    教養教育院    外国語セミナーＣ（中国語）(主：外国語セミナーＣ（中国語）)    高橋　康徳    水5    1G631
+445    2026    第1クォーター    教養教育院    外国語セミナーＣ（ロシア語）(主：外国語セミナーＣ（ロシア語）)    髙田　映介    水5    1G657
+446    2026    第1クォーター    教養教育院    多言語セミナー１（スペイン語）(副：多言語セミナー１（スペイン語）)    平田　和重    水5    1U095
+447    2026    第1クォーター    教養教育院    多言語セミナー１（ラテン語）(副：多言語セミナー１（ラテン語）)    中村　満耶    水5    1U100
+448    2026    第1クォーター    教養教育院    外国語セミナーＣ（ドイツ語）(副：外国語セミナーＣ（ドイツ語）)    芹澤　円    水5    1U471
+449    2026    第1クォーター    教養教育院    フランス語中級Ｃ１    廣田　大地    水5    1U521
+450    2026    第1クォーター    教養教育院    外国語セミナーＣ（フランス語）(副：外国語セミナーＣ（フランス語）)    Christophe Garrabet    水5    1U541
+451    2026    第1クォーター    教養教育院    外国語セミナーＣ（中国語）(副：外国語セミナーＣ（中国語）)    高橋　康徳    水5    1U631
+452    2026    第1クォーター    教養教育院    外国語セミナーＣ（ロシア語）(副：外国語セミナーＣ（ロシア語）)    髙田　映介    水5    1U657
+453    2026    第1クォーター    教養教育院    ロシア語中級Ｃ１    クドヤーロワ　タチアーナ    水5    1U660
+454    2026    第1クォーター    教養教育院    物理学入門    小谷野　由紀    水5    1U797
+455    2026    第2クォーター    教養教育院    多言語セミナー２（スペイン語）(主：多言語セミナー２（スペイン語）)    平田　和重    水5    2G101
+456    2026    第2クォーター    教養教育院    多言語セミナー２（ラテン語）(主：多言語セミナー２（ラテン語）)    中村　満耶    水5    2G106
+457    2026    第2クォーター    教養教育院    外国語セミナーＤ（ドイツ語）(主：外国語セミナーＤ（ドイツ語）)    芹澤　円    水5    2G471
+458    2026    第2クォーター    教養教育院    外国語セミナーＤ（フランス語）(主：外国語セミナーＤ（フランス語）)    Christophe Garrabet    水5    2G541
+459    2026    第2クォーター    教養教育院    外国語セミナーＤ（中国語）(主：外国語セミナーＤ（中国語）)    高橋　康徳    水5    2G631
+460    2026    第2クォーター    教養教育院    外国語セミナーＤ（ロシア語）(主：外国語セミナーＤ（ロシア語）)    髙田　映介    水5    2G657
+461    2026    第2クォーター    教養教育院    多言語セミナー２（スペイン語）(副：多言語セミナー２（スペイン語）)    平田　和重    水5    2U101
+462    2026    第2クォーター    教養教育院    多言語セミナー２（ラテン語）(副：多言語セミナー２（ラテン語）)    中村　満耶    水5    2U106
+463    2026    第2クォーター    教養教育院    ESD論（持続可能な社会づくり）基礎    後藤　聡美    水5    2U109
+464    2026    第2クォーター    教養教育院    価値創造論Ａ    鶴田 宏樹    水5    2U112
+465    2026    第2クォーター    教養教育院    外国語セミナーＤ（ドイツ語）(副：外国語セミナーＤ（ドイツ語）)    芹澤　円    水5    2U471
+466    2026    第2クォーター    教養教育院    フランス語中級Ｃ２    廣田　大地    水5    2U521
+467    2026    第2クォーター    教養教育院    外国語セミナーＤ（フランス語）(副：外国語セミナーＤ（フランス語）)    Christophe Garrabet    水5    2U541
+468    2026    第2クォーター    教養教育院    外国語セミナーＤ（中国語）(副：外国語セミナーＤ（中国語）)    高橋　康徳    水5    2U631
+469    2026    第2クォーター    教養教育院    外国語セミナーＤ（ロシア語）(副：外国語セミナーＤ（ロシア語）)    髙田　映介    水5    2U657
+470    2026    第2クォーター    教養教育院    ロシア語中級Ｃ２    クドヤーロワ　タチアーナ    水5    2U660
+471    2026    第3クォーター    教養教育院    多言語セミナー３（スペイン語）(主：多言語セミナー３（スペイン語）)    平田　和重    水5    3G108
+472    2026    第3クォーター    教養教育院    外国語セミナーＡ（ドイツ語）(主：外国語セミナーＡ（ドイツ語）)    芹澤　円    水5    3G471
+473    2026    第3クォーター    教養教育院    外国語セミナーＥ（ドイツ語）(主：外国語セミナーＥ（ドイツ語）)    林 良子    水5    3G474
+474    2026    第3クォーター    教養教育院    外国語セミナーＡ（フランス語）(主：外国語セミナーＡ（フランス語）)    廣田　大地    水5    3G541
+475    2026    第3クォーター    教養教育院    外国語セミナーＥ（フランス語）(主：外国語セミナーＥ（フランス語）)    Christophe Garrabet    水5    3G542
+476    2026    第3クォーター    教養教育院    外国語セミナーＥ（中国語）    陳　暁    水5    3G634
+477    2026    第3クォーター    教養教育院    外国語セミナーＡ（ロシア語）(主：外国語セミナーＡ（ロシア語）)    東海　晃久    水5    3G657
+478    2026    第3クォーター    教養教育院    外国語セミナーＥ（ロシア語）(主：外国語セミナーＥ（ロシア語）)    中野　悠希    水5    3G658
+479    2026    第3クォーター    教養教育院    統計学Ａ    福山 克司    水5    3U075
+480    2026    第3クォーター    教養教育院    ボランティアと社会貢献活動Ａ    山地　久美子    水5    3U097
+481    2026    第3クォーター    教養教育院    日本酒学入門    鶴田 宏樹    水5    3U100
+482    2026    第3クォーター    教養教育院    多言語セミナー３（スペイン語）(副：多言語セミナー３（スペイン語）)    平田　和重    水5    3U108
+483    2026    第3クォーター    教養教育院    ESD論（持続可能な社会づくり）Ａ    後藤　聡美    水5    3U115
+484    2026    第3クォーター    教養教育院    外国語セミナーＡ（ドイツ語）(副：外国語セミナーＡ（ドイツ語）)    芹澤　円    水5    3U471
+485    2026    第3クォーター    教養教育院    外国語セミナーＥ（ドイツ語）(副：外国語セミナーＥ（ドイツ語）)    林 良子    水5    3U474
+486    2026    第3クォーター    教養教育院    外国語セミナーＡ（フランス語）(副：外国語セミナーＡ（フランス語）)    廣田　大地    水5    3U541
+487    2026    第3クォーター    教養教育院    外国語セミナーＥ（フランス語）(副：外国語セミナーＥ（フランス語）)    Christophe Garrabet    水5    3U542
+488    2026    第3クォーター    教養教育院    外国語セミナーＥ（中国語）    陳　暁    水5    3U634
+489    2026    第3クォーター    教養教育院    外国語セミナーＡ（ロシア語）(副：外国語セミナーＡ（ロシア語）)    東海　晃久    水5    3U657
+490    2026    第3クォーター    教養教育院    外国語セミナーＥ（ロシア語）(副：外国語セミナーＥ（ロシア語）)    中野　悠希    水5    3U658
+491    2026    第4クォーター    教養教育院    多言語セミナー４（スペイン語）(主：多言語セミナー４（スペイン語）)    平田　和重    水5    4G100
+492    2026    第4クォーター    教養教育院    外国語セミナーＢ（ドイツ語）(主：外国語セミナーＢ（ドイツ語）)    芹澤　円    水5    4G471
+493    2026    第4クォーター    教養教育院    外国語セミナーＦ（ドイツ語）(主：外国語セミナーＦ（ドイツ語）)    林 良子    水5    4G474
+494    2026    第4クォーター    教養教育院    外国語セミナーＢ（フランス語）(主：外国語セミナーＢ（フランス語）)    廣田　大地    水5    4G541
+495    2026    第4クォーター    教養教育院    外国語セミナーＦ（フランス語）(主：外国語セミナーＦ（フランス語）)    Christophe Garrabet    水5    4G542
+496    2026    第4クォーター    教養教育院    外国語セミナーＦ（中国語）    陳　暁    水5    4G634
+497    2026    第4クォーター    教養教育院    外国語セミナーＢ（ロシア語）(主：外国語セミナーＢ（ロシア語）)    東海　晃久    水5    4G657
+498    2026    第4クォーター    教養教育院    外国語セミナーＦ（ロシア語）(主：外国語セミナーＦ（ロシア語）)    中野　悠希    水5    4G658
+499    2026    第4クォーター    教養教育院    統計学Ｂ    福山 克司    水5    4U069
+500    2026    第4クォーター    教養教育院    ボランティアと社会貢献活動Ｂ    山地　久美子    水5    4U092
+501    2026    第4クォーター    教養教育院    多言語セミナー４（スペイン語）(副：多言語セミナー４（スペイン語）)    平田　和重    水5    4U100
+502    2026    第4クォーター    教養教育院    ESD論（持続可能な社会づくり）Ｂ    後藤　聡美    水5    4U106
+503    2026    第4クォーター    教養教育院    外国語セミナーＢ（ドイツ語）(副：外国語セミナーＢ（ドイツ語）)    芹澤　円    水5    4U471
+504    2026    第4クォーター    教養教育院    外国語セミナーＦ（ドイツ語）(副：外国語セミナーＦ（ドイツ語）)    林 良子    水5    4U474
+505    2026    第4クォーター    教養教育院    外国語セミナーＢ（フランス語）(副：外国語セミナーＢ（フランス語）)    廣田　大地    水5    4U541
+506    2026    第4クォーター    教養教育院    外国語セミナーＦ（フランス語）(副：外国語セミナーＦ（フランス語）)    Christophe Garrabet    水5    4U542
+507    2026    第4クォーター    教養教育院    外国語セミナーＦ（中国語）    陳　暁    水5    4U634
+508    2026    第4クォーター    教養教育院    外国語セミナーＢ（ロシア語）(副：外国語セミナーＢ（ロシア語）)    東海　晃久    水5    4U657
+509    2026    第4クォーター    教養教育院    外国語セミナーＦ（ロシア語）(副：外国語セミナーＦ（ロシア語）)    中野　悠希    水5    4U658
+＜ 月/ 火/ 水/ 木/ 金/ 土/ 日/ 他/ ＞
+ページTOPへ

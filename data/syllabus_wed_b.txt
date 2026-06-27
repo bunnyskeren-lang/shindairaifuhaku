@@ -1,0 +1,35 @@
+No.	年度	開講区分	所属	科目名	成績入力担当	曜日・時限	時間割コード
+1	2026	第1クォーター	経営学部　昼間主コース	Entrepreneurial Mindset	戸梶　奈都子	月3,水1	1B250
+2	2026	第2クォーター	経営学部　昼間主コース	Overview of Corporate Financing	西村 幸宏	月3,水1	2B250
+3	2026	第3クォーター	経営学部　昼間主コース	Entrepreneurial Global Strategy	戸梶　奈都子	月3,水1	3B250
+4	2026	第4クォーター	経営学部　昼間主コース	Portfolio Theory	西村 幸宏	月3,水1	4B250
+5	2026	第1クォーター	経営学部　昼間主コース	外国書講読(早木Ⅰ)	早木　祥夏	水1,2	1B230
+6	2026	前期	経営学部　昼間主コース	外国文献講義(于)	于　キン	水1	1B261
+7	2026	前期	経営学部　昼間主コース	組織と情報(副：組織と情報（高度教養科目）)	定兼　仁	水1	1B306
+8	2026	前期	経営学部　昼間主コース	組織と情報（高度教養科目）(主：組織と情報)	定兼　仁	水1	1B806
+9	2026	第3クォーター	経営学部　昼間主コース	外国書講読(安間Ⅰ)	安間　陽加	水1,2	3B230
+10	2026	第4クォーター	経営学部　昼間主コース	外国書講読(戸梶Ⅰ)	戸梶　奈都子	水1,2	4B230
+11	2026	前期	経営学部　昼間主コース	経営学基礎論(副：経営学基礎論)	松嶋　登	水2	1B101
+12	2026	前期	経営学部　昼間主コース	経営学基礎論(主：経営学基礎論)	松嶋　登	水2	1B111
+13	2026	前期	経営学部　昼間主コース	Business Communication I(主：Business Presentation, Discussion, and Debate Ⅰ)	Mark Fielden	水2	1B168
+14	2026	前期	経営学部　昼間主コース	Business Presentation, Discussion, and Debate Ⅰ(副：Business Communication I、Business Communication I、Business Presentation, Discussion, and Debate Ⅰ)	Mark Fielden	水2	1B171
+15	2026	前期	経営学部　昼間主コース	外国文献講義(水田)	水田　誠一郎	水2	1B260
+16	2026	前期	経営学部　昼間主コース	外国文献講義(塩谷)	塩谷　剛	水2	1B262
+17	2026	後期	経営学部　昼間主コース	経営データ分析（ファイナンス）	本田　朋史	水2	3B165
+18	2026	後期	経営学部　昼間主コース	Business Presentation, Discussion, and Debate Ⅱ(副：Business Presentation, Discussion, and Debate Ⅱ)	Mark Fielden	水2	3B171
+19	2026	後期	経営学部　昼間主コース	外国文献講義(庭本)	庭本　佳子	水2	3B260
+20	2026	後期	経営学部　昼間主コース	外国文献講義(伍)	伍　一昌	水2	3B264
+21	2026	第1クォーター	経営学部　昼間主コース	実践簿記１	玉野 里佳	水3,4	1B150
+22	2026	前期	経営学部　昼間主コース	経営データ分析（エネルギー）	中島　忠博	水3	1B167
+23	2026	前期	経営学部　昼間主コース	Business Communication I(主：Business Presentation, Discussion, and Debate Ⅰ)	Mark Fielden	水3	1B169
+24	2026	前期	経営学部　昼間主コース	Business Presentation, Discussion, and Debate Ⅰ(主：Business Presentation, Discussion, and Debate Ⅰ)	Mark Fielden	水3	1B172
+25	2026	前期	経営学部　昼間主コース	中堅・中小企業経営論（株式会社船井総合研究所寄附講義）（高度教養科目）	久保　雄一郎	水3	1B879
+26	2026	第2クォーター	経営学部　昼間主コース	実践簿記２	玉野 里佳	水3,4	2B152
+27	2026	後期	経営学部　昼間主コース	Business Presentation, Discussion, and Debate Ⅱ(主：Business Presentation, Discussion, and Debate Ⅱ)	Mark Fielden	水3	3B172
+28	2026	第3クォーター	経営学部　昼間主コース	Introduction to Management	JACKSON Keith	水3,4	3B251
+29	2026	第3クォーター	経営学部　昼間主コース	高度教養セミナー経営学部（ビジネスリーダーとの議論と対話）	吉田　満梨	水3,4	3B864
+30	2026	第4クォーター	経営学部　昼間主コース	事業承継と中堅・中小企業のM&A(日本M＆Aセンター寄附講義）（高度教養科目）	伍　一昌	水3	4B872
+31	2026	前期	経営学部　昼間主コース	地域創生と観光経営（アンカー・シップ・パートナーズ寄附講義）（高度教養科目）	松嶋　登	水4	1B875
+32	2026	後期	経営学部　昼間主コース	実践　顧客基点のデジタルトランスフォーメーション（電通デジタル寄附講義）（高度教養科目）	宮尾 学	水4	3B871
+33	2026	後期	経営学部　昼間主コース	監査論(副：監査論（高度教養科目）)	高田 知実	水5	3B307
+34	2026	後期	経営学部　昼間主コース	監査論（高度教養科目）(主：監査論)	高田 知実	水5	3B807
