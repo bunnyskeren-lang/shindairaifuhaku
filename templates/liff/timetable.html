@@ -458,6 +458,7 @@ tbody td:first-child {
         <option value="法学部">法学部</option>
         <option value="経済学部">経済学部</option>
         <option value="経営学部">経営学部</option>
+        <option value="システム情報学部">システム情報学部</option>
         <option value="理学部">理学部</option>
         <option value="医学部">医学部</option>
         <option value="工学部">工学部</option>
@@ -512,7 +513,7 @@ const PERIOD_TIMES = {
   5: "17:00〜18:30",
   6: "18:50〜20:20",
 };
-const FACULTY_PATH_JS = { 'U': '20', 'B': '06' };
+const FACULTY_PATH_JS = { 'U': '20', 'B': '06', 'X': '15' };
 
 let userId = "";
 let myCourseIds = new Set();
@@ -867,15 +868,24 @@ function renderCourseList(courses) {
     );
   }
 
-  const kyoyo = filtered.filter(c => !c.department || !c.department.includes("経営学部"));
-  let senmon = filtered.filter(c => c.department && c.department.includes("経営学部"));
-
-  // 経営学部以外の学生には経営専門科目を非表示
-  if (userFaculty && userFaculty !== "経営学部") {
-    senmon = [];
+  // 時間割コードの2文字目で学部専門科目を判定（'B'=経営、'X'=システム情報）
+  function _courseType(c) {
+    if (!c.timetable_code || c.timetable_code.length < 2) return 'kyoyo';
+    const ch = c.timetable_code[1].toUpperCase();
+    if (ch === 'B') return 'keiei';
+    if (ch === 'X') return 'sysinfo';
+    return 'kyoyo';
   }
 
-  if (kyoyo.length === 0 && senmon.length === 0) {
+  const kyoyo = filtered.filter(c => _courseType(c) === 'kyoyo');
+  let senmonKeiei   = filtered.filter(c => _courseType(c) === 'keiei');
+  let senmonSysInfo = filtered.filter(c => _courseType(c) === 'sysinfo');
+
+  // 所属学部以外の専門科目を非表示
+  if (userFaculty !== "経営学部")       senmonKeiei   = [];
+  if (userFaculty !== "システム情報学部") senmonSysInfo = [];
+
+  if (kyoyo.length === 0 && senmonKeiei.length === 0 && senmonSysInfo.length === 0) {
     list.innerHTML = '<div class="empty-msg">この時間に科目がありません</div>';
     return;
   }
@@ -888,12 +898,20 @@ function renderCourseList(courses) {
     kyoyo.forEach(c => list.appendChild(makeCourseItem(c)));
   }
 
-  if (senmon.length > 0) {
+  if (senmonKeiei.length > 0) {
     const h = document.createElement("div");
     h.className = "course-section-header";
     h.textContent = "経営学部専門科目";
     list.appendChild(h);
-    senmon.forEach(c => list.appendChild(makeCourseItem(c)));
+    senmonKeiei.forEach(c => list.appendChild(makeCourseItem(c)));
+  }
+
+  if (senmonSysInfo.length > 0) {
+    const h = document.createElement("div");
+    h.className = "course-section-header";
+    h.textContent = "システム情報学部専門科目";
+    list.appendChild(h);
+    senmonSysInfo.forEach(c => list.appendChild(makeCourseItem(c)));
   }
 }
 
@@ -958,7 +976,8 @@ document.addEventListener('click', () => {
 
 async function loadCreditRequirements() {
   try {
-    const res = await fetch(BASE_URL + '/api/credit_requirements');
+    const faculty = (window._userProfile || {}).faculty || '経営学部';
+    const res = await fetch(`${BASE_URL}/api/credit_requirements?faculty=${encodeURIComponent(faculty)}`);
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     CREDIT_CATS = data.map(r => ({
@@ -1082,50 +1101,52 @@ function renderCreditRows() {
     }
     item.querySelector(`#req-${cat.id}`).addEventListener('input', updateCredits);
   });
-  // 合計行共通スタイル
-  const combinedStyle = 'background:#eef2ff;border-radius:8px;padding:8px 10px;margin-top:10px;border:1px solid #c7d2fe';
-  // 初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他 計98単位行
-  const row98 = document.createElement('div');
-  row98.className = 'credits-row-item';
-  row98.style.cssText = combinedStyle;
-  row98.innerHTML = `
-    <span class="credits-cat-name" style="display:block;line-height:1.5">
-      <span style="font-weight:700;font-size:12px;color:#4338ca">選択必修 98単位計</span><br>
-      <span style="font-size:10px;color:#6366f1;font-weight:500">初年次＋第1群＋第2群＋グローバル＋第3群<br>＋関連科目＋その他必要と認める科目</span>
-    </span>
-    <div class="credits-inputs">
-      <div class="credits-mini-field">
-        <div class="credits-mini-label">必要</div>
-        <div class="credits-earn-val">98</div>
-      </div>
-      <div class="credits-mini-field">
-        <div class="credits-mini-label">取得</div>
-        <div class="credits-earn-val" id="earn-combined-98">0</div>
-      </div>
-      <div class="credits-remain" id="remain-combined-98"></div>
-    </div>
-  `;
-  container.appendChild(row98);
-  // 第2群＋第3群＋グローバル 合計行
-  if (senmonGrid) {
-    const row = document.createElement('div');
-    row.className = 'credits-row-item';
-    row.style.cssText = combinedStyle;
-    row.innerHTML = `
-      <span class="credits-cat-name" style="font-weight:700;font-size:11px;color:#4338ca">第2群＋第3群＋グローバル計</span>
+  // 経営学部専用の合計行
+  if ((window._userProfile || {}).faculty === '経営学部') {
+    const combinedStyle = 'background:#eef2ff;border-radius:8px;padding:8px 10px;margin-top:10px;border:1px solid #c7d2fe';
+    // 初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他 計98単位行
+    const row98 = document.createElement('div');
+    row98.className = 'credits-row-item';
+    row98.style.cssText = combinedStyle;
+    row98.innerHTML = `
+      <span class="credits-cat-name" style="display:block;line-height:1.5">
+        <span style="font-weight:700;font-size:12px;color:#4338ca">選択必修 98単位計</span><br>
+        <span style="font-size:10px;color:#6366f1;font-weight:500">初年次＋第1群＋第2群＋グローバル＋第3群<br>＋関連科目＋その他必要と認める科目</span>
+      </span>
       <div class="credits-inputs">
         <div class="credits-mini-field">
           <div class="credits-mini-label">必要</div>
-          <div class="credits-earn-val">55</div>
+          <div class="credits-earn-val">98</div>
         </div>
         <div class="credits-mini-field">
           <div class="credits-mini-label">取得</div>
-          <div class="credits-earn-val" id="earn-combined-senmon">0</div>
+          <div class="credits-earn-val" id="earn-combined-98">0</div>
         </div>
-        <div class="credits-remain" id="remain-combined-senmon"></div>
+        <div class="credits-remain" id="remain-combined-98"></div>
       </div>
     `;
-    senmonGrid.appendChild(row);
+    container.appendChild(row98);
+    // 第2群＋第3群＋グローバル 合計行
+    if (senmonGrid) {
+      const row = document.createElement('div');
+      row.className = 'credits-row-item';
+      row.style.cssText = combinedStyle;
+      row.innerHTML = `
+        <span class="credits-cat-name" style="font-weight:700;font-size:11px;color:#4338ca">第2群＋第3群＋グローバル計</span>
+        <div class="credits-inputs">
+          <div class="credits-mini-field">
+            <div class="credits-mini-label">必要</div>
+            <div class="credits-earn-val">55</div>
+          </div>
+          <div class="credits-mini-field">
+            <div class="credits-mini-label">取得</div>
+            <div class="credits-earn-val" id="earn-combined-senmon">0</div>
+          </div>
+          <div class="credits-remain" id="remain-combined-senmon"></div>
+        </div>
+      `;
+      senmonGrid.appendChild(row);
+    }
   }
 }
 
@@ -1154,43 +1175,45 @@ function updateCredits() {
     _creditData[cat.id].required = req;
     _creditData[cat.id].earned   = earned;
   });
-  // 共通専門基礎科目が6単位超えた分（上限2）をその他必要と認める科目へ
-  const kyotsuOverflow = Math.min(Math.max(0, kyotsuEarned - 6), 2);
-  if (kyotsuOverflow > 0) {
-    const sonotaBase = _creditData.sonota_base || 0;
-    const sonotaAdj  = sonotaBase + kyotsuOverflow;
-    const sonotaEl   = document.getElementById('earn-sonota');
-    if (sonotaEl) sonotaEl.textContent = sonotaAdj;
-    const sonotaReq  = parseInt(document.getElementById('req-sonota')?.value) || 0;
-    const sonotaRem  = document.getElementById('remain-sonota');
-    if (sonotaRem) {
-      if (sonotaReq === 0) { sonotaRem.textContent = ''; sonotaRem.className = 'credits-remain'; }
-      else if (sonotaAdj >= sonotaReq) { sonotaRem.textContent = '✓'; sonotaRem.className = 'credits-remain done'; }
-      else { sonotaRem.textContent = String(sonotaReq - sonotaAdj); sonotaRem.className = 'credits-remain'; }
+  // 経営学部専用：共通専門基礎科目が6単位超えた分（上限2）をその他必要と認める科目へ
+  if ((window._userProfile || {}).faculty === '経営学部') {
+    const kyotsuOverflow = Math.min(Math.max(0, kyotsuEarned - 6), 2);
+    if (kyotsuOverflow > 0) {
+      const sonotaBase = _creditData.sonota_base || 0;
+      const sonotaAdj  = sonotaBase + kyotsuOverflow;
+      const sonotaEl   = document.getElementById('earn-sonota');
+      if (sonotaEl) sonotaEl.textContent = sonotaAdj;
+      const sonotaReq  = parseInt(document.getElementById('req-sonota')?.value) || 0;
+      const sonotaRem  = document.getElementById('remain-sonota');
+      if (sonotaRem) {
+        if (sonotaReq === 0) { sonotaRem.textContent = ''; sonotaRem.className = 'credits-remain'; }
+        else if (sonotaAdj >= sonotaReq) { sonotaRem.textContent = '✓'; sonotaRem.className = 'credits-remain done'; }
+        else { sonotaRem.textContent = String(sonotaReq - sonotaAdj); sonotaRem.className = 'credits-remain'; }
+      }
+      totalEarned += kyotsuOverflow;
+      if (_creditData.sonota) _creditData.sonota.earned = sonotaAdj;
     }
-    totalEarned += kyotsuOverflow;
-    if (_creditData.sonota) _creditData.sonota.earned = sonotaAdj;
-  }
-  // 第2群＋第3群＋グローバル 合計チェック（totalEarned には加算しない）
-  const combinedEarned = (_creditData.senmon2?.earned || 0) + (_creditData.senmon3?.earned || 0) + (_creditData.global?.earned || 0);
-  const combinedEl = document.getElementById('earn-combined-senmon');
-  if (combinedEl) combinedEl.textContent = combinedEarned;
-  const combinedRem = document.getElementById('remain-combined-senmon');
-  if (combinedRem) {
-    if (combinedEarned >= 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain done'; }
-    else { combinedRem.textContent = String(55 - combinedEarned); combinedRem.className = 'credits-remain'; }
-  }
-  // 専門98単位合計チェック（初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他）
-  const combined98 = (_creditData.shonen?.earned || 0) + (_creditData.senmon1?.earned || 0)
-    + (_creditData.senmon2?.earned || 0) + (_creditData.global?.earned || 0)
-    + (_creditData.senmon3?.earned || 0) + (_creditData.kanren?.earned || 0)
-    + (_creditData.sonota?.earned || 0);
-  const el98 = document.getElementById('earn-combined-98');
-  if (el98) el98.textContent = combined98;
-  const rem98 = document.getElementById('remain-combined-98');
-  if (rem98) {
-    if (combined98 >= 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain done'; }
-    else { rem98.textContent = String(98 - combined98); rem98.className = 'credits-remain'; }
+    // 第2群＋第3群＋グローバル 合計チェック（totalEarned には加算しない）
+    const combinedEarned = (_creditData.senmon2?.earned || 0) + (_creditData.senmon3?.earned || 0) + (_creditData.global?.earned || 0);
+    const combinedEl = document.getElementById('earn-combined-senmon');
+    if (combinedEl) combinedEl.textContent = combinedEarned;
+    const combinedRem = document.getElementById('remain-combined-senmon');
+    if (combinedRem) {
+      if (combinedEarned >= 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain done'; }
+      else { combinedRem.textContent = String(55 - combinedEarned); combinedRem.className = 'credits-remain'; }
+    }
+    // 専門98単位合計チェック（初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他）
+    const combined98 = (_creditData.shonen?.earned || 0) + (_creditData.senmon1?.earned || 0)
+      + (_creditData.senmon2?.earned || 0) + (_creditData.global?.earned || 0)
+      + (_creditData.senmon3?.earned || 0) + (_creditData.kanren?.earned || 0)
+      + (_creditData.sonota?.earned || 0);
+    const el98 = document.getElementById('earn-combined-98');
+    if (el98) el98.textContent = combined98;
+    const rem98 = document.getElementById('remain-combined-98');
+    if (rem98) {
+      if (combined98 >= 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain done'; }
+      else { rem98.textContent = String(98 - combined98); rem98.className = 'credits-remain'; }
+    }
   }
   document.getElementById('credits-total-earned').textContent = totalEarned;
   const totalReqEl = document.getElementById('credits-total-req');
@@ -1211,10 +1234,11 @@ function updateCredits() {
   localStorage.setItem('credit_data', JSON.stringify(_creditData));
 }
 
+const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部']);
 function updateCreditsVisibility() {
   const wrap = document.getElementById('credits-wrap');
   if (!wrap) return;
-  wrap.style.display = ((window._userProfile || {}).faculty === '経営学部') ? 'block' : 'none';
+  wrap.style.display = _CREDIT_CHECKER_FACULTIES.has((window._userProfile || {}).faculty || '') ? 'block' : 'none';
 }
 
 function openSeisekiPicker() {

@@ -160,8 +160,9 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 |---|---|---|
 | `U` | 教養科目（教養教育院） | `20` |
 | `B` | 経営学部 | `06` |
+| `X` | システム情報学部 | `15` |
 
-例: `3U020` → `/20/` → `2026_3U020.html` / `3B379` → `/06/` → `2026_3B379.html`
+例: `3U020` → `/20/` → `2026_3U020.html` / `3B379` → `/06/` → `2026_3B379.html` / `1X058` → `/15/` → `2026_1X058.html`
 
 新しい学部のデータを追加する際は、実際のシラバスURLを確認してpathの数字を特定し、
 `programing files/import_syllabus.py` と `programing files/fetch_syllabus_info.py` と

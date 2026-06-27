@@ -1,0 +1,171 @@
+{% extends "admin/base.html" %}
+{% block title %}システム情報学部 管理{% endblock %}
+{% block heading %}💻 システム情報学部 管理{% endblock %}
+
+{% block extra_style %}
+.req-input   { width:60px;  padding:4px 6px; font-size:13px; text-align:center; margin:0; border:1px solid #e2e8f0; border-radius:6px; }
+.sort-input  { width:54px;  padding:4px 6px; font-size:13px; text-align:center; margin:0; border:1px solid #e2e8f0; border-radius:6px; }
+.label-input { width:100%;  padding:4px 7px; font-size:13px; border:1px solid #e2e8f0; border-radius:6px; }
+.group-input { width:100%;  padding:4px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px; }
+.note-input  { width:100%;  padding:5px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px;
+  resize:vertical; min-height:44px; font-family:inherit; color:#374151; }
+.note-input:focus, .label-input:focus, .group-input:focus, .req-input:focus, .sort-input:focus {
+  outline:none; border-color:#6366f1; }
+.btn-del { background:none; border:none; cursor:pointer; font-size:15px; padding:2px 4px; opacity:.6; }
+.btn-del:hover { opacity:1; }
+{% endblock %}
+
+{% block content %}
+
+<!-- 単位要件 -->
+<div class="card">
+  <h2 style="margin-top:0">📊 単位要件（必要単位数）</h2>
+  {% if request.query_params.get('error') == 'invalid' %}
+  <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin-bottom:12px">⚠ 表示名は必須です</div>
+  {% endif %}
+  <form method="post" action="/admin/sysinfo/credit_requirements/update">
+    <table>
+      <tr>
+        <th>表示名</th>
+        <th style="width:90px">グループ</th>
+        <th style="width:60px">並び</th>
+        <th style="width:70px">必要単位</th>
+        <th>ⓘ 注記テキスト</th>
+        <th style="width:48px"></th>
+      </tr>
+      {% for r in reqs %}
+      <tr>
+        <td><input type="text" class="label-input" name="label_{{ r.category_id }}" value="{{ r.label }}"></td>
+        <td><input type="text" class="group-input" name="group_{{ r.category_id }}" value="{{ r.group_name }}" list="group-list"></td>
+        <td><input type="number" class="sort-input" name="sort_{{ r.category_id }}" value="{{ r.sort_order }}" min="0" max="9999"></td>
+        <td><input type="number" class="req-input" name="req_{{ r.category_id }}" value="{{ r.required_credits }}" min="0" max="200"></td>
+        <td><textarea class="note-input" name="note_{{ r.category_id }}" placeholder="（注記なし）">{{ r.note or '' }}</textarea></td>
+        <td>
+          <button type="button" class="btn-del"
+                  data-id="{{ r.category_id }}"
+                  data-label="{{ r.label }}"
+                  onclick="deleteReq(this)">🗑</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="color:#999;text-align:center;padding:16px">単位要件がまだ登録されていません</td></tr>
+      {% endfor %}
+    </table>
+    {% if reqs %}
+    <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <span id="save-status" style="font-size:12px;color:#6b7280"></span>
+    </div>
+    {% endif %}
+  </form>
+  <datalist id="group-list">
+    <option value="教養科目">
+    <option value="専門科目">
+  </datalist>
+
+  <!-- 新規追加 -->
+  <details style="margin-top:20px" {% if not reqs %}open{% endif %}>
+    <summary style="cursor:pointer;font-weight:600;color:#6366f1">＋ カテゴリを追加</summary>
+    <form method="post" action="/admin/sysinfo/credit_requirements/add" style="margin-top:12px">
+      <table>
+        <tr>
+          <th>表示名</th>
+          <th style="width:90px">グループ</th>
+          <th style="width:60px">並び</th>
+          <th style="width:70px">必要単位</th>
+          <th>ⓘ 注記テキスト</th>
+        </tr>
+        <tr>
+          <td><input type="text" class="label-input" name="new_label" placeholder="例: 専門基礎科目" required></td>
+          <td><input type="text" class="group-input" name="new_group" placeholder="専門科目" list="group-list"></td>
+          <td><input type="number" class="sort-input" name="new_sort" value="999" min="0" max="9999"></td>
+          <td><input type="number" class="req-input" name="new_req" value="0" min="0" max="200"></td>
+          <td><textarea class="note-input" name="new_note" placeholder="（注記なし）"></textarea></td>
+        </tr>
+      </table>
+      <button type="submit" class="btn btn-primary" style="margin-top:10px">追加</button>
+    </form>
+  </details>
+</div>
+
+<!-- 登録済み科目一覧 -->
+<div class="card">
+  <h2 style="margin-top:0">📚 システム情報学部 科目一覧
+    <span style="font-size:11px;font-weight:normal;color:#6b7280">（import_syllabus.py で登録済み）</span>
+  </h2>
+  <table>
+    <tr><th>科目名</th><th>分類</th><th>学期</th></tr>
+    {% for c in courses %}
+    <tr>
+      <td style="font-size:13px">{{ c.name }}</td>
+      <td style="font-size:12px;color:#6b7280">{{ c.classification or '—' }}</td>
+      <td style="font-size:12px;color:#6b7280">{{ c.term or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" style="color:#999;text-align:center;padding:16px">システム情報学部の科目がありません<br><small>import_syllabus.py --also-courses --faculty システム情報学部 で登録してください</small></td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const form = document.querySelector('form[action$="/update"]');
+  if (!form) return;
+  const status = document.getElementById('save-status');
+  let timer = null;
+
+  async function save() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    status.textContent = '保存中...';
+    status.style.color = '#6b7280';
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: new URLSearchParams(new FormData(form)),
+      });
+      if (!res.ok) throw new Error(res.status);
+      status.textContent = '✓ 保存済み';
+      status.style.color = '#15803d';
+    } catch(e) {
+      status.textContent = '⚠ 保存に失敗しました';
+      status.style.color = '#b91c1c';
+    }
+  }
+
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    status.textContent = '変更あり...';
+    status.style.color = '#d97706';
+    timer = setTimeout(save, 1000);
+  }
+
+  form.querySelectorAll('input, textarea').forEach(el => {
+    el.addEventListener('input', schedule);
+  });
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    save();
+  });
+})();
+
+async function deleteReq(btn) {
+  const id    = btn.dataset.id;
+  const label = btn.dataset.label;
+  if (!await askConfirm(`「${label}」を削除しますか？`)) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/admin/sysinfo/credit_requirements/${encodeURIComponent(id)}/delete`, { method: 'POST' });
+    if (!res.ok) throw new Error(res.status);
+    location.reload();
+  } catch(e) {
+    alert('削除に失敗しました');
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

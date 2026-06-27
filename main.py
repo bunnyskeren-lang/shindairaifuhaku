@@ -88,7 +88,7 @@ APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 _LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
-_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06"}
+_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15"}
 
 def _make_syllabus_url(timetable_code: str) -> str:
     if not timetable_code or len(timetable_code) < 2:
@@ -3480,10 +3480,12 @@ async def api_seiseki_save_raw(request: Request):
 
 
 @app.get("/api/credit_requirements")
-async def api_credit_requirements():
+async def api_credit_requirements(faculty: str = Query("経営学部")):
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
-            select(CreditRequirement).order_by(CreditRequirement.sort_order)
+            select(CreditRequirement)
+            .where(CreditRequirement.faculty == faculty)
+            .order_by(CreditRequirement.sort_order)
         )).scalars().all()
         cc_rows = (await session.execute(
             select(SubjectCreditCategory.category_id, Subject.name)
@@ -3702,3 +3704,102 @@ async def admin_keiei_delete_requirement(cat_id: str, request: Request, _: str =
             await session.delete(row)
             await session.commit()
     return RedirectResponse("/admin/keiei", status_code=303)
+
+
+# ── システム情報学部 管理ページ ────────────────────────────────────────────────
+
+@app.get("/admin/sysinfo", response_class=HTMLResponse)
+async def admin_sysinfo(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        reqs = (await session.execute(
+            select(CreditRequirement)
+            .where(CreditRequirement.faculty == "システム情報学部")
+            .order_by(CreditRequirement.sort_order)
+        )).scalars().all()
+        courses = (await session.execute(
+            select(Subject)
+            .where(Subject.faculty.like("%システム情報学部%"))
+            .order_by(Subject.name)
+        )).scalars().all()
+    return templates.TemplateResponse("admin/sysinfo.html", {
+        "request": request,
+        "reqs": reqs,
+        "courses": courses,
+    })
+
+
+@app.post("/admin/sysinfo/credit_requirements/update")
+async def admin_sysinfo_update_requirements(request: Request, _: str = Depends(check_admin)):
+    form = await request.form()
+    async with AsyncSessionLocal() as session:
+        existing_ids = {
+            r for (r,) in (await session.execute(
+                select(CreditRequirement.category_id)
+                .where(CreditRequirement.faculty == "システム情報学部")
+            )).all()
+        }
+        for cat_id in existing_ids:
+            values: dict = {}
+            if f"req_{cat_id}" in form:
+                try:
+                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
+                except ValueError:
+                    pass
+            if f"note_{cat_id}" in form:
+                note_val = form[f"note_{cat_id}"].strip()
+                values["note"] = note_val or None
+            if f"label_{cat_id}" in form:
+                values["label"] = form[f"label_{cat_id}"].strip()
+            if f"group_{cat_id}" in form:
+                values["group_name"] = form[f"group_{cat_id}"].strip()
+            if f"sort_{cat_id}" in form:
+                try:
+                    values["sort_order"] = int(form[f"sort_{cat_id}"])
+                except ValueError:
+                    pass
+            if values:
+                await session.execute(
+                    sa_update(CreditRequirement)
+                    .where(CreditRequirement.category_id == cat_id)
+                    .values(**values)
+                )
+        await session.commit()
+    return RedirectResponse("/admin/sysinfo", status_code=303)
+
+
+@app.post("/admin/sysinfo/credit_requirements/add")
+async def admin_sysinfo_add_requirement(request: Request, _: str = Depends(check_admin)):
+    form = await request.form()
+    label  = form.get("new_label", "").strip()
+    group  = form.get("new_group", "").strip()
+    note   = form.get("new_note", "").strip() or None
+    if not label:
+        return RedirectResponse("/admin/sysinfo?error=invalid", status_code=303)
+    try:
+        req    = max(0, int(form.get("new_req", "0")))
+        sort_v = int(form.get("new_sort", "999"))
+    except ValueError:
+        req, sort_v = 0, 999
+    cat_id = f"si_{int(time.time() * 1000)}"
+    async with AsyncSessionLocal() as session:
+        session.add(CreditRequirement(
+            category_id=cat_id,
+            label=label,
+            group_name=group,
+            sort_order=sort_v,
+            required_credits=req,
+            note=note,
+            faculty="システム情報学部",
+        ))
+        await session.commit()
+    return RedirectResponse("/admin/sysinfo", status_code=303)
+
+
+@app.post("/admin/sysinfo/credit_requirements/{cat_id}/delete")
+async def admin_sysinfo_delete_requirement(cat_id: str, request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        row = await session.get(CreditRequirement, cat_id)
+        if row:
+            await session.delete(row)
+            await session.commit()
+    return RedirectResponse("/admin/sysinfo", status_code=303)

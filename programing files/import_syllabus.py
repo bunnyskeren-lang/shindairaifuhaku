@@ -17,6 +17,7 @@ SYLLABUS_BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/da
 FACULTY_PATH: dict[str, str] = {
     "U": "20",
     "B": "06",
+    "X": "15",  # システム情報学部
 }
 
 def make_syllabus_url(code: str) -> str | None:
