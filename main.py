@@ -2151,6 +2151,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 "category": c.category or "",
                 "syllabus_url": "",
                 "faculty": c.faculty or "",
+                "term": c.term or "",
+                "credits": float(c.credits) if c.credits is not None else 0,
             }
             for c in courses
         }, ensure_ascii=False)
@@ -2174,10 +2176,14 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             content=rev.content,
             rating=rev.rating,
             ease_rating=rev.ease_rating,
+            grading_method=rev.grading_method,
             is_approved=rev.is_approved,
             selected_instructor=rev.selected_instructor,
             created_at=rev.created_at,
             submitter_name=rev.submitter_name,
+            nickname=rev.nickname,
+            academic_year=rev.academic_year,
+            student_id=rev.student_id,
         ))
 
     # groupby順を保持するため事前グループ化
