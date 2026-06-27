@@ -33,10 +33,9 @@ class Base(DeclarativeBase):
 
 async def init_db():
     from models import (  # noqa: F401
-        MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog,
-        PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap,
-        CourseView, SyllabusCourse, CourseSlot, UserCourse, TimetableProfile,
-        CreditRequirement, CategoryCourse, UserSeisekiRaw,
+        MessageLog, UserProfile, UserActivity, ErrorLog,
+        PushSubscription, ClassificationOrder, RichMenuTap,
+        TimetableProfile, CreditRequirement, UserSeisekiRaw,
         Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
         CourseSectionView, UserSyllabus, SubjectCreditCategory,
     )
@@ -44,49 +43,10 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text(
-            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS reading VARCHAR(400) NOT NULL DEFAULT ''"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE course_instructors ADD COLUMN IF NOT EXISTS url VARCHAR(500)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE pending_reviews ADD COLUMN IF NOT EXISTS selected_instructor VARCHAR(100)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE pending_reviews ADD COLUMN IF NOT EXISTS nickname VARCHAR(30)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE pending_reviews ADD COLUMN IF NOT EXISTS academic_year INTEGER"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE pending_reviews ADD COLUMN IF NOT EXISTS student_id VARCHAR(20)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS faculty VARCHAR(100)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS target_grades VARCHAR(20)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS subject_category VARCHAR(50)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS numbering_code VARCHAR(20)"
-        ))
-        await conn.execute(text(
             "ALTER TABLE classification_orders ADD COLUMN IF NOT EXISTS parent_group VARCHAR(100)"
         ))
         await conn.execute(text(
-            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS senmon_group VARCHAR(20)"
-        ))
-        await conn.execute(text(
             "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS note TEXT"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_course_slots_day_period ON course_slots (day_of_week, period)"
         ))
         await conn.execute(text(
             "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS label VARCHAR(100) NOT NULL DEFAULT ''"
@@ -124,31 +84,7 @@ async def init_db():
             "UPDATE credit_requirements SET required_credits = 12 "
             "WHERE category_id = 'sonota' AND required_credits = 0"
         ))
-        await conn.execute(text(
-            "INSERT INTO courses (name, classification, category, reading, term, credits, faculty, sort_order) "
-            "SELECT '研究指導', '第3群科目', '専門', 'けんきゅうしどう', '通年', 8, '経営学部', 0 "
-            "WHERE NOT EXISTS (SELECT 1 FROM courses WHERE name = '研究指導')"
-        ))
-        await conn.execute(text(
-            "UPDATE courses SET classification = '第3群科目', senmon_group = '第3群' "
-            "WHERE name = '研究指導' AND (classification = '専門科目' OR senmon_group IS NULL)"
-        ))
-        await conn.execute(text(
-            "INSERT INTO courses (name, classification, category, reading, term, credits, faculty, sort_order) "
-            "SELECT '初年次セミナー', '初年次セミナー', '専門', 'しょねんじせみなー', '第1クォーター', 2, '経営学部', 0 "
-            "WHERE NOT EXISTS (SELECT 1 FROM courses WHERE name = '初年次セミナー')"
-        ))
-        # ── スキーマ改善マイグレーション ───────────────────────────────────────────
         # インデックス追加
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_pr_course_name ON pending_reviews (course_name)"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_pr_is_approved ON pending_reviews (is_approved)"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_pr_course_name_approved ON pending_reviews (course_name, is_approved)"
-        ))
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_message_logs_user_id ON message_logs (user_id)"
         ))
@@ -171,72 +107,11 @@ async def init_db():
         # UNIQUE制約（重複時は無視）
         await conn.execute(text("""
             DO $$ BEGIN
-              ALTER TABLE course_instructors ADD CONSTRAINT uq_ci_course_id_name UNIQUE (course_id, name);
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE course_slots ADD CONSTRAINT uq_cs_slot UNIQUE (syllabus_course_id, day_of_week, period);
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
-        await conn.execute(text("""
-            DO $$ BEGIN
               ALTER TABLE user_profiles ADD CONSTRAINT uq_up_student_id UNIQUE (student_id);
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$
         """))
-        # FK制約（重複時は無視）
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE course_instructors ADD CONSTRAINT fk_ci_course_id
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE;
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE course_slots ADD CONSTRAINT fk_cs_syllabus_course_id
-                FOREIGN KEY (syllabus_course_id) REFERENCES syllabus_courses(id) ON DELETE CASCADE;
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE user_courses ADD CONSTRAINT fk_uc_syllabus_course_id
-                FOREIGN KEY (syllabus_course_id) REFERENCES syllabus_courses(id) ON DELETE CASCADE;
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE course_views ADD CONSTRAINT fk_cv_course_id
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE;
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE category_courses ADD CONSTRAINT fk_cc_category_id
-                FOREIGN KEY (category_id) REFERENCES credit_requirements(category_id);
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
         # CHECK制約（重複時は無視）
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE pending_reviews ADD CONSTRAINT chk_pr_rating CHECK (rating BETWEEN 1 AND 5);
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE pending_reviews ADD CONSTRAINT chk_pr_ease_rating
-                CHECK (ease_rating IN ('SS', 'S', 'A', 'B', 'C'));
-            EXCEPTION WHEN duplicate_object THEN NULL;
-            END $$
-        """))
         await conn.execute(text("""
             DO $$ BEGIN
               ALTER TABLE message_logs ADD CONSTRAINT chk_ml_direction CHECK (direction IN ('in', 'out'));

@@ -56,8 +56,7 @@ from models import (
     PushSubscription, Instructor, CourseSection, ClassificationOrder,
     RichMenuTap, CourseSectionView, Syllabus, Schedule, UserSyllabus,
     CreditRequirement, SubjectCreditCategory, UserSeisekiRaw,
-    Course, PendingReview, CourseInstructor, SyllabusCourse, CourseSlot,
-    UserCourse, CourseView, CategoryCourse,
+    TimetableProfile,
 )
 
 from dotenv import load_dotenv
@@ -3087,7 +3086,6 @@ async def liff_timetable(request: Request):
 async def api_timetable_profile_get(user_id: str = Query("")):
     if not user_id:
         return {"faculty": None, "grade": None}
-    from models import TimetableProfile
     async with AsyncSessionLocal() as session:
         p = await session.get(TimetableProfile, user_id)
         if not p:
@@ -3097,7 +3095,6 @@ async def api_timetable_profile_get(user_id: str = Query("")):
 
 @app.post("/api/timetable/profile")
 async def api_timetable_profile_set(request: Request):
-    from models import TimetableProfile
     data = await request.json()
     user_id = data.get("user_id", "")
     if not user_id or not _LINE_USER_ID_RE.match(user_id):
