@@ -14,6 +14,7 @@ import base64
 import secrets as py_secrets
 from collections import defaultdict
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -50,7 +51,14 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, AsyncSessionLocal, engine
-from models import MessageLog, Course, PendingReview, UserProfile, UserActivity, ErrorLog, PushSubscription, CourseInstructor, ClassificationOrder, RichMenuTap, CourseView, SyllabusCourse, CourseSlot, UserCourse, CreditRequirement, CategoryCourse, UserSeisekiRaw
+from models import (
+    MessageLog, Subject, Review, UserProfile, UserActivity, ErrorLog,
+    PushSubscription, Instructor, CourseSection, ClassificationOrder,
+    RichMenuTap, CourseSectionView, Syllabus, Schedule, UserSyllabus,
+    CreditRequirement, SubjectCreditCategory, UserSeisekiRaw,
+    Course, PendingReview, CourseInstructor, SyllabusCourse, CourseSlot,
+    UserCourse, CourseView, CategoryCourse,
+)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -225,7 +233,7 @@ async def _reload_senmon_cache():
     global _senmon_name_to_group
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
-            select(Course.name, Course.senmon_group).where(Course.senmon_group.isnot(None))
+            select(Subject.name, Subject.senmon_group).where(Subject.senmon_group.isnot(None))
         )).all()
     _senmon_name_to_group = {r[0]: r[1] for r in rows}
 
@@ -407,7 +415,7 @@ async def _get_cls_set() -> set[str]:
     if _cls_cache and time.monotonic() - _cls_cache_at < _CLS_CACHE_TTL:
         return _cls_cache
     async with AsyncSessionLocal() as s:
-        rows = (await s.execute(select(Course.classification).distinct())).scalars().all()
+        rows = (await s.execute(select(Subject.classification).distinct())).scalars().all()
     _cls_cache = {r for r in rows if r}
     _cls_cache_at = time.monotonic()
     return _cls_cache
@@ -441,7 +449,7 @@ async def _get_courses_cached():
         return _course_by_name, _course_list_all
     async with AsyncSessionLocal() as s:
         courses = (await s.execute(
-            select(Course).order_by(Course.sort_order, Course.name)
+            select(Subject).order_by(Subject.sort_order, Subject.name)
         )).scalars().all()
     _course_list_all = courses
     _course_by_name = {c.name: c for c in courses}
@@ -454,7 +462,10 @@ async def _get_reviewed_cached() -> set[str]:
         return _reviewed_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
-            select(PendingReview.course_name).where(PendingReview.is_approved == True).distinct()
+            select(Subject.name).distinct()
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.is_approved == True)
         )).scalars().all()
     _reviewed_cache = set(rows)
     _reviewed_cache_at = time.monotonic()
@@ -467,10 +478,13 @@ async def _get_all_instructors_cached() -> dict[int, list]:
     if _all_instructors_cache and time.monotonic() - _all_instructors_cache_at < _COURSE_CACHE_TTL:
         return _all_instructors_cache
     async with AsyncSessionLocal() as s:
-        rows = (await s.execute(select(CourseInstructor))).scalars().all()
+        rows = (await s.execute(
+            select(CourseSection, Instructor)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+        )).all()
     d: dict[int, list] = {}
-    for r in rows:
-        d.setdefault(r.course_id, []).append(r)
+    for cs, instr in rows:
+        d.setdefault(cs.subject_id, []).append(instr)
     _all_instructors_cache = d
     _all_instructors_cache_at = time.monotonic()
     return _all_instructors_cache
@@ -482,14 +496,18 @@ async def _get_all_review_stats_cached() -> dict[str, tuple]:
         return _all_review_stats_cache
     async with AsyncSessionLocal() as s:
         count_rows = (await s.execute(
-            select(PendingReview.course_name, func.count(PendingReview.id).label("cnt"))
-            .where(PendingReview.is_approved == True)
-            .group_by(PendingReview.course_name)
+            select(Subject.name, func.count(Review.id).label("cnt"))
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.is_approved == True)
+            .group_by(Subject.name)
         )).all()
         ease_rows = (await s.execute(
-            select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id).label("cnt"))
-            .where(PendingReview.is_approved == True, PendingReview.ease_rating.isnot(None))
-            .group_by(PendingReview.course_name, PendingReview.ease_rating)
+            select(Subject.name, Review.ease_rating, func.count(Review.id).label("cnt"))
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.is_approved == True, Review.ease_rating.isnot(None))
+            .group_by(Subject.name, Review.ease_rating)
         )).all()
     ease_map: dict[str, list] = {}
     for name, ease, cnt in ease_rows:
@@ -558,7 +576,7 @@ EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★�
 
 
 
-async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
+async def get_course_flex(course: Subject, user_id: str) -> FlexMessage:
     _cfx = _course_flex_cache.get(course.id)
     if _cfx and time.monotonic() - _cfx[1] < _COURSE_FLEX_TTL:
         return _cfx[0]
@@ -570,7 +588,7 @@ async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
     instructors = all_instrs.get(course.id, [])
     review_count, top_ease_flex = all_stats.get(course.name, (0, None))
 
-    instructor_str = "・".join(i.name for i in instructors) or course.instructor or "未設定"
+    instructor_str = "・".join(i.name for i in instructors) or "未設定"
     liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
 
     meta_parts = []
@@ -625,7 +643,7 @@ async def get_course_flex(course: Course, user_id: str) -> FlexMessage:
     return msg
 
 
-def make_no_review_flex(course: Course, user_id: str = "") -> FlexMessage:
+def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
     form_url = f"{REVIEW_FORM_URL}?course={_url_quote(course.name)}"
     if user_id:
         form_url += f"&uid={user_id}"
@@ -1081,7 +1099,15 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     _sem_base_for = {n: _b for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
     seen_sem_base: set[str] = set()
 
-    course_syllabus_urls: dict[str, str] = {c.name: c.syllabus_url for c in rows if c.syllabus_url}
+    # syllabus_url は CourseSection にある - subject_id をキーに最初の非NULLを取得
+    async with AsyncSessionLocal() as _sv_s:
+        _sv_rows = (await _sv_s.execute(
+            select(CourseSection.subject_id, CourseSection.syllabus_url)
+            .where(CourseSection.syllabus_url.isnot(None))
+            .where(CourseSection.subject_id.in_([c.id for c in rows]))
+        )).all()
+    _sv_by_id = {sid: url for sid, url in _sv_rows}
+    course_syllabus_urls: dict[str, str] = {c.name: _sv_by_id[c.id] for c in rows if c.id in _sv_by_id}
     course_liff_urls: dict[str, str] = {c.name: f"{APP_URL}/liff/course?course_id={c.id}" for c in rows}
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
@@ -1389,13 +1415,12 @@ async def handle_message(text: str, user_id: str = "") -> list:
             return _rk[0]
         async with AsyncSessionLocal() as _s:
             rows = (await _s.execute(
-                select(PendingReview.course_name, func.avg(PendingReview.rating).label("avg"))
-                .where(
-                    PendingReview.is_approved == True,
-                    PendingReview.course_name.in_(select(Course.name)),
-                )
-                .group_by(PendingReview.course_name)
-                .order_by(func.avg(PendingReview.rating).desc())
+                select(Subject.name, func.avg(Review.rating).label("avg"))
+                .join(CourseSection, CourseSection.subject_id == Subject.id)
+                .join(Review, Review.course_section_id == CourseSection.id)
+                .where(Review.is_approved == True)
+                .group_by(Subject.name)
+                .order_by(func.avg(Review.rating).desc())
                 .limit(5)
             )).all()
         if not rows:
@@ -1414,12 +1439,11 @@ async def handle_message(text: str, user_id: str = "") -> list:
             return _rk[0]
         async with AsyncSessionLocal() as _s:
             rows = (await _s.execute(
-                select(PendingReview.course_name, PendingReview.ease_rating, func.count(PendingReview.id))
-                .where(
-                    PendingReview.is_approved == True,
-                    PendingReview.course_name.in_(select(Course.name)),
-                )
-                .group_by(PendingReview.course_name, PendingReview.ease_rating)
+                select(Subject.name, Review.ease_rating, func.count(Review.id))
+                .join(CourseSection, CourseSection.subject_id == Subject.id)
+                .join(Review, Review.course_section_id == CourseSection.id)
+                .where(Review.is_approved == True)
+                .group_by(Subject.name, Review.ease_rating)
             )).all()
         if not rows:
             return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
@@ -1730,39 +1754,40 @@ async def search_courses(q: str = ""):
             tokens = [tok for tok in _re.split(r'[\s　]+', q.strip()) if tok]
             def _escape(tok: str) -> str:
                 return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-            stmt = select(Course)
+            stmt = select(Subject)
             for tok in tokens:
                 t = _escape(tok)
                 stmt = stmt.where(or_(
-                    Course.name.ilike(f"%{t}%", escape="\\"),
-                    Course.reading.ilike(f"%{t}%", escape="\\"),
+                    Subject.name.ilike(f"%{t}%", escape="\\"),
+                    Subject.reading.ilike(f"%{t}%", escape="\\"),
                 ))
-            stmt = stmt.order_by(Course.name)
+            stmt = stmt.order_by(Subject.name)
             courses = (await session.execute(stmt)).scalars().all()
             if not courses:
-                norm_col = Course.name
+                norm_col = Subject.name
                 for ch in ('・', '･', '（', '）', '(', ')'):
                     norm_col = func.replace(norm_col, ch, '')
                 norm_tokens = [_normalize_form_q(tok) for tok in tokens]
-                stmt2 = select(Course)
+                stmt2 = select(Subject)
                 for tok in norm_tokens:
                     t = _escape(tok)
                     stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
-                courses = (await session.execute(stmt2.order_by(Course.name))).scalars().all()
+                courses = (await session.execute(stmt2.order_by(Subject.name))).scalars().all()
         else:
-            stmt = select(Course).order_by(Course.name).limit(30)
+            stmt = select(Subject).order_by(Subject.name).limit(30)
             courses = (await session.execute(stmt)).scalars().all()
         course_ids = [c.id for c in courses]
-        instructors_raw = []
+        cs_rows = []
         if course_ids:
-            instructors_raw = (await session.execute(
-                select(CourseInstructor)
-                .where(CourseInstructor.course_id.in_(course_ids))
-                .order_by(CourseInstructor.name)
-            )).scalars().all()
+            cs_rows = (await session.execute(
+                select(CourseSection, Instructor)
+                .join(Instructor, Instructor.id == CourseSection.instructor_id)
+                .where(CourseSection.subject_id.in_(course_ids))
+                .order_by(Instructor.name)
+            )).all()
         insts_by_course: dict = {}
-        for inst in instructors_raw:
-            insts_by_course.setdefault(inst.course_id, []).append({"name": inst.name, "url": inst.url or ""})
+        for cs, inst in cs_rows:
+            insts_by_course.setdefault(cs.subject_id, []).append({"name": inst.name, "url": cs.syllabus_url or ""})
     return {"courses": [
         {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
         for c in courses
@@ -1772,14 +1797,18 @@ async def search_courses(q: str = ""):
 @app.get("/api/preload")
 async def api_preload():
     async with AsyncSessionLocal() as session:
-        courses = (await session.execute(select(Course).order_by(Course.name))).scalars().all()
-        insts_raw = (await session.execute(select(CourseInstructor).order_by(CourseInstructor.name))).scalars().all()
+        courses = (await session.execute(select(Subject).order_by(Subject.name))).scalars().all()
+        cs_rows = (await session.execute(
+            select(CourseSection, Instructor)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .order_by(Instructor.name)
+        )).all()
     insts_by_course: dict = {}
     inst_courses: dict = {}
     course_by_id = {c.id: c.name for c in courses}
-    for inst in insts_raw:
-        insts_by_course.setdefault(inst.course_id, []).append({"name": inst.name})
-        cname = course_by_id.get(inst.course_id)
+    for cs, inst in cs_rows:
+        insts_by_course.setdefault(cs.subject_id, []).append({"name": inst.name})
+        cname = course_by_id.get(cs.subject_id)
         if cname:
             bucket = inst_courses.setdefault(inst.name, [])
             if not any(x["name"] == cname for x in bucket):
@@ -1808,18 +1837,18 @@ async def search_instructors(q: str = ""):
         q_clean = q.replace("　", " ").strip()
         escaped = _esc(q_clean)
         insts_raw = (await session.execute(
-            select(CourseInstructor.name)
-            .where(CourseInstructor.name.ilike(f"%{escaped}%", escape="\\"))
+            select(Instructor.name)
+            .where(Instructor.name.ilike(f"%{escaped}%", escape="\\"))
             .distinct()
         )).scalars().all()
         insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))
         if not insts:
-            norm_col = CourseInstructor.name
+            norm_col = Instructor.name
             for ch in ('・', '･', '（', '）', '(', ')'):
                 norm_col = func.replace(norm_col, ch, '')
             escaped_norm = _esc(_normalize_form_q(q_clean))
             insts_raw = (await session.execute(
-                select(CourseInstructor.name)
+                select(Instructor.name)
                 .where(norm_col.ilike(f"%{escaped_norm}%", escape="\\"))
                 .distinct()
             )).scalars().all()
@@ -1828,31 +1857,18 @@ async def search_instructors(q: str = ""):
         result = []
         if insts:
             all_rows = (await session.execute(
-                select(CourseInstructor.name, Course.id, Course.name)
-                .join(Course, CourseInstructor.course_id == Course.id)
-                .where(CourseInstructor.name.in_(insts))
-                .order_by(CourseInstructor.name, Course.name)
+                select(Instructor.name, Subject.id, Subject.name)
+                .join(CourseSection, CourseSection.instructor_id == Instructor.id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
+                .where(Instructor.name.in_(insts))
+                .order_by(Instructor.name, Subject.name)
             )).all()
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
             for inst_name, c_id, c_name in all_rows:
-                courses_by_inst[inst_name].append({"id": c_id, "name": c_name})
+                if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
+                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name})
             for name in insts:
                 result.append({"name": name, "courses": courses_by_inst[name]})
-
-        if not result:
-            # Course.instructor フィールドからも検索
-            fallback_courses = (await session.execute(
-                select(Course)
-                .where(Course.instructor.ilike(f"%{escaped}%", escape="\\"))
-                .order_by(Course.name)
-                .limit(10)
-            )).scalars().all()
-            instr_map: dict[str, list] = {}
-            for c in fallback_courses:
-                if c.instructor:
-                    instr_map.setdefault(c.instructor, []).append({"id": c.id, "name": c.name})
-            for instr_name, cs in instr_map.items():
-                result.append({"name": instr_name, "courses": cs})
 
     return {"instructors": result}
 
@@ -1870,9 +1886,9 @@ async def autofill_profile(uid: str = Query(default=""), student_id: str = Query
         if existing:
             return {"found": True, "name": existing.name}
         row = (await session.execute(
-            select(PendingReview.submitter_name)
-            .where(PendingReview.student_id == sid)
-            .order_by(PendingReview.created_at.desc())
+            select(Review.submitter_name)
+            .where(Review.student_id == sid)
+            .order_by(Review.created_at.desc())
             .limit(1)
         )).scalar_one_or_none()
         if not row:
@@ -1926,10 +1942,10 @@ async def submit(
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 
     async with AsyncSessionLocal() as session:
-        course_exists = (await session.execute(
-            select(Course.id).where(Course.name == course_name.strip())
+        subject = (await session.execute(
+            select(Subject).where(Subject.name == course_name.strip())
         )).scalar_one_or_none()
-        if not course_exists:
+        if not subject:
             return _form_error("指定された科目が見つかりません")
 
         uid = line_user_id.strip()
@@ -1956,14 +1972,35 @@ async def submit(
                 if existing.student_id != sid:
                     return _form_error("学籍番号が登録情報と一致しません")
 
-        review = PendingReview(
+        # 担当教員に対応する course_section を探す
+        instr_name = selected_instructor.strip()[:100] or None
+        cs_obj = None
+        if instr_name:
+            instr_obj = (await session.execute(
+                select(Instructor).where(Instructor.name == instr_name)
+            )).scalar_one_or_none()
+            if instr_obj:
+                cs_obj = (await session.execute(
+                    select(CourseSection).where(
+                        CourseSection.subject_id == subject.id,
+                        CourseSection.instructor_id == instr_obj.id,
+                    )
+                )).scalar_one_or_none()
+        if cs_obj is None:
+            cs_obj = (await session.execute(
+                select(CourseSection).where(CourseSection.subject_id == subject.id)
+            )).scalars().first()
+        if cs_obj is None:
+            return _form_error("この科目の担当教員情報が見つかりません")
+
+        review = Review(
+            course_section_id=cs_obj.id,
             submitter_name=submitter_name.strip()[:100],
-            course_name=course_name.strip()[:200],
+            content=comment.strip()[:500],
             rating=rating,
             ease_rating=ease_rating,
             grading_method=grading_method.strip()[:500] or None,
-            comment=comment.strip()[:500],
-            selected_instructor=selected_instructor.strip()[:100] or None,
+            selected_instructor=instr_name,
             nickname=nickname.strip()[:30] or None,
             academic_year=academic_year,
             student_id=sid or None,
@@ -2054,65 +2091,65 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
     def _search_filter(q: str):
         q_safe = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
         return or_(
-            Course.name.ilike(f"%{q_safe}%", escape="\\"),
-            Course.instructor.ilike(f"%{q_safe}%", escape="\\"),
-            Course.reading.ilike(f"%{q_safe}%", escape="\\"),
-            Course.faculty.ilike(f"%{q_safe}%", escape="\\"),
+            Subject.name.ilike(f"%{q_safe}%", escape="\\"),
+            Subject.reading.ilike(f"%{q_safe}%", escape="\\"),
+            Subject.faculty.ilike(f"%{q_safe}%", escape="\\"),
         )
 
     async with AsyncSessionLocal() as session:
-        base_stmt = select(Course)
+        base_stmt = select(Subject)
         if category:
-            base_stmt = base_stmt.where(Course.category == category)
+            base_stmt = base_stmt.where(Subject.category == category)
         if q:
             base_stmt = base_stmt.where(_search_filter(q))
 
         courses = (await session.execute(
-            base_stmt.order_by(Course.sort_order, Course.name)
+            base_stmt.order_by(Subject.sort_order, Subject.name)
         )).scalars().all()
         cls_map = await _get_cls_order_map()
         _cls_sort = _make_cls_sort(cls_map)
         courses = sorted(courses, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
         total = len(courses)
         classifications = (await session.execute(
-            select(Course.classification).distinct().order_by(Course.classification)
+            select(Subject.classification).distinct().order_by(Subject.classification)
         )).scalars().all()
         class_counts_raw = dict((await session.execute(
-            select(Course.classification, func.count(Course.id))
-            .where(Course.classification != "")
-            .group_by(Course.classification)
-            .order_by(Course.classification)
+            select(Subject.classification, func.count(Subject.id))
+            .where(Subject.classification.isnot(None), Subject.classification != "")
+            .group_by(Subject.classification)
+            .order_by(Subject.classification)
         )).all())
         class_counts = {k: class_counts_raw[k] for k in sorted(class_counts_raw, key=_cls_sort)}
 
         course_ids = [c.id for c in courses]
-        course_names = [c.name for c in courses]
 
+        cs_instr_rows = []
         if course_ids:
-            instructors_raw = (await session.execute(
-                select(CourseInstructor).where(CourseInstructor.course_id.in_(course_ids))
-            )).scalars().all()
-        else:
-            instructors_raw = []
+            cs_instr_rows = (await session.execute(
+                select(CourseSection, Instructor)
+                .join(Instructor, Instructor.id == CourseSection.instructor_id)
+                .where(CourseSection.subject_id.in_(course_ids))
+            )).all()
 
-        if course_names:
-            reviews_raw = (await session.execute(
-                select(PendingReview)
-                .where(PendingReview.course_name.in_(course_names))
-                .order_by(PendingReview.is_approved, PendingReview.created_at.desc())
-            )).scalars().all()
-        else:
-            reviews_raw = []
+        reviews_data = []
+        if course_ids:
+            reviews_data = (await session.execute(
+                select(Review, Subject.name.label("subj_name"))
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
+                .where(CourseSection.subject_id.in_(course_ids))
+                .order_by(Review.is_approved, Review.created_at.desc())
+            )).all()
 
     existing = sorted([c for c in classifications if c], key=_cls_sort)
     courses_data = (
         json.dumps({
             c.id: {
                 "name": c.name,
-                "instructor": c.instructor or "",
+                "instructor": "",
                 "classification": c.classification or "",
-                "category": c.category,
-                "syllabus_url": c.syllabus_url or "",
+                "category": c.category or "",
+                "syllabus_url": "",
                 "faculty": c.faculty or "",
             }
             for c in courses
@@ -2123,12 +2160,25 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
     )
 
     instructors_by_course: dict = defaultdict(list)
-    for inst in sorted(instructors_raw, key=lambda i: i.name):
-        instructors_by_course[inst.course_id].append(inst)
+    for cs, inst in sorted(cs_instr_rows, key=lambda x: x[1].name):
+        instructors_by_course[cs.subject_id].append(
+            SimpleNamespace(id=inst.id, name=inst.name, url=cs.syllabus_url or "")
+        )
 
     reviews_by_course: dict = defaultdict(list)
-    for r in reviews_raw:
-        reviews_by_course[r.course_name].append(r)
+    for rev, subj_name in reviews_data:
+        reviews_by_course[subj_name].append(SimpleNamespace(
+            id=rev.id,
+            course_name=subj_name,
+            comment=rev.content,
+            content=rev.content,
+            rating=rev.rating,
+            ease_rating=rev.ease_rating,
+            is_approved=rev.is_approved,
+            selected_instructor=rev.selected_instructor,
+            created_at=rev.created_at,
+            submitter_name=rev.submitter_name,
+        ))
 
     # groupby順を保持するため事前グループ化
     cls_parent_map = await _get_cls_parent_map()
@@ -2180,25 +2230,33 @@ async def add_instructor(course_id: int, request: Request, name: str = Form(...)
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if name_s:
         async with AsyncSessionLocal() as session:
-            existing = (await session.execute(
-                select(CourseInstructor).where(
-                    CourseInstructor.course_id == course_id,
-                    CourseInstructor.name == name_s,
+            # Instructor upsert
+            instr = (await session.execute(
+                select(Instructor).where(Instructor.name == name_s)
+            )).scalar_one_or_none()
+            if not instr:
+                instr = Instructor(name=name_s)
+                session.add(instr)
+                await session.flush()
+            # CourseSection 重複チェック
+            existing_cs = (await session.execute(
+                select(CourseSection).where(
+                    CourseSection.subject_id == course_id,
+                    CourseSection.instructor_id == instr.id,
                 )
             )).scalar_one_or_none()
-            if existing:
+            if existing_cs:
                 if is_ajax:
                     return JSONResponse({"ok": False, "error": "duplicate"})
                 referer = request.headers.get("Referer", "/admin/courses")
                 sep = "&" if "?" in referer else "?"
                 return RedirectResponse(f"{referer}{sep}inst_err={course_id}", status_code=303)
-            inst = CourseInstructor(course_id=course_id, name=name_s, url=url_s)
-            session.add(inst)
+            cs = CourseSection(subject_id=course_id, instructor_id=instr.id, syllabus_url=url_s)
+            session.add(cs)
             await session.commit()
-            await session.refresh(inst)
             _invalidate_courses_cache()
             if is_ajax:
-                return JSONResponse({"ok": True, "id": inst.id, "name": inst.name, "url": inst.url or ""})
+                return JSONResponse({"ok": True, "id": instr.id, "name": instr.name, "url": url_s or ""})
     if is_ajax:
         return JSONResponse({"ok": False, "error": "empty"})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
@@ -2209,9 +2267,24 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
     from fastapi.responses import JSONResponse
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     async with AsyncSessionLocal() as session:
-        inst = await session.get(CourseInstructor, instructor_id)
-        if inst:
-            await session.delete(inst)
+        cs = (await session.execute(
+            select(CourseSection).where(
+                CourseSection.subject_id == course_id,
+                CourseSection.instructor_id == instructor_id,
+            )
+        )).scalar_one_or_none()
+        if cs:
+            has_approved = (await session.execute(
+                select(func.count(Review.id)).where(
+                    Review.course_section_id == cs.id,
+                    Review.is_approved == True,
+                )
+            )).scalar()
+            if has_approved:
+                if is_ajax:
+                    return JSONResponse({"ok": False, "error": "承認済みレビューがあるため削除できません"})
+                return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
+            await session.delete(cs)
             await session.commit()
     _invalidate_courses_cache()
     if is_ajax:
@@ -2221,15 +2294,21 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
 
 @app.post("/admin/reviews/cleanup")
 async def admin_reviews_cleanup(_: str = Depends(check_admin)):
-    # データ保護ルール: 承認済みレビューは削除しない。未承認レビューのみ孤立分を削除。
+    # 未承認の孤立レビュー（subject が削除済み）を削除。承認済みは削除しない。
     async with AsyncSessionLocal() as session:
-        await session.execute(
-            delete(PendingReview).where(
-                ~PendingReview.course_name.in_(select(Course.name)),
-                PendingReview.is_approved == False,
+        orphan_cs_ids = (await session.execute(
+            select(CourseSection.id).where(
+                ~CourseSection.subject_id.in_(select(Subject.id))
             )
-        )
-        await session.commit()
+        )).scalars().all()
+        if orphan_cs_ids:
+            await session.execute(
+                delete(Review).where(
+                    Review.course_section_id.in_(orphan_cs_ids),
+                    Review.is_approved == False,
+                )
+            )
+            await session.commit()
     return RedirectResponse("/admin/courses", status_code=303)
 
 
@@ -2239,21 +2318,19 @@ async def migrate_third_language(_: str = Depends(check_admin)):
     NUMS = [1, 2, 3, 4]
     async with AsyncSessionLocal() as session:
         to_delete = (await session.execute(
-            select(Course).where(Course.name.contains("第三外国語"))
+            select(Subject).where(Subject.name.contains("第三外国語"))
         )).scalars().all()
         for c in to_delete:
-            # データ保護ルール: レビューは削除せず course_name を新科目名にリダイレクトしない（孤立のまま保持）
-            await session.execute(delete(CourseInstructor).where(CourseInstructor.course_id == c.id))
             await session.delete(c)
         for lang in LANGS:
             for n in NUMS:
                 name = f"第三外国語({lang})T{n}"
                 existing = (await session.execute(
-                    select(Course).where(Course.name == name)
+                    select(Subject).where(Subject.name == name)
                 )).scalar_one_or_none()
                 if not existing:
-                    session.add(Course(
-                        name=name, instructor="",
+                    session.add(Subject(
+                        name=name,
                         classification="外国語", category="教養",
                         reading=_reading(name),
                     ))
@@ -2268,9 +2345,9 @@ async def strip_trailing_numbers(
     prefix: str = Form(default=""),
 ):
     async with AsyncSessionLocal() as session:
-        stmt = select(Course)
+        stmt = select(Subject)
         if prefix.strip():
-            stmt = stmt.where(Course.name.contains(prefix.strip()))
+            stmt = stmt.where(Subject.name.contains(prefix.strip()))
         courses = (await session.execute(stmt)).scalars().all()
 
         groups: dict[str, list] = defaultdict(list)
@@ -2281,47 +2358,63 @@ async def strip_trailing_numbers(
 
         for base_name, dups in groups.items():
             existing = (await session.execute(
-                select(Course).where(Course.name == base_name)
+                select(Subject).where(Subject.name == base_name)
             )).scalar_one_or_none()
 
             if existing:
-                survivor_id = existing.id
+                pass
             else:
                 survivor = dups[0]
                 survivor.name = base_name
                 survivor.reading = _reading(base_name)
-                survivor_id = survivor.id
                 dups = dups[1:]
 
             for dup in dups:
-                await session.execute(
-                    sa_update(PendingReview)
-                    .where(PendingReview.course_name == dup.name)
-                    .values(course_name=base_name)
-                )
-                await session.execute(
-                    delete(CourseInstructor).where(CourseInstructor.course_id == dup.id)
-                )
                 await session.delete(dup)
 
         await session.commit()
     return RedirectResponse("/admin/courses", status_code=303)
 
 
+def _make_review_ns(rev: Review, course_name: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=rev.id,
+        course_name=course_name,
+        comment=rev.content,
+        content=rev.content,
+        rating=rev.rating,
+        ease_rating=rev.ease_rating,
+        grading_method=rev.grading_method,
+        is_approved=rev.is_approved,
+        selected_instructor=rev.selected_instructor,
+        created_at=rev.created_at,
+        submitter_name=rev.submitter_name,
+        nickname=rev.nickname,
+        academic_year=rev.academic_year,
+        student_id=rev.student_id,
+    )
+
+
 @app.get("/admin/reviews", response_class=HTMLResponse)
 async def admin_reviews(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        pending = (await session.execute(
-            select(PendingReview)
-            .where(PendingReview.is_approved == False)
-            .order_by(PendingReview.created_at.desc())
-        )).scalars().all()
-        approved = (await session.execute(
-            select(PendingReview)
-            .where(PendingReview.is_approved == True)
-            .order_by(PendingReview.created_at.desc())
+        pending_rows = (await session.execute(
+            select(Review, Subject.name.label("subj_name"))
+            .join(CourseSection, CourseSection.id == Review.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .where(Review.is_approved == False)
+            .order_by(Review.created_at.desc())
+        )).all()
+        approved_rows = (await session.execute(
+            select(Review, Subject.name.label("subj_name"))
+            .join(CourseSection, CourseSection.id == Review.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .where(Review.is_approved == True)
+            .order_by(Review.created_at.desc())
             .limit(50)
-        )).scalars().all()
+        )).all()
+    pending = [_make_review_ns(r, n) for r, n in pending_rows]
+    approved = [_make_review_ns(r, n) for r, n in approved_rows]
     return templates.TemplateResponse("admin/reviews.html", {
         "request": request,
         "pending": pending,
@@ -2332,7 +2425,7 @@ async def admin_reviews(request: Request, _: str = Depends(check_admin)):
 @app.post("/admin/reviews/approve/{review_id}")
 async def admin_review_approve(review_id: int, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        review = await session.get(PendingReview, review_id)
+        review = await session.get(Review, review_id)
         if review:
             review.is_approved = True
             await session.commit()
@@ -2343,7 +2436,7 @@ async def admin_review_approve(review_id: int, _: str = Depends(check_admin)):
 @app.post("/admin/reviews/reject/{review_id}")
 async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        review = await session.get(PendingReview, review_id)
+        review = await session.get(Review, review_id)
         if review:
             await session.delete(review)
             await session.commit()
@@ -2365,20 +2458,20 @@ async def admin_courses_add(
     name_s = name.strip()
     async with AsyncSessionLocal() as session:
         existing = (await session.execute(
-            select(Course).where(Course.name == name_s)
+            select(Subject).where(Subject.name == name_s)
         )).scalar_one_or_none()
         if existing:
             return RedirectResponse(
                 url=f"/admin/courses?error={py_secrets.token_urlsafe(4)}&msg=duplicate",
                 status_code=303,
             )
-        session.add(Course(
-            name=name_s, instructor="",
-            classification=classification.strip(), category=category,
+        session.add(Subject(
+            name=name_s,
+            classification=classification.strip() or None,
+            category=category,
             reading=_reading(name_s),
             term=term.strip() or None,
             credits=credits if credits else None,
-            syllabus_url=syllabus_url.strip() or None,
             faculty=faculty.strip() or None,
         ))
         await session.commit()
@@ -2477,7 +2570,7 @@ async def rename_classification(
         return RedirectResponse(url="/admin/courses", status_code=303)
     async with AsyncSessionLocal() as session:
         courses = (await session.execute(
-            select(Course).where(Course.classification == old_name)
+            select(Subject).where(Subject.classification == old_name)
         )).scalars().all()
         for course in courses:
             course.classification = new_name
@@ -2499,10 +2592,10 @@ async def delete_classification(
 ):
     async with AsyncSessionLocal() as session:
         courses_in_class = (await session.execute(
-            select(Course).where(Course.classification == classification)
+            select(Subject).where(Subject.classification == classification)
         )).scalars().all()
         for course in courses_in_class:
-            course.classification = ""
+            course.classification = None
         cls_row = (await session.execute(
             select(ClassificationOrder).where(ClassificationOrder.name == classification)
         )).scalar_one_or_none()
@@ -2526,7 +2619,7 @@ async def admin_cls_move(request: Request, _=Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         all_cls = sorted(
             [c for c in (await session.execute(
-                select(Course.classification).distinct()
+                select(Subject.classification).distinct()
             )).scalars().all() if c],
         )
         cls_map = await _get_cls_order_map()
@@ -2589,14 +2682,14 @@ async def admin_course_move(course_id: int, request: Request, _=Depends(check_ad
         return JSONResponse({"ok": False})
 
     async with AsyncSessionLocal() as session:
-        course = await session.get(Course, course_id)
+        course = await session.get(Subject, course_id)
         if not course:
             return JSONResponse({"ok": False})
 
         all_in_cls = list((await session.execute(
-            select(Course)
-            .where(Course.classification == (course.classification or ""))
-            .order_by(Course.sort_order, Course.name)
+            select(Subject)
+            .where(Subject.classification == (course.classification or ""))
+            .order_by(Subject.sort_order, Subject.name)
         )).scalars().all())
 
         try:
@@ -2630,24 +2723,16 @@ async def admin_courses_update(
     faculty: str = Form(""),
 ):
     async with AsyncSessionLocal() as session:
-        course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
+        course = (await session.execute(select(Subject).where(Subject.id == course_id))).scalar_one_or_none()
         if course:
-            old_name = course.name
             new_name = name.strip()
             course.name = new_name
-            course.classification = classification.strip()
+            course.classification = classification.strip() or None
             course.category = category
             course.reading = _reading(new_name)
             course.term = term.strip() or None
             course.credits = credits if credits else None
-            course.syllabus_url = syllabus_url.strip() or None
             course.faculty = faculty.strip() or None
-            if old_name != new_name:
-                await session.execute(
-                    sa_update(PendingReview)
-                    .where(PendingReview.course_name == old_name)
-                    .values(course_name=new_name)
-                )
             await session.commit()
     _invalidate_courses_cache()
     _invalidate_cls_caches()
@@ -2657,10 +2742,20 @@ async def admin_courses_update(
 @app.post("/admin/courses/delete/{course_id}")
 async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        course = (await session.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
+        course = (await session.execute(select(Subject).where(Subject.id == course_id))).scalar_one_or_none()
         if course:
-            # データ保護ルール: レビューは削除しない（孤立したレビューはDBに残す）
-            await session.execute(delete(CourseInstructor).where(CourseInstructor.course_id == course_id))
+            cs_ids = (await session.execute(
+                select(CourseSection.id).where(CourseSection.subject_id == course_id)
+            )).scalars().all()
+            if cs_ids:
+                has_approved = (await session.execute(
+                    select(func.count(Review.id)).where(
+                        Review.course_section_id.in_(cs_ids),
+                        Review.is_approved == True,
+                    )
+                )).scalar()
+                if has_approved:
+                    return RedirectResponse(url=f"/admin/courses?msg=has_reviews", status_code=303)
             await session.delete(course)
             await session.commit()
     _invalidate_courses_cache()
@@ -2692,108 +2787,119 @@ async def liff_course(request: Request):
 async def api_course(course_id: int):
     try:
         async with AsyncSessionLocal() as session:
-            course = (await session.execute(
-                select(Course).where(Course.id == course_id)
-            )).scalar_one_or_none()
-            if not course:
+            subject = await session.get(Subject, course_id)
+            if not subject:
                 raise HTTPException(status_code=404, detail="course not found")
 
-            async def _instrs():
-                async with AsyncSessionLocal() as s:
-                    return (await s.execute(
-                        select(CourseInstructor).where(CourseInstructor.course_id == course.id)
-                    )).scalars().all()
+        async def _cs_instr():
+            async with AsyncSessionLocal() as s:
+                return (await s.execute(
+                    select(CourseSection, Instructor)
+                    .join(Instructor, Instructor.id == CourseSection.instructor_id)
+                    .where(CourseSection.subject_id == course_id)
+                )).all()
 
-            async def _agg():
-                async with AsyncSessionLocal() as s:
-                    return (await s.execute(
-                        select(func.avg(PendingReview.rating), func.count(PendingReview.id))
-                        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                    )).first()
+        async def _agg(cs_ids: list):
+            if not cs_ids:
+                return None
+            async with AsyncSessionLocal() as s:
+                return (await s.execute(
+                    select(func.avg(Review.rating), func.count(Review.id))
+                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved == True)
+                )).first()
 
-            async def _ease():
-                async with AsyncSessionLocal() as s:
-                    return (await s.execute(
-                        select(PendingReview.ease_rating, func.count(PendingReview.id))
-                        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                        .group_by(PendingReview.ease_rating)
-                    )).all()
+        async def _ease(cs_ids: list):
+            if not cs_ids:
+                return []
+            async with AsyncSessionLocal() as s:
+                return (await s.execute(
+                    select(Review.ease_rating, func.count(Review.id))
+                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved == True)
+                    .group_by(Review.ease_rating)
+                )).all()
 
-            async def _reviews():
-                async with AsyncSessionLocal() as s:
-                    return (await s.execute(
-                        select(PendingReview)
-                        .where(PendingReview.course_name == course.name, PendingReview.is_approved == True)
-                        .order_by(PendingReview.selected_instructor.nulls_last(), PendingReview.academic_year.desc())
-                        .limit(20)
-                    )).scalars().all()
+        async def _reviews(cs_ids: list):
+            if not cs_ids:
+                return []
+            async with AsyncSessionLocal() as s:
+                return (await s.execute(
+                    select(Review)
+                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved == True)
+                    .order_by(Review.selected_instructor.nulls_last(), Review.academic_year.desc())
+                    .limit(20)
+                )).scalars().all()
 
-            async def _syllabus_code():
-                if course.syllabus_url:
-                    return None
-                async with AsyncSessionLocal() as s:
-                    return (await s.execute(
-                        select(SyllabusCourse.timetable_code)
-                        .where(SyllabusCourse.name == course.name)
-                        .limit(1)
-                    )).scalar_one_or_none()
+        async def _syllabus_code():
+            async with AsyncSessionLocal() as s:
+                return (await s.execute(
+                    select(Syllabus.timetable_code)
+                    .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+                    .where(CourseSection.subject_id == course_id)
+                    .limit(1)
+                )).scalar_one_or_none()
 
-            async def _record_view():
-                async with AsyncSessionLocal() as s:
-                    _now = datetime.now(timezone.utc)
-                    _ins = pg_insert(CourseView).values(
-                        course_id=course.id,
-                        course_name=course.name,
-                        view_count=1,
-                        last_viewed_at=_now,
+        cs_instr_rows = await _cs_instr()
+        cs_ids = [cs.id for cs, _ in cs_instr_rows]
+
+        agg, ease_rows, reviews_raw, sc_code = await asyncio.gather(
+            _agg(cs_ids), _ease(cs_ids), _reviews(cs_ids), _syllabus_code()
+        )
+
+        # ビューカウント記録
+        if cs_ids:
+            main_cs_id = cs_ids[0]
+            async with AsyncSessionLocal() as s:
+                _now = datetime.now(timezone.utc)
+                _ins = pg_insert(CourseSectionView).values(
+                    course_section_id=main_cs_id,
+                    view_count=1,
+                    last_viewed_at=_now,
+                )
+                await s.execute(
+                    _ins.on_conflict_do_update(
+                        index_elements=["course_section_id"],
+                        set_={
+                            "view_count": CourseSectionView.view_count + 1,
+                            "last_viewed_at": _now,
+                        },
                     )
-                    await s.execute(
-                        _ins.on_conflict_do_update(
-                            index_elements=["course_id"],
-                            set_={
-                                "view_count": CourseView.view_count + 1,
-                                "last_viewed_at": _now,
-                                "course_name": _ins.excluded.course_name,
-                            },
-                        )
-                    )
-                    await s.commit()
+                )
+                await s.commit()
 
-            instructors, agg, ease_rows, reviews_raw, sc_code, _ = await asyncio.gather(
-                _instrs(), _agg(), _ease(), _reviews(), _syllabus_code(), _record_view()
-            )
-            syllabus_url = course.syllabus_url or _make_syllabus_url(sc_code or "")
-            instructor_str = "・".join(i.name for i in instructors) or course.instructor or ""
-            avg_rating = float(agg[0]) if agg and agg[0] else None
-            top_ease = None
-            if ease_rows:
-                top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
-            reviews = reviews_raw
+        # 最初の非NULL syllabus_url を CourseSection から取得
+        syllabus_url = next((cs.syllabus_url for cs, _ in cs_instr_rows if cs.syllabus_url), None)
+        if not syllabus_url:
+            syllabus_url = _make_syllabus_url(sc_code or "")
+        instructor_str = "・".join(instr.name for _, instr in cs_instr_rows)
+        avg_rating = float(agg[0]) if agg and agg[0] else None
+        top_ease = None
+        if ease_rows:
+            top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
-            return {
-                "id": course.id,
-                "name": course.name,
-                "instructor": instructor_str,
-                "classification": course.classification or "",
-                "category": course.category or "",
-                "term": getattr(course, "term", None) or "",
-                "credits": getattr(course, "credits", None) or 0,
-                "syllabus_url": syllabus_url,
-                "avg_rating": avg_rating,
-                "top_ease": top_ease,
-                "reviews": [
-                    {
-                        "rating": r.rating,
-                        "ease_rating": r.ease_rating,
-                        "grading_method": r.grading_method or "",
-                        "comment": r.comment,
-                        "instructor": r.selected_instructor or "",
-                        "nickname": r.nickname or "",
-                        "academic_year": r.academic_year or 0,
-                    }
-                    for r in reviews
-                ],
-            }
+        return {
+            "id": subject.id,
+            "name": subject.name,
+            "instructor": instructor_str,
+            "classification": subject.classification or "",
+            "category": subject.category or "",
+            "term": subject.term or "",
+            "credits": float(subject.credits) if subject.credits else 0,
+            "syllabus_url": syllabus_url or "",
+            "avg_rating": avg_rating,
+            "top_ease": top_ease,
+            "reviews": [
+                {
+                    "rating": r.rating,
+                    "ease_rating": r.ease_rating,
+                    "grading_method": r.grading_method or "",
+                    "comment": r.content or "",
+                    "instructor": r.selected_instructor or "",
+                    "nickname": r.nickname or "",
+                    "academic_year": r.academic_year or 0,
+                }
+                for r in reviews_raw
+            ],
+        }
     except HTTPException:
         raise
     except Exception as exc:
@@ -2907,9 +3013,20 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin)):
             .outerjoin(UserProfile, UserProfile.line_user_id == UserActivity.user_id)
             .order_by(UserActivity.user_id, UserActivity.count.desc())
         )).all()
-        course_view_rows = (await session.execute(
-            select(CourseView).order_by(CourseView.view_count.desc())
-        )).scalars().all()
+        csv_rows = (await session.execute(
+            select(CourseSectionView, Subject.name.label("subj_name"))
+            .join(CourseSection, CourseSection.id == CourseSectionView.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .order_by(CourseSectionView.view_count.desc())
+        )).all()
+        course_view_rows = [
+            SimpleNamespace(
+                course_name=subj_name,
+                view_count=csv_row.view_count,
+                last_viewed_at=csv_row.last_viewed_at,
+            )
+            for csv_row, subj_name in csv_rows
+        ]
 
     uri_stats = [
         {"label": RICHMENU_LABELS.get(r.button, r.button), "count": r.cnt}
@@ -3003,23 +3120,26 @@ async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
     if day not in _VALID_DAYS:
         raise HTTPException(status_code=400, detail="invalid day")
     async with AsyncSessionLocal() as session:
-        courses = (await session.execute(
-            select(SyllabusCourse)
-            .join(CourseSlot, CourseSlot.syllabus_course_id == SyllabusCourse.id)
-            .where(CourseSlot.day_of_week == day, CourseSlot.period == period)
-            .order_by(SyllabusCourse.term, SyllabusCourse.name)
-        )).scalars().all()
+        rows = (await session.execute(
+            select(Syllabus, Subject, Instructor)
+            .join(Schedule, Schedule.syllabus_id == Syllabus.id)
+            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .where(Schedule.day_of_week == day, Schedule.period == period)
+            .order_by(Syllabus.quarter, Subject.name)
+        )).all()
 
-        if not courses:
+        if not rows:
             return {"courses": []}
 
-        course_ids = [c.id for c in courses]
+        syllabus_ids = [s.id for s, _, _ in rows]
         registered_ids: set[int] = set()
         if user_id:
             regs = (await session.execute(
-                select(UserCourse.syllabus_course_id).where(
-                    UserCourse.line_user_id == user_id,
-                    UserCourse.syllabus_course_id.in_(course_ids),
+                select(UserSyllabus.syllabus_id).where(
+                    UserSyllabus.line_user_id == user_id,
+                    UserSyllabus.syllabus_id.in_(syllabus_ids),
                 )
             )).scalars().all()
             registered_ids = set(regs)
@@ -3027,17 +3147,17 @@ async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
         return {
             "courses": [
                 {
-                    "id": c.id,
-                    "name": c.name,
-                    "instructor": c.instructor,
-                    "term": c.term,
-                    "timetable_code": c.timetable_code,
-                    "department": c.department,
-                    "target_grades": c.target_grades,
-                    "subject_category": c.subject_category,
-                    "registered": c.id in registered_ids,
+                    "id": syl.id,
+                    "name": subj.name,
+                    "instructor": instr.name,
+                    "term": syl.quarter,
+                    "timetable_code": syl.timetable_code or "",
+                    "department": syl.department or "",
+                    "target_grades": syl.target_grades or "",
+                    "subject_category": syl.subject_category or "",
+                    "registered": syl.id in registered_ids,
                 }
-                for c in courses
+                for syl, subj, instr in rows
             ]
         }
 
@@ -3060,62 +3180,63 @@ async def api_timetable_my(user_id: str = Query("")):
         return {"courses": []}
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
-            select(UserCourse, SyllabusCourse, CourseSlot)
-            .join(SyllabusCourse, SyllabusCourse.id == UserCourse.syllabus_course_id)
-            .join(CourseSlot, CourseSlot.syllabus_course_id == SyllabusCourse.id)
-            .where(UserCourse.line_user_id == user_id)
+            select(UserSyllabus, Syllabus, Schedule, Subject, Instructor)
+            .join(Syllabus, Syllabus.id == UserSyllabus.syllabus_id)
+            .join(Schedule, Schedule.syllabus_id == Syllabus.id)
+            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .where(UserSyllabus.line_user_id == user_id)
         )).all()
 
         result = {}
-        for uc, sc, slot in rows:
-            if sc.id not in result:
-                result[sc.id] = {
-                    "id": sc.id,
-                    "name": sc.name,
-                    "instructor": sc.instructor,
-                    "term": sc.term,
-                    "credits": _credits_from_term(sc.term),
+        for us, syl, sch, subj, instr in rows:
+            if syl.id not in result:
+                result[syl.id] = {
+                    "id": syl.id,
+                    "name": subj.name,
+                    "instructor": instr.name,
+                    "term": syl.quarter,
+                    "credits": _credits_from_term(syl.quarter),
                     "slots": [],
                 }
-            result[sc.id]["slots"].append({"day": slot.day_of_week, "period": slot.period})
+            result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})
 
         return {"courses": list(result.values())}
 
 
-@app.post("/api/timetable/register/{course_id}")
-async def api_timetable_register(course_id: int, request: Request):
+@app.post("/api/timetable/register/{syllabus_id}")
+async def api_timetable_register(syllabus_id: int, request: Request):
     body = await request.json()
     user_id = body.get("user_id", "")
     if not user_id or not _LINE_USER_ID_RE.match(user_id):
         raise HTTPException(status_code=400, detail="user_id required")
     async with AsyncSessionLocal() as session:
-        course = (await session.execute(
-            select(SyllabusCourse).where(SyllabusCourse.id == course_id)
-        )).scalar_one_or_none()
-        if not course:
+        syl = await session.get(Syllabus, syllabus_id)
+        if not syl:
             raise HTTPException(status_code=404, detail="course not found")
         await session.execute(
-            pg_insert(UserCourse)
-            .values(line_user_id=user_id, syllabus_course_id=course_id)
-            .on_conflict_do_nothing(index_elements=["line_user_id", "syllabus_course_id"])
+            pg_insert(UserSyllabus)
+            .values(line_user_id=user_id, syllabus_id=syllabus_id)
+            .on_conflict_do_nothing(index_elements=["line_user_id", "syllabus_id"])
         )
         await session.commit()
     return {"ok": True}
 
 
-@app.delete("/api/timetable/register/{course_id}")
-async def api_timetable_unregister(course_id: int, user_id: str = Query("")):
+@app.delete("/api/timetable/register/{syllabus_id}")
+async def api_timetable_unregister(syllabus_id: int, user_id: str = Query("")):
     if not user_id or not _LINE_USER_ID_RE.match(user_id):
         raise HTTPException(status_code=400, detail="user_id required")
     async with AsyncSessionLocal() as session:
-        uc = (await session.execute(
-            select(UserCourse).where(
-                UserCourse.line_user_id == user_id,
-                UserCourse.syllabus_course_id == course_id,
+        us = (await session.execute(
+            select(UserSyllabus).where(
+                UserSyllabus.line_user_id == user_id,
+                UserSyllabus.syllabus_id == syllabus_id,
             )
         )).scalar_one_or_none()
-        if uc:
-            await session.delete(uc)
+        if us:
+            await session.delete(us)
             await session.commit()
     return {"ok": True}
 
@@ -3362,7 +3483,8 @@ async def api_credit_requirements():
             select(CreditRequirement).order_by(CreditRequirement.sort_order)
         )).scalars().all()
         cc_rows = (await session.execute(
-            select(CategoryCourse.category_id, CategoryCourse.course_name)
+            select(SubjectCreditCategory.category_id, Subject.name)
+            .join(Subject, Subject.id == SubjectCreditCategory.subject_id)
         )).all()
     courses_by_cat: dict[str, list[str]] = {}
     for cat_id, course_name in cc_rows:
@@ -3387,9 +3509,11 @@ async def api_credit_requirements():
 @app.get("/admin/timetable/check", response_class=HTMLResponse)
 async def admin_timetable_check(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        course_rows = (await session.execute(select(Course.id, Course.name, Course.faculty))).all()
+        course_rows = (await session.execute(select(Subject.id, Subject.name, Subject.faculty))).all()
         syllabus_rows = (await session.execute(
-            select(SyllabusCourse.name, SyllabusCourse.department).distinct()
+            select(Subject.name, Syllabus.department).distinct()
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Syllabus, Syllabus.course_section_id == CourseSection.id)
         )).all()
 
     course_name_set   = {name for _, name, _ in course_rows}
@@ -3431,20 +3555,21 @@ _SENMON_GROUPS = ["第1群", "第2群", "第3群", "グローバル", "初年次
 async def admin_keiei(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
         courses = (await session.execute(
-            select(Course)
-            .where(Course.faculty.like("%経営学部%"))
-            .order_by(Course.classification, Course.sort_order, Course.name)
+            select(Subject)
+            .where(Subject.faculty.like("%経営学部%"))
+            .order_by(Subject.classification, Subject.sort_order, Subject.name)
         )).scalars().all()
         reqs = (await session.execute(
             select(CreditRequirement).order_by(CreditRequirement.sort_order)
         )).scalars().all()
         kyotsu_candidates = (await session.execute(
-            select(Course.name, Course.credits)
-            .where(Course.classification.like("%共通専門基礎%"))
-            .order_by(Course.sort_order, Course.name)
+            select(Subject.name, Subject.credits)
+            .where(Subject.classification.like("%共通専門基礎%"))
+            .order_by(Subject.sort_order, Subject.name)
         )).all()
         approved_rows = (await session.execute(
-            select(CategoryCourse.category_id, CategoryCourse.course_name)
+            select(SubjectCreditCategory.category_id, Subject.name)
+            .join(Subject, Subject.id == SubjectCreditCategory.subject_id)
         )).all()
     approved_by_cat: dict[str, set[str]] = {}
     for cat_id, course_name in approved_rows:
@@ -3468,17 +3593,18 @@ async def admin_save_category_courses(cat_id: str, request: Request, _: str = De
     checked = form.getlist("courses")
     async with AsyncSessionLocal() as session:
         await session.execute(
-            delete(CategoryCourse).where(CategoryCourse.category_id == cat_id)
+            delete(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id)
         )
         for name in checked:
-            cr = (await session.execute(
-                select(Course.credits).where(Course.name == name)
-            )).scalar_one_or_none()
-            session.add(CategoryCourse(
-                category_id=cat_id,
-                course_name=name,
-                credits=float(cr) if cr else 2.0,
-            ))
+            subj = (await session.execute(
+                select(Subject.id, Subject.credits).where(Subject.name == name)
+            )).first()
+            if subj:
+                session.add(SubjectCreditCategory(
+                    subject_id=subj.id,
+                    category_id=cat_id,
+                    credits=float(subj.credits) if subj.credits else 2.0,
+                ))
         await session.commit()
     return _JSONResponse({"ok": True})
 
@@ -3491,7 +3617,7 @@ async def admin_keiei_set_group(course_id: int, request: Request, _: str = Depen
     if group and group not in _SENMON_GROUPS:
         raise HTTPException(status_code=400, detail="invalid group")
     async with AsyncSessionLocal() as session:
-        course = await session.get(Course, course_id)
+        course = await session.get(Subject, course_id)
         if not course:
             raise HTTPException(status_code=404)
         course.senmon_group = group
