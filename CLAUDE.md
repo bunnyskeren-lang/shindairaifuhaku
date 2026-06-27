@@ -82,24 +82,28 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 
 **本番デプロイ時は、コードのプッシュに加えて必ず dev → prod のDB同期も行うこと。**
 
-同期対象（この3テーブルのみ）：
+同期対象（この5テーブルのみ）：
 - `classification_orders`
-- `courses`
-- `course_instructors`
+- `subjects`
+- `instructors`
+- `course_sections`
+- `subject_credit_categories`
 
 絶対に同期しないテーブル（ユーザーデータ・ログ・レビュー・利用履歴）：
-- `pending_reviews`
+- `reviews`
 - `message_logs`
 - `user_profiles`
 - `user_activity`
 - `error_logs`
 - `push_subscriptions`
 - `richmenu_taps`
+- `syllabi` / `schedules` / `user_syllabi`（時間割データ・import_syllabus.py で別途管理）
 
-同期方法（Python スクリプトで dev → prod にコピー）：
-1. dev DBから3テーブルのデータを取得
-2. prod DBの3テーブルをTRUNCATEしてINSERT
-3. レビュー等への外部キー制約に注意（`course_instructors` → `courses` の順で削除、逆順でINSERT）
+同期方法：
+```bash
+cd "programing files"
+python -X utf8 sync_db_to_prod.py
+```
 
 ### LIFF ID の固定ルール
 
@@ -144,7 +148,7 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 **シラバスは科目名だけでなく担当教員に強く依存する。** 同じ科目名でも担当教員が異なればシラバスの内容（到達目標・授業計画・評価方法）は別物になる。
 そのため、シラバスURLは「科目名」だけに紐づけるのではなく、**「科目名 × 担当教員」の組み合わせ**に紐づけることが望ましい。
 
-現状の `courses.syllabus_url` は科目単位で1本のURLを持つ設計だが、将来的には `course_instructors` テーブルや担当教員情報と合わせて「この先生のこの科目のシラバス」として管理することを検討すること。
+現状の `course_sections.syllabus_url` は「科目×担当教員」単位で1本のURLを持つ設計になっており、`course_sections` テーブルが `subjects`（科目）と `instructors`（教員）を結ぶ形で管理している。
 
 神戸大学シラバスサイトのURLは **時間割コード** から一意に決まる。
 

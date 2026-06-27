@@ -1,14 +1,23 @@
 """
 教養科目を一括インポートするスクリプト。
-実行: python import_kyoyo_courses.py
+実行: python -X utf8 import_kyoyo_courses.py --env dev
 """
-import asyncio
-from dotenv import load_dotenv
-load_dotenv()
+import argparse, asyncio, os, sys
+from pathlib import Path
+
+
+def load_env(env: str):
+    env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
 
 from sqlalchemy import select
 from database import init_db, AsyncSessionLocal
-from models import Course
+from models import Subject
 
 try:
     import pykakasi as _pykakasi
@@ -156,16 +165,15 @@ async def insert_courses(session, names, classification):
         return 0
     existing = set(
         (await session.execute(
-            select(Course.name).where(Course.name.in_(names))
+            select(Subject.name).where(Subject.name.in_(names))
         )).scalars().all()
     )
     count = 0
     for name in names:
         if name in existing:
             continue
-        session.add(Course(
+        session.add(Subject(
             name=name,
-            instructor="",
             classification=classification,
             category="教養",
             reading=_reading(name),
@@ -174,7 +182,8 @@ async def insert_courses(session, names, classification):
     return count
 
 
-async def main():
+async def main(env: str):
+    load_env(env)
     await init_db()
     async with AsyncSessionLocal() as session:
         totals = {}
@@ -192,4 +201,12 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", choices=["dev", "prod"], default="dev")
+    args = parser.parse_args()
+    if args.env == "prod":
+        confirm = input("本番DBにインポートします。よろしいですか？ (yes/no): ")
+        if confirm.strip().lower() != "yes":
+            print("中止しました")
+            sys.exit(0)
+    asyncio.run(main(args.env))

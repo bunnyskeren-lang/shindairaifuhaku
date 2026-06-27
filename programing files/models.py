@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, func, UniqueConstraint, Index, ForeignKey
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
@@ -8,216 +8,136 @@ from database import Base
 
 class MessageLog(Base):
     __tablename__ = "message_logs"
-
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     direction: Mapped[str] = mapped_column(String(8), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-
-class Course(Base):
-    __tablename__ = "courses"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    instructor: Mapped[str] = mapped_column(String(100), nullable=False, default="")
-    classification: Mapped[str] = mapped_column(String(50), nullable=False, default="")
-    category: Mapped[str] = mapped_column(String(20), nullable=False, server_default="専門")
-    syllabus_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    reading: Mapped[str] = mapped_column(String(400), nullable=False, server_default="", default="")
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
-    term: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    credits: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    faculty: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
-    senmon_group: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class ClassificationOrder(Base):
     __tablename__ = "classification_orders"
-
+    __table_args__ = (UniqueConstraint("name", "faculty", name="uq_classification_orders_name_faculty"),)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    parent_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
-
-
-class PendingReview(Base):
-    __tablename__ = "pending_reviews"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    submitter_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    course_name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
-    rating: Mapped[int] = mapped_column(Integer, nullable=False)
-    ease_rating: Mapped[str] = mapped_column(String(10), nullable=False)
-    grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    comment: Mapped[str] = mapped_column(Text, nullable=False)
-    selected_instructor: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    nickname: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    student_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-
-class UserPreference(Base):
-    __tablename__ = "user_preferences"
-
-    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    max_reviews: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    parent_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
 
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
-
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     student_id: Mapped[str] = mapped_column(String(20), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-class ErrorLog(Base):
-    __tablename__ = "error_logs"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    action: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    error_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    error_message: Mapped[str] = mapped_column(Text, nullable=False)
-    traceback: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-
-class UserActivity(Base):
-    __tablename__ = "user_activity"
-    __table_args__ = (UniqueConstraint("user_id", "action"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
-    action: Mapped[str] = mapped_column(String(200), nullable=False)
-    count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
-class CourseInstructor(Base):
-    __tablename__ = "course_instructors"
-    __table_args__ = (UniqueConstraint("course_id", "name", name="uq_ci_course_id_name"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-
-
-class RichMenuTap(Base):
-    __tablename__ = "richmenu_taps"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    button: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    tapped_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-
-class CourseView(Base):
-    __tablename__ = "course_views"
-
-    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True)
-    course_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
-class PushSubscription(Base):
-    __tablename__ = "push_subscriptions"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    endpoint: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
-    auth: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    line_user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
-
-
-class SyllabusCourse(Base):
-    __tablename__ = "syllabus_courses"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    year: Mapped[int] = mapped_column(Integer, nullable=False)
-    term: Mapped[str] = mapped_column(String(20), nullable=False)
-    department: Mapped[str] = mapped_column(String(100), nullable=False, default="")
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    instructor: Mapped[str] = mapped_column(String(100), nullable=False, default="")
-    timetable_code: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
-    target_grades: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    subject_category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    numbering_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TimetableProfile(Base):
     __tablename__ = "timetable_profiles"
-
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     faculty: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
-class CourseSlot(Base):
-    __tablename__ = "course_slots"
-    __table_args__ = (
-        Index("ix_course_slots_day_period", "day_of_week", "period"),
-        UniqueConstraint("syllabus_course_id", "day_of_week", "period", name="uq_cs_slot"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    syllabus_course_id: Mapped[int] = mapped_column(ForeignKey("syllabus_courses.id", ondelete="CASCADE"), nullable=False, index=True)
-    day_of_week: Mapped[str] = mapped_column(String(2), nullable=False)
-    period: Mapped[int] = mapped_column(Integer, nullable=False)
-
-
 class CreditRequirement(Base):
     __tablename__ = "credit_requirements"
-
     category_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     label: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     group_name: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     required_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
 
 
 class UserSeisekiRaw(Base):
     __tablename__ = "user_seiseki_raw"
-
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class CategoryCourse(Base):
-    __tablename__ = "category_courses"
-    __table_args__ = (UniqueConstraint("category_id", "course_name"),)
+class Subject(Base):
+    __tablename__ = "subjects"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    classification_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("classification_orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    senmon_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+    term: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    category_id: Mapped[str] = mapped_column(String(50), ForeignKey("credit_requirements.category_id"), nullable=False, index=True)
-    course_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    credits: Mapped[float] = mapped_column(Float, nullable=False, default=2.0)
+
+class Instructor(Base):
+    __tablename__ = "instructors"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, index=True, unique=True)
 
 
-class UserCourse(Base):
-    __tablename__ = "user_courses"
-    __table_args__ = (UniqueConstraint("line_user_id", "syllabus_course_id"),)
+class CourseSection(Base):
+    __tablename__ = "course_sections"
+    __table_args__ = (UniqueConstraint("subject_id", "instructor_id", name="uq_course_sections_subject_instructor"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
+    instructor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    syllabus_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    syllabus_course_id: Mapped[int] = mapped_column(ForeignKey("syllabus_courses.id", ondelete="CASCADE"), nullable=False)
+
+class Syllabus(Base):
+    __tablename__ = "syllabi"
+    __table_args__ = (UniqueConstraint("course_section_id", "year", "quarter", name="uq_syllabi_section_year_quarter"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    quarter: Mapped[str] = mapped_column(Text, nullable=False)
+    timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    target_grades: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    subject_category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    numbering_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Schedule(Base):
+    __tablename__ = "schedules"
+    __table_args__ = (UniqueConstraint("syllabus_id", "day_of_week", "period", name="uq_schedules_syllabus_day_period"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
+    day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
+    period: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    classroom: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ease_rating: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    submitter_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    nickname: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    student_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    selected_instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SubjectCreditCategory(Base):
+    __tablename__ = "subject_credit_categories"
+    __table_args__ = (UniqueConstraint("subject_id", "category_id", name="uq_subject_credit_categories"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
+    category_id: Mapped[str] = mapped_column(String(50), ForeignKey("credit_requirements.category_id"), nullable=False, index=True)
+    credits: Mapped[float] = mapped_column(Numeric(3, 1), nullable=False, default=2.0)

@@ -1,11 +1,14 @@
 """
-経営学部専門科目の担当教員を course_instructors テーブルに登録するスクリプト。
-courses.instructor フィールドのデータを course_instructors に移行する。
+【廃止済み】このスクリプトは新スキーマ移行（2026-06）で不要になりました。
 
-実行:
-  python -X utf8 import_keiei_instructors.py --env dev
-  python -X utf8 import_keiei_instructors.py --env dev --dry-run
+旧目的: courses.instructor フィールドのデータを course_instructors テーブルに移行。
+現在は migrate_to_new_tables.py で subjects/instructors/course_sections への移行が完了済み。
+
+経営学部の担当教員を新規追加・編集するには管理画面（/admin/courses）を使用してください。
 """
+import sys
+print("このスクリプトは廃止済みです。管理画面（/admin/courses）から教員を追加してください。", file=sys.stderr)
+sys.exit(1)
 import argparse
 import asyncio
 import os
