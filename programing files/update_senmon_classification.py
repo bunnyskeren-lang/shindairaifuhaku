@@ -1,6 +1,6 @@
 """
 経営学部専門科目のナンバリングコードをシラバスから取得し、
-syllabus_courses.numbering_code に保存 → courses.classification を群名に更新する。
+syllabi.numbering_code に保存 → subjects.classification を群名に更新する。
 
 実行:
   python -X utf8 update_senmon_classification.py --env dev
@@ -17,7 +17,7 @@ from pathlib import Path
 
 SYLLABUS_BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/06/data/2026_{code}.html"
 
-# ナンバリングコード末尾3桁 → courses.classification
+# ナンバリングコード末尾3桁 → subjects.classification
 _NC_SUFFIX_TO_CLS: dict[str, str] = {
     "100": "第1群科目",
     "101": "第1群科目",
@@ -61,27 +61,19 @@ def nc_to_classification(nc: str) -> str | None:
 
 
 async def run(env: str, dry_run: bool):
-    from sqlalchemy import select, text
+    from sqlalchemy import select
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from database import AsyncSessionLocal, init_db
-    from models import SyllabusCourse, Course
+    from models import Syllabus, CourseSection, Subject
 
     await init_db()
 
-    # ALTERでカラム追加（既存なら無視）
-    async with AsyncSessionLocal() as s:
-        await s.execute(text(
-            "ALTER TABLE syllabus_courses ADD COLUMN IF NOT EXISTS numbering_code VARCHAR(20)"
-        ))
-        await s.commit()
-    print("syllabus_courses.numbering_code カラム確認 OK")
-
-    # 経営学部の syllabus_courses を取得
+    # 経営学部の syllabi を取得（timetable_code の2文字目が B）
     async with AsyncSessionLocal() as s:
         sc_rows = (await s.execute(
-            select(SyllabusCourse).where(SyllabusCourse.timetable_code.like("_B%"))
+            select(Syllabus).where(Syllabus.timetable_code.like("_B%"))
         )).scalars().all()
-    print(f"経営学部 syllabus_courses: {len(sc_rows)} 件")
+    print(f"経営学部 syllabi: {len(sc_rows)} 件")
 
     fetched = 0
     failed = 0
@@ -96,7 +88,7 @@ async def run(env: str, dry_run: bool):
             print(f"  {sc.timetable_code}: {nc} → {nc_to_classification(nc)}")
         else:
             async with AsyncSessionLocal() as s:
-                row = await s.get(SyllabusCourse, sc.id)
+                row = await s.get(Syllabus, sc.id)
                 row.numbering_code = nc
                 await s.commit()
         fetched += 1
@@ -107,37 +99,40 @@ async def run(env: str, dry_run: bool):
     print(f"ナンバリングコード取得: 成功={fetched}, 失敗={failed}")
 
     if dry_run:
-        print("[dry-run] courses.classification は更新しません")
+        print("[dry-run] subjects.classification は更新しません")
         return
 
-    # courses.classification を更新
+    # subjects.classification を更新
+    # syllabi → course_sections → subjects の JOIN で科目名を取得
     async with AsyncSessionLocal() as s:
-        sc_all = (await s.execute(
-            select(SyllabusCourse.name, SyllabusCourse.numbering_code)
-            .where(SyllabusCourse.timetable_code.like("_B%"))
-            .where(SyllabusCourse.numbering_code.isnot(None))
+        rows = (await s.execute(
+            select(Subject.name, Syllabus.numbering_code)
+            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .where(Syllabus.timetable_code.like("_B%"))
+            .where(Syllabus.numbering_code.isnot(None))
         )).all()
 
     nc_by_name: dict[str, str] = {}
-    for name, nc in sc_all:
+    for name, nc in rows:
         cls = nc_to_classification(nc)
         if cls:
             nc_by_name[name] = cls
 
     async with AsyncSessionLocal() as s:
-        courses = (await s.execute(
-            select(Course).where(Course.faculty == "経営学部")
+        subjects = (await s.execute(
+            select(Subject).where(Subject.faculty == "経営学部")
         )).scalars().all()
 
         updated = 0
-        for c in courses:
-            new_cls = nc_by_name.get(c.name)
-            if new_cls and c.classification != new_cls:
-                c.classification = new_cls
+        for subj in subjects:
+            new_cls = nc_by_name.get(subj.name)
+            if new_cls and subj.classification != new_cls:
+                subj.classification = new_cls
                 updated += 1
         await s.commit()
 
-    print(f"courses.classification 更新: {updated} 件")
+    print(f"subjects.classification 更新: {updated} 件")
     print("完了")
 
 

@@ -84,14 +84,14 @@ def parse_subject_category(html_text: str) -> str:
 async def run(dry_run: bool = False, force: bool = False):
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
-    from models import SyllabusCourse
+    from models import Syllabus
 
     await init_db()
 
     async with AsyncSessionLocal() as session:
-        q = select(SyllabusCourse)
+        q = select(Syllabus).where(Syllabus.timetable_code.isnot(None))
         if not force:
-            q = q.where(SyllabusCourse.target_grades == None)
+            q = q.where(Syllabus.target_grades == None)
         courses = (await session.execute(q)).scalars().all()
 
     print(f"対象コース: {len(courses)}件")
@@ -117,7 +117,7 @@ async def run(dry_run: bool = False, force: bool = False):
             if dry_run:
                 print(f"  {c.timetable_code}: grades={grades!r}, category={category!r}")
             else:
-                sc = await session.get(SyllabusCourse, c.id)
+                sc = await session.get(Syllabus, c.id)
                 sc.target_grades = grades or None
                 sc.subject_category = category or None
                 updated += 1
