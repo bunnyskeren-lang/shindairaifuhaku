@@ -6,6 +6,22 @@
 
 ---
 
+# ⚠️ 次回 Render 起動時に必ず実施すること
+
+**新スキーマ移行の仕上げ作業。Render dev が稼働を確認したら以下を順番に実施すること。**
+
+1. **dev 環境で動作確認**（LINE Bot の応答・管理画面の表示・レビュー投稿）
+2. **問題なければ旧テーブルを削除**：
+   ```
+   cd "programing files"
+   python -X utf8 drop_old_tables.py --env dev
+   ```
+   削除対象：`courses` / `course_instructors` / `pending_reviews` / `syllabus_courses` / `course_slots` / `user_courses` / `category_courses` / `course_views`
+
+3. **完了後、この「⚠️ 次回 Render 起動時に必ず実施すること」セクションを CLAUDE.md から削除する**
+
+---
+
 # デプロイルール
 
 ## 環境変数の追加ルール（必須）
