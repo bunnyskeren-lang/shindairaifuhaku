@@ -2741,16 +2741,20 @@ async def api_course(course_id: int):
             async def _record_view():
                 async with AsyncSessionLocal() as s:
                     _now = datetime.now(timezone.utc)
+                    _ins = pg_insert(CourseView).values(
+                        course_id=course.id,
+                        course_name=course.name,
+                        view_count=1,
+                        last_viewed_at=_now,
+                    )
                     await s.execute(
-                        pg_insert(CourseView).values(
-                            course_id=course.id,
-                            course_name=course.name,
-                            view_count=1,
-                            last_viewed_at=_now,
-                        ).on_conflict_do_update(
+                        _ins.on_conflict_do_update(
                             index_elements=["course_id"],
-                            set_={"view_count": CourseView.view_count + 1,
-                                  "last_viewed_at": _now},
+                            set_={
+                                "view_count": CourseView.view_count + 1,
+                                "last_viewed_at": _now,
+                                "course_name": _ins.excluded.course_name,
+                            },
                         )
                     )
                     await s.commit()
@@ -3304,11 +3308,11 @@ async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
     if uid and _LINE_USER_ID_RE.match(uid):
         async with AsyncSessionLocal() as session:
             existing = await session.get(UserSeisekiRaw, uid)
-            raw_json = json.dumps(result["raw"], ensure_ascii=False)
+            raw_data = result["raw"]
             if existing:
-                existing.raw_json = raw_json
+                existing.raw_json = raw_data
             else:
-                session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_json))
+                session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_data))
             await session.commit()
     return result
 
@@ -3330,7 +3334,7 @@ async def api_seiseki_credits(uid: str):
         row = await session.get(UserSeisekiRaw, uid)
     if not row:
         return {}
-    raw = json.loads(row.raw_json)
+    raw = row.raw_json
     return {"credits": _classify_seiseki_raw(raw)}
 
 
@@ -3343,11 +3347,10 @@ async def api_seiseki_save_raw(request: Request):
         raise HTTPException(status_code=400, detail="uid and raw required")
     async with AsyncSessionLocal() as session:
         existing = await session.get(UserSeisekiRaw, uid)
-        raw_json = json.dumps(raw, ensure_ascii=False)
         if existing:
-            existing.raw_json = raw_json
+            existing.raw_json = raw
         else:
-            session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_json))
+            session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw))
         await session.commit()
     return {"ok": True}
 

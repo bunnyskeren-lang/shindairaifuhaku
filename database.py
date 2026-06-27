@@ -131,3 +131,137 @@ async def init_db():
             "SELECT '初年次セミナー', '初年次セミナー', '専門', 'しょねんじせみなー', '第1クォーター', 2, '経営学部', 0 "
             "WHERE NOT EXISTS (SELECT 1 FROM courses WHERE name = '初年次セミナー')"
         ))
+        # ── スキーマ改善マイグレーション ───────────────────────────────────────────
+        # インデックス追加
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_pr_course_name ON pending_reviews (course_name)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_pr_is_approved ON pending_reviews (is_approved)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_pr_course_name_approved ON pending_reviews (course_name, is_approved)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_message_logs_user_id ON message_logs (user_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_message_logs_created_at ON message_logs (created_at)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_error_logs_created_at ON error_logs (created_at)"
+        ))
+        # 新規カラム追加
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS line_user_id VARCHAR(64)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_push_subscriptions_line_user_id ON push_subscriptions (line_user_id)"
+        ))
+        # UNIQUE制約（重複時は無視）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE course_instructors ADD CONSTRAINT uq_ci_course_id_name UNIQUE (course_id, name);
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE course_slots ADD CONSTRAINT uq_cs_slot UNIQUE (syllabus_course_id, day_of_week, period);
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE user_profiles ADD CONSTRAINT uq_up_student_id UNIQUE (student_id);
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        # FK制約（重複時は無視）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE course_instructors ADD CONSTRAINT fk_ci_course_id
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE course_slots ADD CONSTRAINT fk_cs_syllabus_course_id
+                FOREIGN KEY (syllabus_course_id) REFERENCES syllabus_courses(id) ON DELETE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE user_courses ADD CONSTRAINT fk_uc_syllabus_course_id
+                FOREIGN KEY (syllabus_course_id) REFERENCES syllabus_courses(id) ON DELETE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE course_views ADD CONSTRAINT fk_cv_course_id
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE category_courses ADD CONSTRAINT fk_cc_category_id
+                FOREIGN KEY (category_id) REFERENCES credit_requirements(category_id);
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        # CHECK制約（重複時は無視）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE pending_reviews ADD CONSTRAINT chk_pr_rating CHECK (rating BETWEEN 1 AND 5);
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE pending_reviews ADD CONSTRAINT chk_pr_ease_rating
+                CHECK (ease_rating IN ('SS', 'S', 'A', 'B', 'C'));
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE message_logs ADD CONSTRAINT chk_ml_direction CHECK (direction IN ('in', 'out'));
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        # user_seiseki_raw.raw_json を TEXT→JSONB に変換（まだ TEXT の場合のみ）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              IF (SELECT data_type FROM information_schema.columns
+                  WHERE table_name='user_seiseki_raw' AND column_name='raw_json') = 'text' THEN
+                ALTER TABLE user_seiseki_raw ALTER COLUMN raw_json TYPE JSONB USING raw_json::jsonb;
+              END IF;
+            END $$
+        """))
+        # updated_at 自動更新トリガー
+        await conn.execute(text("""
+            CREATE OR REPLACE FUNCTION fn_set_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              NEW.updated_at = NOW();
+              RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql
+        """))
+        await conn.execute(text("""
+            CREATE OR REPLACE TRIGGER trg_user_seiseki_raw_updated_at
+            BEFORE UPDATE ON user_seiseki_raw
+            FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at()
+        """))
+        await conn.execute(text("""
+            CREATE OR REPLACE TRIGGER trg_user_profiles_updated_at
+            BEFORE UPDATE ON user_profiles
+            FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at()
+        """))

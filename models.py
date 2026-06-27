@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, func, UniqueConstraint, Index
+from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, func, UniqueConstraint, Index, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -73,6 +74,7 @@ class UserProfile(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ErrorLog(Base):
@@ -102,9 +104,10 @@ class UserActivity(Base):
 
 class CourseInstructor(Base):
     __tablename__ = "course_instructors"
+    __table_args__ = (UniqueConstraint("course_id", "name", name="uq_ci_course_id_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
@@ -122,7 +125,7 @@ class RichMenuTap(Base):
 class CourseView(Base):
     __tablename__ = "course_views"
 
-    course_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True)
     course_name: Mapped[str] = mapped_column(String(200), nullable=False)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -136,6 +139,7 @@ class PushSubscription(Base):
     p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
     auth: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    line_user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
 
 
 class SyllabusCourse(Base):
@@ -163,10 +167,13 @@ class TimetableProfile(Base):
 
 class CourseSlot(Base):
     __tablename__ = "course_slots"
-    __table_args__ = (Index("ix_course_slots_day_period", "day_of_week", "period"),)
+    __table_args__ = (
+        Index("ix_course_slots_day_period", "day_of_week", "period"),
+        UniqueConstraint("syllabus_course_id", "day_of_week", "period", name="uq_cs_slot"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    syllabus_course_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    syllabus_course_id: Mapped[int] = mapped_column(ForeignKey("syllabus_courses.id", ondelete="CASCADE"), nullable=False, index=True)
     day_of_week: Mapped[str] = mapped_column(String(2), nullable=False)
     period: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -186,7 +193,7 @@ class UserSeisekiRaw(Base):
     __tablename__ = "user_seiseki_raw"
 
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    raw_json: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
@@ -195,7 +202,7 @@ class CategoryCourse(Base):
     __table_args__ = (UniqueConstraint("category_id", "course_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    category_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    category_id: Mapped[str] = mapped_column(String(50), ForeignKey("credit_requirements.category_id"), nullable=False, index=True)
     course_name: Mapped[str] = mapped_column(String(200), nullable=False)
     credits: Mapped[float] = mapped_column(Float, nullable=False, default=2.0)
 
@@ -206,5 +213,5 @@ class UserCourse(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    syllabus_course_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    syllabus_course_id: Mapped[int] = mapped_column(ForeignKey("syllabus_courses.id", ondelete="CASCADE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
