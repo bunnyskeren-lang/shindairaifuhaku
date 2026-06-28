@@ -445,6 +445,9 @@ _COURSE_FLEX_TTL = 3600
 _COURSE_LIST_TTL = 3600
 _RANKING_TTL = 3600
 
+_syllabus_url_cache: dict[int, str] = {}
+_syllabus_url_cache_at: float = 0.0
+
 _all_instructors_cache: dict[int, list] = {}
 _all_instructors_cache_at: float = 0.0
 _all_review_stats_cache: dict[str, tuple] = {}
@@ -530,13 +533,41 @@ async def _get_all_review_stats_cached() -> dict[str, tuple]:
     return _all_review_stats_cache
 
 
+async def _get_syllabus_urls_cached() -> dict[int, str]:
+    global _syllabus_url_cache, _syllabus_url_cache_at
+    if _syllabus_url_cache and time.monotonic() - _syllabus_url_cache_at < _COURSE_CACHE_TTL:
+        return _syllabus_url_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(CourseSection.subject_id, CourseSection.syllabus_url)
+            .where(CourseSection.syllabus_url.isnot(None))
+        )).all()
+    _syllabus_url_cache = {sid: url for sid, url in rows}
+    _syllabus_url_cache_at = time.monotonic()
+    return _syllabus_url_cache
+
+
 async def _prewarm_caches():
-    await asyncio.sleep(2)
-    for fn in [_get_cls_order_map, _get_cls_parent_map, _get_cls_set, _get_courses_cached, _get_reviewed_cached, _get_all_instructors_cached, _get_all_review_stats_cached]:
-        try:
-            await fn()
-        except Exception as e:
-            print(f"Prewarm {fn.__name__} failed: {e}", flush=True)
+    await asyncio.sleep(0.5)
+    try:
+        await asyncio.gather(
+            _get_cls_order_map(),
+            _get_cls_parent_map(),
+            _get_cls_set(),
+            _get_courses_cached(),
+            _get_reviewed_cached(),
+            _get_all_instructors_cached(),
+            _get_all_review_stats_cached(),
+            _get_syllabus_urls_cached(),
+        )
+    except Exception as e:
+        print(f"Prewarm failed: {e}", flush=True)
+    try:
+        _, all_courses = await _get_courses_cached()
+        for course in all_courses:
+            await get_course_flex(course, "")
+    except Exception as e:
+        print(f"Prewarm flex cache failed: {e}", flush=True)
     print("Cache pre-warm complete", flush=True)
 
 
@@ -1116,14 +1147,8 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     _sem_base_for = {n: _b for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
     seen_sem_base: set[str] = set()
 
-    # syllabus_url は CourseSection にある - subject_id をキーに最初の非NULLを取得
-    async with AsyncSessionLocal() as _sv_s:
-        _sv_rows = (await _sv_s.execute(
-            select(CourseSection.subject_id, CourseSection.syllabus_url)
-            .where(CourseSection.syllabus_url.isnot(None))
-            .where(CourseSection.subject_id.in_([c.id for c in rows]))
-        )).all()
-    _sv_by_id = {sid: url for sid, url in _sv_rows}
+    # syllabus_url は全件キャッシュから取得（DBアクセスなし）
+    _sv_by_id = await _get_syllabus_urls_cached()
     course_syllabus_urls: dict[str, str] = {c.name: _sv_by_id[c.id] for c in rows if c.id in _sv_by_id}
     course_liff_urls: dict[str, str] = {c.name: f"{APP_URL}/liff/course?course_id={c.id}" for c in rows}
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
