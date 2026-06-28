@@ -102,6 +102,9 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
 JST = timezone(timedelta(hours=9))
 
+_line_api_client: AsyncApiClient | None = None
+_line_api: AsyncMessagingApi | None = None
+
 ADMIN_COOKIE = "admin_tok"
 ADMIN_TOKEN_TTL = 4 * 3600
 _HMAC_KEY = hashlib.sha256((CHANNEL_SECRET + ADMIN_PASSWORD).encode()).digest()
@@ -326,6 +329,7 @@ async def _self_ping():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _line_api_client, _line_api
     try:
         await init_db()
         print("DB OK", flush=True)
@@ -337,6 +341,8 @@ async def lifespan(app: FastAPI):
         print(f"DB ERROR: {e}", flush=True)
         await engine.dispose()
         print("Engine disposed and reset after startup error", flush=True)
+    _line_api_client = AsyncApiClient(configuration)
+    _line_api = AsyncMessagingApi(_line_api_client)
     ping_task = asyncio.create_task(_self_ping())
     yield
     ping_task.cancel()
@@ -344,6 +350,8 @@ async def lifespan(app: FastAPI):
         await ping_task
     except asyncio.CancelledError:
         pass
+    if _line_api_client:
+        await _line_api_client.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -530,6 +538,16 @@ async def _prewarm_caches():
         except Exception as e:
             print(f"Prewarm {fn.__name__} failed: {e}", flush=True)
     print("Cache pre-warm complete", flush=True)
+
+
+async def _cleanup_old_logs():
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
+            await session.commit()
+    except Exception as exc:
+        await save_error_log(exc, action="cleanup")
 
 
 async def _save_log_bg(user_id: str, direction: str, message: str) -> None:
@@ -1574,83 +1592,34 @@ async def handle_message(text: str, user_id: str = "") -> list:
 # ── Routes ──────────────────────────────────────────────────────
 
 async def _process_events(events) -> None:
-    try:
-        if random.random() < 0.02:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-            async with AsyncSessionLocal() as session:
-                await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
-                await session.commit()
-    except Exception as exc:
-        await save_error_log(exc, action="cleanup")
+    if random.random() < 0.02:
+        asyncio.create_task(_cleanup_old_logs())
 
     try:
-        async with AsyncApiClient(configuration) as api_client:
-            line_api = AsyncMessagingApi(api_client)
-            for event in events:
-                if isinstance(event, FollowEvent):
-                    try:
-                        await line_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=[make_welcome_flex()],
-                            )
-                        )
-                        asyncio.create_task(_save_log_bg(event.source.user_id, "in", "[follow]"))
-                    except Exception as exc:
-                        await save_error_log(exc, action="follow")
-                    continue
-
-                if isinstance(event, PostbackEvent):
-                    user_id = event.source.user_id
-                    data = event.postback.data
-                    try:
-                        asyncio.create_task(_save_log_bg(user_id, "in", f"[postback]{data}"))
-                        messages = await asyncio.wait_for(
-                            handle_message(data, user_id),
-                            timeout=25.0,
-                        )
-                        await line_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=messages[:5],
-                            )
-                        )
-                        asyncio.create_task(_save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
-                    except asyncio.TimeoutError:
-                        await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=data)
-                        try:
-                            await line_api.reply_message(ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
-                            ))
-                        except Exception:
-                            pass
-                    except Exception as exc:
-                        await save_error_log(exc, user_id=user_id, action=f"postback:{data}")
-                        try:
-                            await line_api.reply_message(ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=[TextMessage(text="エラーが発生しました。もう一度お試しください。")],
-                            ))
-                        except Exception:
-                            pass
-                    continue
-
-                if not isinstance(event, MessageEvent):
-                    continue
-                if not isinstance(event.message, TextMessageContent):
-                    continue
-
-                user_id = event.source.user_id
-                user_text = event.message.text
-
+        for event in events:
+            if isinstance(event, FollowEvent):
                 try:
-                    asyncio.create_task(_save_log_bg(user_id, "in", user_text))
+                    await _line_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[make_welcome_flex()],
+                        )
+                    )
+                    asyncio.create_task(_save_log_bg(event.source.user_id, "in", "[follow]"))
+                except Exception as exc:
+                    await save_error_log(exc, action="follow")
+                continue
+
+            if isinstance(event, PostbackEvent):
+                user_id = event.source.user_id
+                data = event.postback.data
+                try:
+                    asyncio.create_task(_save_log_bg(user_id, "in", f"[postback]{data}"))
                     messages = await asyncio.wait_for(
-                        handle_message(user_text, user_id),
+                        handle_message(data, user_id),
                         timeout=25.0,
                     )
-                    await line_api.reply_message(
+                    await _line_api.reply_message(
                         ReplyMessageRequest(
                             reply_token=event.reply_token,
                             messages=messages[:5],
@@ -1658,27 +1627,68 @@ async def _process_events(events) -> None:
                     )
                     asyncio.create_task(_save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
                 except asyncio.TimeoutError:
-                    await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
+                    await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=data)
                     try:
-                        await line_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
-                            )
-                        )
+                        await _line_api.reply_message(ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
+                        ))
                     except Exception:
                         pass
                 except Exception as exc:
-                    await save_error_log(exc, user_id=user_id, action=user_text)
+                    await save_error_log(exc, user_id=user_id, action=f"postback:{data}")
                     try:
-                        await line_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=event.reply_token,
-                                messages=[TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")],
-                            )
-                        )
+                        await _line_api.reply_message(ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="エラーが発生しました。もう一度お試しください。")],
+                        ))
                     except Exception:
                         pass
+                continue
+
+            if not isinstance(event, MessageEvent):
+                continue
+            if not isinstance(event.message, TextMessageContent):
+                continue
+
+            user_id = event.source.user_id
+            user_text = event.message.text
+
+            try:
+                asyncio.create_task(_save_log_bg(user_id, "in", user_text))
+                messages = await asyncio.wait_for(
+                    handle_message(user_text, user_id),
+                    timeout=25.0,
+                )
+                await _line_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=messages[:5],
+                    )
+                )
+                asyncio.create_task(_save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
+            except asyncio.TimeoutError:
+                await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
+                try:
+                    await _line_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")],
+                        )
+                    )
+                except Exception:
+                    pass
+            except Exception as exc:
+                await save_error_log(exc, user_id=user_id, action=user_text)
+                try:
+                    await _line_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")],
+                        )
+                    )
+                except Exception:
+                    pass
     except Exception as exc:
         await save_error_log(exc, action="process_events")
 
