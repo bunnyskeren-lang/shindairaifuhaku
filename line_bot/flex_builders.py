@@ -1,12 +1,10 @@
 import asyncio
-import re as _re
 from urllib.parse import quote as _url_quote
 
 from linebot.v3.messaging import (
     FlexBox,
     FlexBubble,
     FlexButton,
-    FlexCarousel,
     FlexMessage,
     FlexSeparator,
     FlexText,

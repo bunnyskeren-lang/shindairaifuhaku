@@ -19,7 +19,6 @@ async def startup() -> None:
 
 
 async def shutdown() -> None:
-    global _client
     if _client:
         await _client.close()
 
