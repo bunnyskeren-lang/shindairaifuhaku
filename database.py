@@ -105,10 +105,13 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS ix_push_subscriptions_line_user_id ON push_subscriptions (line_user_id)"
         ))
         # UNIQUE制約（重複時は無視）
+        # UNIQUE制約は内部的に同名のインデックスも作成するため、既存の場合の
+        # エラーコードは duplicate_object(42710) ではなく duplicate_table(42P07)
+        # になることがある（インデックスもrelationとして扱われるため）
         await conn.execute(text("""
             DO $$ BEGIN
               ALTER TABLE user_profiles ADD CONSTRAINT uq_up_student_id UNIQUE (student_id);
-            EXCEPTION WHEN duplicate_object THEN NULL;
+            EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
             END $$
         """))
         # CHECK制約（重複時は無視）
