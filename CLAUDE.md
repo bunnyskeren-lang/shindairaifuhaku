@@ -46,7 +46,7 @@
 
 ## データ保護ルール
 
-- **投稿されたレビュー（PendingReviewテーブル）は、ユーザーから明示的な削除指示がない限り絶対に消去しないこと**
+- **投稿されたレビュー（reviews テーブル）は、ユーザーから明示的な削除指示がない限り絶対に消去しないこと**
 - 科目の削除・変更・マージなど、いかなる操作においても、その科目に紐づくレビューを巻き添えで削除しないこと
 - レビューに影響しうるDB操作を行う前は、必ずユーザーに確認を取ること
 
@@ -171,18 +171,18 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
   - `--env dev` で dev DB に書き込み、`--force` で既取得分も上書き
   - 0.3秒スリープ/件、20件ごとにコミット
 
-### 時間割DBテーブル構成
+### 時間割DBテーブル構成（新スキーマ）
 
 | テーブル | 用途 |
 |---|---|
-| `syllabus_courses` | 時間割マスタ（timetable_code, term, target_grades, subject_category） |
-| `course_slots` | 曜日・時限（day_of_week, period） |
-| `user_courses` | ユーザーの登録科目 |
+| `syllabi` | 時間割マスタ（course_section_id, timetable_code, term, target_grades, subject_category） |
+| `schedules` | 曜日・時限（syllabus_id, day_of_week, period） |
+| `user_syllabi` | ユーザーの登録科目（line_user_id, syllabus_id） |
 | `timetable_profiles` | ユーザーの学部・学年プロフィール |
 
 インポートスクリプト: `programing files/import_syllabus.py`
-- `--also-courses` を付けると `courses` テーブル（LINE bot用）にも登録
-- `--classification` / `--faculty` で courses の分類・学部名を指定
+- `--also-courses` を付けると `subjects`/`instructors`/`course_sections`（LINE bot用）にも登録
+- `--classification` / `--faculty` で分類・学部名を指定
 
 ---
 
@@ -207,29 +207,48 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 
 ### ディレクトリ構成
 
+main.py は 2026年7月に単一3800行ファイルから「core / line_bot / routers」パッケージ構成へリファクタリング済み。main.py 自体は app 生成・lifespan・include_router のみの薄いエントリポイント（約90行）。
+
 ```
 shindairaifuhaku/          ← Renderがデプロイするルート
-├── main.py                ← アプリ本体（約3500行、全ルートを含む）
-├── models.py              ← SQLAlchemy ORMモデル定義（17テーブル）
-├── database.py            ← DBエンジン生成・init_db()（マイグレーション含む）
+├── main.py                ← 薄いエントリポイント（app生成・CORS・例外ハンドラ・lifespan・include_router）
+├── models.py               ← SQLAlchemy ORMモデル定義（新スキーマ）
+├── database.py             ← DBエンジン生成・init_db()（マイグレーション含む）
 ├── requirements.txt
-├── Procfile               ← "web: uvicorn main:app ..."
-├── runtime.txt            ← "python-3.12.0"
+├── Procfile / runtime.txt
+├── core/                   ← 横断的関心事（ルーター間で共有）
+│   ├── config.py            ← 環境変数・定数・シラバスURL生成・よみがな変換
+│   ├── security.py          ← 管理者トークン発行/検証・LINE署名検証・check_admin依存関数
+│   ├── cache.py              ← 全インメモリキャッシュ・invalidate/prewarm関数（rawなdictは外部公開しない）
+│   ├── activity_log.py        ← エラーログ・メッセージログ保存
+│   ├── line_client.py          ← LINE APIクライアント・reply送信・自己ping
+│   ├── push.py                  ← Web Push (VAPID) 通知送信
+│   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
+│   ├── templates.py               ← Jinja2Templates・jstフィルタ
+│   └── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
+├── line_bot/                ← LINE Bot応答ロジック
+│   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
+│   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
+├── routers/                 ← FastAPI APIRouter（URLプレフィックス単位）
+│   ├── webhook.py             ← POST /callback（LINE Webhook）
+│   ├── health.py               ← /health
+│   ├── pages.py                  ← /, /privacy, /sw.js, /liff/course, /liff/timetable
+│   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
+│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /submit, /api/course/{id}
+│   ├── timetable_api.py             ← /api/timetable/*
+│   ├── seiseki_api.py                ← /api/parse_seiseki 等（成績PDF解析）
+│   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
+│       ├── auth.py                     ← /admin/login, /admin/logout
+│       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe
+│       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、最大ブロック）
+│       ├── reviews.py                     ← /admin/reviews*
+│       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/activity
+│       ├── stats.py                         ← /admin/richmenu-stats, /admin/usage-stats
+│       ├── timetable_check.py                ← /admin/timetable/check
+│       └── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*
 ├── templates/
-│   ├── admin/
-│   │   ├── base.html      ← 管理画面共通レイアウト（ナビ・ローディング・確認モーダル）
-│   │   ├── courses.html   ← 科目管理（追加・編集・削除・教員管理）
-│   │   ├── reviews.html   ← レビュー承認・却下
-│   │   ├── keiei.html     ← 経営学部専用（単位要件・専門群分類）
-│   │   ├── logs.html      ← メッセージログ
-│   │   ├── users.html     ← ユーザー一覧
-│   │   ├── errors.html    ← エラーログ
-│   │   ├── activity.html  ← アクティビティ統計
-│   │   ├── usage_stats.html   ← 利用統計
-│   │   ├── richmenu.html      ← リッチメニュータップ統計
-│   │   ├── timetable_check.html ← 時間割照合
-│   │   ├── course_views.html  ← 科目閲覧数
-│   │   └── login.html
+│   ├── admin/              ← courses / reviews / keiei / sysinfo / logs / users / errors /
+│   │                          activity / usage_stats / richmenu / timetable_check / login / base 等
 │   ├── liff/
 │   │   ├── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
 │   │   └── timetable.html ← マイ時間割（LIFFページ）
@@ -238,79 +257,89 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── form_error.html
 │   └── privacy.html
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
-├── docs/                  ← ドキュメント類
+├── supabase/migrations/   ← 新スキーマ移行SQL
+├── review_form/           ← 旧世代の独立レビュー投稿アプリ（実質保守終了、機能はmain.pyに統合済み）
+├── docs/                  ← ドキュメント類（.gitignore対象）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← 時間割データをDB投入
     ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング
     ├── import_kyoyo_courses.py    ← 教養科目インポート
-    ├── import_keiei_instructors.py← 経営学部教員インポート
-    ├── setup_richmenu.py          ← LINEリッチメニュー設定
-    ├── sync_db_to_prod.py         ← dev→本番DBの3テーブル同期
-    ├── seed_courses.py / cleanup_*.py / fix_dupes.py 等
+    ├── update_senmon_classification.py ← 経営学部専門科目の分類コード更新
+    ├── setup_richmenu.py / sync_richmenu.py ← LINEリッチメニュー設定・dev→本番同期
+    ├── sync_db_to_prod.py         ← dev→本番DBの5テーブル同期
+    ├── drop_old_tables.py         ← 旧スキーマテーブル削除（移行完了後用）
+    ├── models.py / database.py    ← スクリプト群専用のDBアクセス層（ルートのmodels.pyとは別定義）
     └── .env / .env.dev            ← 環境変数（本番・dev）
 ```
 
-### DBテーブル一覧（models.py）
+### DBテーブル一覧（models.py・新スキーマ）
+
+コアドメイン（科目・シラバス・レビュー）:
 
 | テーブル | 用途 |
 |----------|------|
-| `courses` | 科目マスタ（name, classification, category, term, credits, faculty, senmon_group） |
-| `course_instructors` | 科目↔教員の多対多（course_id, name, url） |
-| `classification_orders` | 分類の表示順・親グループ設定 |
-| `pending_reviews` | レビュー投稿（is_approved で承認管理） |
+| `subjects` | 科目マスタ（name, faculty, classification, term, credits 等） |
+| `instructors` | 教員マスタ |
+| `course_sections` | 科目×教員のセクション（syllabus_url 等） |
+| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類） |
+| `schedules` | 曜日・時限・教室 |
+| `reviews` | 投稿レビュー（`is_approved` で承認管理） |
+| `course_section_views` | 科目セクションの閲覧数 |
+| `user_syllabi` | ユーザーの時間割登録 |
+| `subject_credit_categories` | 科目↔単位カテゴリの紐付け |
+
+共通・運用系:
+
+| テーブル | 用途 |
+|----------|------|
+| `classification_orders` | 分類の表示順・親グループ・学部 |
+| `credit_requirements` | 単位要件定義（学部別、category_id, required_credits, label） |
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号） |
-| `user_activity` | LINEアクション統計（user_id, action, count） |
+| `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |
+| `timetable_profiles` | ユーザーの学部・学年設定 |
 | `message_logs` | LINEメッセージ送受信ログ |
+| `user_activity` | LINEアクション統計（user_id, action, count） |
 | `error_logs` | サーバーエラーログ |
 | `push_subscriptions` | Web Push VAPID 購読情報 |
 | `richmenu_taps` | リッチメニュークリックログ |
-| `course_views` | 科目詳細の閲覧数 |
-| `syllabus_courses` | 時間割マスタ（timetable_code で一意） |
-| `course_slots` | 曜日・時限（syllabus_course_id, day_of_week, period） |
-| `user_courses` | ユーザーの時間割登録（line_user_id, syllabus_course_id） |
-| `timetable_profiles` | ユーザーの学部・学年設定 |
-| `credit_requirements` | 単位要件定義（category_id, required_credits, label） |
-| `category_courses` | 単位カテゴリ↔科目の紐付け |
-| `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |
 
 ### アーキテクチャ概要
 
-**main.py の構成（単一ファイル）**
+**main.py の構成（薄いエントリポイント）**
 
 ```
-環境変数読み込み → LINE SDK初期化 → キャッシュ変数定義
-→ FastAPI app 生成 → lifespan（init_db + prewarm + self-ping）
-→ ルート定義（以下のグループ）
-  - /callback          LINE Webhookエントリポイント
-  - /submit, /api/*    レビューフォーム・LIFF用API
-  - /liff/*            LIFFページ HTML返却
-  - /r/{name}          リッチメニューリダイレクト（クリック計測付き）
-  - /admin/*           管理画面（HMAC cookie認証）
-  - /health            死活監視
+core.line_client / core.prewarm 等のimport
+→ FastAPI app 生成 → lifespan（init_db + prewarm + self-ping、core.line_client.startup/shutdown）
+→ 例外ハンドラ登録（core.activity_log.save_error_log でエラーログ保存）
+→ include_router（webhook / health / pages / richmenu / liff_api / timetable_api / seiseki_api /
+                  admin.auth / admin.dashboard / admin.courses / admin.reviews /
+                  admin.users_errors / admin.stats / admin.timetable_check / admin.credit_requirements）
 ```
 
-**キャッシュ設計（モジュールレベルグローバル変数）**
+**キャッシュ設計（core/cache.py に集約したモジュールレベルグローバル変数）**
 
-- TTL 3600秒のインメモリキャッシュを複数保持
-- `_get_*_cached()` → TTL切れ or 空のとき DB取得、それ以外はキャッシュ返却
-- `_invalidate_*_cache()` → DB更新後に呼び出してキャッシュ即時無効化
-- `_prewarm_caches()` → サーバー起動2秒後に全キャッシュをウォームアップ
+- TTL 3600秒のインメモリキャッシュを複数保持。他モジュールは必ず `cache.get_*`/`cache.set_*`/`cache.invalidate_*` の関数経由でアクセスし、rawなdictを直接importしない（invalidate時に `global` で再代入されるため、直import すると古い参照を掴んだままになる）
+- `cache.get_*_cached()` → TTL切れ or 空のとき DB取得、それ以外はキャッシュ返却
+- `cache.invalidate_*_cache()` → DB更新後に呼び出してキャッシュ即時無効化
+- `core.prewarm.prewarm_caches()` → サーバー起動0.5秒後に全キャッシュをウォームアップ（`core.cache.warm_query_caches()` → `line_bot.flex_builders.prewarm_flex_cache()` の順）
 - **注意**: 初期値は空コレクション（`{}`/`set()`）のため、truthy チェックでキャッシュヒット判定する
 
 **LINE Bot フロー**
 
 ```
-POST /callback → 署名検証 → parser.parse() → create_task(_process_events())
+POST /callback（routers/webhook.py） → core.security.verify_line_signature
+  → core.line_client.parser.parse() → create_task(line_bot.handler.process_events())
   → FollowEvent  : ウェルカムFlexMessage
   → MessageEvent : handle_message(text, user_id) → FlexMessage or TextMessage
   → PostbackEvent: handle_message(data, user_id)（科目一覧タップ等）
+返信は core.line_client.reply(reply_token, messages) 経由（生の _line_api を各所で触らない）
 ```
 
 **管理画面認証**
 
-- ログイン: `ADMIN_PASSWORD` と POST フォーム、`py_secrets.compare_digest` で比較
-- トークン: `HMAC-SHA256(CHANNEL_SECRET + ADMIN_PASSWORD, "admin:{timestamp}")` をCookieに保存
-- TTL: 4時間（`ADMIN_TOKEN_TTL = 4 * 3600`）
+- ログイン: `routers/admin/auth.py`、`ADMIN_PASSWORD` と POST フォームを `py_secrets.compare_digest` で比較
+- トークン: `core.security.make_admin_token()` が `HMAC-SHA256(CHANNEL_SECRET + ADMIN_PASSWORD, "admin:{timestamp}")` を生成しCookieに保存
+- TTL: 4時間（`core.config.ADMIN_TOKEN_TTL`）、`core.security.check_admin` を全 `/admin/*` ルートに `Depends()` で付与
 
 **非同期クエリのルール**
 
