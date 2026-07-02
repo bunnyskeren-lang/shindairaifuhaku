@@ -65,7 +65,6 @@ class Subject(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
-    classification_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("classification_orders.id", ondelete="SET NULL"), nullable=True, index=True)
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     senmon_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
