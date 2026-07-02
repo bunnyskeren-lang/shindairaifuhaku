@@ -150,3 +150,28 @@ async def init_db():
             BEFORE UPDATE ON user_profiles
             FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at()
         """))
+        # subjects.reading（よみがな検索用カラム、新スキーマ移行後に追加）
+        await conn.execute(text(
+            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS reading TEXT"
+        ))
+        # 既存科目のうち reading 未設定のものをバックフィル
+        result = await conn.execute(text("SELECT id, name FROM subjects WHERE reading IS NULL"))
+        rows = result.fetchall()
+        if rows:
+            try:
+                import pykakasi
+                kks = pykakasi.kakasi()
+
+                def _gen_reading(name: str) -> str:
+                    converted = kks.convert(name)
+                    hira = ''.join(item.get('hira', '') for item in converted)
+                    roma = ''.join(item.get('hepburn', '') for item in converted)
+                    return f"{hira} {roma}".lower().strip()
+
+                for row in rows:
+                    await conn.execute(
+                        text("UPDATE subjects SET reading = :r WHERE id = :id"),
+                        {"r": _gen_reading(row.name), "id": row.id},
+                    )
+            except Exception:
+                pass
