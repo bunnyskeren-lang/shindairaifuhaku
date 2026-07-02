@@ -1,0 +1,171 @@
+from fastapi import APIRouter, HTTPException, Query, Request
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from core.config import LINE_USER_ID_RE
+from database import AsyncSessionLocal
+from models import CourseSection, Instructor, Schedule, Subject, Syllabus, TimetableProfile, UserSyllabus
+
+router = APIRouter()
+
+_VALID_DAYS = {"月", "火", "水", "木", "金", "土", "日"}
+
+
+@router.get("/api/timetable/profile")
+async def api_timetable_profile_get(user_id: str = Query("")):
+    if not user_id:
+        return {"faculty": None, "grade": None}
+    async with AsyncSessionLocal() as session:
+        p = await session.get(TimetableProfile, user_id)
+        if not p:
+            return {"faculty": None, "grade": None}
+        return {"faculty": p.faculty, "grade": p.grade}
+
+
+@router.post("/api/timetable/profile")
+async def api_timetable_profile_set(request: Request):
+    data = await request.json()
+    user_id = data.get("user_id", "")
+    if not user_id or not LINE_USER_ID_RE.match(user_id):
+        raise HTTPException(status_code=400, detail="user_id required")
+    faculty = data.get("faculty") or None
+    grade = data.get("grade")
+    if grade is not None:
+        grade = int(grade)
+        if not (1 <= grade <= 6):
+            raise HTTPException(status_code=400, detail="grade must be between 1 and 6")
+    async with AsyncSessionLocal() as session:
+        p = await session.get(TimetableProfile, user_id)
+        if p:
+            p.faculty = faculty
+            p.grade = grade
+        else:
+            session.add(TimetableProfile(line_user_id=user_id, faculty=faculty, grade=grade))
+        await session.commit()
+    return {"ok": True}
+
+
+@router.get("/api/timetable/slots/{day}/{period}")
+async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
+    if day not in _VALID_DAYS:
+        raise HTTPException(status_code=400, detail="invalid day")
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(Syllabus, Subject, Instructor)
+            .join(Schedule, Schedule.syllabus_id == Syllabus.id)
+            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .where(Schedule.day_of_week == day, Schedule.period == period)
+            .order_by(Syllabus.quarter, Subject.name)
+        )).all()
+
+        if not rows:
+            return {"courses": []}
+
+        syllabus_ids = [s.id for s, _, _ in rows]
+        registered_ids: set[int] = set()
+        if user_id:
+            regs = (await session.execute(
+                select(UserSyllabus.syllabus_id).where(
+                    UserSyllabus.line_user_id == user_id,
+                    UserSyllabus.syllabus_id.in_(syllabus_ids),
+                )
+            )).scalars().all()
+            registered_ids = set(regs)
+
+        return {
+            "courses": [
+                {
+                    "id": syl.id,
+                    "name": subj.name,
+                    "instructor": instr.name,
+                    "term": syl.quarter,
+                    "timetable_code": syl.timetable_code or "",
+                    "department": syl.department or "",
+                    "target_grades": syl.target_grades or "",
+                    "subject_category": syl.subject_category or "",
+                    "registered": syl.id in registered_ids,
+                }
+                for syl, subj, instr in rows
+            ]
+        }
+
+
+def _credits_from_term(term: str | None) -> int:
+    if not term:
+        return 2
+    if "クォーター" in term:
+        return 1
+    if term in ("前期", "後期") or "セメスター" in term:
+        return 2
+    if "通年" in term:
+        return 4
+    return 2
+
+
+@router.get("/api/timetable/my")
+async def api_timetable_my(user_id: str = Query("")):
+    if not user_id:
+        return {"courses": []}
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(UserSyllabus, Syllabus, Schedule, Subject, Instructor)
+            .join(Syllabus, Syllabus.id == UserSyllabus.syllabus_id)
+            .join(Schedule, Schedule.syllabus_id == Syllabus.id)
+            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .where(UserSyllabus.line_user_id == user_id)
+        )).all()
+
+        result = {}
+        for us, syl, sch, subj, instr in rows:
+            if syl.id not in result:
+                result[syl.id] = {
+                    "id": syl.id,
+                    "name": subj.name,
+                    "instructor": instr.name,
+                    "term": syl.quarter,
+                    "credits": _credits_from_term(syl.quarter),
+                    "slots": [],
+                }
+            result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})
+
+        return {"courses": list(result.values())}
+
+
+@router.post("/api/timetable/register/{syllabus_id}")
+async def api_timetable_register(syllabus_id: int, request: Request):
+    body = await request.json()
+    user_id = body.get("user_id", "")
+    if not user_id or not LINE_USER_ID_RE.match(user_id):
+        raise HTTPException(status_code=400, detail="user_id required")
+    async with AsyncSessionLocal() as session:
+        syl = await session.get(Syllabus, syllabus_id)
+        if not syl:
+            raise HTTPException(status_code=404, detail="course not found")
+        await session.execute(
+            pg_insert(UserSyllabus)
+            .values(line_user_id=user_id, syllabus_id=syllabus_id)
+            .on_conflict_do_nothing(index_elements=["line_user_id", "syllabus_id"])
+        )
+        await session.commit()
+    return {"ok": True}
+
+
+@router.delete("/api/timetable/register/{syllabus_id}")
+async def api_timetable_unregister(syllabus_id: int, user_id: str = Query("")):
+    if not user_id or not LINE_USER_ID_RE.match(user_id):
+        raise HTTPException(status_code=400, detail="user_id required")
+    async with AsyncSessionLocal() as session:
+        us = (await session.execute(
+            select(UserSyllabus).where(
+                UserSyllabus.line_user_id == user_id,
+                UserSyllabus.syllabus_id == syllabus_id,
+            )
+        )).scalar_one_or_none()
+        if us:
+            await session.delete(us)
+            await session.commit()
+    return {"ok": True}
