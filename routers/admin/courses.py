@@ -212,15 +212,14 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
             )
         )).scalar_one_or_none()
         if cs:
-            has_approved = (await session.execute(
+            has_reviews = (await session.execute(
                 select(func.count(Review.id)).where(
                     Review.course_section_id == cs.id,
-                    Review.is_approved == True,
                 )
             )).scalar()
-            if has_approved:
+            if has_reviews:
                 if is_ajax:
-                    return JSONResponse({"ok": False, "error": "承認済みレビューがあるため削除できません"})
+                    return JSONResponse({"ok": False, "error": "レビュー（承認済み・未承認とも）が紐づいているため削除できません"})
                 return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
             await session.delete(cs)
             await session.commit()
@@ -517,13 +516,12 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
                 select(CourseSection.id).where(CourseSection.subject_id == course_id)
             )).scalars().all()
             if cs_ids:
-                has_approved = (await session.execute(
+                has_reviews = (await session.execute(
                     select(func.count(Review.id)).where(
                         Review.course_section_id.in_(cs_ids),
-                        Review.is_approved == True,
                     )
                 )).scalar()
-                if has_approved:
+                if has_reviews:
                     return RedirectResponse(url=f"/admin/courses?msg=has_reviews", status_code=303)
             await session.delete(course)
             await session.commit()
