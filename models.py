@@ -184,7 +184,7 @@ class Review(Base):
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="RESTRICT"), nullable=False, index=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     ease_rating: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
