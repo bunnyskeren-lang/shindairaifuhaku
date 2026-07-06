@@ -268,6 +268,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
 ├── docs/                  ← ドキュメント類（.gitignore対象）
+├── backups/               ← download_prod_backup.pyのダウンロード先（.gitignore対象、env別サブフォルダ）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← 時間割データをDB投入
     ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング
@@ -275,6 +276,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
     ├── update_senmon_classification.py ← 経営学部専門科目の分類コード更新
     ├── setup_richmenu.py / sync_richmenu.py ← LINEリッチメニュー設定・dev→本番同期
     ├── sync_db_to_prod.py         ← dev→本番DBの5テーブル同期
+    ├── download_prod_backup.py    ← Supabase Storage上のDBバックアップをローカルbackups/へ差分ダウンロード（--env dev/prod）
     ├── drop_old_tables.py         ← 旧スキーマテーブル削除（移行完了後用）
     ├── models.py / database.py    ← スクリプト群専用のDBアクセス層（ルートのmodels.pyとは別定義）
     └── .env / .env.dev            ← 環境変数（本番・dev）
@@ -352,6 +354,15 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 
 - 同一 `AsyncSession` では `asyncio.gather` による並行クエリ禁止（InterfaceError）
 - 並行したい場合は各コルーチン内で `async with AsyncSessionLocal() as s:` を個別に開く
+
+**DB自動バックアップ（`core/backup.py`）**
+
+- Supabase Freeプランには自動バックアップが無く、ローカル開発環境はNetwork Restrictionsにより本番DBへ直接接続できない。そのため「本番DBに到達できる本番アプリ自身」が日次バックアップを生成する設計にした
+- `backup_loop()`（`self_ping()`と同じ無限ループ+`asyncio.sleep`パターン、`main.py`のlifespanで`asyncio.create_task`）が毎日JST 3:00に`dump_all_tables_to_sql()`（`Base.metadata.sorted_tables`のFK依存順で全テーブルをSELECTしINSERT文形式のSQLを生成・gzip圧縮）を実行し、`upload_backup_to_storage()`でSupabase Storageの`BACKUP_BUCKET`（既定`db-backups`）へアップロード、`BACKUP_RETENTION_DAYS`（既定15日）より古い世代を削除する
+- `BACKUP_ENABLED`が`true`でない環境では`backup_loop()`は即returnして何もしない（既定false。dev/本番それぞれ明示的に有効化するまで安全）
+- ローカルPCへの取り込みは`programing files/download_prod_backup.py --env dev|prod`で、Supabase Storageからまだ無いファイルだけを`backups/{env}/`へ差分ダウンロードする（Windowsタスクスケジューラ等で定期実行する想定）
+- 必要な環境変数: `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `BACKUP_BUCKET` / `BACKUP_ENABLED` / `BACKUP_RETENTION_DAYS`（dev/本番でSupabaseプロジェクトが別なので値も別々に設定する）
+- 復元は「`init_db()`で空スキーマを作ってから、ダウンロードした`.sql.gz`を解凍してINSERT文を流し込む」想定（CREATE TABLE等のスキーマDDLは含まない）
 
 ---
 
