@@ -67,7 +67,7 @@ async def init_db():
         # core/config.py の FACULTIES と同じ11学部（database.py は core.config に依存させない）
         _default_faculties = [
             "文学部", "国際人間科学部", "法学部", "経済学部", "経営学部",
-            "システム情報学部", "理学部", "医学部", "工学部", "農学部", "海事科学部",
+            "システム情報学部", "理学部", "医学部", "工学部", "農学部", "海洋政策科学部",
         ]
         for i, faculty_name in enumerate(_default_faculties):
             await conn.execute(text(
