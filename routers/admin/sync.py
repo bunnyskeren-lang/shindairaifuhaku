@@ -3,16 +3,49 @@ import ssl
 import asyncpg
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache
 from core.config import DEV_DATABASE_URL
 from core.security import check_admin
-from database import AsyncSessionLocal
+from database import AsyncSessionLocal, engine
 from models import CourseSection, DisplayOrder, Instructor, Subject, SubjectCreditCategory
 
 router = APIRouter()
+
+_LEGACY_TABLES = [
+    "courses", "course_instructors", "syllabus_courses", "course_slots",
+    "user_courses", "pending_reviews", "course_views",
+]
+
+
+@router.get("/admin/sync/inspect_legacy")
+async def inspect_legacy_tables(_: str = Depends(check_admin)):
+    """本番に残っている旧テーブルの存在有無・件数・カラム構成を確認する（読み取り専用）。
+
+    reviews/syllabi/schedules等の本移行スクリプトを書く前提の事前調査用。
+    """
+    result = {}
+    async with engine.begin() as conn:
+        for tbl in _LEGACY_TABLES:
+            exists = (await conn.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = :t)"
+            ), {"t": tbl})).scalar()
+            if not exists:
+                result[tbl] = {"exists": False}
+                continue
+            count = (await conn.execute(text(f"SELECT COUNT(*) FROM {tbl}"))).scalar()
+            cols = (await conn.execute(text(
+                "SELECT column_name, data_type FROM information_schema.columns "
+                "WHERE table_name = :t ORDER BY ordinal_position"
+            ), {"t": tbl})).all()
+            result[tbl] = {
+                "exists": True,
+                "count": count,
+                "columns": [{"name": c[0], "type": c[1]} for c in cols],
+            }
+    return JSONResponse(result)
 
 
 def _dev_ssl_context() -> ssl.SSLContext:
