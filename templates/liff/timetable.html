@@ -456,15 +456,21 @@ tbody td:first-child {
       </select>
     </div>
     <div class="profile-field">
+      <div class="profile-label">学科</div>
+      <select class="profile-select" id="profile-department-sel" onchange="submitProfile()">
+        <option value="">先に学部を選択してください</option>
+      </select>
+    </div>
+    <div class="profile-field">
       <div class="profile-label">学年</div>
       <div class="grade-grid">
-        <div class="grade-opt"><input type="radio" id="g1" name="prof-grade" value="1"><label for="g1">1年</label></div>
-        <div class="grade-opt"><input type="radio" id="g2" name="prof-grade" value="2"><label for="g2">2年</label></div>
-        <div class="grade-opt"><input type="radio" id="g3" name="prof-grade" value="3"><label for="g3">3年</label></div>
-        <div class="grade-opt"><input type="radio" id="g4" name="prof-grade" value="4"><label for="g4">4年</label></div>
+        <div class="grade-opt"><input type="radio" id="g1" name="prof-grade" value="1" onchange="submitProfile()"><label for="g1">1年</label></div>
+        <div class="grade-opt"><input type="radio" id="g2" name="prof-grade" value="2" onchange="submitProfile()"><label for="g2">2年</label></div>
+        <div class="grade-opt"><input type="radio" id="g3" name="prof-grade" value="3" onchange="submitProfile()"><label for="g3">3年</label></div>
+        <div class="grade-opt"><input type="radio" id="g4" name="prof-grade" value="4" onchange="submitProfile()"><label for="g4">4年</label></div>
       </div>
     </div>
-    <button class="profile-save-btn" onclick="submitProfile()">保存</button>
+    <button class="profile-save-btn" onclick="closeProfileModal()">閉じる</button>
   </div>
 </div>
 
@@ -520,7 +526,8 @@ function makeSyllabusUrl(code) {
   return `https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/${path}/data/2026_${code}.html`;
 }
 
-window._userProfile = { faculty: null, grade: null };
+window._userProfile = { faculty: null, grade: null, department: null };
+window._facultyDepartments = {};
 
 async function loadProfile() {
   const cached = localStorage.getItem('timetable_profile');
@@ -533,7 +540,7 @@ async function loadProfile() {
     const res = await fetch(`${BASE_URL}/api/timetable/profile?user_id=${encodeURIComponent(userId)}`);
     const data = await res.json();
     if (data.faculty !== undefined || data.grade !== undefined) {
-      window._userProfile = { faculty: data.faculty, grade: data.grade };
+      window._userProfile = { faculty: data.faculty, grade: data.grade, department: data.department };
       localStorage.setItem('timetable_profile', JSON.stringify(window._userProfile));
       updateProfileChip();
     }
@@ -544,8 +551,8 @@ function updateProfileChip() {
   const chip = document.getElementById('profile-chip');
   if (!chip) return;
   const p = window._userProfile || {};
-  if (p.faculty || p.grade) {
-    const label = [p.faculty || '', p.grade ? `${p.grade}年` : ''].filter(Boolean).join(' ');
+  if (p.faculty || p.grade || p.department) {
+    const label = [p.faculty || '', p.department || '', p.grade ? `${p.grade}年` : ''].filter(Boolean).join(' ');
     chip.textContent = `👤 ${label}`;
     chip.classList.add('has-profile');
   } else {
@@ -560,6 +567,7 @@ async function loadFacultyOptions() {
   try {
     const res = await fetch(`${BASE_URL}/api/faculties`);
     const data = await res.json();
+    window._facultyDepartments = data.departments || {};
     (data.faculties || []).forEach(f => {
       const opt = document.createElement('option');
       opt.value = f;
@@ -570,14 +578,38 @@ async function loadFacultyOptions() {
   } catch (e) {}
 }
 
+function populateDepartmentOptions(faculty, selected) {
+  const sel = document.getElementById('profile-department-sel');
+  sel.innerHTML = '';
+  const depts = (window._facultyDepartments || {})[faculty] || [];
+  if (!depts.length) {
+    sel.insertAdjacentHTML('beforeend', '<option value="">先に学部を選択してください</option>');
+    return;
+  }
+  sel.insertAdjacentHTML('beforeend', '<option value="">選択してください</option>');
+  depts.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = d;
+    if (d === selected) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
 function openProfileModal() {
   const p = window._userProfile || {};
   document.getElementById('profile-faculty-sel').value = p.faculty || '';
+  populateDepartmentOptions(p.faculty || '', p.department || '');
   document.querySelectorAll('input[name="prof-grade"]').forEach(r => {
     r.checked = String(r.value) === String(p.grade);
   });
   document.getElementById('profile-modal-overlay').style.display = 'flex';
 }
+
+document.getElementById('profile-faculty-sel').addEventListener('change', (e) => {
+  populateDepartmentOptions(e.target.value, '');
+  submitProfile();
+});
 
 function closeProfileModal() {
   document.getElementById('profile-modal-overlay').style.display = 'none';
@@ -589,19 +621,19 @@ function closeProfileModalOnOverlay(e) {
 
 async function submitProfile() {
   const faculty = document.getElementById('profile-faculty-sel').value || null;
+  const department = document.getElementById('profile-department-sel').value || null;
   const gradeEl = document.querySelector('input[name="prof-grade"]:checked');
   const grade = gradeEl ? parseInt(gradeEl.value) : null;
-  window._userProfile = { faculty, grade };
+  window._userProfile = { faculty, grade, department };
   localStorage.setItem('timetable_profile', JSON.stringify(window._userProfile));
   updateProfileChip();
   updateCreditsVisibility();
-  closeProfileModal();
   if (currentSlot) setFilter(currentQuarter);
   if (userId) {
     fetch(`${BASE_URL}/api/timetable/profile`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, faculty, grade }),
+      body: JSON.stringify({ user_id: userId, faculty, grade, department }),
     }).catch(() => {});
   }
 }

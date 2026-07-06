@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from core.config import LINE_USER_ID_RE
+from core.config import FACULTY_DEPARTMENTS, LINE_USER_ID_RE
 from database import AsyncSessionLocal
 from models import CourseSection, Instructor, Schedule, Subject, Syllabus, UserProfile, UserSyllabus
 
@@ -25,12 +25,12 @@ _TERM_ORDER = case(
 @router.get("/api/timetable/profile")
 async def api_timetable_profile_get(user_id: str = Query("")):
     if not user_id:
-        return {"faculty": None, "grade": None}
+        return {"faculty": None, "grade": None, "department": None}
     async with AsyncSessionLocal() as session:
         p = await session.get(UserProfile, user_id)
         if not p:
-            return {"faculty": None, "grade": None}
-        return {"faculty": p.faculty, "grade": p.grade}
+            return {"faculty": None, "grade": None, "department": None}
+        return {"faculty": p.faculty, "grade": p.grade, "department": p.department}
 
 
 @router.post("/api/timetable/profile")
@@ -45,11 +45,15 @@ async def api_timetable_profile_set(request: Request):
         grade = int(grade)
         if not (1 <= grade <= 6):
             raise HTTPException(status_code=400, detail="grade must be between 1 and 6")
+    department = data.get("department") or None
+    if department is not None and department not in FACULTY_DEPARTMENTS.get(faculty, []):
+        raise HTTPException(status_code=400, detail="department does not match faculty")
     async with AsyncSessionLocal() as session:
         p = await session.get(UserProfile, user_id)
         if p:
             p.faculty = faculty
             p.grade = grade
+            p.department = department
             await session.commit()
     return {"ok": True}
 
