@@ -39,8 +39,19 @@ def load_env(env: str):
             k, v = line.split("=", 1)
             os.environ.setdefault(k.strip(), v.strip())
 
+_FULLWIDTH_ALNUM = str.maketrans({
+    chr(c): chr(c - 0xFEE0)
+    for c in list(range(0xFF10, 0xFF1A)) + list(range(0xFF21, 0xFF3B)) + list(range(0xFF41, 0xFF5B))
+})
+
+def normalize_alnum(name: str) -> str:
+    """全角英数字（Ａ-Ｚ, a-z, ０-９）のみ半角化する。括弧等の全角記号はそのまま残す。"""
+    return name.translate(_FULLWIDTH_ALNUM)
+
 def clean_name(name: str) -> str:
-    return re.sub(r'\((?:副|主)：[^)]+\)', '', name).strip()
+    name = re.sub(r'\((?:副|主)：[^)]+\)', '', name)
+    name = re.sub(r'【[^】]*】', '', name)
+    return name.strip()
 
 def parse_slots(slot_str: str) -> list[tuple[str, int]]:
     slot_str = slot_str.strip()
@@ -79,7 +90,7 @@ def parse_file(filepath: str) -> list[dict]:
         year = int(year_str)
         term = parts[2].strip()
         department = parts[3].strip()
-        name = clean_name(parts[4].strip())
+        name = normalize_alnum(clean_name(parts[4].strip()))
         instructor = parts[5].strip()
         slot_str = parts[6].strip()
         timetable_code = parts[7].strip()
@@ -99,7 +110,8 @@ def parse_file(filepath: str) -> list[dict]:
 
 
 async def import_courses(courses: list[dict], also_courses: bool = False,
-                         classification: str = "", faculty: str = ""):
+                         classification: str = "", faculty: str = "",
+                         auto_create: bool = True):
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
     from models import Subject, Instructor, CourseSection, Syllabus, Schedule
@@ -108,6 +120,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
 
     tt_added = 0
     tt_skipped = 0
+    tt_unmatched = 0
     c_added = 0
 
     async with AsyncSessionLocal() as session:
@@ -136,6 +149,9 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     c_added += 1
                 elif not is_tt:
                     continue
+                elif not auto_create:
+                    tt_unmatched += 1
+                    continue
                 else:
                     # 時間割用だが科目が未登録 → subject を仮登録
                     subj = Subject(
@@ -158,6 +174,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             )).scalar_one_or_none()
             if existing_syl:
                 tt_skipped += 1
+                print(f"  [重複スキップ:コード既存] {c['name']} / {c['instructor']} / {c['term']} / コード:{c['timetable_code']}")
                 continue
 
             # Instructor を find-or-create
@@ -169,7 +186,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 session.add(instr)
                 await session.flush()
 
-            # CourseSection を find-or-create
+            # CourseSection を find-or-create（既存の場合、syllabus_url が未設定なら補完する）
             cs = (await session.execute(
                 select(CourseSection).where(
                     CourseSection.subject_id == subj.id,
@@ -184,6 +201,22 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 )
                 session.add(cs)
                 await session.flush()
+            elif not cs.syllabus_url:
+                cs.syllabus_url = make_syllabus_url(c["timetable_code"])
+
+            # 同一セクション×同一クォーターは1件のみ保持可能（DB制約）。
+            # 同じ科目×同じ教員が同クォーターに複数コマ持つ場合は先勝ちでスキップする
+            existing_term_syl = (await session.execute(
+                select(Syllabus).where(
+                    Syllabus.course_section_id == cs.id,
+                    Syllabus.year == c["year"],
+                    Syllabus.academic_term == c["term"],
+                )
+            )).scalar_one_or_none()
+            if existing_term_syl is not None:
+                tt_skipped += 1
+                print(f"  [重複スキップ:同一セクション] {c['name']} / {c['instructor']} / {c['term']} / 既存コード:{existing_term_syl.timetable_code} 今回:{c['timetable_code']}")
+                continue
 
             syl = Syllabus(
                 course_section_id=cs.id,
@@ -206,6 +239,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
         await session.commit()
 
     print(f"時間割DB: {tt_added}件追加, {tt_skipped}件スキップ（重複）")
+    if not auto_create and tt_unmatched:
+        print(f"科目DBに未登録のためスキップ: {tt_unmatched}件")
     if also_courses:
         print(f"科目DB:  {c_added}件追加")
 
@@ -222,6 +257,8 @@ def main():
                         help="subjects テーブルの分類名（例：共通専門科目）")
     parser.add_argument("--faculty", default="",
                         help="subjects テーブルの学部名（例：経営学部）")
+    parser.add_argument("--no-auto-create", action="store_true",
+                        help="科目名がsubjectsに未登録の場合、仮登録せずスキップする")
     args = parser.parse_args()
 
     load_env(args.env)
@@ -248,6 +285,7 @@ def main():
         also_courses=args.also_courses,
         classification=args.classification,
         faculty=args.faculty,
+        auto_create=not args.no_auto_create,
     ))
 
 if __name__ == "__main__":
