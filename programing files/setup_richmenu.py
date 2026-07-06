@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--env", choices=["dev", "prod"], required=True,
                     help="dev=.env.dev, prod=.env")
 parser.add_argument("image", nargs="?", default=None,
-                    help="カスタム画像パス (省略時: ../picture/6.24リッチメニュー.png)")
+                    help="カスタム画像パス (省略時: ../docs/picture/6.24リッチメニュー.png)")
 args = parser.parse_args()
 
 # ── 環境変数読み込み ─────────────────────────────────────────────────────────
@@ -99,12 +99,12 @@ AREAS = [
     {
         "label": "教養",
         "x": COL2_X, "y": ROW2_Y, "w": COL3_X - COL2_X, "h": ROW3_Y - ROW2_Y,
-        "action": MessageAction(label="教養科目一覧", text="教養"),
+        "action": PostbackAction(label="教養科目一覧", data="教養"),
     },
     {
         "label": "専門",
         "x": COL3_X, "y": ROW2_Y, "w": SIDE_X - COL3_X, "h": ROW3_Y - ROW2_Y,
-        "action": MessageAction(label="専門科目一覧", text="専門"),
+        "action": PostbackAction(label="専門科目一覧", data="専門"),
     },
     # ── Row 3 ────────────────────────────────────────────────────
     {
@@ -115,7 +115,7 @@ AREAS = [
     {
         "label": "バイト",
         "x": COL3B_X, "y": ROW3_Y, "w": SIDE_X - COL3B_X, "h": H - ROW3_Y,
-        "action": MessageAction(label="バイト", text="バイト"),
+        "action": PostbackAction(label="バイト", data="バイト"),
     },
     # ── 右サイドバー (4 段) ───────────────────────────────────────
     {
@@ -159,7 +159,7 @@ def load_custom_image(path: str) -> bytes:
 
 
 def main():
-    image_path = args.image or "../picture/6.24リッチメニュー.png"
+    image_path = args.image or "../docs/picture/6.24リッチメニュー.png"
 
     config = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
