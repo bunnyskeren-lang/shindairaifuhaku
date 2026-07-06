@@ -13,6 +13,13 @@ import re
 import sys
 from pathlib import Path
 
+_LOG_PATH = Path(__file__).parent / "import_debug.log"
+
+def _log(msg: str) -> None:
+    print(msg)
+    with open(_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(msg + "\n")
+
 SYLLABUS_BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.html"
 FACULTY_PATH: dict[str, str] = {
     "U": "20",
@@ -47,6 +54,9 @@ _FULLWIDTH_ALNUM = str.maketrans({
 def normalize_alnum(name: str) -> str:
     """全角英数字（Ａ-Ｚ, a-z, ０-９）のみ半角化する。括弧等の全角記号はそのまま残す。"""
     return name.translate(_FULLWIDTH_ALNUM)
+
+_PAREN_F2H = str.maketrans("（）", "()")
+_PAREN_H2F = str.maketrans("()", "（）")
 
 def clean_name(name: str) -> str:
     name = re.sub(r'\((?:副|主)：[^)]+\)', '', name)
@@ -133,6 +143,18 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             )).scalar_one_or_none()
 
             if subj is None:
+                # 括弧の全角/半角表記ゆれを吸収して再検索（表示名は変更しない）
+                for alt_name in {
+                    c["name"].translate(_PAREN_F2H),
+                    c["name"].translate(_PAREN_H2F),
+                } - {c["name"]}:
+                    subj = (await session.execute(
+                        select(Subject).where(Subject.name == alt_name)
+                    )).scalar_one_or_none()
+                    if subj is not None:
+                        break
+
+            if subj is None:
                 if also_courses:
                     dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
                     subj = Subject(
@@ -167,16 +189,6 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             if not is_tt:
                 continue
 
-            # ── syllabi / schedules ──
-            # timetable_code 重複チェック
-            existing_syl = (await session.execute(
-                select(Syllabus).where(Syllabus.timetable_code == c["timetable_code"])
-            )).scalar_one_or_none()
-            if existing_syl:
-                tt_skipped += 1
-                print(f"  [重複スキップ:コード既存] {c['name']} / {c['instructor']} / {c['term']} / コード:{c['timetable_code']}")
-                continue
-
             # Instructor を find-or-create
             instr = (await session.execute(
                 select(Instructor).where(Instructor.name == c["instructor"])
@@ -187,6 +199,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 await session.flush()
 
             # CourseSection を find-or-create（既存の場合、syllabus_url が未設定なら補完する）
+            # ※ syllabus 重複チェックより先に行う。既にSyllabusが登録済みでも
+            #   URLだけ未設定というケース（レビュー投稿由来のセクション等）を補完するため。
             cs = (await session.execute(
                 select(CourseSection).where(
                     CourseSection.subject_id == subj.id,
@@ -204,6 +218,16 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             elif not cs.syllabus_url:
                 cs.syllabus_url = make_syllabus_url(c["timetable_code"])
 
+            # ── syllabi / schedules ──
+            # timetable_code 重複チェック
+            existing_syl = (await session.execute(
+                select(Syllabus).where(Syllabus.timetable_code == c["timetable_code"])
+            )).scalar_one_or_none()
+            if existing_syl:
+                tt_skipped += 1
+                _log(f"  [重複スキップ:コード既存] {c['name']} / {c['instructor']} / {c['term']} / コード:{c['timetable_code']}")
+                continue
+
             # 同一セクション×同一クォーターは1件のみ保持可能（DB制約）。
             # 同じ科目×同じ教員が同クォーターに複数コマ持つ場合は先勝ちでスキップする
             existing_term_syl = (await session.execute(
@@ -215,7 +239,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             )).scalar_one_or_none()
             if existing_term_syl is not None:
                 tt_skipped += 1
-                print(f"  [重複スキップ:同一セクション] {c['name']} / {c['instructor']} / {c['term']} / 既存コード:{existing_term_syl.timetable_code} 今回:{c['timetable_code']}")
+                _log(f"  [重複スキップ:同一セクション] {c['name']} / {c['instructor']} / {c['term']} / 既存コード:{existing_term_syl.timetable_code} 今回:{c['timetable_code']}")
                 continue
 
             syl = Syllabus(
@@ -238,9 +262,9 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
 
         await session.commit()
 
-    print(f"時間割DB: {tt_added}件追加, {tt_skipped}件スキップ（重複）")
+    _log(f"時間割DB: {tt_added}件追加, {tt_skipped}件スキップ（重複）")
     if not auto_create and tt_unmatched:
-        print(f"科目DBに未登録のためスキップ: {tt_unmatched}件")
+        _log(f"科目DBに未登録のためスキップ: {tt_unmatched}件")
     if also_courses:
         print(f"科目DB:  {c_added}件追加")
 
