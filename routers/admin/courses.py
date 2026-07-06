@@ -75,6 +75,14 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 .order_by(Review.is_approved, Review.created_at.desc())
             )).all()
 
+        all_instructors = [] if q or category else (await session.execute(
+            select(Instructor).order_by(Instructor.sort_order, Instructor.name)
+        )).scalars().all()
+
+        all_faculties = [] if q or category else (await session.execute(
+            select(DisplayOrder).where(DisplayOrder.kind == "faculty").order_by(DisplayOrder.sort_order)
+        )).scalars().all()
+
     existing = sorted([c for c in classifications if c], key=_cls_sort)
     courses_data = (
         json.dumps({
@@ -96,7 +104,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
     )
 
     instructors_by_course: dict = defaultdict(list)
-    for cs, inst in sorted(cs_instr_rows, key=lambda x: x[1].name):
+    for cs, inst in sorted(cs_instr_rows, key=lambda x: (x[1].sort_order, x[1].name)):
         instructors_by_course[cs.subject_id].append(
             SimpleNamespace(id=inst.id, name=inst.name, url=cs.syllabus_url or "")
         )
@@ -156,6 +164,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "courses_data": courses_data,
         "reviews_by_course": reviews_by_course,
         "instructors_by_course": instructors_by_course,
+        "all_instructors": all_instructors,
+        "all_faculties": all_faculties,
         "error": msg,
         "total": total,
         "q": q,
@@ -227,6 +237,68 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
     if is_ajax:
         return JSONResponse({"ok": True})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
+
+
+@router.post("/admin/courses/instructor/move")
+async def admin_instructor_move(request: Request, _=Depends(check_admin)):
+    data = await request.json()
+    instructor_id = data.get("id")
+    direction = data.get("direction", "")
+    if not instructor_id or direction not in ("up", "down"):
+        return JSONResponse({"ok": False})
+
+    async with AsyncSessionLocal() as session:
+        all_instr = list((await session.execute(
+            select(Instructor).order_by(Instructor.sort_order, Instructor.name)
+        )).scalars().all())
+
+        try:
+            idx = next(i for i, inst in enumerate(all_instr) if inst.id == instructor_id)
+        except StopIteration:
+            return JSONResponse({"ok": False})
+
+        delta = -1 if direction == "up" else 1
+        swap_idx = idx + delta
+        if swap_idx < 0 or swap_idx >= len(all_instr):
+            return JSONResponse({"ok": True})
+
+        all_instr[idx], all_instr[swap_idx] = all_instr[swap_idx], all_instr[idx]
+        for i, inst in enumerate(all_instr):
+            inst.sort_order = i
+        await session.commit()
+    cache.invalidate_courses_cache()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/admin/courses/faculty/move")
+async def admin_faculty_move(request: Request, _=Depends(check_admin)):
+    data = await request.json()
+    faculty_id = data.get("id")
+    direction = data.get("direction", "")
+    if not faculty_id or direction not in ("up", "down"):
+        return JSONResponse({"ok": False})
+
+    async with AsyncSessionLocal() as session:
+        all_fac = list((await session.execute(
+            select(DisplayOrder).where(DisplayOrder.kind == "faculty").order_by(DisplayOrder.sort_order)
+        )).scalars().all())
+
+        try:
+            idx = next(i for i, f in enumerate(all_fac) if f.id == faculty_id)
+        except StopIteration:
+            return JSONResponse({"ok": False})
+
+        delta = -1 if direction == "up" else 1
+        swap_idx = idx + delta
+        if swap_idx < 0 or swap_idx >= len(all_fac):
+            return JSONResponse({"ok": True})
+
+        all_fac[idx], all_fac[swap_idx] = all_fac[swap_idx], all_fac[idx]
+        for i, f in enumerate(all_fac):
+            f.sort_order = i
+        await session.commit()
+    cache.invalidate_faculty_order_cache()
+    return JSONResponse({"ok": True})
 
 
 @router.post("/admin/courses/migrate-third-language")

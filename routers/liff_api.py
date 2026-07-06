@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, STUDENT_ID_RE, LINE_USER_ID_RE,
@@ -64,7 +65,7 @@ async def search_courses(q: str = ""):
                 select(CourseSection, Instructor)
                 .join(Instructor, Instructor.id == CourseSection.instructor_id)
                 .where(CourseSection.subject_id.in_(course_ids))
-                .order_by(Instructor.name)
+                .order_by(Instructor.sort_order, Instructor.name)
             )).all()
         insts_by_course: dict = {}
         for cs, inst in cs_rows:
@@ -82,7 +83,7 @@ async def api_preload():
         cs_rows = (await session.execute(
             select(CourseSection, Instructor)
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
-            .order_by(Instructor.name)
+            .order_by(Instructor.sort_order, Instructor.name)
         )).all()
     insts_by_course: dict = {}
     inst_courses: dict = {}
@@ -103,6 +104,13 @@ async def api_preload():
         for name, clist in sorted(inst_courses.items())
     ]
     res = JSONResponse({"courses": course_list, "instructors": instructor_list})
+    res.headers["Cache-Control"] = "public, max-age=300"
+    return res
+
+
+@router.get("/api/faculties")
+async def api_faculties():
+    res = JSONResponse({"faculties": await cache.get_faculty_order(), "departments": FACULTY_DEPARTMENTS})
     res.headers["Cache-Control"] = "public, max-age=300"
     return res
 

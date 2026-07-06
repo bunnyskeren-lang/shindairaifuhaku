@@ -50,6 +50,55 @@ async def get_cls_parent_map() -> dict[str, str]:
     return _cls_parent_map_cache
 
 
+_faculty_order_cache: list = []
+_faculty_order_at: float = 0.0
+
+
+async def get_faculty_order() -> list[str]:
+    global _faculty_order_cache, _faculty_order_at
+    if _faculty_order_cache and time.monotonic() - _faculty_order_at < _CLS_CACHE_TTL:
+        return _faculty_order_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(DisplayOrder.name).where(DisplayOrder.kind == "faculty").order_by(DisplayOrder.sort_order)
+        )).scalars().all()
+    _faculty_order_cache = list(rows)
+    _faculty_order_at = time.monotonic()
+    return _faculty_order_cache
+
+
+def invalidate_faculty_order_cache():
+    global _faculty_order_cache, _faculty_order_at
+    _faculty_order_cache = []
+    _faculty_order_at = 0.0
+
+
+CREDIT_GROUP_ORDER_FALLBACK = 999999
+
+_credit_group_order_cache: dict = {}
+_credit_group_order_at: float = 0.0
+
+
+async def get_credit_group_order() -> dict[tuple[str, str], int]:
+    """(faculty, group_name) -> sort_order。存在しない組み合わせは呼び出し側で _CREDIT_GROUP_ORDER_FALLBACK を使うこと。"""
+    global _credit_group_order_cache, _credit_group_order_at
+    if _credit_group_order_cache and time.monotonic() - _credit_group_order_at < _CLS_CACHE_TTL:
+        return _credit_group_order_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(DisplayOrder).where(DisplayOrder.kind == "credit_requirement_group")
+        )).scalars().all()
+    _credit_group_order_cache = {(r.faculty, r.name): r.sort_order for r in rows}
+    _credit_group_order_at = time.monotonic()
+    return _credit_group_order_cache
+
+
+def invalidate_credit_group_order_cache():
+    global _credit_group_order_cache, _credit_group_order_at
+    _credit_group_order_cache = {}
+    _credit_group_order_at = 0.0
+
+
 async def get_cls_set() -> set[str]:
     global _cls_cache, _cls_cache_at
     if _cls_cache and time.monotonic() - _cls_cache_at < _CLS_CACHE_TTL:
@@ -136,6 +185,7 @@ async def get_all_instructors_cached() -> dict[int, list]:
         rows = (await s.execute(
             select(CourseSection, Instructor)
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .order_by(Instructor.sort_order, Instructor.name)
         )).all()
     d: dict[int, list] = {}
     for cs, instr in rows:
@@ -279,6 +329,8 @@ async def warm_query_caches() -> None:
         get_cls_order_map(),
         get_cls_parent_map(),
         get_cls_set(),
+        get_faculty_order(),
+        get_credit_group_order(),
         get_courses_cached(),
         get_reviewed_cached(),
         get_all_instructors_cached(),

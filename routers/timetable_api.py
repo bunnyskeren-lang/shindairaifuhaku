@@ -55,7 +55,7 @@ async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
             .join(Subject, Subject.id == CourseSection.subject_id)
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
             .where(Schedule.day_of_week == day, Schedule.period == period)
-            .order_by(Syllabus.quarter, Subject.name)
+            .order_by(Syllabus.academic_term, Subject.name)
         )).all()
 
         if not rows:
@@ -78,7 +78,7 @@ async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
                     "id": syl.id,
                     "name": subj.name,
                     "instructor": instr.name,
-                    "term": syl.quarter,
+                    "term": syl.academic_term,
                     "timetable_code": syl.timetable_code or "",
                     "department": syl.department or "",
                     "target_grades": syl.target_grades or "",
@@ -124,8 +124,8 @@ async def api_timetable_my(user_id: str = Query("")):
                     "id": syl.id,
                     "name": subj.name,
                     "instructor": instr.name,
-                    "term": syl.quarter,
-                    "credits": _credits_from_term(syl.quarter),
+                    "term": syl.academic_term,
+                    "credits": _credits_from_term(syl.academic_term),
                     "slots": [],
                 }
             result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})

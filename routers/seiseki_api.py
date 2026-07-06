@@ -1,6 +1,7 @@
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy import select
 
+from core import cache
 from core.config import LINE_USER_ID_RE
 from core.seiseki import PDFPLUMBER_OK, classify_seiseki_raw, parse_seiseki_pdf
 from database import AsyncSessionLocal
@@ -81,6 +82,11 @@ async def api_credit_requirements(faculty: str = Query("経営学部")):
             .where(CreditRequirement.faculty == faculty)
             .order_by(CreditRequirement.sort_order)
         )).scalars().all()
+        group_order = await cache.get_credit_group_order()
+        rows = sorted(
+            rows,
+            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
+        )
         cc_rows = (await session.execute(
             select(SubjectCreditCategory.category_id, Subject.name)
             .join(Subject, Subject.id == SubjectCreditCategory.subject_id)

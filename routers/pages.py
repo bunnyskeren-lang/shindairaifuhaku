@@ -4,9 +4,10 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 
+from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, FACULTIES, FACULTY_DEPARTMENTS, IS_DEV, KYOYO_REQUIRED_CREDITS,
+    APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOYO_REQUIRED_CREDITS,
     LIFF_ID, REVIEW_FORM_URL, TIMETABLE_LIFF_ID,
 )
 from core.templates import templates
@@ -63,7 +64,7 @@ async def register_page(request: Request, uid: str = Query(default="")):
             "stored_faculty": profile.faculty if profile else "",
             "stored_grade": profile.grade if profile else "",
             "stored_department": profile.department if profile else "",
-            "faculties": FACULTIES,
+            "faculties": await cache.get_faculty_order(),
             "faculty_departments_json": json.dumps(FACULTY_DEPARTMENTS, ensure_ascii=False),
             "IS_DEV": IS_DEV,
         },

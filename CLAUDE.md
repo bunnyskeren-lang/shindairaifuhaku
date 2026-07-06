@@ -4,6 +4,8 @@
 
 **迷ったらコードを広範囲に読む前にユーザーに確認を取ること。**
 
+**作業がひと区切りついたら、ユーザーに指摘される前に自動でメモリ（永続記憶システム）を更新すること。** 新しい機能・仕様決定・DBスキーマ変更・ユーザーの指示や好みなど、次回以降のセッションに引き継ぐべき情報は都度メモリファイルに保存し、MEMORY.mdの索引も更新する。
+
 ---
 
 # デプロイルール
@@ -22,7 +24,8 @@
 
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
 - dev環境（shindairaifuhaku-1.onrender.com）のみ自由に操作してよい
-- `git push` の push先が `origin main` または `origin shindairaifuhaku` の場合は必ず確認を取ること
+- `git push origin dev:shindairaifuhaku-dev`（dev環境へのデプロイ）は、ユーザーの許可なく実行してよい
+- `git push` の push先が `origin main` または `origin shindairaifuhaku`（本番相当ブランチ）の場合は必ず確認を取ること
 
 ## ブランチとRenderサービスの対応
 
@@ -178,7 +181,8 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 | `syllabi` | 時間割マスタ（course_section_id, timetable_code, term, target_grades, subject_category） |
 | `schedules` | 曜日・時限（syllabus_id, day_of_week, period） |
 | `user_syllabi` | ユーザーの登録科目（line_user_id, syllabus_id） |
-| `timetable_profiles` | ユーザーの学部・学年プロフィール |
+
+ユーザーの学部・学年・学科プロフィールは `user_profiles`（faculty/grade/department列）で管理する（旧`timetable_profiles`は2026-07-06に統合・廃止）。
 
 インポートスクリプト: `programing files/import_syllabus.py`
 - `--also-courses` を付けると `subjects`/`instructors`/`course_sections`（LINE bot用）にも登録
@@ -232,20 +236,20 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 ├── routers/                 ← FastAPI APIRouter（URLプレフィックス単位）
 │   ├── webhook.py             ← POST /callback（LINE Webhook）
 │   ├── health.py               ← /health
-│   ├── pages.py                  ← /, /privacy, /sw.js, /liff/course, /liff/timetable
+│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /privacy, /sw.js, /liff/course, /liff/timetable
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
-│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /submit, /api/course/{id}
+│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /api/faculties, /submit, /api/course/{id}
 │   ├── timetable_api.py             ← /api/timetable/*
 │   ├── seiseki_api.py                ← /api/parse_seiseki 等（成績PDF解析）
 │   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
 │       ├── auth.py                     ← /admin/login, /admin/logout
 │       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe
-│       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、最大ブロック）
+│       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、教員/学部/分類の並び替え）
 │       ├── reviews.py                     ← /admin/reviews*
 │       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/activity
 │       ├── stats.py                         ← /admin/richmenu-stats, /admin/usage-stats
 │       ├── timetable_check.py                ← /admin/timetable/check
-│       └── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*
+│       └── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*, /admin/credit_requirements/group/move（グループ並び替え）
 ├── templates/
 │   ├── admin/              ← courses / reviews / keiei / sysinfo / logs / users / errors /
 │   │                          activity / usage_stats / richmenu / timetable_check / login / base 等
@@ -292,11 +296,10 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 
 | テーブル | 用途 |
 |----------|------|
-| `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。現状`kind='classification'`で分類の表示順・親グループを管理） |
+| `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順、`credit_requirement_group`=単位要件グループの表示順（`faculty`列で経営学部/システム情報学部を区別）） |
 | `credit_requirements` | 単位要件定義（学部別、category_id, required_credits, label） |
-| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号） |
+| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み） |
 | `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |
-| `timetable_profiles` | ユーザーの学部・学年設定 |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
 | `error_logs` | サーバーエラーログ |

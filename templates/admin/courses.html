@@ -115,6 +115,46 @@
   </table>
 </div>
 
+{% if all_instructors %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">教員一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可。検索・カテゴリ絞り込み時は非表示）</span></h2>
+  <table style="margin-top:0">
+    <tr><th>順番</th><th>教員名</th></tr>
+    {% for inst in all_instructors %}
+    <tr>
+      <td style="white-space:nowrap;width:64px">
+        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
+                onclick="moveInstructor({{ inst.id }},'up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↑</button>
+        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
+                onclick="moveInstructor({{ inst.id }},'down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↓</button>
+      </td>
+      <td>{{ inst.name }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if all_faculties %}
+<div class="card" style="margin-top:16px">
+  <h2 style="margin-top:0">学部一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可。会員登録フォーム・マイ時間割の学部選択の表示順に反映）</span></h2>
+  <table style="margin-top:0">
+    <tr><th>順番</th><th>学部名</th></tr>
+    {% for fac in all_faculties %}
+    <tr>
+      <td style="white-space:nowrap;width:64px">
+        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
+                onclick="moveFaculty({{ fac.id }},'up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↑</button>
+        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
+                onclick="moveFaculty({{ fac.id }},'down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↓</button>
+      </td>
+      <td>{{ fac.name }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
 <!-- タブ -->
 <div style="display:flex;gap:4px;margin:16px 0 0">
   <a href="/admin/courses{% if q %}?q={{ q }}{% endif %}"
@@ -606,6 +646,26 @@ function moveCls(name, dir) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name, direction: dir })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.ok) location.reload();
+  }).catch(function() {});
+}
+
+function moveInstructor(id, dir) {
+  fetch('/admin/courses/instructor/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id, direction: dir })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.ok) location.reload();
+  }).catch(function() {});
+}
+
+function moveFaculty(id, dir) {
+  fetch('/admin/courses/faculty/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id, direction: dir })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
   }).catch(function() {});

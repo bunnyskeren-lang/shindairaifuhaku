@@ -188,7 +188,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             syl = Syllabus(
                 course_section_id=cs.id,
                 year=c["year"],
-                quarter=c["term"],
+                academic_term=c["term"],
                 timetable_code=c["timetable_code"],
                 department=c["department"],
             )

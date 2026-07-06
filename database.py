@@ -60,6 +60,18 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE instructors ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
         ))
+        # display_orders(kind='faculty') の初期シード（未登録の場合のみ）
+        # core/config.py の FACULTIES と同じ11学部（database.py は core.config に依存させない）
+        _default_faculties = [
+            "文学部", "国際人間科学部", "法学部", "経済学部", "経営学部",
+            "システム情報学部", "理学部", "医学部", "工学部", "農学部", "海事科学部",
+        ]
+        for i, faculty_name in enumerate(_default_faculties):
+            await conn.execute(text(
+                "INSERT INTO display_orders (kind, name, faculty, sort_order) "
+                "VALUES ('faculty', :name, '', :sort) "
+                "ON CONFLICT (kind, name, faculty) DO NOTHING"
+            ), {"name": faculty_name, "sort": i})
         await conn.execute(text(
             "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS note TEXT"
         ))
@@ -98,6 +110,15 @@ async def init_db():
         await conn.execute(text(
             "UPDATE credit_requirements SET required_credits = 12 "
             "WHERE category_id = 'sonota' AND required_credits = 0"
+        ))
+        # display_orders(kind='credit_requirement_group') の初期シード
+        # 各(faculty, group_name)の現行sort_order最小値を引き継ぐ（未登録の場合のみ）
+        await conn.execute(text(
+            "INSERT INTO display_orders (kind, name, faculty, sort_order) "
+            "SELECT 'credit_requirement_group', group_name, faculty, MIN(sort_order) "
+            "FROM credit_requirements WHERE group_name != '' "
+            "GROUP BY faculty, group_name "
+            "ON CONFLICT (kind, name, faculty) DO NOTHING"
         ))
         # インデックス追加
         await conn.execute(text(
@@ -189,6 +210,23 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS reading TEXT"
         ))
+        # syllabi.quarter → academic_term へのカラム名変更（「いつ開講か」のニュアンスを明確化）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'syllabi' AND column_name = 'quarter'
+              ) THEN
+                ALTER TABLE syllabi RENAME COLUMN quarter TO academic_term;
+              END IF;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE syllabi RENAME CONSTRAINT uq_syllabi_section_year_quarter TO uq_syllabi_section_year_term;
+            EXCEPTION WHEN undefined_object THEN NULL;
+            END $$
+        """))
         # 既存科目のうち reading 未設定のものをバックフィル
         result = await conn.execute(text("SELECT id, name FROM subjects WHERE reading IS NULL"))
         rows = result.fetchall()

@@ -453,17 +453,6 @@ tbody td:first-child {
       <div class="profile-label">学部</div>
       <select class="profile-select" id="profile-faculty-sel">
         <option value="">選択してください</option>
-        <option value="文学部">文学部</option>
-        <option value="国際人間科学部">国際人間科学部</option>
-        <option value="法学部">法学部</option>
-        <option value="経済学部">経済学部</option>
-        <option value="経営学部">経営学部</option>
-        <option value="システム情報学部">システム情報学部</option>
-        <option value="理学部">理学部</option>
-        <option value="医学部">医学部</option>
-        <option value="工学部">工学部</option>
-        <option value="農学部">農学部</option>
-        <option value="海事科学部">海事科学部</option>
       </select>
     </div>
     <div class="profile-field">
@@ -564,6 +553,22 @@ function updateProfileChip() {
   }
 }
 
+async function loadFacultyOptions() {
+  const sel = document.getElementById('profile-faculty-sel');
+  if (sel.dataset.loaded) return;
+  try {
+    const res = await fetch(`${BASE_URL}/api/faculties`);
+    const data = await res.json();
+    (data.faculties || []).forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f;
+      opt.textContent = f;
+      sel.appendChild(opt);
+    });
+    sel.dataset.loaded = '1';
+  } catch (e) {}
+}
+
 function openProfileModal() {
   const p = window._userProfile || {};
   document.getElementById('profile-faculty-sel').value = p.faculty || '';
@@ -605,6 +610,7 @@ async function init() {
   document.querySelectorAll(".q-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.q === currentQuarter);
   });
+  loadFacultyOptions();
   try {
     {% if IS_DEV %}
     const devUid = new URLSearchParams(location.search).get("dev_uid");

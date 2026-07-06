@@ -35,13 +35,6 @@ class UserProfile(Base):
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class TimetableProfile(Base):
-    __tablename__ = "timetable_profiles"
-    line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    faculty: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-
-
 class CreditRequirement(Base):
     __tablename__ = "credit_requirements"
     category_id: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -94,11 +87,11 @@ class CourseSection(Base):
 
 class Syllabus(Base):
     __tablename__ = "syllabi"
-    __table_args__ = (UniqueConstraint("course_section_id", "year", "quarter", name="uq_syllabi_section_year_quarter"),)
+    __table_args__ = (UniqueConstraint("course_section_id", "year", "academic_term", name="uq_syllabi_section_year_term"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
-    quarter: Mapped[str] = mapped_column(Text, nullable=False)
+    academic_term: Mapped[str] = mapped_column(Text, nullable=False)
     timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     target_grades: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     subject_category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

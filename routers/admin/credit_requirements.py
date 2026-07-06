@@ -11,7 +11,7 @@ from core.security import check_admin
 from core.seiseki import SENMON_GROUPS, classify_senmon
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CreditRequirement, Subject, SubjectCreditCategory
+from models import CreditRequirement, DisplayOrder, Subject, SubjectCreditCategory
 
 router = APIRouter()
 
@@ -29,6 +29,11 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
         reqs = (await session.execute(
             select(CreditRequirement).order_by(CreditRequirement.sort_order)
         )).scalars().all()
+        group_order = await cache.get_credit_group_order()
+        reqs = sorted(
+            reqs,
+            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
+        )
         kyotsu_candidates = (await session.execute(
             select(Subject.name, Subject.credits)
             .where(Subject.classification.like("%共通専門基礎%"))
@@ -42,6 +47,7 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
     for cat_id, course_name in approved_rows:
         approved_by_cat.setdefault(cat_id, set()).add(course_name)
     auto_groups = {c.id: classify_senmon(c.name) for c in courses}
+    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     return templates.TemplateResponse("admin/keiei.html", {
         "request": request,
         "courses": courses,
@@ -50,6 +56,8 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
         "auto_groups": auto_groups,
         "kyotsu_candidates": kyotsu_candidates,
         "approved_by_cat": approved_by_cat,
+        "group_names": group_names,
+        "group_faculty": "経営学部",
     })
 
 
@@ -166,6 +174,56 @@ async def admin_keiei_delete_requirement(cat_id: str, request: Request, _: str =
     return RedirectResponse("/admin/keiei", status_code=303)
 
 
+@router.post("/admin/credit_requirements/group/move")
+async def admin_credit_group_move(request: Request, _: str = Depends(check_admin)):
+    data = await request.json()
+    faculty = data.get("faculty", "")
+    group_name = data.get("group_name", "")
+    direction = data.get("direction", "")
+    if not faculty or not group_name or direction not in ("up", "down"):
+        return JSONResponse({"ok": False})
+
+    async with AsyncSessionLocal() as session:
+        distinct_groups = (await session.execute(
+            select(CreditRequirement.group_name)
+            .where(CreditRequirement.faculty == faculty, CreditRequirement.group_name != "")
+            .distinct()
+        )).scalars().all()
+        group_order = await cache.get_credit_group_order()
+        sorted_groups = sorted(
+            distinct_groups,
+            key=lambda g: group_order.get((faculty, g), cache.CREDIT_GROUP_ORDER_FALLBACK),
+        )
+
+        try:
+            idx = sorted_groups.index(group_name)
+        except ValueError:
+            return JSONResponse({"ok": False})
+
+        delta = -1 if direction == "up" else 1
+        swap_idx = idx + delta
+        if swap_idx < 0 or swap_idx >= len(sorted_groups):
+            return JSONResponse({"ok": True})
+
+        sorted_groups[idx], sorted_groups[swap_idx] = sorted_groups[swap_idx], sorted_groups[idx]
+
+        for i, g in enumerate(sorted_groups):
+            existing = (await session.execute(
+                select(DisplayOrder).where(
+                    DisplayOrder.kind == "credit_requirement_group",
+                    DisplayOrder.name == g,
+                    DisplayOrder.faculty == faculty,
+                )
+            )).scalar_one_or_none()
+            if existing:
+                existing.sort_order = i
+            else:
+                session.add(DisplayOrder(kind="credit_requirement_group", name=g, faculty=faculty, sort_order=i))
+        await session.commit()
+    cache.invalidate_credit_group_order_cache()
+    return JSONResponse({"ok": True})
+
+
 # ── システム情報学部 管理ページ ────────────────────────────────────────────────
 
 @router.get("/admin/sysinfo", response_class=HTMLResponse)
@@ -176,15 +234,23 @@ async def admin_sysinfo(request: Request, _: str = Depends(check_admin)):
             .where(CreditRequirement.faculty == "システム情報学部")
             .order_by(CreditRequirement.sort_order)
         )).scalars().all()
+        group_order = await cache.get_credit_group_order()
+        reqs = sorted(
+            reqs,
+            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
+        )
         courses = (await session.execute(
             select(Subject)
             .where(Subject.faculty.like("%システム情報学部%"))
             .order_by(Subject.name)
         )).scalars().all()
+    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     return templates.TemplateResponse("admin/sysinfo.html", {
         "request": request,
         "reqs": reqs,
         "courses": courses,
+        "group_names": group_names,
+        "group_faculty": "システム情報学部",
     })
 
 
