@@ -24,7 +24,8 @@ parser.add_argument("--env", choices=["dev", "prod"], required=True,
 args = parser.parse_args()
 
 from dotenv import load_dotenv
-env_file = ".env.dev" if args.env == "dev" else ".env"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_file = os.path.join(script_dir, ".env.dev" if args.env == "dev" else ".env")
 load_dotenv(env_file, override=True)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
