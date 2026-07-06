@@ -34,16 +34,31 @@ class Base(DeclarativeBase):
 async def init_db():
     from models import (  # noqa: F401
         MessageLog, UserProfile, UserActivity, ErrorLog,
-        PushSubscription, ClassificationOrder, RichMenuTap,
-        TimetableProfile, CreditRequirement, UserSeisekiRaw,
+        PushSubscription, DisplayOrder, RichMenuTap,
+        CreditRequirement, UserSeisekiRaw,
         Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
         CourseSectionView, UserSyllabus, SubjectCreditCategory,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # classification_orders → display_orders(kind='classification') への移行
+        # classification_ordersテーブルがまだ存在する場合のみ実行（移行後は削除済みで存在しない）
+        table_exists = (await conn.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'classification_orders')"
+        ))).scalar()
+        if table_exists:
+            await conn.execute(text(
+                "ALTER TABLE classification_orders ADD COLUMN IF NOT EXISTS parent_group VARCHAR(100)"
+            ))
+            await conn.execute(text(
+                "INSERT INTO display_orders (kind, name, faculty, sort_order, parent_group) "
+                "SELECT 'classification', name, faculty, sort_order, parent_group FROM classification_orders "
+                "ON CONFLICT (kind, name, faculty) DO NOTHING"
+            ))
+            await conn.execute(text("DROP TABLE classification_orders"))
         await conn.execute(text(
-            "ALTER TABLE classification_orders ADD COLUMN IF NOT EXISTS parent_group VARCHAR(100)"
+            "ALTER TABLE instructors ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
         ))
         await conn.execute(text(
             "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS note TEXT"
@@ -98,6 +113,26 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
         ))
+        # user_profiles / timetable_profiles 統合（学部・学年・学科を登録必須項目としてuser_profilesに集約）
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS faculty TEXT"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS grade INTEGER"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS department TEXT"
+        ))
+        timetable_profiles_exists = (await conn.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'timetable_profiles')"
+        ))).scalar()
+        if timetable_profiles_exists:
+            await conn.execute(text("""
+                UPDATE user_profiles up SET faculty = tp.faculty, grade = tp.grade
+                FROM timetable_profiles tp
+                WHERE up.line_user_id = tp.line_user_id AND up.faculty IS NULL
+            """))
+            await conn.execute(text("DROP TABLE timetable_profiles"))
         await conn.execute(text(
             "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS line_user_id VARCHAR(64)"
         ))

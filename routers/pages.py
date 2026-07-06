@@ -1,9 +1,14 @@
+import json
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 
 from core.activity_log import save_error_log
-from core.config import APP_URL, IS_DEV, KYOYO_REQUIRED_CREDITS, LIFF_ID, REVIEW_FORM_URL, TIMETABLE_LIFF_ID
+from core.config import (
+    APP_URL, FACULTIES, FACULTY_DEPARTMENTS, IS_DEV, KYOYO_REQUIRED_CREDITS,
+    LIFF_ID, REVIEW_FORM_URL, TIMETABLE_LIFF_ID,
+)
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import UserProfile
@@ -39,6 +44,31 @@ async def index(request: Request, uid: str = Query(default="")):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+    return response
+
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request, uid: str = Query(default="")):
+    profile = None
+    if uid:
+        async with AsyncSessionLocal() as session:
+            profile = await session.get(UserProfile, uid)
+    response = templates.TemplateResponse(
+        "form_register.html",
+        {
+            "request": request,
+            "uid": uid,
+            "stored_name": profile.name if profile else "",
+            "stored_student_id": profile.student_id if profile else "",
+            "stored_faculty": profile.faculty if profile else "",
+            "stored_grade": profile.grade if profile else "",
+            "stored_department": profile.department if profile else "",
+            "faculties": FACULTIES,
+            "faculty_departments_json": json.dumps(FACULTY_DEPARTMENTS, ensure_ascii=False),
+            "IS_DEV": IS_DEV,
+        },
+    )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
 

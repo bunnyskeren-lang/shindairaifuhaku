@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>会員登録 | 神大ライフハック</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
+
+  <div class="max-w-md mx-auto px-4 pt-8">
+
+    {% if IS_DEV %}
+    <div class="bg-orange-500 text-white text-center text-sm font-bold py-2 px-4 rounded-2xl mb-4">
+      🚧 開発環境
+    </div>
+    {% endif %}
+
+    <!-- Header -->
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-3">🎓</div>
+      <h1 class="text-2xl font-bold text-gray-800">会員登録</h1>
+      <p class="text-gray-500 text-sm mt-1">ご利用の前に、以下の情報をご登録ください</p>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 flex items-start gap-2">
+      <span class="text-lg leading-none mt-0.5">✋</span>
+      <span>登録が完了するまで、Botの機能はご利用いただけません。</span>
+    </div>
+
+    <form id="registerForm" action="/api/register" method="post" novalidate class="space-y-4">
+      <input type="hidden" name="uid" value="{{ uid }}">
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          👤 お名前（漢字） <span class="text-red-500">*</span>
+        </label>
+        <input type="text" name="name" id="name"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+          placeholder="例：神戸 太郎" required maxlength="50" value="{{ stored_name }}">
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-1">
+          🪪 学籍番号 <span class="text-red-500">*</span>
+        </label>
+        <p class="text-xs text-gray-400 mb-1">数字7桁＋学部コード（医学部のみ2文字: MM・ME・MH）</p>
+        <input type="text" name="student_id" id="student_id"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+          placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
+          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+          value="{{ stored_student_id }}">
+        <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          🏫 学部 <span class="text-red-500">*</span>
+        </label>
+        <select name="faculty" id="faculty" required
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white">
+          <option value="">選択してください</option>
+          {% for f in faculties %}
+          <option value="{{ f }}" {% if f == stored_faculty %}selected{% endif %}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          📚 学科 <span class="text-red-500">*</span>
+        </label>
+        <select name="department" id="department" required
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white">
+          <option value="">先に学部を選択してください</option>
+        </select>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          📅 学年 <span class="text-red-500">*</span>
+        </label>
+        <select name="grade" id="grade" required
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white">
+          <option value="">選択してください</option>
+          {% for g in range(1, 7) %}
+          <option value="{{ g }}" {% if g == stored_grade %}selected{% endif %}>{{ g }}年</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit"
+        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">
+        登録する
+      </button>
+    </form>
+  </div>
+
+  <script>
+    const FACULTY_DEPARTMENTS = {{ faculty_departments_json | safe }};
+    const STORED_DEPARTMENT = "{{ stored_department }}";
+
+    function populateDepartments(faculty, selected) {
+      const sel = document.getElementById('department');
+      sel.innerHTML = '';
+      const depts = FACULTY_DEPARTMENTS[faculty] || [];
+      if (!depts.length) {
+        sel.insertAdjacentHTML('beforeend', '<option value="">先に学部を選択してください</option>');
+        return;
+      }
+      sel.insertAdjacentHTML('beforeend', '<option value="">選択してください</option>');
+      for (const d of depts) {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        if (d === selected) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    const facultySel = document.getElementById('faculty');
+    populateDepartments(facultySel.value, STORED_DEPARTMENT);
+    facultySel.addEventListener('change', () => populateDepartments(facultySel.value, ''));
+
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+      const sid = document.getElementById('student_id').value.trim().toUpperCase();
+      const re = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
+      if (!re.test(sid)) {
+        e.preventDefault();
+        document.getElementById('studentIdError').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('studentIdError').classList.add('hidden');
+    });
+  </script>
+</body>
+</html>

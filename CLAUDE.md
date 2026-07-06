@@ -67,7 +67,7 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 **本番デプロイ時は、コードのプッシュに加えて必ず dev → prod のDB同期も行うこと。**
 
 同期対象（この5テーブルのみ）：
-- `classification_orders`
+- `display_orders`
 - `subjects`
 - `instructors`
 - `course_sections`
@@ -292,7 +292,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 
 | テーブル | 用途 |
 |----------|------|
-| `classification_orders` | 分類の表示順・親グループ・学部 |
+| `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。現状`kind='classification'`で分類の表示順・親グループを管理） |
 | `credit_requirements` | 単位要件定義（学部別、category_id, required_credits, label） |
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号） |
 | `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |

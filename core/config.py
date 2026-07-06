@@ -28,6 +28,26 @@ IS_DEV = os.environ.get("ENV", "prod") == "dev"
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
+# 登録フォーム用の学部・学科選択肢（templates/liff/timetable.html のプロフィール学部プルダウンと同じ11学部）
+FACULTIES = [
+    "文学部", "国際人間科学部", "法学部", "経済学部", "経営学部",
+    "システム情報学部", "理学部", "医学部", "工学部", "農学部", "海事科学部",
+]
+
+FACULTY_DEPARTMENTS = {
+    "文学部": ["人文学科"],
+    "国際人間科学部": ["グローバル文化学科", "発達コミュニティ学科", "環境共生学科", "子ども教育学科"],
+    "法学部": ["法律学科"],
+    "経済学部": ["経済学科"],
+    "経営学部": ["経営学科"],
+    "システム情報学部": ["計算科学科", "情報知能学科"],
+    "理学部": ["数学科", "物理学科", "化学科", "生物学科", "惑星学科"],
+    "医学部": ["医学科", "保健学科"],
+    "工学部": ["建築学科", "市民工学科", "電気電子工学科", "機械工学科", "応用化学科", "情報知能工学科"],
+    "農学部": ["食料環境システム学科", "資源生命科学科", "生命機能科学科"],
+    "海事科学部": ["海事科学科"],
+}
+
 JST = timezone(timedelta(hours=9))
 
 ADMIN_COOKIE = "admin_tok"
@@ -57,6 +77,11 @@ def make_syllabus_url(timetable_code: str) -> str:
     if not path:
         return ""
     return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
+
+
+def is_profile_complete(p) -> bool:
+    """UserProfile行が氏名・学籍番号・学部・学年・学科すべて入力済みか判定する。"""
+    return bool(p and p.name and p.student_id and p.faculty and p.grade and p.department)
 
 
 def normalize_instructor_name(name: str) -> str:

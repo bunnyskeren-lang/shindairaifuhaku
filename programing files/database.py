@@ -31,7 +31,7 @@ class Base(DeclarativeBase):
 
 async def init_db():
     from models import (  # noqa: F401
-        MessageLog, ClassificationOrder, UserProfile, TimetableProfile,
+        MessageLog, DisplayOrder, UserProfile, TimetableProfile,
         CreditRequirement, UserSeisekiRaw,
         Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
         SubjectCreditCategory,

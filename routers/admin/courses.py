@@ -13,7 +13,7 @@ from core.config import make_cls_sort, normalize_instructor_name, reading
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import ClassificationOrder, CourseSection, Instructor, Review, Subject
+from models import CourseSection, DisplayOrder, Instructor, Review, Subject
 
 router = APIRouter()
 
@@ -345,7 +345,7 @@ async def rename_classification(
         for course in courses:
             course.classification = new_name
         cls_row = (await session.execute(
-            select(ClassificationOrder).where(ClassificationOrder.name == old_name)
+            select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == old_name)
         )).scalar_one_or_none()
         if cls_row:
             cls_row.name = new_name
@@ -367,7 +367,7 @@ async def delete_classification(
         for course in courses_in_class:
             course.classification = None
         cls_row = (await session.execute(
-            select(ClassificationOrder).where(ClassificationOrder.name == classification)
+            select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == classification)
         )).scalar_one_or_none()
         if cls_row:
             await session.delete(cls_row)
@@ -409,12 +409,12 @@ async def admin_cls_move(request: Request, _=Depends(check_admin)):
 
         for i, cls_name in enumerate(sorted_cls):
             existing = (await session.execute(
-                select(ClassificationOrder).where(ClassificationOrder.name == cls_name)
+                select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == cls_name)
             )).scalar_one_or_none()
             if existing:
                 existing.sort_order = i
             else:
-                session.add(ClassificationOrder(name=cls_name, sort_order=i))
+                session.add(DisplayOrder(kind="classification", name=cls_name, sort_order=i))
         await session.commit()
     cache.invalidate_cls_caches()
     cache.invalidate_courses_cache()
@@ -430,12 +430,12 @@ async def admin_cls_set_parent(
     parent_group = parent_group.strip()
     async with AsyncSessionLocal() as session:
         row = (await session.execute(
-            select(ClassificationOrder).where(ClassificationOrder.name == classification)
+            select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == classification)
         )).scalar_one_or_none()
         if row:
             row.parent_group = parent_group or None
         else:
-            session.add(ClassificationOrder(name=classification, sort_order=0, parent_group=parent_group or None))
+            session.add(DisplayOrder(kind="classification", name=classification, sort_order=0, parent_group=parent_group or None))
         await session.commit()
     cache.invalidate_cls_caches()
     cache.invalidate_courses_cache()

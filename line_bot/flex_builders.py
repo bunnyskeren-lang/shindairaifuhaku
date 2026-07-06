@@ -291,6 +291,53 @@ def make_welcome_flex() -> FlexMessage:
     )
 
 
+def make_registration_flex(register_url: str) -> FlexMessage:
+    return FlexMessage(
+        alt_text="🎓 会員登録のお願い",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="🎓 会員登録のお願い", weight="bold", color="#ffffff", size="lg"),
+                ],
+                background_color="#6366f1",
+                padding_all="xl",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(
+                        text="ご利用の前に、お名前・学籍番号・学部・学年・学科のご登録をお願いします。",
+                        wrap=True,
+                        size="sm",
+                        color="#374151",
+                    ),
+                    FlexText(
+                        text="登録が完了するまでBotの機能はご利用いただけません。",
+                        wrap=True,
+                        size="xs",
+                        color="#9ca3af",
+                        margin="md",
+                    ),
+                ],
+                padding_all="lg",
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexButton(
+                        action=URIAction(label="📝 登録する", uri=register_url),
+                        style="primary",
+                        color="#6366f1",
+                        height="sm",
+                    ),
+                ],
+                padding_all="md",
+            ),
+        ),
+    )
+
+
 # ── Ranking bubble ──────────────────────────────────────────────
 
 RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}

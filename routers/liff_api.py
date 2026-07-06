@@ -8,7 +8,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.activity_log import save_error_log
-from core.config import EASE_ORDER, STUDENT_ID_RE, LINE_USER_ID_RE, make_syllabus_url
+from core.config import (
+    EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, STUDENT_ID_RE, LINE_USER_ID_RE,
+    is_profile_complete, make_syllabus_url,
+)
 from core.push import send_push_notification
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -148,6 +151,78 @@ async def search_instructors(q: str = ""):
                 result.append({"name": name, "courses": courses_by_inst[name]})
 
     return {"instructors": result}
+
+
+@router.get("/api/profile/status")
+async def profile_status(uid: str = ""):
+    uid = uid.strip()
+    if not uid:
+        return {"complete": False}
+    async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, uid)
+        return {"complete": is_profile_complete(profile)}
+
+
+@router.post("/api/register")
+async def register_profile(
+    request: Request,
+    uid: str = Form(...),
+    name: str = Form(...),
+    student_id: str = Form(...),
+    faculty: str = Form(...),
+    grade: int = Form(...),
+    department: str = Form(...),
+):
+    def _form_error(msg: str):
+        return templates.TemplateResponse(
+            "form_error.html", {"request": request, "message": msg}, status_code=400
+        )
+
+    uid = uid.strip()
+    if not uid or not LINE_USER_ID_RE.match(uid):
+        return _form_error("LINE ユーザー ID の形式が不正です")
+    if not name.strip():
+        return _form_error("お名前を入力してください")
+    sid = student_id.strip().upper()
+    if not STUDENT_ID_RE.match(sid):
+        return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
+    if faculty not in FACULTIES:
+        return _form_error("学部を選択してください")
+    if not (1 <= grade <= 6):
+        return _form_error("学年を選択してください")
+    if department not in FACULTY_DEPARTMENTS.get(faculty, []):
+        return _form_error("学科を選択してください")
+
+    async with AsyncSessionLocal() as session:
+        taken = (await session.execute(
+            select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
+        )).scalars().first()
+        if taken is not None and taken != uid:
+            return _form_error("この学籍番号はすでに別のアカウントで登録されています")
+
+        profile = await session.get(UserProfile, uid)
+        if profile:
+            profile.name = name.strip()[:100]
+            profile.student_id = sid
+            profile.faculty = faculty
+            profile.grade = grade
+            profile.department = department
+        else:
+            session.add(UserProfile(
+                line_user_id=uid,
+                name=name.strip()[:100],
+                student_id=sid,
+                faculty=faculty,
+                grade=grade,
+                department=department,
+            ))
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            return _form_error("登録に失敗しました。もう一度お試しください")
+
+    return templates.TemplateResponse("form_register_success.html", {"request": request})
 
 
 @router.get("/api/autofill")

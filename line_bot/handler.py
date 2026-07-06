@@ -27,6 +27,7 @@ from core.config import (
     IS_DEV,
     REVIEW_FORM_URL,
     TIMETABLE_LIFF_ID,
+    is_profile_complete,
     make_cls_sort,
     stars,
 )
@@ -38,10 +39,17 @@ from line_bot.flex_builders import (
     make_help_flex,
     make_no_review_flex,
     make_ranking_bubble,
+    make_registration_flex,
     make_variant_selection_bubble,
     make_welcome_flex,
 )
-from models import CourseSection, Review, Subject
+from models import CourseSection, Review, Subject, UserProfile
+
+
+async def _registration_incomplete(user_id: str) -> bool:
+    async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, user_id)
+        return not is_profile_complete(profile)
 
 # ── Course list carousel ────────────────────────────────────────
 
@@ -574,9 +582,11 @@ async def process_events(events) -> None:
     try:
         for event in events:
             if isinstance(event, FollowEvent):
+                user_id = event.source.user_id
                 try:
-                    await line_client.reply(event.reply_token, [make_welcome_flex()])
-                    asyncio.create_task(save_log_bg(event.source.user_id, "in", "[follow]"))
+                    register_url = f"{APP_URL}/register?uid={user_id}"
+                    await line_client.reply(event.reply_token, [make_welcome_flex(), make_registration_flex(register_url)])
+                    asyncio.create_task(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
                     await save_error_log(exc, action="follow")
                 continue
@@ -586,6 +596,10 @@ async def process_events(events) -> None:
                 data = event.postback.data
                 try:
                     asyncio.create_task(save_log_bg(user_id, "in", f"[postback]{data}"))
+                    if await _registration_incomplete(user_id):
+                        register_url = f"{APP_URL}/register?uid={user_id}"
+                        await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
+                        continue
                     messages = await asyncio.wait_for(
                         handle_message(data, user_id),
                         timeout=25.0,
@@ -616,6 +630,10 @@ async def process_events(events) -> None:
 
             try:
                 asyncio.create_task(save_log_bg(user_id, "in", user_text))
+                if await _registration_incomplete(user_id):
+                    register_url = f"{APP_URL}/register?uid={user_id}"
+                    await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
+                    continue
                 messages = await asyncio.wait_for(
                     handle_message(user_text, user_id),
                     timeout=25.0,

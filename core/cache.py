@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 
 from core.config import EASE_ORDER
 from database import AsyncSessionLocal
-from models import ClassificationOrder, CourseSection, Instructor, Review, Subject
+from models import CourseSection, DisplayOrder, Instructor, Review, Subject
 
 _CLS_CACHE_TTL = 3600
 _COURSE_CACHE_TTL = 3600
@@ -27,7 +27,7 @@ async def get_cls_order_map() -> dict:
         return _cls_order_map_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
-            select(ClassificationOrder).order_by(ClassificationOrder.sort_order)
+            select(DisplayOrder).where(DisplayOrder.kind == "classification").order_by(DisplayOrder.sort_order)
         )).scalars().all()
     _cls_order_map_cache = {r.name: r.sort_order for r in rows}
     _cls_order_map_at = time.monotonic()
@@ -40,9 +40,10 @@ async def get_cls_parent_map() -> dict[str, str]:
         return _cls_parent_map_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
-            select(ClassificationOrder.name, ClassificationOrder.parent_group)
-            .where(ClassificationOrder.parent_group.isnot(None))
-            .where(ClassificationOrder.parent_group != "")
+            select(DisplayOrder.name, DisplayOrder.parent_group)
+            .where(DisplayOrder.kind == "classification")
+            .where(DisplayOrder.parent_group.isnot(None))
+            .where(DisplayOrder.parent_group != "")
         )).all()
     _cls_parent_map_cache = {r.name: r.parent_group for r in rows}
     _cls_parent_map_at = time.monotonic()

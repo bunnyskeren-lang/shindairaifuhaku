@@ -621,6 +621,14 @@ async function init() {
     await liff.init({ liffId: LIFF_ID });
     userId = liff.getContext()?.userId || "";
     if (!userId) throw new Error("LINE アプリから開いてください");
+    try {
+      const statusRes = await fetch(`${BASE_URL}/api/profile/status?uid=${userId}`);
+      const status = await statusRes.json();
+      if (!status.complete) {
+        location.href = `${BASE_URL}/register?uid=${userId}`;
+        return;
+      }
+    } catch (e) {}
     await Promise.all([loadMyCourses(), loadProfile()]);
     await loadCredits();
     updateCreditsVisibility();

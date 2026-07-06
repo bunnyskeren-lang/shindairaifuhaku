@@ -15,14 +15,15 @@ class MessageLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
-class ClassificationOrder(Base):
-    __tablename__ = "classification_orders"
-    __table_args__ = (UniqueConstraint("name", "faculty", name="uq_classification_orders_name_faculty"),)
+class DisplayOrder(Base):
+    __tablename__ = "display_orders"
+    __table_args__ = (UniqueConstraint("kind", "name", "faculty", name="uq_display_orders_kind_name_faculty"),)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     parent_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
+    faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="", default="")
 
 
 class UserProfile(Base):
@@ -78,6 +79,7 @@ class Instructor(Base):
     __tablename__ = "instructors"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True, unique=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
 
 
 class CourseSection(Base):

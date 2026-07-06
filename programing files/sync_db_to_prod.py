@@ -2,7 +2,7 @@
 """
 dev → 本番 DB の同期スクリプト
 同期対象テーブル（この5テーブルのみ）:
-  classification_orders, subjects, instructors, course_sections, subject_credit_categories
+  display_orders, subjects, instructors, course_sections, subject_credit_categories
 
 絶対に同期しないテーブル:
   reviews, message_logs, user_profiles, user_activity, error_logs,
@@ -34,21 +34,21 @@ async def main():
     prod = await asyncpg.connect(PROD_URL, ssl=_ssl())
 
     try:
-        # ── 1. classification_orders ──────────────────────────────────────────
-        # subjects.classification は名称の文字列一致で参照するのみで FK 依存がないため、TRUNCATE しても安全
+        # ── 1. display_orders ──────────────────────────────────────────────────
+        # 分類/学部/単位要件グループの並び順マスタ。文字列一致で参照するのみで FK 依存がないため、TRUNCATE しても安全
         cls_rows = await dev.fetch(
-            "SELECT id, name, sort_order, parent_group, faculty FROM classification_orders ORDER BY id"
+            "SELECT id, kind, name, sort_order, parent_group, faculty FROM display_orders ORDER BY id"
         )
         async with prod.transaction():
-            await prod.execute("DELETE FROM classification_orders")
+            await prod.execute("DELETE FROM display_orders")
             if cls_rows:
                 await prod.executemany(
-                    "INSERT INTO classification_orders (id, name, sort_order, parent_group, faculty) "
-                    "VALUES ($1, $2, $3, $4, $5)",
-                    [(r["id"], r["name"], r["sort_order"], r["parent_group"], r["faculty"])
+                    "INSERT INTO display_orders (id, kind, name, sort_order, parent_group, faculty) "
+                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    [(r["id"], r["kind"], r["name"], r["sort_order"], r["parent_group"], r["faculty"])
                      for r in cls_rows]
                 )
-        print(f"classification_orders: {len(cls_rows)}件")
+        print(f"display_orders: {len(cls_rows)}件")
 
         # ── 2. subjects: UPSERT by id ─────────────────────────────────────────
         # course_sections/reviews が subjects に CASCADE 依存するため TRUNCATE せず UPSERT
@@ -79,11 +79,12 @@ async def main():
         print(f"subjects: {len(subj_rows)}件 upsert")
 
         # ── 3. instructors: UPSERT by name ────────────────────────────────────
-        instr_rows = await dev.fetch("SELECT id, name FROM instructors ORDER BY id")
+        instr_rows = await dev.fetch("SELECT id, name, sort_order FROM instructors ORDER BY id")
         async with prod.transaction():
             await prod.executemany(
-                "INSERT INTO instructors (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
-                [(r["name"],) for r in instr_rows]
+                "INSERT INTO instructors (name, sort_order) VALUES ($1, $2) "
+                "ON CONFLICT (name) DO UPDATE SET sort_order = EXCLUDED.sort_order",
+                [(r["name"], r["sort_order"]) for r in instr_rows]
             )
         print(f"instructors: {len(instr_rows)}件 upsert")
 

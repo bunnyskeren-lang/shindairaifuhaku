@@ -18,15 +18,17 @@ class MessageLog(Base):
     )
 
 
-class ClassificationOrder(Base):
-    __tablename__ = "classification_orders"
-    __table_args__ = (UniqueConstraint("name", "faculty", name="uq_classification_orders_name_faculty"),)
+class DisplayOrder(Base):
+    """汎用の表示順マスタ。kindで対象種別(classification/faculty/credit_requirement_group等)を区別する。"""
+    __tablename__ = "display_orders"
+    __table_args__ = (UniqueConstraint("kind", "name", "faculty", name="uq_display_orders_kind_name_faculty"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     parent_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
-    faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
+    faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="", default="")
 
 
 class UserProfile(Base):
@@ -35,6 +37,9 @@ class UserProfile(Base):
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     student_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -87,14 +92,6 @@ class PushSubscription(Base):
     line_user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
 
 
-class TimetableProfile(Base):
-    __tablename__ = "timetable_profiles"
-
-    line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    faculty: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-
-
 class CreditRequirement(Base):
     __tablename__ = "credit_requirements"
 
@@ -139,6 +136,7 @@ class Instructor(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True, unique=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
 
 
 class CourseSection(Base):

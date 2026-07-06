@@ -4,7 +4,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config import LINE_USER_ID_RE
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Schedule, Subject, Syllabus, TimetableProfile, UserSyllabus
+from models import CourseSection, Instructor, Schedule, Subject, Syllabus, UserProfile, UserSyllabus
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ async def api_timetable_profile_get(user_id: str = Query("")):
     if not user_id:
         return {"faculty": None, "grade": None}
     async with AsyncSessionLocal() as session:
-        p = await session.get(TimetableProfile, user_id)
+        p = await session.get(UserProfile, user_id)
         if not p:
             return {"faculty": None, "grade": None}
         return {"faculty": p.faculty, "grade": p.grade}
@@ -35,13 +35,11 @@ async def api_timetable_profile_set(request: Request):
         if not (1 <= grade <= 6):
             raise HTTPException(status_code=400, detail="grade must be between 1 and 6")
     async with AsyncSessionLocal() as session:
-        p = await session.get(TimetableProfile, user_id)
+        p = await session.get(UserProfile, user_id)
         if p:
             p.faculty = faculty
             p.grade = grade
-        else:
-            session.add(TimetableProfile(line_user_id=user_id, faculty=faculty, grade=grade))
-        await session.commit()
+            await session.commit()
     return {"ok": True}
 
 
