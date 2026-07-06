@@ -10,7 +10,10 @@ from core import cache
 from core.config import DEV_DATABASE_URL
 from core.security import check_admin
 from database import AsyncSessionLocal, engine
-from models import CourseSection, DisplayOrder, Instructor, Subject, SubjectCreditCategory
+from models import (
+    CourseSection, CourseSectionView, DisplayOrder, Instructor, Review,
+    Subject, SubjectCreditCategory,
+)
 
 router = APIRouter()
 
@@ -187,4 +190,131 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
         "instructors": len(instr_rows),
         "course_sections": cs_count,
         "subject_credit_categories": scc_count,
+    })
+
+
+@router.post("/admin/sync/migrate_legacy_reviews")
+async def migrate_legacy_reviews(_: str = Depends(check_admin)):
+    """本番に残る旧テーブル pending_reviews / course_views を、新スキーマの
+    reviews / course_section_views へ移行する（本番DB内で完結、冪等）。
+
+    course_name は新schemaのsubjectsをname一致で探し、見つからなければ
+    courses（旧テーブル）の情報で補完しつつ最小限のSubjectを新規作成する。
+    course_section は selected_instructor 一致を優先し、無ければ該当科目の
+    どれか1件にフォールバックする（元のUI上もinstructor別に厳密区別していないため）。
+    """
+    async with AsyncSessionLocal() as session:
+        legacy_courses = {
+            row.name: row for row in (await session.execute(text(
+                "SELECT name, classification, category, reading, sort_order, term, credits "
+                "FROM courses"
+            ))).mappings()
+        }
+
+        subject_id_by_name = dict((await session.execute(select(Subject.name, Subject.id))).all())
+
+        async def get_or_create_subject(name: str) -> int:
+            sid = subject_id_by_name.get(name)
+            if sid is not None:
+                return sid
+            lc = legacy_courses.get(name)
+            values = {
+                "classification": lc["classification"] if lc else None,
+                "category": lc["category"] if lc else None,
+                "reading": lc["reading"] if lc else None,
+                "sort_order": lc["sort_order"] if lc else 0,
+                "term": lc["term"] if lc else None,
+                "credits": lc["credits"] if lc else None,
+            }
+            new_id = (await session.execute(
+                Subject.__table__.insert().values(name=name, **values).returning(Subject.id)
+            )).scalar_one()
+            subject_id_by_name[name] = new_id
+            return new_id
+
+        async def get_course_section(subject_id: int, instructor_name):
+            if instructor_name:
+                csid = (await session.execute(
+                    select(CourseSection.id)
+                    .join(Instructor, Instructor.id == CourseSection.instructor_id)
+                    .where(CourseSection.subject_id == subject_id, Instructor.name == instructor_name)
+                )).scalar_one_or_none()
+                if csid is not None:
+                    return csid
+            return (await session.execute(
+                select(CourseSection.id).where(CourseSection.subject_id == subject_id).limit(1)
+            )).scalar_one_or_none()
+
+        existing_reviews = set((await session.execute(
+            select(Review.course_section_id, Review.created_at)
+        )).all())
+
+        pr_rows = (await session.execute(text(
+            "SELECT course_name, comment, rating, ease_rating, grading_method, "
+            "submitter_name, nickname, student_id, academic_year, is_approved, "
+            "created_at, selected_instructor FROM pending_reviews"
+        ))).mappings().all()
+
+        migrated = 0
+        skipped = []
+        for pr in pr_rows:
+            sid = await get_or_create_subject(pr["course_name"])
+            csid = await get_course_section(sid, pr["selected_instructor"])
+            if csid is None:
+                skipped.append(pr["course_name"])
+                continue
+            if (csid, pr["created_at"]) in existing_reviews:
+                continue
+            await session.execute(Review.__table__.insert().values(
+                course_section_id=csid,
+                content=pr["comment"],
+                rating=pr["rating"],
+                ease_rating=pr["ease_rating"],
+                grading_method=pr["grading_method"],
+                submitter_name=pr["submitter_name"],
+                nickname=pr["nickname"],
+                student_id=pr["student_id"],
+                academic_year=pr["academic_year"],
+                selected_instructor=pr["selected_instructor"],
+                is_approved=pr["is_approved"],
+                created_at=pr["created_at"],
+            ))
+            existing_reviews.add((csid, pr["created_at"]))
+            migrated += 1
+
+        cv_rows = (await session.execute(text(
+            "SELECT course_name, view_count, last_viewed_at FROM course_views"
+        ))).mappings().all()
+        cv_migrated = 0
+        for cv in cv_rows:
+            sid = subject_id_by_name.get(cv["course_name"])
+            if sid is None:
+                continue
+            csid = await get_course_section(sid, None)
+            if csid is None:
+                continue
+            existing_view = (await session.execute(
+                select(CourseSectionView.course_section_id).where(CourseSectionView.course_section_id == csid)
+            )).scalar_one_or_none()
+            if existing_view is not None:
+                await session.execute(
+                    CourseSectionView.__table__.update()
+                    .where(CourseSectionView.course_section_id == csid)
+                    .values(view_count=cv["view_count"], last_viewed_at=cv["last_viewed_at"])
+                )
+            else:
+                await session.execute(CourseSectionView.__table__.insert().values(
+                    course_section_id=csid, view_count=cv["view_count"], last_viewed_at=cv["last_viewed_at"],
+                ))
+            cv_migrated += 1
+
+        await session.commit()
+
+    cache.invalidate_review_cache()
+
+    return JSONResponse({
+        "ok": True,
+        "reviews_migrated": migrated,
+        "reviews_skipped": skipped,
+        "course_views_migrated": cv_migrated,
     })
