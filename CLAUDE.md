@@ -23,8 +23,11 @@
 ---
 
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
-- dev環境（shindairaifuhaku-1.onrender.com）のみ自由に操作してよい
-- `git push origin dev:shindairaifuhaku-dev`（dev環境へのデプロイ）は、ユーザーの許可なく実行してよい
+- dev環境（shindairaifuhaku-1.onrender.com）に関するpush・デプロイ操作は、確認を取らず自由に実行してよい
+  - `git push origin dev`（devブランチへの通常push）
+  - `git push origin dev:shindairaifuhaku-dev`（dev環境へのデプロイ）
+  - `python setup_richmenu.py --env dev`（devリッチメニュー更新）
+  - その他 dev サービス・dev DB のみに影響する操作全般
 - `git push` の push先が `origin main` または `origin shindairaifuhaku`（本番相当ブランチ）の場合は必ず確認を取ること
 
 ## ブランチとRenderサービスの対応
@@ -262,7 +265,6 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   └── privacy.html
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
-├── review_form/           ← 旧世代の独立レビュー投稿アプリ（実質保守終了、機能はmain.pyに統合済み）
 ├── docs/                  ← ドキュメント類（.gitignore対象）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← 時間割データをDB投入

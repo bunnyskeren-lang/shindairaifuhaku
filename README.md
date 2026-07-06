@@ -109,9 +109,6 @@ shindairaifuhaku/          ← Render がデプロイするルート
 ├── data/                   ← シラバス取り込み用テキストファイル（曜日別、経営学部）
 ├── supabase/migrations/    ← 新スキーマ移行 SQL（2026-06-27 適用: テーブル新設 → faculty 列追加 →
 │                              subjects スキーマ修正の3本）
-├── review_form/            ← 旧世代の独立レビュー投稿アプリ（自前 Procfile 持ち）。
-│                              旧スキーマ（Course / PendingReview 等）に依存したまま更新が止まっており、
-│                              機能はルートの main.py（/submit, /admin）に統合済み。実質保守終了
 ├── docs/                   ← ドキュメント類（.gitignore 対象、非公開）
 └── programing files/       ← 運用・整備用スクリプト群（Render にはデプロイされない）
     ├── import_syllabus.py            ← シラバステキストを DB へインポート

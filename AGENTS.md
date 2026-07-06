@@ -258,7 +258,6 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   └── privacy.html
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
-├── review_form/           ← 旧世代の独立レビュー投稿アプリ（実質保守終了、機能はmain.pyに統合済み）
 ├── docs/                  ← ドキュメント類（.gitignore対象）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← 時間割データをDB投入
