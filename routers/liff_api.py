@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, STUDENT_ID_RE, LINE_USER_ID_RE,
+    EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
     is_profile_complete, make_syllabus_url,
 )
 from core.push import send_push_notification
@@ -230,7 +230,9 @@ async def register_profile(
             await session.rollback()
             return _form_error("登録に失敗しました。もう一度お試しください")
 
-    return templates.TemplateResponse("form_register_success.html", {"request": request})
+    return templates.TemplateResponse(
+        "form_register_success.html", {"request": request, "liff_id": REGISTER_LIFF_ID}
+    )
 
 
 @router.get("/api/autofill")

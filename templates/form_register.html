@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>会員登録 | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  {% if liff_id %}<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>{% endif %}
 </head>
 <body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
 
@@ -97,8 +98,21 @@
   </div>
 
   <script>
+    const LIFF_ID = "{{ liff_id }}";
     const FACULTY_DEPARTMENTS = {{ faculty_departments_json | safe }};
     const STORED_DEPARTMENT = "{{ stored_department }}";
+
+    if (LIFF_ID) {
+      (async () => {
+        try {
+          await liff.init({ liffId: LIFF_ID });
+          if (liff.isLoggedIn()) {
+            const profile = await liff.getProfile();
+            document.querySelector('input[name="uid"]').value = profile.userId;
+          }
+        } catch (e) {}
+      })();
+    }
 
     function populateDepartments(faculty, selected) {
       const sel = document.getElementById('department');

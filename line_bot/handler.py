@@ -29,6 +29,7 @@ from core.config import (
     TIMETABLE_LIFF_ID,
     is_profile_complete,
     make_cls_sort,
+    make_register_url,
     stars,
 )
 from database import AsyncSessionLocal
@@ -584,7 +585,7 @@ async def process_events(events) -> None:
             if isinstance(event, FollowEvent):
                 user_id = event.source.user_id
                 try:
-                    register_url = f"{APP_URL}/register?uid={user_id}"
+                    register_url = make_register_url(user_id)
                     await line_client.reply(event.reply_token, [make_welcome_flex(), make_registration_flex(register_url)])
                     asyncio.create_task(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
@@ -597,7 +598,7 @@ async def process_events(events) -> None:
                 try:
                     asyncio.create_task(save_log_bg(user_id, "in", f"[postback]{data}"))
                     if await _registration_incomplete(user_id):
-                        register_url = f"{APP_URL}/register?uid={user_id}"
+                        register_url = make_register_url(user_id)
                         await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
                         continue
                     messages = await asyncio.wait_for(
@@ -631,7 +632,7 @@ async def process_events(events) -> None:
             try:
                 asyncio.create_task(save_log_bg(user_id, "in", user_text))
                 if await _registration_incomplete(user_id):
-                    register_url = f"{APP_URL}/register?uid={user_id}"
+                    register_url = make_register_url(user_id)
                     await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
                     continue
                 messages = await asyncio.wait_for(

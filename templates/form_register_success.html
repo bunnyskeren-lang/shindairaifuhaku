@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>登録完了 | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  {% if liff_id %}<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>{% endif %}
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center px-4">
   <div class="max-w-sm w-full">
@@ -12,7 +13,23 @@
       <div class="text-6xl mb-4">🎉</div>
       <h1 class="text-xl font-bold text-gray-800 mb-2">登録が完了しました！</h1>
       <p class="text-gray-500 text-sm mb-8">LINEのトーク画面に戻って、引き続きご利用ください。</p>
+      {% if liff_id %}<button onclick="closeLiff()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">閉じる</button>{% endif %}
     </div>
   </div>
+  {% if liff_id %}
+  <script>
+    function closeLiff() {
+      try { liff.closeWindow(); } catch (e) {}
+    }
+    (async () => {
+      try {
+        await liff.init({ liffId: "{{ liff_id }}" });
+        if (liff.isInClient()) {
+          setTimeout(closeLiff, 1200);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>

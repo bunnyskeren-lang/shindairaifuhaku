@@ -19,6 +19,7 @@ DEV_DATABASE_URL = os.environ.get("DEV_DATABASE_URL", "")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
+REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 try:
     KYOYO_REQUIRED_CREDITS = int(os.environ.get("KYOYO_REQUIRED_CREDITS", "1"))
 except ValueError:
@@ -83,6 +84,14 @@ def make_syllabus_url(timetable_code: str) -> str:
 def is_profile_complete(p) -> bool:
     """UserProfile行が氏名・学籍番号・学部・学年・学科すべて入力済みか判定する。"""
     return bool(p and p.name and p.student_id and p.faculty and p.grade and p.department)
+
+
+def make_register_url(user_id: str) -> str:
+    """会員登録画面のURL。REGISTER_LIFF_ID設定済みならLIFFとして開き、
+    登録完了後にliff.closeWindow()でLINEのトーク画面へ自動で戻れるようにする。"""
+    if REGISTER_LIFF_ID:
+        return f"https://liff.line.me/{REGISTER_LIFF_ID}?uid={user_id}"
+    return f"{APP_URL}/register?uid={user_id}"
 
 
 def normalize_instructor_name(name: str) -> str:

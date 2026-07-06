@@ -8,7 +8,7 @@ from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOYO_REQUIRED_CREDITS,
-    LIFF_ID, REVIEW_FORM_URL, TIMETABLE_LIFF_ID,
+    LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, TIMETABLE_LIFF_ID,
 )
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -66,6 +66,7 @@ async def register_page(request: Request, uid: str = Query(default="")):
             "stored_department": profile.department if profile else "",
             "faculties": await cache.get_faculty_order(),
             "faculty_departments_json": json.dumps(FACULTY_DEPARTMENTS, ensure_ascii=False),
+            "liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
         },
     )

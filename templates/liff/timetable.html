@@ -635,7 +635,10 @@ async function init() {
         location.href = `${BASE_URL}/register?uid=${userId}`;
         return;
       }
-    } catch (e) {}
+    } catch (e) {
+      location.href = `${BASE_URL}/register?uid=${userId}`;
+      return;
+    }
     await Promise.all([loadMyCourses(), loadProfile()]);
     await loadCredits();
     updateCreditsVisibility();
