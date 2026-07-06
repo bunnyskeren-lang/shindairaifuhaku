@@ -27,6 +27,16 @@ async def reply(reply_token: str, messages: list) -> None:
     await _api.reply_message(ReplyMessageRequest(reply_token=reply_token, messages=messages))
 
 
+async def link_rich_menu(user_id: str, rich_menu_id: str) -> None:
+    if not rich_menu_id:
+        return
+    await _api.link_rich_menu_id_to_user(user_id, rich_menu_id)
+
+
+async def unlink_rich_menu(user_id: str) -> None:
+    await _api.unlink_rich_menu_id_from_user(user_id)
+
+
 async def self_ping() -> None:
     if not SELF_URL:
         return

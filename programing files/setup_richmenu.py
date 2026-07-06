@@ -34,6 +34,7 @@ REVIEW_FORM_URL = os.environ.get(
     else "https://shindairaifuhaku.onrender.com",
 )
 TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
+REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 
 if args.env == "prod":
     confirm = input("⚠️  本番環境のリッチメニューを更新します。よろしいですか？ (yes/no): ")
@@ -143,6 +144,13 @@ AREAS = [
 ]
 
 
+# 登録前ユーザー用: 全ボタンを会員登録LIFFへのURIActionにした同一画像のリッチメニュー
+PREREG_AREAS = [
+    {**a, "action": URIAction(label="会員登録", uri=f"https://liff.line.me/{REGISTER_LIFF_ID}")}
+    for a in AREAS
+] if REGISTER_LIFF_ID else []
+
+
 def load_custom_image(path: str) -> bytes:
     try:
         from PIL import Image
@@ -155,6 +163,49 @@ def load_custom_image(path: str) -> bytes:
     except ImportError:
         with open(path, "rb") as f:
             return f.read()
+
+
+def _delete_richmenus_by_name(api, name: str) -> None:
+    for rm in api.get_rich_menu_list().richmenus:
+        if rm.name == name:
+            api.delete_rich_menu(rm.rich_menu_id)
+            print(f"同名リッチメニューを削除: {rm.rich_menu_id} ({name})")
+
+
+def _create_and_upload(api, name: str, areas: list, image_data: bytes) -> str:
+    rich_menu_areas = [
+        RichMenuArea(
+            bounds=RichMenuBounds(x=a["x"], y=a["y"], width=a["w"], height=a["h"]),
+            action=a["action"],
+        )
+        for a in areas
+    ]
+    result = api.create_rich_menu(
+        RichMenuRequest(
+            size=RichMenuSize(width=W, height=H),
+            selected=True,
+            name=name,
+            chat_bar_text="メニュー",
+            areas=rich_menu_areas,
+        )
+    )
+    rich_menu_id = result.rich_menu_id
+    print(f"リッチメニュー作成: {rich_menu_id} ({name})")
+
+    req = urllib.request.Request(
+        f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
+        data=image_data,
+        headers={
+            "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+            "Content-Type": "image/jpeg",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"画像アップロード失敗: {resp.status}")
+    print(f"画像アップロード完了 ({name})")
+    return rich_menu_id
 
 
 def main():
@@ -170,60 +221,40 @@ def main():
             existing_id = api.get_default_rich_menu_id().rich_menu_id
             api.cancel_default_rich_menu()
             api.delete_rich_menu(existing_id)
-            print(f"既存のリッチメニューを削除: {existing_id}")
+            print(f"既存のデフォルトリッチメニューを削除: {existing_id}")
         except Exception:
             print("既存のデフォルトリッチメニューなし")
 
-        # リッチメニュー作成
-        rich_menu_areas = [
-            RichMenuArea(
-                bounds=RichMenuBounds(
-                    x=a["x"], y=a["y"],
-                    width=a["w"], height=a["h"],
-                ),
-                action=a["action"],
-            )
-            for a in AREAS
-        ]
+        # 前回実行分の登録前用リッチメニューが残っていれば削除（デフォルトではないため上のロジックでは消えない）
+        _delete_richmenus_by_name(api, "神大ライフハック（登録前）")
 
-        result = api.create_rich_menu(
-            RichMenuRequest(
-                size=RichMenuSize(width=W, height=H),
-                selected=True,
-                name="神大ライフハック",
-                chat_bar_text="メニュー",
-                areas=rich_menu_areas,
-            )
-        )
-        rich_menu_id = result.rich_menu_id
-        print(f"リッチメニュー作成: {rich_menu_id}")
-
-        # 画像アップロード
         print(f"画像を読み込み中: {image_path}")
         image_data = load_custom_image(image_path)
 
-        req = urllib.request.Request(
-            f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
-            data=image_data,
-            headers={
-                "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-                "Content-Type": "image/jpeg",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"画像アップロード失敗: {resp.status}")
-        print("画像アップロード完了")
+        # 通常メニュー（デフォルトに設定）
+        main_id = _create_and_upload(api, "神大ライフハック", AREAS, image_data)
+        api.set_default_rich_menu(main_id)
+        print(f"[完了] デフォルトリッチメニューに設定しました: {main_id}")
 
-        # デフォルトに設定
-        api.set_default_rich_menu(rich_menu_id)
-        print(f"\n[完了] デフォルトリッチメニューに設定しました: {rich_menu_id}")
-        print(f"環境: {args.env}  /  REVIEW_FORM_URL: {REVIEW_FORM_URL}")
+        # 登録前メニュー（全ボタン→会員登録LIFF。デフォルトにはせず、未登録ユーザーへ個別リンクする）
+        prereg_id = ""
+        if PREREG_AREAS:
+            prereg_id = _create_and_upload(api, "神大ライフハック（登録前）", PREREG_AREAS, image_data)
+            print(f"[完了] 登録前リッチメニューを作成しました: {prereg_id}")
+        else:
+            print("[警告] REGISTER_LIFF_ID が未設定のため、登録前リッチメニューは作成されませんでした")
+
+        print(f"\n環境: {args.env}  /  REVIEW_FORM_URL: {REVIEW_FORM_URL}")
         print(f"TIMETABLE_LIFF_ID: {TIMETABLE_LIFF_ID or '(未設定 → メッセージアクション)'}")
-        print("\nボタン配置:")
+        print("\nボタン配置（通常メニュー）:")
         for a in AREAS:
             print(f"  {a['label']:16s} → {a['action'].__class__.__name__}")
+
+        if prereg_id:
+            print(f"\n次の環境変数を設定してください: RICHMENU_ID_PREREGISTER={prereg_id}")
+            print("  1. programing files/.env" + (".dev" if args.env == "dev" else "") + f" に RICHMENU_ID_PREREGISTER={prereg_id} を追記")
+            svc = "shindairaifuhaku-1（dev）" if args.env == "dev" else "shindairaifuhaku（本番）"
+            print(f"  2. Render の {svc} サービスの Environment にも同じ値を追加してください")
 
 
 if __name__ == "__main__":

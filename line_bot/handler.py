@@ -25,6 +25,7 @@ from core.config import (
     EASE_ORDER,
     EASE_STARS,
     IS_DEV,
+    RICHMENU_ID_PREREGISTER,
     REVIEW_FORM_URL,
     TIMETABLE_LIFF_ID,
     is_profile_complete,
@@ -589,6 +590,13 @@ async def process_events(events) -> None:
                     asyncio.create_task(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
                     await save_error_log(exc, action="follow")
+                try:
+                    if await _registration_incomplete(user_id):
+                        await line_client.link_rich_menu(user_id, RICHMENU_ID_PREREGISTER)
+                    else:
+                        await line_client.unlink_rich_menu(user_id)
+                except Exception as exc:
+                    await save_error_log(exc, user_id=user_id, action="follow_richmenu")
                 continue
 
             if isinstance(event, PostbackEvent):

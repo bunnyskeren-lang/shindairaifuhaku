@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from core import cache
+from core import cache, line_client
 from core.activity_log import save_error_log
 from core.config import (
     EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
@@ -229,6 +229,11 @@ async def register_profile(
         except Exception:
             await session.rollback()
             return _form_error("登録に失敗しました。もう一度お試しください")
+
+    try:
+        await line_client.unlink_rich_menu(uid)
+    except Exception as exc:
+        await save_error_log(exc, user_id=uid, action="register_richmenu_unlink")
 
     return templates.TemplateResponse(
         "form_register_success.html", {"request": request, "liff_id": REGISTER_LIFF_ID}
