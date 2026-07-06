@@ -243,9 +243,9 @@ def make_help_flex() -> FlexMessage:
     )
 
 
-def make_welcome_flex() -> FlexMessage:
+def make_registration_flex(register_url: str) -> FlexMessage:
     return FlexMessage(
-        alt_text="🎓 神大ライフハックへようこそ！",
+        alt_text="🎓 神大ライフハックへようこそ！会員登録をお願いします",
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
@@ -265,59 +265,28 @@ def make_welcome_flex() -> FlexMessage:
                         size="sm",
                         color="#374151",
                     ),
-                    FlexSeparator(margin="lg"),
-                    FlexText(text="できること", weight="bold", size="xs", color="#9ca3af", margin="lg"),
-                    FlexText(text="🔍  科目名を送って検索", size="sm", color="#4b5563", margin="sm"),
-                    FlexText(text="📚  「科目一覧」で全科目を表示", size="sm", color="#4b5563", margin="sm"),
-                    FlexText(text="✏️  「レビュー投稿」で口コミを投稿", size="sm", color="#4b5563", margin="sm"),
-                    FlexText(text="🏆  「人気」「楽単」でランキング表示", size="sm", color="#4b5563", margin="sm"),
-                    FlexText(text="❓  「ヘルプ」で使い方を確認", size="sm", color="#4b5563", margin="sm"),
-                ],
-                padding_all="lg",
-            ),
-            footer=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexButton(
-                        action=MessageAction(label="📚 科目一覧を見る", text="科目一覧"),
-                        style="primary",
-                        color="#6366f1",
-                        height="sm",
-                    ),
-                ],
-                padding_all="md",
-            ),
-        ),
-    )
-
-
-def make_registration_flex(register_url: str) -> FlexMessage:
-    return FlexMessage(
-        alt_text="🎓 会員登録のお願い",
-        contents=FlexBubble(
-            header=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexText(text="🎓 会員登録のお願い", weight="bold", color="#ffffff", size="lg"),
-                ],
-                background_color="#6366f1",
-                padding_all="xl",
-            ),
-            body=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexText(
-                        text="ご利用の前に、お名前・学籍番号・学部・学年・学科のご登録をお願いします。",
-                        wrap=True,
-                        size="sm",
-                        color="#374151",
-                    ),
-                    FlexText(
-                        text="登録が完了するまでBotの機能はご利用いただけません。",
-                        wrap=True,
-                        size="xs",
-                        color="#9ca3af",
-                        margin="md",
+                    FlexBox(
+                        layout="vertical",
+                        margin="lg",
+                        padding_all="md",
+                        background_color="#fff7ed",
+                        corner_radius="md",
+                        contents=[
+                            FlexText(
+                                text="⚠️ ご利用には会員登録が必要です",
+                                weight="bold",
+                                size="sm",
+                                color="#c2410c",
+                                wrap=True,
+                            ),
+                            FlexText(
+                                text="お名前・学籍番号・学部・学年・学科を入力するだけ（30秒で完了）",
+                                size="xs",
+                                color="#9a3412",
+                                wrap=True,
+                                margin="sm",
+                            ),
+                        ],
                     ),
                 ],
                 padding_all="lg",
@@ -326,10 +295,10 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                 layout="vertical",
                 contents=[
                     FlexButton(
-                        action=URIAction(label="📝 登録する", uri=register_url),
+                        action=URIAction(label="📝 今すぐ登録する（30秒）", uri=register_url),
                         style="primary",
-                        color="#6366f1",
-                        height="sm",
+                        color="#f97316",
+                        height="md",
                     ),
                 ],
                 padding_all="md",

@@ -42,7 +42,6 @@ from line_bot.flex_builders import (
     make_ranking_bubble,
     make_registration_flex,
     make_variant_selection_bubble,
-    make_welcome_flex,
 )
 from models import CourseSection, Review, Subject, UserProfile
 
@@ -586,7 +585,7 @@ async def process_events(events) -> None:
                 user_id = event.source.user_id
                 try:
                     register_url = make_register_url(user_id)
-                    await line_client.reply(event.reply_token, [make_welcome_flex(), make_registration_flex(register_url)])
+                    await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
                     asyncio.create_task(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
                     await save_error_log(exc, action="follow")
