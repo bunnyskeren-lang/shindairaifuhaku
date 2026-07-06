@@ -52,6 +52,9 @@ async def init_db():
                 "ALTER TABLE classification_orders ADD COLUMN IF NOT EXISTS parent_group VARCHAR(100)"
             ))
             await conn.execute(text(
+                "ALTER TABLE classification_orders ADD COLUMN IF NOT EXISTS faculty VARCHAR(100) NOT NULL DEFAULT ''"
+            ))
+            await conn.execute(text(
                 "INSERT INTO display_orders (kind, name, faculty, sort_order, parent_group) "
                 "SELECT 'classification', name, faculty, sort_order, parent_group FROM classification_orders "
                 "ON CONFLICT (kind, name, faculty) DO NOTHING"
