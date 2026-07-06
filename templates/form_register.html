@@ -50,7 +50,7 @@
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
           value="{{ stored_student_id }}">
-        <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
+        <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM／アルファベットは大文字で入力してください）</p>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -123,7 +123,7 @@
     facultySel.addEventListener('change', () => populateDepartments(facultySel.value, ''));
 
     document.getElementById('registerForm').addEventListener('submit', function(e) {
-      const sid = document.getElementById('student_id').value.trim().toUpperCase();
+      const sid = document.getElementById('student_id').value.trim();
       const re = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
       if (!re.test(sid)) {
         e.preventDefault();
