@@ -49,7 +49,6 @@ from linebot.v3.messaging import (
     RichMenuBounds,
     RichMenuRequest,
     RichMenuSize,
-    MessageAction,
     PostbackAction,
     URIAction,
 )
@@ -139,7 +138,7 @@ AREAS = [
     {
         "label": "ヘルプ",
         "x": SIDE_X, "y": SY3, "w": W - SIDE_X, "h": H - SY3,
-        "action": MessageAction(label="ヘルプ", text="ヘルプ"),
+        "action": PostbackAction(label="ヘルプ", data="ヘルプ"),
     },
 ]
 
