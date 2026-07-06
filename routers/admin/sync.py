@@ -318,3 +318,43 @@ async def migrate_legacy_reviews(_: str = Depends(check_admin)):
         "reviews_skipped": skipped,
         "course_views_migrated": cv_migrated,
     })
+
+
+_DROP_ORDER = [
+    "course_views", "category_courses", "user_courses", "course_slots",
+    "syllabus_courses", "course_instructors", "pending_reviews", "courses",
+]
+
+
+@router.post("/admin/sync/drop_legacy_tables")
+async def drop_legacy_tables(_: str = Depends(check_admin)):
+    """移行済みの旧テーブルを削除する。安全のため、pending_reviewsの件数が
+    新reviewsテーブルの件数以下であることを確認してからでないと実行しない。
+    """
+    async with engine.begin() as conn:
+        pending_exists = (await conn.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'pending_reviews')"
+        ))).scalar()
+        if pending_exists:
+            pending_count = (await conn.execute(text("SELECT COUNT(*) FROM pending_reviews"))).scalar()
+            reviews_count = (await conn.execute(text("SELECT COUNT(*) FROM reviews"))).scalar()
+            if pending_count > reviews_count:
+                return JSONResponse({
+                    "ok": False,
+                    "error": (
+                        f"pending_reviews({pending_count}件)がreviews({reviews_count}件)より多いため中止しました。"
+                        "先に /admin/sync/migrate_legacy_reviews を実行してください。"
+                    ),
+                }, status_code=409)
+
+        dropped = []
+        for tbl in _DROP_ORDER:
+            exists = (await conn.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = :t)"
+            ), {"t": tbl})).scalar()
+            if not exists:
+                continue
+            await conn.execute(text(f"DROP TABLE IF EXISTS {tbl} CASCADE"))
+            dropped.append(tbl)
+
+    return JSONResponse({"ok": True, "dropped": dropped})
