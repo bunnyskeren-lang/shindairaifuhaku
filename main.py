@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
 
-from core import cache, line_client, prewarm
+from core import backup, cache, line_client, prewarm
 from core.activity_log import save_error_log
 from database import engine, init_db
 from routers import health, liff_api, pages, richmenu, seiseki_api, timetable_api, webhook
@@ -39,10 +39,16 @@ async def lifespan(app: FastAPI):
         print("Engine disposed and reset after startup error", flush=True)
     await line_client.startup()
     ping_task = asyncio.create_task(line_client.self_ping())
+    backup_task = asyncio.create_task(backup.backup_loop())
     yield
     ping_task.cancel()
+    backup_task.cancel()
     try:
         await ping_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await backup_task
     except asyncio.CancelledError:
         pass
     await line_client.shutdown()

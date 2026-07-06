@@ -28,6 +28,15 @@ except ValueError:
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 IS_DEV = os.environ.get("ENV", "prod") == "dev"
 
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+BACKUP_BUCKET = os.environ.get("BACKUP_BUCKET", "db-backups")
+BACKUP_ENABLED = os.environ.get("BACKUP_ENABLED", "false").lower() in ("1", "true", "yes")
+try:
+    BACKUP_RETENTION_DAYS = int(os.environ.get("BACKUP_RETENTION_DAYS", "15"))
+except ValueError:
+    BACKUP_RETENTION_DAYS = 15
+
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
