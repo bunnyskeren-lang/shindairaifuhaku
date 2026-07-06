@@ -15,6 +15,7 @@ REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku.on
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
+DEV_DATABASE_URL = os.environ.get("DEV_DATABASE_URL", "")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")

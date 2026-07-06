@@ -16,6 +16,12 @@
 </div>
 {% endif %}
 <div class="card">
+  <h2 style="margin-top:0">dev DBから反映</h2>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 10px">devの科目名・教員データをこの環境に反映します（他のテーブルは変更されません）。</p>
+  <button type="button" class="btn btn-primary" id="syncSubjectsInstructorsBtn" onclick="syncSubjectsInstructors()">🔄 科目名・教員をdevから反映</button>
+</div>
+
+<div class="card">
   <h2 style="margin-top:0">科目を追加</h2>
   <form method="post" action="/admin/courses/add">
     <div style="margin-bottom:10px">
@@ -667,6 +673,30 @@ function moveInstructor(id, dir) {
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
   }).catch(function() {});
+}
+
+function syncSubjectsInstructors() {
+  if (!confirm('devの科目名・教員データでこの環境を上書きします。よろしいですか？')) return;
+  var btn = document.getElementById('syncSubjectsInstructorsBtn');
+  btn.disabled = true;
+  btn.textContent = '反映中...';
+  fetch('/admin/sync/subjects_instructors', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        alert('反映しました（subjects: ' + data.subjects + '件, instructors: ' + data.instructors + '件）');
+        location.reload();
+      } else {
+        alert('失敗しました: ' + (data.error || '不明なエラー'));
+        btn.disabled = false;
+        btn.textContent = '🔄 科目名・教員をdevから反映';
+      }
+    })
+    .catch(function() {
+      alert('通信エラーが発生しました');
+      btn.disabled = false;
+      btn.textContent = '🔄 科目名・教員をdevから反映';
+    });
 }
 
 function moveFaculty(id, dir) {

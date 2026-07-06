@@ -19,6 +19,7 @@ from routers.admin import (
     dashboard as admin_dashboard,
     reviews as admin_reviews,
     stats as admin_stats,
+    sync as admin_sync,
     timetable_check as admin_timetable_check,
     users_errors as admin_users_errors,
 )
@@ -94,3 +95,4 @@ app.include_router(admin_users_errors.router)
 app.include_router(admin_stats.router)
 app.include_router(admin_timetable_check.router)
 app.include_router(admin_credit_requirements.router)
+app.include_router(admin_sync.router)
