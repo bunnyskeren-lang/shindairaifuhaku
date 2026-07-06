@@ -235,7 +235,7 @@ async function main() {
     data.reviews.forEach((r, i) => {
       const card = document.createElement("div");
       card.className = "card";
-      const byLabel = r.nickname ? esc(r.nickname) : "匿名";
+      const byLabel = r.nickname ? `ニックネーム ${esc(r.nickname)}` : "匿名";
       const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
       const yearLabel = r.academic_year ? `受講年度 ${r.academic_year}年` : "";
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
