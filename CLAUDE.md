@@ -211,6 +211,7 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 | よみがな生成 | pykakasi |
 | プッシュ通知 | pywebpush（VAPID） |
 | ホスティング | Render（Web Service） |
+| HTTPクライアント | httpx（自己ping・DBバックアップのSupabase Storage API呼び出し） |
 
 ### ディレクトリ構成
 
@@ -232,7 +233,8 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── push.py                  ← Web Push (VAPID) 通知送信
 │   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
 │   ├── templates.py               ← Jinja2Templates・jstフィルタ
-│   └── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
+│   ├── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
+│   └── backup.py                    ← DB自動バックアップ（毎日JST3:00に全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
