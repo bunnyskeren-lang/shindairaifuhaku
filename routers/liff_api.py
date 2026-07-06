@@ -191,9 +191,9 @@ async def register_profile(
         return _form_error("LINE ユーザー ID の形式が不正です")
     if not name.strip():
         return _form_error("お名前を入力してください")
-    sid = student_id.strip()
+    sid = student_id.strip().upper()
     if not STUDENT_ID_RE.match(sid):
-        return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM。アルファベットは大文字で入力してください）")
+        return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
     if faculty not in FACULTIES:
         return _form_error("学部を選択してください")
     if not (1 <= grade <= 6):
