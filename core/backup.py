@@ -9,6 +9,7 @@ import httpx
 from core.config import (
     BACKUP_BUCKET,
     BACKUP_ENABLED,
+    BACKUP_INTERVAL_HOURS,
     BACKUP_RETENTION_DAYS,
     JST,
     SUPABASE_SERVICE_ROLE_KEY,
@@ -64,7 +65,7 @@ def _storage_headers() -> dict:
 
 
 async def upload_backup_to_storage(data: bytes) -> None:
-    filename = f"backup_{_dt.datetime.now(JST).strftime('%Y%m%d')}.sql.gz"
+    filename = f"backup_{_dt.datetime.now(JST).strftime('%Y%m%d_%H%M')}.sql.gz"
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             f"{SUPABASE_URL}/storage/v1/object/{BACKUP_BUCKET}/{filename}",
@@ -88,7 +89,7 @@ async def upload_backup_to_storage(data: bytes) -> None:
                 continue
             date_part = name[len("backup_"):-len(".sql.gz")]
             try:
-                file_date = _dt.datetime.strptime(date_part, "%Y%m%d").replace(tzinfo=JST)
+                file_date = _dt.datetime.strptime(date_part, "%Y%m%d_%H%M").replace(tzinfo=JST)
             except ValueError:
                 continue
             if file_date < cutoff:
@@ -105,18 +106,15 @@ async def upload_backup_to_storage(data: bytes) -> None:
 
 
 async def backup_loop() -> None:
-    """毎日JST 3:00に全テーブルをバックアップし、Supabase Storageへアップロードする。"""
+    """BACKUP_INTERVAL_HOURS間隔で全テーブルをバックアップし、Supabase Storageへアップロードする。"""
     if not BACKUP_ENABLED:
         return
+    await asyncio.sleep(30)
     while True:
-        now = _dt.datetime.now(JST)
-        next_run = now.replace(hour=3, minute=0, second=0, microsecond=0)
-        if next_run <= now:
-            next_run += _dt.timedelta(days=1)
-        await asyncio.sleep((next_run - now).total_seconds())
         try:
             data = await dump_all_tables_to_sql()
             await upload_backup_to_storage(data)
             print(f"Backup uploaded: {len(data)} bytes", flush=True)
         except Exception as e:
             print(f"Backup failed: {e}", flush=True)
+        await asyncio.sleep(BACKUP_INTERVAL_HOURS * 3600)

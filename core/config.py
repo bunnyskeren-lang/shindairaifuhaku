@@ -36,6 +36,10 @@ try:
     BACKUP_RETENTION_DAYS = int(os.environ.get("BACKUP_RETENTION_DAYS", "15"))
 except ValueError:
     BACKUP_RETENTION_DAYS = 15
+try:
+    BACKUP_INTERVAL_HOURS = float(os.environ.get("BACKUP_INTERVAL_HOURS", "1"))
+except ValueError:
+    BACKUP_INTERVAL_HOURS = 1
 
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
