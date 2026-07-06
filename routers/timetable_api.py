@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Request
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config import LINE_USER_ID_RE
@@ -9,6 +9,17 @@ from models import CourseSection, Instructor, Schedule, Subject, Syllabus, UserP
 router = APIRouter()
 
 _VALID_DAYS = {"月", "火", "水", "木", "金", "土", "日"}
+
+# academic_term は自由文字列のため、時系列順に並べるための明示的な優先度
+_TERM_ORDER = case(
+    (Syllabus.academic_term == "第1クォーター", 1),
+    (Syllabus.academic_term == "第2クォーター", 2),
+    (Syllabus.academic_term == "第3クォーター", 3),
+    (Syllabus.academic_term == "第4クォーター", 4),
+    (Syllabus.academic_term == "後期", 5),
+    (Syllabus.academic_term == "集中", 6),
+    else_=99,
+)
 
 
 @router.get("/api/timetable/profile")
@@ -44,18 +55,26 @@ async def api_timetable_profile_set(request: Request):
 
 
 @router.get("/api/timetable/slots/{day}/{period}")
-async def api_timetable_slots(day: str, period: int, user_id: str = Query("")):
+async def api_timetable_slots(day: str, period: int, user_id: str = Query(""), year: int | None = Query(None)):
     if day not in _VALID_DAYS:
         raise HTTPException(status_code=400, detail="invalid day")
     async with AsyncSessionLocal() as session:
-        rows = (await session.execute(
+        stmt = (
             select(Syllabus, Subject, Instructor)
             .join(Schedule, Schedule.syllabus_id == Syllabus.id)
             .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
-            .where(Schedule.day_of_week == day, Schedule.period == period)
-            .order_by(Syllabus.academic_term, Subject.name)
+            .where(
+                Schedule.day_of_week == day,
+                Schedule.period == period,
+                Subject.hide_from_timetable.is_(False),
+            )
+        )
+        if year is not None:
+            stmt = stmt.where(Syllabus.year == year)
+        rows = (await session.execute(
+            stmt.order_by(Syllabus.year, _TERM_ORDER, Subject.name)
         )).all()
 
         if not rows:

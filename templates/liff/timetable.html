@@ -492,6 +492,7 @@ const KYOTSU_KEIEI_APPROVED = new Set([
 let CREDIT_CATS = [];
 let _creditData = {};
 let _totalReqListenerAdded = false;
+const CURRENT_ACADEMIC_YEAR = 2026;
 const DAYS = ["月","火","水","木","金"];
 const PERIODS = [1,2,3,4,5,6];
 const PERIOD_TIMES = {
@@ -786,7 +787,7 @@ async function openDrawer(day, period) {
     document.getElementById("course-list").innerHTML = "";
     try {
       const res = await fetch(
-        `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?user_id=${encodeURIComponent(userId)}`
+        `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?user_id=${encodeURIComponent(userId)}&year=${CURRENT_ACADEMIC_YEAR}`
       );
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();

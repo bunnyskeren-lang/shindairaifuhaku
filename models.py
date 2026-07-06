@@ -129,6 +129,7 @@ class Subject(Base):
     term: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
+    hide_from_timetable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
 
 class Instructor(Base):

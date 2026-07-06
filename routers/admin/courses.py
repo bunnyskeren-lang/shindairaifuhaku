@@ -95,6 +95,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 "faculty": c.faculty or "",
                 "term": c.term or "",
                 "credits": float(c.credits) if c.credits is not None else 0,
+                "hide_from_timetable": c.hide_from_timetable,
             }
             for c in courses
         }, ensure_ascii=False)
@@ -512,6 +513,19 @@ async def admin_cls_set_parent(
     cache.invalidate_cls_caches()
     cache.invalidate_courses_cache()
     return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@router.post("/admin/courses/{course_id}/toggle-timetable-visibility")
+async def admin_course_toggle_timetable_visibility(course_id: int, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        course = await session.get(Subject, course_id)
+        if not course:
+            return JSONResponse({"ok": False})
+        course.hide_from_timetable = not course.hide_from_timetable
+        await session.commit()
+        hidden = course.hide_from_timetable
+    cache.invalidate_courses_cache()
+    return JSONResponse({"ok": True, "hide_from_timetable": hidden})
 
 
 @router.post("/admin/courses/{course_id}/move")

@@ -227,6 +227,10 @@ async def init_db():
             EXCEPTION WHEN undefined_object THEN NULL;
             END $$
         """))
+        # subjects.hide_from_timetable（管理者がマイ時間割への表示を科目単位で止められるようにする）
+        await conn.execute(text(
+            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS hide_from_timetable BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
         # 既存科目のうち reading 未設定のものをバックフィル
         result = await conn.execute(text("SELECT id, name FROM subjects WHERE reading IS NULL"))
         rows = result.fetchall()
