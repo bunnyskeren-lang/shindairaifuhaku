@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from core import cache
 from core.config import LINE_USER_ID_RE
@@ -75,12 +75,14 @@ async def api_seiseki_save_raw(request: Request):
 
 
 @router.get("/api/credit_requirements")
-async def api_credit_requirements(faculty: str = Query("経営学部")):
+async def api_credit_requirements(faculty: str = Query("経営学部"), department: str | None = Query(None)):
     async with AsyncSessionLocal() as session:
+        stmt = select(CreditRequirement).where(CreditRequirement.faculty == faculty)
+        if department:
+            # department未設定の行（学部内全学科共通の要件）も含めて返す
+            stmt = stmt.where(or_(CreditRequirement.department == department, CreditRequirement.department.is_(None)))
         rows = (await session.execute(
-            select(CreditRequirement)
-            .where(CreditRequirement.faculty == faculty)
-            .order_by(CreditRequirement.sort_order)
+            stmt.order_by(CreditRequirement.sort_order)
         )).scalars().all()
         group_order = await cache.get_credit_group_order()
         rows = sorted(

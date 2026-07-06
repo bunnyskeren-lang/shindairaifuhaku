@@ -87,6 +87,10 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
         ))
+        # 学科別の卒業要件に対応するための列（NULL＝学部内の全学科共通の要件）
+        await conn.execute(text(
+            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS department TEXT"
+        ))
         # (cat_id, req, note, label, group_name, sort_order)
         defaults = [
             ("kyoyo_kei",   12, "人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。", "系科目（人文・自然・社会・総合）", "教養科目", 10),

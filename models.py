@@ -102,6 +102,7 @@ class CreditRequirement(Base):
     required_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
+    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
 
 
 class UserSeisekiRaw(Base):
