@@ -76,7 +76,7 @@ async def upload_backup_to_storage(data: bytes) -> None:
         list_resp = await client.post(
             f"{SUPABASE_URL}/storage/v1/object/list/{BACKUP_BUCKET}",
             headers=_storage_headers(),
-            json={"limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
+            json={"prefix": "", "limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
         )
         list_resp.raise_for_status()
 

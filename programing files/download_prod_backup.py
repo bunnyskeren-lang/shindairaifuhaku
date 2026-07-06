@@ -49,7 +49,7 @@ def main():
         resp = client.post(
             f"{SUPABASE_URL}/storage/v1/object/list/{BACKUP_BUCKET}",
             headers=HEADERS,
-            json={"limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
+            json={"prefix": "", "limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
         )
         resp.raise_for_status()
         items = resp.json()
