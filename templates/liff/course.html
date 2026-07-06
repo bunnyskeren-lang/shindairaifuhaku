@@ -78,34 +78,34 @@
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid #f1f5f9">
       <div style="display:grid;grid-template-columns:repeat(3,1fr);font-size:11px;text-align:center">
         <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px"></div>
-        <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px">充実度</div>
-        <div style="color:#818cf8;font-weight:700;font-size:10px;padding-bottom:6px">楽単度</div>
+        <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px">楽単度</div>
+        <div style="color:#a78bfa;font-weight:700;font-size:10px;padding-bottom:6px">充実度</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:3px;font-size:11px">
         <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
           <div style="font-size:12px;color:#e2e8f0">★☆☆☆☆</div>
-          <div style="color:#64748b">ほぼ学びなし</div>
           <div style="color:#64748b">修羅場</div>
+          <div style="color:#64748b">ほぼ学びなし</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;padding:5px 8px;text-align:center">
           <div style="font-size:12px"><span style="color:#fbbf24">★★</span><span style="color:#e2e8f0">☆☆☆</span></div>
-          <div style="color:#64748b">ちょい学び</div>
           <div style="color:#64748b">大変</div>
+          <div style="color:#64748b">ちょい学び</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
           <div style="font-size:12px"><span style="color:#f59e0b">★★★</span><span style="color:#e2e8f0">☆☆</span></div>
-          <div style="color:#64748b">まあまあ学びあり</div>
           <div style="color:#64748b">標準</div>
+          <div style="color:#64748b">まあまあ学びあり</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;padding:5px 8px;text-align:center">
           <div style="font-size:12px"><span style="color:#f59e0b">★★★★</span><span style="color:#e2e8f0">☆</span></div>
-          <div style="color:#64748b">かなり学べた</div>
           <div style="color:#64748b">楽々</div>
+          <div style="color:#64748b">かなり学べた</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
           <div style="font-size:12px;color:#f59e0b">★★★★★</div>
-          <div style="color:#64748b">めちゃくちゃ学べた</div>
           <div style="color:#64748b">天国</div>
+          <div style="color:#64748b">めちゃくちゃ学べた</div>
         </div>
       </div>
     </div>
@@ -210,21 +210,21 @@ async function main() {
   const ratingsEl = document.getElementById("ratings");
   if (data.avg_rating != null) {
     const rLabel = RATING_LABELS[Math.round(data.avg_rating)] || '';
-    ratingsEl.innerHTML =
-      `<div class="rating-row">
-         <span class="rating-label">充実度</span>
-         <span class="stars">${stars(data.avg_rating)}</span>
-         <span style="font-size:12px;color:#64748b;margin-left:6px">${rLabel}</span>
-       </div>`;
+    let ratingsHtml = '';
     if (data.top_ease) {
       const eLabel = EASE_LABELS[data.top_ease] || '';
-      ratingsEl.insertAdjacentHTML("beforeend",
-        `<div class="rating-row">
+      ratingsHtml += `<div class="rating-row">
            <span class="rating-label">楽単度</span>
-           <span class="stars" style="color:#818cf8">${EASE_STARS[data.top_ease] || ""}</span>
+           <span class="stars" style="color:#f59e0b">${EASE_STARS[data.top_ease] || ""}</span>
            <span style="font-size:12px;color:#64748b;margin-left:6px">${eLabel}</span>
-         </div>`);
+         </div>`;
     }
+    ratingsHtml += `<div class="rating-row">
+         <span class="rating-label">充実度</span>
+         <span class="stars" style="color:#a78bfa">${stars(data.avg_rating)}</span>
+         <span style="font-size:12px;color:#64748b;margin-left:6px">${rLabel}</span>
+       </div>`;
+    ratingsEl.innerHTML = ratingsHtml;
   } else {
     ratingsEl.innerHTML = `<div class="no-review">⭐ まだレビューはありません</div>`;
   }
@@ -237,7 +237,7 @@ async function main() {
       card.className = "card";
       const byLabel = r.nickname ? esc(r.nickname) : "匿名";
       const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
-      const yearLabel = r.academic_year ? `${r.academic_year}年度` : "";
+      const yearLabel = r.academic_year ? `受講年度 ${r.academic_year}年` : "";
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:13px;font-weight:700;color:#6366f1">👨‍🏫 ${instrLabel}</span>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
@@ -245,16 +245,16 @@ async function main() {
           <span style="font-size:11px;color:#94a3b8">🏷️ ${byLabel}</span>
         </div>
       </div>`;
-      html += `<div class="rating-row">
-        <span class="rating-label">充実度</span>
-        <span class="stars">${stars(r.rating)}</span>
-      </div>`;
       if (r.ease_rating) {
         html += `<div class="rating-row">
           <span class="rating-label">楽単度</span>
-          <span class="stars" style="color:#818cf8">${EASE_STARS[r.ease_rating] || ""}</span>
+          <span class="stars" style="color:#f59e0b">${EASE_STARS[r.ease_rating] || ""}</span>
         </div>`;
       }
+      html += `<div class="rating-row">
+        <span class="rating-label">充実度</span>
+        <span class="stars" style="color:#a78bfa">${stars(r.rating)}</span>
+      </div>`;
       if (r.grading_method) {
         const gmParts = r.grading_method.split(' / ');
         let gmHtml = '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9">';
