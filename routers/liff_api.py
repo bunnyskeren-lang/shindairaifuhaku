@@ -324,6 +324,11 @@ async def submit(
         if existing is None:
             if not reg_name.strip():
                 return _form_error("お名前を入力してください")
+            taken = (await session.execute(
+                select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
+            )).scalars().first()
+            if taken is not None and taken != uid:
+                return _form_error("この学籍番号はすでに別のアカウントで登録されています")
             submitter_name = reg_name.strip()[:100]
             try:
                 session.add(UserProfile(

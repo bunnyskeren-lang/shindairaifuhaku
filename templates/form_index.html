@@ -1102,6 +1102,7 @@
         el.addEventListener('click', () => {
           courseItems.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
           el.classList.add('active');
+          currentInstructors = [{ name: inst.name }];
           document.getElementById('courseNameHidden').value = el.dataset.courseName;
           document.getElementById('selectedInstructorHidden').value = inst.name;
           document.getElementById('selectedCourseName').textContent = el.dataset.courseName;
