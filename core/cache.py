@@ -264,6 +264,7 @@ def invalidate_courses_cache():
     global _course_by_name, _course_list_all, _course_cache_at
     global _all_instructors_cache, _all_instructors_cache_at
     global _course_flex_cache, _course_list_cache, _ranking_cache
+    global _syllabus_url_cache, _syllabus_url_cache_at
     _course_by_name = {}
     _course_list_all = []
     _course_cache_at = 0.0
@@ -272,6 +273,10 @@ def invalidate_courses_cache():
     _course_flex_cache = {}
     _course_list_cache = {}
     _ranking_cache = {}
+    # 修正理由: シラバスURL(course_sections.syllabus_url)もcourses関連の派生データのため、
+    # ここで一緒に無効化しないと管理画面での追加・変更が最大TTL(1時間)反映されなかった。
+    _syllabus_url_cache = {}
+    _syllabus_url_cache_at = 0.0
 
 
 def invalidate_review_cache():
