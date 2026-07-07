@@ -1,6 +1,7 @@
 from types import SimpleNamespace
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, select
 
@@ -80,10 +81,33 @@ async def admin_reviews(request: Request, _: str = Depends(check_admin)):
 
 
 @router.post("/admin/reviews/approve/{review_id}")
-async def admin_review_approve(review_id: int, _: str = Depends(check_admin)):
+async def admin_review_approve(
+    review_id: int,
+    content: Optional[str] = Form(None),
+    rating: Optional[int] = Form(None),
+    ease_rating: Optional[str] = Form(None),
+    grading_method: Optional[str] = Form(None),
+    selected_instructor: Optional[str] = Form(None),
+    nickname: Optional[str] = Form(None),
+    _: str = Depends(check_admin),
+):
+    # content/rating等はフォームから送られてきた場合のみ上書きする
+    # （courses.html の簡易承認ボタンはこれらを送らないため、その場合は既存の内容のまま承認する）
     async with AsyncSessionLocal() as session:
         review = await session.get(Review, review_id)
         if review:
+            if content is not None:
+                review.content = content.strip() or None
+            if rating is not None:
+                review.rating = rating
+            if ease_rating is not None:
+                review.ease_rating = ease_rating or None
+            if grading_method is not None:
+                review.grading_method = grading_method.strip() or None
+            if selected_instructor is not None:
+                review.selected_instructor = selected_instructor.strip() or None
+            if nickname is not None:
+                review.nickname = nickname.strip() or None
             review.is_approved = True
             await session.commit()
     cache.invalidate_review_cache()

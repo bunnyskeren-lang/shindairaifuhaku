@@ -72,12 +72,24 @@
   gap: 8px;
   justify-content: flex-end;
 }
+.edit-input, .edit-select, .edit-textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #111827;
+  background: #fff;
+}
+.edit-textarea { width: 100%; resize: vertical; line-height: 1.6; box-sizing: border-box; }
+.instr-input { flex: 1; font-weight: 700; color: #6366f1; }
+.nickname-input { width: 110px; font-size: 12px; flex-shrink: 0; }
 {% endblock %}
 
 {% macro star_rating(n) %}{{ '★' * n }}{{ '☆' * (5 - n) }}{% endmacro %}
 {% macro ease_stars(code) %}{% set n = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(code, 0) %}{{ '★' * n }}{{ '☆' * (5 - n) }}{% endmacro %}
 
-{% macro review_body(r) %}
+{% macro review_body(r, editable=False) %}
 <div class="review-body">
   <!-- 管理者用: 名前・学籍番号 -->
   <div class="admin-row">
@@ -88,28 +100,49 @@
 
   <!-- 教員・ニックネーム行 -->
   <div class="instr-row">
+    {% if editable %}
+    <input type="text" name="selected_instructor" value="{{ r.selected_instructor or '' }}" class="edit-input instr-input" placeholder="担当教員">
+    <input type="text" name="nickname" value="{{ r.nickname or '' }}" class="edit-input nickname-input" placeholder="ニックネーム">
+    {% else %}
     <span class="instr-label">👨‍🏫 {{ r.selected_instructor or '担当教員未選択' }}</span>
     <div class="meta-badges">
       {% if r.nickname %}<span class="meta-badge">🏷️ {{ r.nickname }}</span>{% endif %}
     </div>
+    {% endif %}
   </div>
 
   <!-- 星評価 -->
   <div class="rating-row">
     <span class="rating-label">充実度</span>
+    {% if editable %}
+    <select name="rating" class="edit-select">
+      {% for i in range(1, 6) %}<option value="{{ i }}" {% if r.rating==i %}selected{% endif %}>{{ star_rating(i) }}</option>{% endfor %}
+    </select>
+    {% else %}
     <span class="stars-rating">{{ star_rating(r.rating) }}</span>
+    {% endif %}
   </div>
-  {% if r.ease_rating %}
+  {% if editable or r.ease_rating %}
   <div class="rating-row">
     <span class="rating-label">楽単度</span>
+    {% if editable %}
+    <select name="ease_rating" class="edit-select">
+      <option value="">未設定</option>
+      {% for code in ['C', 'B', 'A', 'S', 'SS'] %}<option value="{{ code }}" {% if r.ease_rating==code %}selected{% endif %}>{{ ease_stars(code) }}</option>{% endfor %}
+    </select>
+    {% else %}
     <span class="stars-ease">{{ ease_stars(r.ease_rating) }}</span>
+    {% endif %}
   </div>
   {% endif %}
 
   <!-- 成績評価方法 -->
-  {% if r.grading_method %}
+  {% if editable or r.grading_method %}
   <div class="grading-section">
-    <div class="grading-title">📋 成績評価方法</div>
+    <div class="grading-title">📋 成績評価方法{% if editable %}（例: 中間試験:40% / 期末試験:60%）{% endif %}</div>
+    {% if editable %}
+    <textarea name="grading_method" class="edit-textarea" rows="2" placeholder="中間試験:40% / 期末試験:60%">{{ r.grading_method or '' }}</textarea>
+    {% else %}
     {% for part in r.grading_method.split(' / ') %}
       {% if ':' in part %}
         <div class="grading-row">
@@ -120,11 +153,14 @@
         <div class="grading-plain">{{ part }}</div>
       {% endif %}
     {% endfor %}
+    {% endif %}
   </div>
   {% endif %}
 
   <!-- コメント -->
-  {% if r.comment %}
+  {% if editable %}
+  <textarea name="content" class="edit-textarea comment-box" rows="5" placeholder="コメント">{{ r.comment or '' }}</textarea>
+  {% elif r.comment %}
   <div class="comment-box">{{ r.comment }}</div>
   {% endif %}
 </div>
@@ -141,15 +177,15 @@
       <span class="review-course-name">📖 {{ r.course_name }}</span>
       <span class="review-date">{{ r.created_at | jst }}</span>
     </div>
-    {{ review_body(r) }}
+    <form method="post" action="/admin/reviews/approve/{{ r.id }}" id="approve-form-{{ r.id }}">
+      {{ review_body(r, editable=True) }}
+    </form>
     <div class="review-footer">
-      <form method="post" action="/admin/reviews/reject/{{ r.id }}"
-            data-confirm="削除しますか？">
+      <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="margin:0"
+            data-confirm="却下（削除）しますか？">
         <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🗑 却下</button>
       </form>
-      <form method="post" action="/admin/reviews/approve/{{ r.id }}">
-        <button class="btn btn-primary" style="font-size:12px;padding:5px 14px">✅ 承認</button>
-      </form>
+      <button type="submit" form="approve-form-{{ r.id }}" class="btn btn-primary" style="font-size:12px;padding:5px 14px">✅ 保存して承認</button>
     </div>
   </div>
   {% endfor %}
