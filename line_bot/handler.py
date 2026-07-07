@@ -54,9 +54,8 @@ async def _registration_incomplete(user_id: str) -> bool:
         return not is_profile_complete(profile)
 
 # ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
-# 文字（A/B/C/D等）はトピック・担当教員違いの「本当の選択肢」、数字はクォーター進行を表す
-# ケースが多い（例: 生物学各論A1/A2/C1/C2 → A/Cが選択肢、1/2はどちらも履修が必要）。
-# そのため「同じベース名で文字違いが2種類以上ある」場合のみバリアントとして統合する。
+# アルファベットや数字のみが異なる科目（ベースの漢字部分が完全一致するもの）は
+# 1行にまとめて選択バブル表示する。全角文字（Ｄ等）はASCIIに正規化して判定する。
 _FULLWIDTH_UPPER = str.maketrans(
     "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -103,26 +102,16 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     course_name_set = {c.name for c in rows}
     seen_base: set[str] = set()
 
-    # Pre-compute numeric variant groups: letter+digit（例: 生物学各論A1/A2/C1/C2）は
-    # 文字違い（A/C）だけを「選択肢」としてまとめる。文字のない純粋な連番
-    # （例: 微分積分1/2/3/4）はどちらも履修必須のクォーター進行なのでまとめない。
-    _num_groups: dict[tuple[str, str], list[tuple[str, int]]] = defaultdict(list)
+    # Pre-compute numeric variant groups: ベースの漢字部分が同じで、末尾のアルファベット・
+    # 数字だけが違う科目（例: 生物学各論A1/A2/C1/C2、微分積分1/2/3/4）を1行にまとめる。
+    _num_bases: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
     for _c in rows:
         _match = _vnum_match(_c.name)
         if _match:
             _b, _letter, _sk = _match
-            _num_groups[(_b, _letter)].append((_c.name, _sk))
-    _letters_per_base: dict[str, set[str]] = defaultdict(set)
-    for _b, _letter in _num_groups:
-        if _letter:
-            _letters_per_base[_b].add(_letter)
-    _num_bases: dict[str, list] = defaultdict(list)
-    for _b, _letters in _letters_per_base.items():
-        if len(_letters) >= 2:
-            for _letter in _letters:
-                _num_bases[_b].extend(_num_groups[(_b, _letter)])
-    _num_variant_names = {n for _items in _num_bases.values() for n, _ in _items}
-    _num_base_for = {n: _b for _b, _items in _num_bases.items() for n, _ in _items}
+            _num_bases[_b].append((_c.name, _letter, _sk))
+    _num_variant_names = {n for _items in _num_bases.values() if len(_items) >= 2 for n, _, _ in _items}
+    _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _, _ in _items}
     seen_num_base: set[str] = set()
 
     # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
@@ -171,7 +160,8 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             base = _num_base_for[name]
             if base not in seen_num_base:
                 seen_num_base.add(base)
-                suffix = "/".join(sorted(_letters_per_base[base]))
+                items_sorted = sorted(_num_bases[base], key=lambda x: (x[1], x[2]))
+                suffix = "/".join(f"{letter}{sk}" for _, letter, sk in items_sorted)
                 groups[cls].append((base, f"numvariant:{suffix}"))
             continue
         groups[cls].append((name, "single"))
@@ -192,7 +182,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             return False
         if kind.startswith("numvariant:"):
             if name in _num_bases:
-                return any(n in reviewed_names for n, _ in _num_bases[name])
+                return any(n in reviewed_names for n, _, _ in _num_bases[name])
             return False
         return False
 
@@ -215,7 +205,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                 first_suffix = kind.split(":", 1)[1].split("/")[0]
                 liff_url = course_liff_urls.get(name + first_suffix, "")
             elif kind.startswith("numvariant:") and name in _num_bases:
-                first_name = min(_num_bases[name], key=lambda x: x[1])[0]
+                first_name = min(_num_bases[name], key=lambda x: (x[1], x[2]))[0]
                 liff_url = course_liff_urls.get(first_name, "")
             else:
                 liff_url = ""
@@ -524,14 +514,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if len(variant_courses) >= 2:
         return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
 
-    # Numeric variant group（文字違い2種類以上のときだけ選択肢としてまとめる。例: 生物学各論A1/A2/C1/C2）
-    _num_groups2: dict[str, list] = defaultdict(list)
-    for c in call:
-        _match = _vnum_match(c.name)
-        if _match and _match[0] == t and _match[1]:
-            _num_groups2[_match[1]].append(c)
-    if len(_num_groups2) >= 2:
-        _num_variants = sorted((c for cs in _num_groups2.values() for c in cs), key=lambda c: c.name)
+    # Numeric variant group（ベースが同じでアルファベット・数字だけ違う科目をまとめる。例: 生物学各論A1/A2/C1/C2）
+    _num_candidates = [c for c in call if (_m := _vnum_match(c.name)) and _m[0] == t]
+    if len(_num_candidates) >= 2:
+        _num_variants = sorted(_num_candidates, key=lambda c: c.name)
         return [make_variant_selection_bubble(t, [c.name for c in _num_variants], _reviewed_names)]
 
     # インメモリキーワード検索（DBアクセスなし）
@@ -567,20 +553,11 @@ async def handle_message(text: str, user_id: str = "") -> list:
                     base_variants[_b].append(_b + _s)
 
         # Numeric variants（文字違いが2種類以上あるベースだけを選択肢としてまとめる）
-        _kw_num_pairs: dict[tuple[str, str], list[str]] = defaultdict(list)
+        _kw_num_bases: dict[str, list[str]] = defaultdict(list)
         for c in courses:
             _match = _vnum_match(c.name)
             if _match:
-                _b, _letter, _ = _match
-                _kw_num_pairs[(_b, _letter)].append(c.name)
-        _kw_letters_per_base: dict[str, set[str]] = defaultdict(set)
-        for _b, _letter in _kw_num_pairs:
-            if _letter:
-                _kw_letters_per_base[_b].add(_letter)
-        _kw_num_bases: dict[str, list[str]] = defaultdict(list)
-        for (_b, _letter), _names in _kw_num_pairs.items():
-            if _letter and len(_kw_letters_per_base[_b]) >= 2:
-                _kw_num_bases[_b].extend(_names)
+                _kw_num_bases[_match[0]].append(c.name)
 
         seen_base: set[str] = set()
         seen_num_base: set[str] = set()
