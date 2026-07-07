@@ -23,11 +23,13 @@ async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
         result = parse_seiseki_pdf(data)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"PDF の解析に失敗しました: {e}")
+    raw_data = result["raw"]
+    if not raw_data.get("gaigo_courses") and not raw_data.get("senmon_courses") and not any(raw_data.get("summaries", {}).values()):
+        raise HTTPException(status_code=422, detail="成績表の内容を読み取れませんでした。神戸大学の成績表PDFかご確認ください。")
     uid = request.headers.get("X-Line-User-Id", "").strip()
     if uid and LINE_USER_ID_RE.match(uid):
         async with AsyncSessionLocal() as session:
             existing = await session.get(UserSeisekiRaw, uid)
-            raw_data = result["raw"]
             if existing:
                 existing.raw_json = raw_data
                 if result["gpa"] is not None:
