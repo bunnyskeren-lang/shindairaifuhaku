@@ -204,7 +204,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                 if syl_url:
                     if link_items:
                         link_items.append(FlexText(text="  ", size="xxs", color="#cbd5e1", flex=0))
-                    link_items.append(FlexText(text="シラバス", size="xxs", color="#64748b", flex=0,
+                    link_items.append(FlexText(text="シラバス", size="xxs", color="#2563eb", flex=0,
                                                action=URIAction(label="シラバス", uri=syl_url)))
                 btn_contents.append(FlexBox(
                     layout="vertical",
