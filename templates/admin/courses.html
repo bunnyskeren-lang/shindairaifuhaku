@@ -611,12 +611,25 @@ function addInstructor(courseId) {
       chip.id = 'inst-chip-' + data.id;
       chip.dataset.name = data.name;
       chip.style.cssText = 'background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px';
-      var nameHtml = data.url
-        ? '<a href="' + data.url + '" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">' + data.name + '</a>'
-        : data.name;
-      chip.innerHTML = nameHtml +
-        ' <button type="button" onclick="deleteInstructor(' + courseId + ',' + data.id + ',this)"' +
-        ' style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>';
+      if (data.url) {
+        const nameLink = document.createElement('a');
+        nameLink.href = data.url;
+        nameLink.target = '_blank';
+        nameLink.rel = 'noopener';
+        nameLink.style.cssText = 'color:#4338ca;text-decoration:underline';
+        nameLink.textContent = data.name;
+        chip.appendChild(nameLink);
+      } else {
+        chip.appendChild(document.createTextNode(data.name));
+      }
+      chip.appendChild(document.createTextNode(' '));
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.title = '削除';
+      delBtn.textContent = '✕';
+      delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1';
+      delBtn.addEventListener('click', function() { deleteInstructor(courseId, data.id, delBtn); });
+      chip.appendChild(delBtn);
       var inserted = false;
       var siblings = list.querySelectorAll('span[data-name]');
       for (var i = 0; i < siblings.length; i++) {
