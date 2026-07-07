@@ -8,7 +8,7 @@ from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOYO_REQUIRED_CREDITS,
-    LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, TIMETABLE_LIFF_ID,
+    LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, REVIEW_LIFF_ID, TIMETABLE_LIFF_ID,
 )
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -72,6 +72,18 @@ async def register_page(request: Request, uid: str = Query(default="")):
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
+
+
+@router.get("/liff/review", response_class=HTMLResponse)
+async def liff_review(request: Request):
+    return templates.TemplateResponse(
+        "liff/review_redirect.html",
+        {
+            "request": request,
+            "liff_id": REVIEW_LIFF_ID,
+            "base_url": APP_URL,
+        },
+    )
 
 
 @router.get("/privacy", response_class=HTMLResponse)

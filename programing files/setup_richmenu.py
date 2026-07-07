@@ -7,6 +7,7 @@
   LINE_CHANNEL_ACCESS_TOKEN
   REVIEW_FORM_URL
   TIMETABLE_LIFF_ID  (My時間割ボタンのLIFF URL用)
+  REVIEW_LIFF_ID     (レビュー投稿ボタンのLIFF URL用)
 """
 import argparse
 import io
@@ -35,6 +36,7 @@ REVIEW_FORM_URL = os.environ.get(
 )
 TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
+REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
 
 if args.env == "prod":
     confirm = input("⚠️  本番環境のリッチメニューを更新します。よろしいですか？ (yes/no): ")
@@ -78,12 +80,18 @@ def _timetable_action():
     return PostbackAction(label="My時間割", data="時間割", display_text="📅 My時間割")
 
 
+def _review_action():
+    if REVIEW_LIFF_ID:
+        return URIAction(label="レビュー投稿", uri=f"https://liff.line.me/{REVIEW_LIFF_ID}")
+    return PostbackAction(label="レビュー投稿", data="レビュー投稿")
+
+
 AREAS = [
     # ── Row 1 ────────────────────────────────────────────────────
     {
         "label": "レビュー投稿",
         "x": 0, "y": 0, "w": REV_W, "h": ROW2_Y,
-        "action": PostbackAction(label="レビュー投稿", data="レビュー投稿"),
+        "action": _review_action(),
     },
     {
         "label": "BEEF+バナー",

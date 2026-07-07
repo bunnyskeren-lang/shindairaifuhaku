@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>授業レビュー投稿 | 神大ライフハック</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(to bottom right, #eff6ff, #e0e7ff);
+    }
+    .box { text-align: center; color: #475569; }
+    .spinner {
+      width: 36px; height: 36px; margin: 0 auto 12px;
+      border: 4px solid #c7d2fe;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="spinner"></div>
+    <p id="msg">読み込み中...</p>
+  </div>
+
+  <script>
+    const LIFF_ID = "{{ liff_id }}";
+    const BASE_URL = "{{ base_url }}";
+
+    async function main() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        let userId = null;
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          userId = profile.userId;
+        }
+        const params = new URLSearchParams(location.search);
+        if (userId) params.set('uid', userId);
+        location.replace(`${BASE_URL}/?${params.toString()}`);
+      } catch (e) {
+        document.getElementById('msg').textContent = 'LINEアプリから開いてください';
+      }
+    }
+    main();
+  </script>
+</body>
+</html>

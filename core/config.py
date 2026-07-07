@@ -20,6 +20,7 @@ SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
+REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
 RICHMENU_ID_PREREGISTER = os.environ.get("RICHMENU_ID_PREREGISTER", "")
 try:
     KYOYO_REQUIRED_CREDITS = int(os.environ.get("KYOYO_REQUIRED_CREDITS", "1"))
