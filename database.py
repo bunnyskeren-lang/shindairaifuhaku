@@ -259,7 +259,25 @@ async def init_db():
                     )
             except Exception:
                 pass
-        # 開講区分: 旧termカラムの値をterm_typeへバックフィル（term_typeに一本化のため）
+        # 開講区分: 旧termカラムの値をterm_typeへバックフィルしてからtermを削除（term_typeに一本化）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'subjects' AND column_name = 'term'
+              ) THEN
+                UPDATE subjects SET term_type = term WHERE term_type IS NULL AND term IS NOT NULL;
+                ALTER TABLE subjects DROP COLUMN term;
+              END IF;
+            END $$
+        """))
+        # 未使用カラムの削除（DBクリーンアップ）
         await conn.execute(text(
-            "UPDATE subjects SET term_type = term WHERE term_type IS NULL AND term IS NOT NULL"
+            "ALTER TABLE course_sections DROP COLUMN IF EXISTS course_type"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE schedules DROP COLUMN IF EXISTS classroom"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE push_subscriptions DROP COLUMN IF EXISTS line_user_id"
         ))

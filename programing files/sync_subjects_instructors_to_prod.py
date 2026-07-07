@@ -34,7 +34,7 @@ async def main():
         # course_sections/reviews が subjects に CASCADE 依存するため TRUNCATE せず UPSERT
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, classification, "
-            "category, senmon_group, sort_order, term, term_type, credits "
+            "category, senmon_group, sort_order, term_type, credits "
             "FROM subjects ORDER BY id"
         )
         async with prod.transaction():
@@ -42,18 +42,18 @@ async def main():
                 """
                 INSERT INTO subjects
                   (id, name, reading, faculty, classification,
-                   category, senmon_group, sort_order, term, term_type, credits)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                   category, senmon_group, sort_order, term_type, credits)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 ON CONFLICT (id) DO UPDATE SET
                   name=EXCLUDED.name, reading=EXCLUDED.reading, faculty=EXCLUDED.faculty,
                   classification=EXCLUDED.classification,
                   category=EXCLUDED.category, senmon_group=EXCLUDED.senmon_group,
-                  sort_order=EXCLUDED.sort_order, term=EXCLUDED.term,
+                  sort_order=EXCLUDED.sort_order,
                   term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
                 """,
                 [(r["id"], r["name"], r["reading"], r["faculty"],
                   r["classification"], r["category"], r["senmon_group"], r["sort_order"],
-                  r["term"], r["term_type"], r["credits"])
+                  r["term_type"], r["credits"])
                  for r in subj_rows]
             )
         print(f"subjects: {len(subj_rows)}件 upsert")

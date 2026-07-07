@@ -54,7 +54,7 @@ async def main():
         # course_sections/reviews が subjects に CASCADE 依存するため TRUNCATE せず UPSERT
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, classification, "
-            "category, senmon_group, sort_order, term, term_type, credits "
+            "category, senmon_group, sort_order, term_type, credits "
             "FROM subjects ORDER BY id"
         )
         async with prod.transaction():
@@ -62,18 +62,18 @@ async def main():
                 """
                 INSERT INTO subjects
                   (id, name, reading, faculty, classification,
-                   category, senmon_group, sort_order, term, term_type, credits)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                   category, senmon_group, sort_order, term_type, credits)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 ON CONFLICT (id) DO UPDATE SET
                   name=EXCLUDED.name, reading=EXCLUDED.reading, faculty=EXCLUDED.faculty,
                   classification=EXCLUDED.classification,
                   category=EXCLUDED.category, senmon_group=EXCLUDED.senmon_group,
-                  sort_order=EXCLUDED.sort_order, term=EXCLUDED.term,
+                  sort_order=EXCLUDED.sort_order,
                   term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
                 """,
                 [(r["id"], r["name"], r["reading"], r["faculty"],
                   r["classification"], r["category"], r["senmon_group"], r["sort_order"],
-                  r["term"], r["term_type"], r["credits"])
+                  r["term_type"], r["credits"])
                  for r in subj_rows]
             )
         print(f"subjects: {len(subj_rows)}件 upsert")
@@ -99,7 +99,7 @@ async def main():
         # subjects は id で UPSERT 済みなので subject_id はそのまま使える
         # instructor_id は prod での ID に変換する必要あり
         cs_rows = await dev.fetch(
-            "SELECT id, subject_id, instructor_id, course_type, syllabus_url "
+            "SELECT id, subject_id, instructor_id, syllabus_url "
             "FROM course_sections ORDER BY id"
         )
         cs_params = []
@@ -111,15 +111,15 @@ async def main():
                 print(f"  WARNING: instructor '{instr_name}' が prod に見つかりません（course_section {r['id']} をスキップ）")
                 skipped += 1
                 continue
-            cs_params.append((r["subject_id"], prod_instr_id, r["course_type"], r["syllabus_url"]))
+            cs_params.append((r["subject_id"], prod_instr_id, r["syllabus_url"]))
 
         async with prod.transaction():
             await prod.executemany(
                 """
-                INSERT INTO course_sections (subject_id, instructor_id, course_type, syllabus_url)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO course_sections (subject_id, instructor_id, syllabus_url)
+                VALUES ($1, $2, $3)
                 ON CONFLICT (subject_id, instructor_id) DO UPDATE SET
-                  course_type=EXCLUDED.course_type, syllabus_url=EXCLUDED.syllabus_url
+                  syllabus_url=EXCLUDED.syllabus_url
                 """,
                 cs_params
             )

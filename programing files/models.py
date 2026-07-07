@@ -63,7 +63,6 @@ class Subject(Base):
     category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     senmon_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
-    term: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
 
@@ -81,7 +80,6 @@ class CourseSection(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
     instructor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False, index=True)
-    course_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     syllabus_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
@@ -107,7 +105,6 @@ class Schedule(Base):
     syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
     day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
     period: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    classroom: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

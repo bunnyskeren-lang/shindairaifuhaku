@@ -129,7 +129,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
     {% set is_auto = not c.senmon_group %}
     <tr>
       <td style="font-size:13px">{{ c.name }}
-        {% if c.term %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term }}</span>{% endif %}
+        {% if c.term_type %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term_type }}</span>{% endif %}
       </td>
       <td style="font-size:12px;color:#6b7280">{{ c.instructor }}</td>
       <td>

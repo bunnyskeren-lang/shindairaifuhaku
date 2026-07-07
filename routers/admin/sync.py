@@ -79,13 +79,13 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
         )
         subj_rows = await dev_conn.fetch(
             "SELECT name, reading, faculty, classification, category, senmon_group, "
-            "sort_order, term, term_type, credits, hide_from_timetable "
+            "sort_order, term_type, credits, hide_from_timetable "
             "FROM subjects ORDER BY id"
         )
         instr_rows = await dev_conn.fetch("SELECT name, sort_order FROM instructors ORDER BY id")
         section_rows = await dev_conn.fetch(
             "SELECT s.name AS subject_name, i.name AS instructor_name, "
-            "cs.course_type, cs.syllabus_url "
+            "cs.syllabus_url "
             "FROM course_sections cs "
             "JOIN subjects s ON s.id = cs.subject_id "
             "JOIN instructors i ON i.id = cs.instructor_id "
@@ -116,7 +116,7 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
             values = {
                 "reading": r["reading"], "faculty": r["faculty"], "classification": r["classification"],
                 "category": r["category"], "senmon_group": r["senmon_group"], "sort_order": r["sort_order"],
-                "term": r["term"], "term_type": r["term_type"], "credits": r["credits"],
+                "term_type": r["term_type"], "credits": r["credits"],
                 "hide_from_timetable": r["hide_from_timetable"],
             }
             existing_id = (await session.execute(
@@ -152,7 +152,7 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
             iid = instructor_id_by_name.get(r["instructor_name"])
             if not sid or not iid:
                 continue
-            values = {"course_type": r["course_type"], "syllabus_url": r["syllabus_url"]}
+            values = {"syllabus_url": r["syllabus_url"]}
             stmt = pg_insert(CourseSection).values(
                 subject_id=sid, instructor_id=iid, **values,
             ).on_conflict_do_update(
