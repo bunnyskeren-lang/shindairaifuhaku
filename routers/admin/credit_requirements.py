@@ -169,6 +169,13 @@ async def admin_keiei_delete_requirement(cat_id: str, request: Request, _: str =
     async with AsyncSessionLocal() as session:
         row = await session.get(CreditRequirement, cat_id)
         if row:
+            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
+            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
+            in_use = (await session.execute(
+                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
+            )).scalar_one_or_none()
+            if in_use:
+                return RedirectResponse("/admin/keiei?error=in_use", status_code=303)
             await session.delete(row)
             await session.commit()
     return RedirectResponse("/admin/keiei", status_code=303)
@@ -326,6 +333,13 @@ async def admin_sysinfo_delete_requirement(cat_id: str, request: Request, _: str
     async with AsyncSessionLocal() as session:
         row = await session.get(CreditRequirement, cat_id)
         if row:
+            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
+            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
+            in_use = (await session.execute(
+                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
+            )).scalar_one_or_none()
+            if in_use:
+                return RedirectResponse("/admin/sysinfo?error=in_use", status_code=303)
             await session.delete(row)
             await session.commit()
     return RedirectResponse("/admin/sysinfo", status_code=303)
