@@ -42,7 +42,10 @@ async def api_timetable_profile_set(request: Request):
     faculty = data.get("faculty") or None
     grade = data.get("grade")
     if grade is not None:
-        grade = int(grade)
+        try:
+            grade = int(grade)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="grade must be an integer")
         if not (1 <= grade <= 6):
             raise HTTPException(status_code=400, detail="grade must be between 1 and 6")
     department = data.get("department") or None
