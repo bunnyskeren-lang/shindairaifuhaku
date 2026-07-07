@@ -876,7 +876,6 @@
 
     const searchInput = document.getElementById('courseSearchInput');
     const dropdown = document.getElementById('courseDropdown');
-    let courseComposing = false;
 
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -934,14 +933,11 @@
       }
     }
 
-    searchInput.addEventListener('compositionstart', () => { courseComposing = true; });
     searchInput.addEventListener('compositionend', () => {
-      courseComposing = false;
       searchCourses(searchInput.value.trim());
     });
 
     searchInput.addEventListener('input', () => {
-      if (courseComposing) return;
       searchCourses(searchInput.value.trim());
     });
 
@@ -1027,7 +1023,6 @@
     // 先生名検索
     const instrSearchInput = document.getElementById('instructorSearchInput');
     const instrSearchDropdown = document.getElementById('instructorSearchDropdown');
-    let instrComposing = false;
 
     function clearInstrSearch() {
       instrSearchDropdown.classList.add('hidden');
@@ -1075,14 +1070,11 @@
       }
     }
 
-    instrSearchInput.addEventListener('compositionstart', () => { instrComposing = true; });
     instrSearchInput.addEventListener('compositionend', () => {
-      instrComposing = false;
       searchInstructors(instrSearchInput.value.trim());
     });
 
     instrSearchInput.addEventListener('input', () => {
-      if (instrComposing) return;
       searchInstructors(instrSearchInput.value.trim());
     });
 
