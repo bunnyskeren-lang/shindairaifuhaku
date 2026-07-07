@@ -254,6 +254,17 @@
             placeholder="例：ハイブリッド形式など" maxlength="30">
           <p id="formatCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
           <p id="classFormatError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
+
+          <!-- 授業形式の割合（2つ以上選択時のみ表示） -->
+          <div id="formatPercentContainer" class="hidden mt-3 pt-3 border-t border-purple-200">
+            <p class="text-xs font-bold text-purple-700 mb-2">📊 それぞれの割合</p>
+            <p class="text-xs text-purple-400 mb-2">👆 ⇔ の付いたつまみを左右にドラッグして割合を調整できます</p>
+            <div id="formatSliderBar" class="eval-slider-bar">
+              <div id="formatSliderTrack" class="eval-slider-track"></div>
+            </div>
+            <div id="formatPercentList" class="mt-2 space-y-1"></div>
+            <p id="formatPercentError" class="hidden mt-1.5 text-red-500 text-xs">割合を入力してください（合計100%になるように）</p>
+          </div>
         </div>
 
         <!-- 出席確認 -->
@@ -596,7 +607,7 @@
             formatInput.value = '';
           }
         }
-        if (btn.dataset.group === 'eval') renderEvalPercents();
+        if (PERCENT_GROUPS[btn.dataset.group]) renderGroupPercents(btn.dataset.group);
         updateGradingMethod();
         saveData();
       };
@@ -604,7 +615,8 @@
 
     ['evalCustomInput', 'formatCustomInput', 'gradingExtra'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
-        if (id === 'evalCustomInput') renderEvalPercents();
+        if (id === 'evalCustomInput') renderGroupPercents('eval');
+        if (id === 'formatCustomInput') renderGroupPercents('class_format');
         updateGradingMethod();
         saveData();
       });
@@ -634,14 +646,39 @@
       }
     });
 
+    const PERCENT_GROUPS = {
+      eval: {
+        containerId: 'evalPercentContainer', barId: 'evalSliderBar', trackId: 'evalSliderTrack',
+        listId: 'evalPercentList', errorId: 'evalPercentError', customInputId: 'evalCustomInput',
+        customValue: '__custom__', dragged: false,
+      },
+      class_format: {
+        containerId: 'formatPercentContainer', barId: 'formatSliderBar', trackId: 'formatSliderTrack',
+        listId: 'formatPercentList', errorId: 'formatPercentError', customInputId: 'formatCustomInput',
+        customValue: '__format_custom__', dragged: false,
+      },
+    };
+
+    function partsForGroup(group) {
+      const cfg = PERCENT_GROUPS[group];
+      const btns = [...document.querySelectorAll(`[data-group="${group}"].active`)];
+      const percents = {};
+      document.querySelectorAll(`.percent-input[data-slider-group="${group}"]`).forEach(inp => {
+        percents[inp.dataset.percentFor] = inp.value.trim();
+      });
+      return btns.map(b => {
+        const label = b.dataset.value === cfg.customValue
+          ? (document.getElementById(cfg.customInputId).value.trim() || null)
+          : b.dataset.value;
+        if (!label) return null;
+        const pct = btns.length >= 2 ? percents[b.dataset.value] : '';
+        return pct ? `${label}(${pct}%)` : label;
+      }).filter(Boolean);
+    }
+
     function updateGradingMethod() {
       const parts = [];
-      const formats = [...document.querySelectorAll('[data-group="class_format"].active')].map(b => {
-        if (b.dataset.value === '__format_custom__') {
-          return document.getElementById('formatCustomInput').value.trim() || null;
-        }
-        return b.dataset.value;
-      }).filter(Boolean);
+      const formats = partsForGroup('class_format');
       if (formats.length) parts.push(`形式:${formats.join('・')}`);
       const att = document.querySelector('[data-group="attendance"].active');
       if (att) parts.push(`出席:${att.dataset.value}`);
@@ -649,19 +686,7 @@
       if (hw) parts.push(`課題:${hw.dataset.value}`);
       const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
       if (hwFreq) parts.push(`頻度:${hwFreq.dataset.value}`);
-      const evalBtns = [...document.querySelectorAll('[data-group="eval"].active')];
-      const evalPercents = {};
-      document.querySelectorAll('.eval-percent-input').forEach(inp => {
-        evalPercents[inp.dataset.percentFor] = inp.value.trim();
-      });
-      const evals = evalBtns.map(b => {
-        const label = b.dataset.value === '__custom__'
-          ? (document.getElementById('evalCustomInput').value.trim() || null)
-          : b.dataset.value;
-        if (!label) return null;
-        const pct = evalBtns.length >= 2 ? evalPercents[b.dataset.value] : '';
-        return pct ? `${label}(${pct}%)` : label;
-      }).filter(Boolean);
+      const evals = partsForGroup('eval');
       if (evals.length) parts.push(`評価:${evals.join('・')}`);
       const extra = document.getElementById('gradingExtra').value.trim();
       if (extra) parts.push(`補足:${extra}`);
@@ -670,20 +695,21 @@
 
     const EVAL_SLIDER_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6'];
 
-    function renderEvalPercents(overridePercents) {
-      const activeBtns = [...document.querySelectorAll('[data-group="eval"].active')];
-      const container = document.getElementById('evalPercentContainer');
-      const trackEl = document.getElementById('evalSliderTrack');
-      const legendEl = document.getElementById('evalPercentList');
+    function renderGroupPercents(group, overridePercents) {
+      const cfg = PERCENT_GROUPS[group];
+      const activeBtns = [...document.querySelectorAll(`[data-group="${group}"].active`)];
+      const container = document.getElementById(cfg.containerId);
+      const trackEl = document.getElementById(cfg.trackId);
+      const legendEl = document.getElementById(cfg.listId);
       if (activeBtns.length < 2) {
         container.classList.add('hidden');
         trackEl.innerHTML = '';
         legendEl.innerHTML = '';
-        document.getElementById('evalPercentError').classList.add('hidden');
+        document.getElementById(cfg.errorId).classList.add('hidden');
         return;
       }
       const existing = {};
-      document.querySelectorAll('.eval-percent-input').forEach(inp => {
+      document.querySelectorAll(`.percent-input[data-slider-group="${group}"]`).forEach(inp => {
         existing[inp.dataset.percentFor] = parseFloat(inp.value);
       });
       const source = overridePercents || existing;
@@ -692,8 +718,8 @@
       const vals = activeBtns.map(b => b.dataset.value);
       const labels = {};
       activeBtns.forEach(b => {
-        labels[b.dataset.value] = b.dataset.value === '__custom__'
-          ? (document.getElementById('evalCustomInput').value.trim() || 'その他')
+        labels[b.dataset.value] = b.dataset.value === cfg.customValue
+          ? (document.getElementById(cfg.customInputId).value.trim() || 'その他')
           : b.dataset.value;
       });
 
@@ -710,13 +736,14 @@
         }
       }
 
-      buildEvalSliderBar(vals, labels, percents);
+      buildSliderBar(group, vals, labels, percents);
     }
 
-    function buildEvalSliderBar(vals, labels, percents) {
-      const trackEl = document.getElementById('evalSliderTrack');
-      const barEl = document.getElementById('evalSliderBar');
-      const legendEl = document.getElementById('evalPercentList');
+    function buildSliderBar(group, vals, labels, percents) {
+      const cfg = PERCENT_GROUPS[group];
+      const trackEl = document.getElementById(cfg.trackId);
+      const barEl = document.getElementById(cfg.barId);
+      const legendEl = document.getElementById(cfg.listId);
       trackEl.innerHTML = '';
       barEl.querySelectorAll('.eval-slider-divider').forEach(d => d.remove());
       legendEl.innerHTML = '';
@@ -733,8 +760,9 @@
 
         const hidden = document.createElement('input');
         hidden.type = 'hidden';
-        hidden.className = 'eval-percent-input';
+        hidden.className = 'percent-input';
         hidden.dataset.percentFor = val;
+        hidden.dataset.sliderGroup = group;
         hidden.value = percents[i];
         legendEl.appendChild(hidden);
 
@@ -749,21 +777,20 @@
       const cumulatives = percents.map(p => (cumulative += p));
       for (let i = 0; i < vals.length - 1; i++) {
         const divider = document.createElement('div');
-        divider.className = 'eval-slider-divider' + (evalSliderDragged ? '' : ' hint');
+        divider.className = 'eval-slider-divider' + (cfg.dragged ? '' : ' hint');
         divider.style.left = cumulatives[i] + '%';
         divider.dataset.index = i;
         barEl.appendChild(divider);
-        attachDividerDrag(divider, i, vals);
+        attachDividerDrag(group, divider, i, vals);
       }
     }
 
-    let evalSliderDragged = false;
-
-    function attachDividerDrag(divider, index, vals) {
-      const barEl = document.getElementById('evalSliderBar');
+    function attachDividerDrag(group, divider, index, vals) {
+      const cfg = PERCENT_GROUPS[group];
+      const barEl = document.getElementById(cfg.barId);
       const onMove = (clientX) => {
         const rect = barEl.getBoundingClientRect();
-        const inputs = vals.map(v => document.querySelector(`.eval-percent-input[data-percent-for="${v}"]`));
+        const inputs = vals.map(v => document.querySelector(`.percent-input[data-slider-group="${group}"][data-percent-for="${v}"]`));
         const percents = inputs.map(inp => parseFloat(inp.value));
         let cumulative = 0;
         const cumulatives = percents.map(p => (cumulative += p));
@@ -779,13 +806,13 @@
         inputs[index + 1].value = percents[index + 1];
         divider.style.left = newBoundary + '%';
 
-        const track = document.getElementById('evalSliderTrack');
+        const track = document.getElementById(cfg.trackId);
         track.children[index].style.flexBasis = percents[index] + '%';
         track.children[index].textContent = percents[index] + '%';
         track.children[index + 1].style.flexBasis = percents[index + 1] + '%';
         track.children[index + 1].textContent = percents[index + 1] + '%';
 
-        document.getElementById('evalPercentError').classList.add('hidden');
+        document.getElementById(cfg.errorId).classList.add('hidden');
         updateGradingMethod();
         saveData();
       };
@@ -798,14 +825,14 @@
       };
       divider.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        evalSliderDragged = true;
+        cfg.dragged = true;
         divider.classList.remove('hint');
         document.addEventListener('mousemove', onPointerMove);
         document.addEventListener('mouseup', onPointerUp);
       });
       divider.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        evalSliderDragged = true;
+        cfg.dragged = true;
         divider.classList.remove('hint');
         document.addEventListener('touchmove', onPointerMove, { passive: false });
         document.addEventListener('touchend', onPointerUp);
@@ -1194,12 +1221,13 @@
           ease: currentEase,
           classFormats: [...document.querySelectorAll('[data-group="class_format"].active')].map(b => b.dataset.value),
           formatCustom: document.getElementById('formatCustomInput').value,
+          formatPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="class_format"]')].map(i => [i.dataset.percentFor, i.value])),
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
           homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
           homeworkFrequency: document.querySelector('[data-group="homework_frequency"].active')?.dataset.value || '',
           evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
           evalCustom: document.getElementById('evalCustomInput').value,
-          evalPercents: Object.fromEntries([...document.querySelectorAll('.eval-percent-input')].map(i => [i.dataset.percentFor, i.value])),
+          evalPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="eval"]')].map(i => [i.dataset.percentFor, i.value])),
           gradingExtra: document.getElementById('gradingExtra').value,
           comment: document.getElementById('comment').value,
         }));
@@ -1244,6 +1272,7 @@
             formatInput.classList.remove('hidden');
             if (d.formatCustom) formatInput.value = d.formatCustom;
           }
+          renderGroupPercents('class_format', d.formatPercents);
         }
         if (d.attendance) {
           document.querySelectorAll('[data-group="attendance"]').forEach(b => {
@@ -1269,7 +1298,7 @@
             customInput.classList.remove('hidden');
             if (d.evalCustom) customInput.value = d.evalCustom;
           }
-          renderEvalPercents(d.evalPercents);
+          renderGroupPercents('eval', d.evalPercents);
         }
         if (d.gradingExtra) document.getElementById('gradingExtra').value = d.gradingExtra;
         if (d.comment) {
@@ -1320,7 +1349,7 @@
       ['regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
        'classFormatError','formatCustomError','attendanceError','homeworkError',
-       'homeworkFrequencyError','evalError','evalCustomError','evalPercentError'].forEach(id => {
+       'homeworkFrequencyError','evalError','evalCustomError','evalPercentError','formatPercentError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -1384,7 +1413,7 @@
         document.getElementById('evalCustomInput').classList.add('border-red-400');
         valid = false;
       } else if (evalActives.length >= 2) {
-        const percentInputs = [...document.querySelectorAll('.eval-percent-input')];
+        const percentInputs = [...document.querySelectorAll('.percent-input[data-slider-group="eval"]')];
         const total = percentInputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
         const allFilled = percentInputs.length === evalActives.length &&
           percentInputs.every(i => i.value.trim() !== '' && parseFloat(i.value) > 0);
@@ -1403,6 +1432,15 @@
         document.getElementById('formatCustomError').classList.remove('hidden');
         document.getElementById('formatCustomInput').classList.add('border-red-400');
         valid = false;
+      } else if (fmtActives.length >= 2) {
+        const percentInputs = [...document.querySelectorAll('.percent-input[data-slider-group="class_format"]')];
+        const total = percentInputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
+        const allFilled = percentInputs.length === fmtActives.length &&
+          percentInputs.every(i => i.value.trim() !== '' && parseFloat(i.value) > 0);
+        if (!allFilled || total !== 100) {
+          document.getElementById('formatPercentError').classList.remove('hidden');
+          valid = false;
+        }
       }
       // コメント必須
       if (!document.getElementById('comment').value.trim()) {
