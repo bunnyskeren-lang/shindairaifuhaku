@@ -783,7 +783,7 @@ function updateIntensiveSection() {
     info.innerHTML = `
       <div class="intensive-item-name">${esc(c.name)}</div>
       <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
-      ${sylUrl ? `<a href="${sylUrl}" target="_blank" class="syllabus-link" onclick="event.stopPropagation()">シラバス →</a>` : ''}
+      ${sylUrl ? `<a href="${esc(sylUrl)}" target="_blank" class="syllabus-link" onclick="event.stopPropagation()">シラバス →</a>` : ''}
     `;
     div.appendChild(info);
     list.appendChild(div);
@@ -896,7 +896,7 @@ function makeCourseItem(c) {
   info.innerHTML = `
     <div class="course-name">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
     <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
-    ${sylUrl ? `<a href="${sylUrl}" target="_blank" class="syllabus-link">シラバス →</a>` : ''}
+    ${sylUrl ? `<a href="${esc(sylUrl)}" target="_blank" class="syllabus-link">シラバス →</a>` : ''}
   `;
 
   const btn = document.createElement("button");
@@ -1009,6 +1009,15 @@ async function toggleRegister(btn, course) {
       course.registered = true;
       myCourseIds.add(course.id);
     }
+  } catch (e) {
+    alert("エラーが発生しました。再度お試しください。");
+    btn.disabled = false;
+    return;
+  }
+  // 修正理由: 登録/解除自体は既に成功している。以前はこの再描画処理も同じtry内にあり、
+  // ここでの失敗（fetch一時エラー等）で「エラーが発生しました」と誤表示され、
+  // 成功しているのにユーザーが再操作して登録⇄解除を繰り返す原因になっていた。
+  try {
     _slotCache.clear();
     await loadMyCourses();
     updateIntensiveSection();
@@ -1019,7 +1028,7 @@ async function toggleRegister(btn, course) {
       if (div) updateCell(div, currentSlot.day, currentSlot.period);
     }
   } catch (e) {
-    alert("エラーが発生しました。再度お試しください。");
+    // 表示更新の失敗は致命的ではないため無視する（次回の一覧表示時に再取得される）
   } finally {
     btn.disabled = false;
   }
@@ -1065,7 +1074,10 @@ async function loadCreditRequirements() {
 async function loadCredits() {
   _creditData = JSON.parse(localStorage.getItem('credit_data') || '{}');
   await loadCreditRequirements();
-  renderCreditRows();
+  // 修正理由: CREDIT_CATSが空（=API取得失敗でエラーメッセージ表示中）の場合、
+  // renderCreditRows()が無条件にcredits-rowsをクリアしてしまい、
+  // loadCreditRequirements()が出したエラーメッセージが一瞬で消えていた。
+  if (CREDIT_CATS.length > 0) renderCreditRows();
   // Restore or default total required credits
   const totalReqEl = document.getElementById('credits-total-req');
   if (totalReqEl) {
