@@ -394,6 +394,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 header_color="#0ea5e9",
                 data_prefix="専門:",
             )]
+        # 修正理由: 該当する子分類が無い場合（管理画面で親グループ設定が変更された直後の
+        # キャッシュずれ等）にreturnせず下の分岐へフォールスルーしていたため、
+        # 最終的に内部のpostback文字列（矢印記号込み）がそのままユーザーに露出していた。
+        return [TextMessage(text=f"「{parent}」の専門科目分類が見つかりませんでした。\n\n「専門科目」からやり直してください。")]
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
@@ -529,7 +533,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
     tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
     _toks_lower = [tok.lower() for tok in tokens]
-    courses = [c for c in call if all(
+    # 修正理由: all(...) はトークンが空リストだと常にTrueを返すため、空白のみの
+    # メッセージ（全角スペース等はstrip()で""になる）だとキャッシュ先頭6件が
+    # 無条件でヒットし、意味不明な科目カードが返信されていた。
+    courses = [c for c in call if _toks_lower and all(
         tok in (c.name or '').lower() or tok in (c.reading or '').lower()
         for tok in _toks_lower
     )][:6]
