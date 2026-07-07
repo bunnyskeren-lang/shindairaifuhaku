@@ -779,9 +779,11 @@ function updateIntensiveSection() {
     div.onclick = () => openDrawer("集", 0);
     const info = document.createElement("div");
     info.className = "intensive-item-info";
+    const sylUrl = makeSyllabusUrl(c.timetable_code);
     info.innerHTML = `
       <div class="intensive-item-name">${esc(c.name)}</div>
       <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
+      ${sylUrl ? `<a href="${sylUrl}" target="_blank" class="syllabus-link" onclick="event.stopPropagation()">シラバス →</a>` : ''}
     `;
     div.appendChild(info);
     list.appendChild(div);

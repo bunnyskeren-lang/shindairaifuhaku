@@ -149,6 +149,7 @@ async def api_timetable_my(user_id: str = Query("")):
                     "instructor": instr.name,
                     "term": syl.academic_term,
                     "credits": _credits_from_term(syl.academic_term),
+                    "timetable_code": syl.timetable_code or "",
                     "slots": [],
                 }
             result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})
