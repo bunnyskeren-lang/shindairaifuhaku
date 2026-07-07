@@ -180,9 +180,10 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             else:
                 display = name
             has_review = _entry_has_review(name, kind)
-            text_color = "#4f46e5" if has_review else "#334155"
-            display_text = f"✓{display}" if has_review else display
             syl_url = course_syllabus_urls.get(name, "")
+            has_content = has_review or bool(syl_url)
+            text_color = "#0f172a" if has_content else "#94a3b8"
+            display_text = f"✓{display}" if has_review else display
             if kind == "single":
                 liff_url = course_liff_urls.get(name, "")
             elif kind.startswith("variant:"):
