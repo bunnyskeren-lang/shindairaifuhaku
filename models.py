@@ -109,6 +109,7 @@ class UserSeisekiRaw(Base):
 
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    gpa: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

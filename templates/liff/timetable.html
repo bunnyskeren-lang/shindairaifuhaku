@@ -1093,7 +1093,7 @@ async function loadCredits() {
         fetch(BASE_URL + '/api/seiseki/save_raw', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: userId, raw: _creditData._raw }),
+          body: JSON.stringify({ uid: userId, raw: _creditData._raw, gpa: _creditData._gpa?.value }),
         }).catch(() => {});
         delete _creditData._raw;
       }
@@ -1116,6 +1116,14 @@ async function loadCredits() {
           const btn = document.getElementById('credits-pdf-btn');
           if (btn) btn.innerHTML = '✅ PDF読込済（再読込）';
         }
+        // GPAはDB側が正（ローカルより優先）
+        if (data.gpa != null) {
+          if (!_creditData._gpa) _creditData._gpa = {};
+          _creditData._gpa.value = data.gpa;
+          document.getElementById('credits-gpa-val').textContent = Number(data.gpa).toFixed(2);
+          document.getElementById('credits-gpa-row').style.display = 'flex';
+        }
+        localStorage.setItem('credit_data', JSON.stringify(_creditData));
       }
     } catch(e) {}
   }

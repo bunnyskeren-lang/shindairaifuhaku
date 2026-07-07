@@ -30,8 +30,10 @@ async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
             raw_data = result["raw"]
             if existing:
                 existing.raw_json = raw_data
+                if result["gpa"] is not None:
+                    existing.gpa = result["gpa"]
             else:
-                session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_data))
+                session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_data, gpa=result["gpa"]))
             await session.commit()
     return result
 
@@ -54,7 +56,7 @@ async def api_seiseki_credits(uid: str):
     if not row:
         return {}
     raw = row.raw_json
-    return {"credits": classify_seiseki_raw(raw)}
+    return {"credits": classify_seiseki_raw(raw), "gpa": row.gpa}
 
 
 @router.post("/api/seiseki/save_raw")
@@ -62,14 +64,17 @@ async def api_seiseki_save_raw(request: Request):
     body = await request.json()
     uid = body.get("uid", "").strip()
     raw = body.get("raw")
+    gpa = body.get("gpa")
     if not uid or not LINE_USER_ID_RE.match(uid) or not raw:
         raise HTTPException(status_code=400, detail="uid and raw required")
     async with AsyncSessionLocal() as session:
         existing = await session.get(UserSeisekiRaw, uid)
         if existing:
             existing.raw_json = raw
+            if gpa is not None:
+                existing.gpa = gpa
         else:
-            session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw))
+            session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw, gpa=gpa))
         await session.commit()
     return {"ok": True}
 

@@ -281,3 +281,7 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE push_subscriptions DROP COLUMN IF EXISTS line_user_id"
         ))
+        # GPAをlocalStorageだけでなくDBにも永続化する
+        await conn.execute(text(
+            "ALTER TABLE user_seiseki_raw ADD COLUMN IF NOT EXISTS gpa DOUBLE PRECISION"
+        ))
