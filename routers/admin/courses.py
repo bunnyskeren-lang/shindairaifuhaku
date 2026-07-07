@@ -68,7 +68,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         reviews_data = []
         if course_ids:
             reviews_data = (await session.execute(
-                select(Review, Subject.name.label("subj_name"))
+                select(Review, CourseSection.subject_id, Subject.name.label("subj_name"))
                 .join(CourseSection, CourseSection.id == Review.course_section_id)
                 .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(CourseSection.subject_id.in_(course_ids))
@@ -110,9 +110,12 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             SimpleNamespace(id=inst.id, name=inst.name, url=cs.syllabus_url or "")
         )
 
+    # 修正理由: Subject.nameにはUNIQUE制約が無く同名科目が複数存在しうるため、
+    # 科目名でキーイングすると別レコードのレビューが同名科目のカードに混在して表示される。
+    # instructors_by_courseと同様にSubject.id（subject_id）でキーイングする。
     reviews_by_course: dict = defaultdict(list)
-    for rev, subj_name in reviews_data:
-        reviews_by_course[subj_name].append(SimpleNamespace(
+    for rev, subj_id, subj_name in reviews_data:
+        reviews_by_course[subj_id].append(SimpleNamespace(
             id=rev.id,
             course_name=subj_name,
             comment=rev.content,
@@ -306,11 +309,23 @@ async def admin_faculty_move(request: Request, _=Depends(check_admin)):
 async def migrate_third_language(_: str = Depends(check_admin)):
     LANGS = ["ドイツ語", "フランス語"]
     NUMS = [1, 2, 3, 4]
+    has_skipped = False
     async with AsyncSessionLocal() as session:
         to_delete = (await session.execute(
             select(Subject).where(Subject.name.contains("第三外国語"))
         )).scalars().all()
         for c in to_delete:
+            # 修正理由: レビューが紐づくcourse_sectionはRESTRICT制約で削除できず、
+            # チェックなしだと例外発生時にこの一括処理全体がロールバックされていた。
+            # レビューが付いている科目は削除せずスキップする（他ルートのhas_reviewsチェックと同じ方針）。
+            has_reviews = (await session.execute(
+                select(func.count(Review.id))
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .where(CourseSection.subject_id == c.id)
+            )).scalar()
+            if has_reviews:
+                has_skipped = True
+                continue
             await session.delete(c)
         for lang in LANGS:
             for n in NUMS:
@@ -325,6 +340,9 @@ async def migrate_third_language(_: str = Depends(check_admin)):
                         reading=reading(name),
                     ))
         await session.commit()
+    cache.invalidate_courses_cache()
+    if has_skipped:
+        return RedirectResponse("/admin/courses?msg=has_reviews", status_code=303)
     return RedirectResponse("/admin/courses", status_code=303)
 
 
@@ -346,23 +364,39 @@ async def strip_trailing_numbers(
             if base != course.name:
                 groups[base].append(course)
 
+        has_skipped = False
         for base_name, dups in groups.items():
             existing = (await session.execute(
                 select(Subject).where(Subject.name == base_name)
             )).scalar_one_or_none()
 
             if existing:
-                pass
+                to_remove = dups
             else:
                 survivor = dups[0]
                 survivor.name = base_name
                 survivor.reading = reading(base_name)
-                dups = dups[1:]
+                to_remove = dups[1:]
 
-            for dup in dups:
+            # 修正理由: レビューが紐づくcourse_sectionはRESTRICT制約で削除できない。
+            # チェックなしだと1グループの例外でリクエスト全体（他の無関係なグループの
+            # マージも含む）がロールバックされていた。レビュー付き科目はスキップして
+            # 他のグループのマージは継続させる。
+            for dup in to_remove:
+                has_reviews = (await session.execute(
+                    select(func.count(Review.id))
+                    .join(CourseSection, CourseSection.id == Review.course_section_id)
+                    .where(CourseSection.subject_id == dup.id)
+                )).scalar()
+                if has_reviews:
+                    has_skipped = True
+                    continue
                 await session.delete(dup)
 
         await session.commit()
+    cache.invalidate_courses_cache()
+    if has_skipped:
+        return RedirectResponse("/admin/courses?msg=has_reviews", status_code=303)
     return RedirectResponse("/admin/courses", status_code=303)
 
 
@@ -421,7 +455,17 @@ async def rename_classification(
             select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == old_name)
         )).scalar_one_or_none()
         if cls_row:
-            cls_row.name = new_name
+            # 修正理由: new_nameが既存の分類名（2つの分類を1つに統合するケース）だと
+            # (kind, name, faculty)のUNIQUE制約に違反しIntegrityErrorで科目側の
+            # classification更新まで全てロールバックしていた。既存分類への統合の場合は
+            # 旧DisplayOrder行を削除する（新分類側の並び順をそのまま使う）。
+            new_row_exists = (await session.execute(
+                select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == new_name)
+            )).scalar_one_or_none()
+            if new_row_exists:
+                await session.delete(cls_row)
+            else:
+                cls_row.name = new_name
         await session.commit()
     cache.invalidate_cls_caches()
     cache.invalidate_courses_cache()

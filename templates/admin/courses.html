@@ -212,7 +212,7 @@
     </td>
   </tr>
   {% for c in sub_list %}
-  {% set reviews = reviews_by_course[c.name] %}
+  {% set reviews = reviews_by_course[c.id] %}
   {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
   <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
     <td>
@@ -323,7 +323,7 @@
     </td>
   </tr>
   {% for c in group_list %}
-  {% set reviews = reviews_by_course[c.name] %}
+  {% set reviews = reviews_by_course[c.id] %}
   {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
   <tr class="{{ gid }}" style="display:none">
     <td>
