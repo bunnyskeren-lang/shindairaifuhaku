@@ -28,7 +28,7 @@
 </head>
 <body>
   <div class="box">
-    <div class="spinner"></div>
+    <div class="spinner" id="spinner"></div>
     <p id="msg">生協アプリを起動しています...</p>
     <p id="fallback" style="display:none; font-size: 14px;">
       アプリが開かない場合は<a id="store-link" href="#">こちらからインストール</a>してください。
@@ -46,6 +46,7 @@
 
     // アプリが未インストールの場合に備え、一定時間後にストアへフォールバック
     setTimeout(function () {
+      document.getElementById('spinner').style.display = 'none';
       document.getElementById('msg').textContent = 'アプリが見つかりませんでした';
       document.getElementById('fallback').style.display = 'block';
     }, 1500);
