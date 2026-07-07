@@ -96,7 +96,7 @@ AREAS = [
     {
         "label": "BEEF+バナー",
         "x": REV_W, "y": 0, "w": SIDE_X - REV_W, "h": ROW2_Y,
-        "action": URIAction(label="BEEF+", uri="https://beefplus.center.kobe-u.ac.jp/login"),
+        "action": URIAction(label="BEEF+", uri="https://beefplus.center.kobe-u.ac.jp/login?openExternalBrowser=1"),
     },
     # ── Row 2 ────────────────────────────────────────────────────
     {
@@ -141,7 +141,7 @@ AREAS = [
         "x": SIDE_X, "y": SY2, "w": W - SIDE_X, "h": SY3 - SY2,
         "action": URIAction(
             label="うりぼーポータル",
-            uri="https://www.uriboportal.ofc.kobe-u.ac.jp/",
+            uri="https://www.uriboportal.ofc.kobe-u.ac.jp/?openExternalBrowser=1",
         ),
     },
     {
