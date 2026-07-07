@@ -360,7 +360,13 @@ async def submit(
                         CourseSection.instructor_id == instr_obj.id,
                     )
                 )).scalar_one_or_none()
-        if cs_obj is None:
+            # 修正理由: 教員名が指定されたのに一致するcourse_sectionが見つからない場合
+            # （教員名変更・統合との競合など）、無条件で「科目の先頭のcourse_section」に
+            # フォールバックしていたため、別教員のレビューとして紐づく恐れがあった。
+            # 教員未指定（instr_name無し）の場合のみ先頭フォールバックを許可する。
+            if cs_obj is None:
+                return _form_error("担当教員の情報が更新されています。ページを再読み込みしてもう一度お試しください")
+        else:
             cs_obj = (await session.execute(
                 select(CourseSection).where(CourseSection.subject_id == subject.id)
             )).scalars().first()
@@ -383,12 +389,18 @@ async def submit(
         session.add(review)
         await session.commit()
 
-    await send_push_notification(
-        course_name=course_name.strip(),
-        rating=rating,
-        ease_rating=ease_rating,
-        comment=comment.strip(),
-    )
+    # 修正理由: レビューは既にcommit済みのため、この後のpush通知処理で例外が起きても
+    # 投稿自体は成功として扱う必要がある。ここでtry/exceptしないと、ユーザーには
+    # エラー画面が表示されてしまい（実際は投稿済み）、再送信による重複投稿を誘発していた。
+    try:
+        await send_push_notification(
+            course_name=course_name.strip(),
+            rating=rating,
+            ease_rating=ease_rating,
+            comment=comment.strip(),
+        )
+    except Exception as exc:
+        await save_error_log(exc, user_id=uid, action="submit_push_notification")
 
     return templates.TemplateResponse(
         "form_success.html", {"request": request, "course_name": course_name}
@@ -405,10 +417,14 @@ async def api_course(course_id: int):
 
         async def _cs_instr():
             async with AsyncSessionLocal() as s:
+                # 修正理由: ORDER BY未指定だとPostgreSQLは行順を保証せず、これに依存する
+                # 閲覧数記録先(main_cs_id)・表示するシラバスURL・教員名の表示順がリクエスト
+                # ごとに変わりうる非決定的な挙動になっていた。id順で固定する。
                 return (await s.execute(
                     select(CourseSection, Instructor)
                     .join(Instructor, Instructor.id == CourseSection.instructor_id)
                     .where(CourseSection.subject_id == course_id)
+                    .order_by(CourseSection.id)
                 )).all()
 
         async def _agg(cs_ids: list):
