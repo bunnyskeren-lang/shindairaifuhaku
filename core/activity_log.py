@@ -10,13 +10,17 @@ from models import ErrorLog, MessageLog, UserActivity
 
 async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None):
     try:
+        # exc.__traceback__から明示的に組み立てる。asyncio.Task.add_done_callback等、
+        # 元のexceptブロックを抜けた後に呼ばれる場合はtraceback.format_exc()だと
+        # 例外コンテキストが失われ無意味な文字列になるため。
+        tb = "".join(_traceback.format_exception(type(exc), exc, exc.__traceback__))
         async with AsyncSessionLocal() as session:
             session.add(ErrorLog(
                 user_id=user_id,
                 action=action[:200] if action else None,
                 error_type=type(exc).__name__,
                 error_message=str(exc)[:500],
-                traceback=_traceback.format_exc()[:4000],
+                traceback=tb[:4000],
             ))
             await session.commit()
     except Exception:
