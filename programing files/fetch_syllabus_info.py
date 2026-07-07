@@ -92,7 +92,7 @@ async def run(dry_run: bool = False, force: bool = False):
     async with AsyncSessionLocal() as session:
         q = select(Syllabus).where(Syllabus.timetable_code.isnot(None))
         if not force:
-            q = q.where(Syllabus.target_grades == None)
+            q = q.where(Syllabus.target_grades.is_(None))
         courses = (await session.execute(q)).scalars().all()
 
     print(f"対象コース: {len(courses)}件")

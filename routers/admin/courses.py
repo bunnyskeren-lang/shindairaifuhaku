@@ -652,7 +652,7 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
                     )
                 )).scalar()
                 if has_reviews:
-                    return RedirectResponse(url=f"/admin/courses?msg=has_reviews", status_code=303)
+                    return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
             await session.delete(course)
             await session.commit()
     cache.invalidate_courses_cache()

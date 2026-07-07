@@ -11,7 +11,10 @@
   python -X utf8 drop_old_tables.py --env dev     # dev DBで確認
   python -X utf8 drop_old_tables.py --env prod    # 本番（要確認プロンプト）
 """
-import argparse, asyncio, ssl, sys
+import argparse
+import asyncio
+import ssl
+import sys
 import asyncpg
 
 sys.stdout.reconfigure(encoding="utf-8")

@@ -151,10 +151,14 @@ def classify_seiseki_raw(raw: dict) -> dict:
     for c in raw.get("senmon_courses", []):
         grp = classify_senmon(c["name"])
         cr = c["credits"]
-        if grp == '初年次':   shonen   += cr
-        elif grp == '第1群':  senmon1  += cr
-        elif grp == '第2群':  senmon2  += cr
-        elif grp == 'グローバル': global_c += cr
+        if grp == '初年次':
+            shonen += cr
+        elif grp == '第1群':
+            senmon1 += cr
+        elif grp == '第2群':
+            senmon2 += cr
+        elif grp == 'グローバル':
+            global_c += cr
 
     senmon_total = s.get("専門科目", 0.0)
     senmon3 = max(0.0, round(senmon_total - shonen - senmon1 - senmon2 - global_c, 1))

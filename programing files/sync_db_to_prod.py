@@ -11,7 +11,9 @@ dev → 本番 DB の同期スクリプト
 実行方法（programing files/ から実行）:
   python -X utf8 sync_db_to_prod.py
 """
-import asyncio, ssl, sys
+import asyncio
+import ssl
+import sys
 sys.stdout.reconfigure(encoding="utf-8")
 import asyncpg
 

@@ -444,7 +444,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 select(Subject.name, func.avg(Review.rating).label("avg"))
                 .join(CourseSection, CourseSection.subject_id == Subject.id)
                 .join(Review, Review.course_section_id == CourseSection.id)
-                .where(Review.is_approved == True)
+                .where(Review.is_approved.is_(True))
                 .group_by(Subject.name)
                 .order_by(func.avg(Review.rating).desc())
                 .limit(5)
@@ -468,7 +468,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 select(Subject.name, Review.ease_rating, func.count(Review.id))
                 .join(CourseSection, CourseSection.subject_id == Subject.id)
                 .join(Review, Review.course_section_id == CourseSection.id)
-                .where(Review.is_approved == True)
+                .where(Review.is_approved.is_(True))
                 .group_by(Subject.name, Review.ease_rating)
             )).all()
         if not rows:

@@ -2,7 +2,10 @@
 教養科目を一括インポートするスクリプト。
 実行: python -X utf8 import_kyoyo_courses.py --env dev
 """
-import argparse, asyncio, os, sys
+import argparse
+import asyncio
+import os
+import sys
 from pathlib import Path
 
 

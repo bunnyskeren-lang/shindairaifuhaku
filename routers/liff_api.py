@@ -433,7 +433,7 @@ async def api_course(course_id: int):
             async with AsyncSessionLocal() as s:
                 return (await s.execute(
                     select(func.avg(Review.rating), func.count(Review.id))
-                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved == True)
+                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved.is_(True))
                 )).first()
 
         async def _ease(cs_ids: list):
@@ -442,7 +442,7 @@ async def api_course(course_id: int):
             async with AsyncSessionLocal() as s:
                 return (await s.execute(
                     select(Review.ease_rating, func.count(Review.id))
-                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved == True)
+                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved.is_(True))
                     .group_by(Review.ease_rating)
                 )).all()
 
@@ -452,7 +452,7 @@ async def api_course(course_id: int):
             async with AsyncSessionLocal() as s:
                 return (await s.execute(
                     select(Review)
-                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved == True)
+                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved.is_(True))
                     .order_by(Review.selected_instructor.nulls_last(), Review.academic_year.desc())
                     .limit(20)
                 )).scalars().all()

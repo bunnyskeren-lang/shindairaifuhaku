@@ -27,7 +27,7 @@ async def admin_reviews_cleanup(_: str = Depends(check_admin)):
             await session.execute(
                 delete(Review).where(
                     Review.course_section_id.in_(orphan_cs_ids),
-                    Review.is_approved == False,
+                    Review.is_approved.is_(False),
                 )
             )
             await session.commit()
@@ -60,14 +60,14 @@ async def admin_reviews(request: Request, _: str = Depends(check_admin)):
             select(Review, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == Review.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
-            .where(Review.is_approved == False)
+            .where(Review.is_approved.is_(False))
             .order_by(Review.created_at.desc())
         )).all()
         approved_rows = (await session.execute(
             select(Review, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == Review.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
-            .where(Review.is_approved == True)
+            .where(Review.is_approved.is_(True))
             .order_by(Review.created_at.desc())
             .limit(50)
         )).all()

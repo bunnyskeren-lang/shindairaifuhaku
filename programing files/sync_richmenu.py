@@ -1,4 +1,5 @@
-import urllib.request, ssl, os, sys
+import urllib.request
+import os
 from dotenv import load_dotenv
 
 # dev トークンで画像取得

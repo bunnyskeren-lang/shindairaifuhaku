@@ -1,4 +1,6 @@
-import asyncio, os, sys, re, urllib.request
+import sys
+import re
+import urllib.request
 from dotenv import load_dotenv
 load_dotenv('.env.dev')
 sys.path.insert(0, '..')
