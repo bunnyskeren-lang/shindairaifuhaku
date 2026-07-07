@@ -1238,7 +1238,7 @@ function updateCredits() {
     if (remainEl) {
       if (req === 0) {
         remainEl.textContent = ''; remainEl.className = 'credits-remain-box blank';
-      } else if (earned >= req) {
+      } else if (earned > req) {
         remainEl.textContent = '✓'; remainEl.className = 'credits-remain-box done';
       } else {
         remainEl.textContent = String(req - earned); remainEl.className = 'credits-remain-box';
@@ -1261,7 +1261,7 @@ function updateCredits() {
       const sonotaRem  = document.getElementById('remain-sonota');
       if (sonotaRem) {
         if (sonotaReq === 0) { sonotaRem.textContent = ''; sonotaRem.className = 'credits-remain-box blank'; }
-        else if (sonotaAdj >= sonotaReq) { sonotaRem.textContent = '✓'; sonotaRem.className = 'credits-remain-box done'; }
+        else if (sonotaAdj > sonotaReq) { sonotaRem.textContent = '✓'; sonotaRem.className = 'credits-remain-box done'; }
         else { sonotaRem.textContent = String(sonotaReq - sonotaAdj); sonotaRem.className = 'credits-remain-box'; }
       }
       totalEarned += kyotsuOverflow;
@@ -1273,7 +1273,7 @@ function updateCredits() {
     if (combinedEl) combinedEl.textContent = combinedEarned;
     const combinedRem = document.getElementById('remain-combined-senmon');
     if (combinedRem) {
-      if (combinedEarned >= 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain-box done'; }
+      if (combinedEarned > 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain-box done'; }
       else { combinedRem.textContent = String(55 - combinedEarned); combinedRem.className = 'credits-remain-box'; }
     }
     // 専門98単位合計チェック（初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他）
@@ -1285,7 +1285,7 @@ function updateCredits() {
     if (el98) el98.textContent = combined98;
     const rem98 = document.getElementById('remain-combined-98');
     if (rem98) {
-      if (combined98 >= 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain-box done'; }
+      if (combined98 > 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain-box done'; }
       else { rem98.textContent = String(98 - combined98); rem98.className = 'credits-remain-box'; }
     }
   }
