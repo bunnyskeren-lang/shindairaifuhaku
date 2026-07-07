@@ -83,7 +83,7 @@ AREAS = [
     {
         "label": "レビュー投稿",
         "x": 0, "y": 0, "w": REV_W, "h": ROW2_Y,
-        "action": URIAction(label="レビュー投稿", uri=REVIEW_FORM_URL),
+        "action": PostbackAction(label="レビュー投稿", data="レビュー投稿"),
     },
     {
         "label": "BEEF+バナー",

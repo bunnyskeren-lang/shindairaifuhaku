@@ -63,26 +63,12 @@
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           🎓 学籍番号 <span class="text-red-500">*</span>
         </label>
-        <p class="text-xs text-gray-400 mb-1">数字7桁＋学部コード（医学部のみ2文字: MM・ME・MH）</p>
-        <p class="text-xs text-gray-300 mb-1">L:文学 H:国際人間 J:法 E:経済 B:経営 S:理 T:工 A:農 Z:海洋政策 X:システム情報 MM/ME/MH:医</p>
         <input type="text" name="student_id" id="student_id"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition{% if stored_student_id %} bg-gray-50 text-gray-500 cursor-not-allowed{% endif %}"
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
           value="{{ stored_student_id }}"{% if stored_student_id %} readonly{% endif %}>
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
-      </div>
-
-      <!-- 1. 名前 -->
-      <div id="nameCard" class="bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">
-          👤 名前 <span class="text-red-500">*</span>
-        </label>
-        <input type="text" name="submitter_name" id="submitter_name"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition{% if stored_name %} bg-gray-50 text-gray-500 cursor-not-allowed{% endif %}"
-          placeholder="例：神大太郎" required maxlength="20"
-          value="{{ stored_name }}"{% if stored_name %} readonly{% endif %}>
-        <p id="submitterNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
       </div>
 
       <!-- 1b. ニックネーム（任意） -->
@@ -1014,12 +1000,6 @@
       return !invalid;
     }
 
-    const submitterNameInput = document.getElementById('submitter_name');
-    const submitterNameError = document.getElementById('submitterNameError');
-    if (submitterNameInput && submitterNameInput.type !== 'hidden') {
-      submitterNameInput.addEventListener('input', () => { validateName(submitterNameInput, submitterNameError); saveData(); });
-    }
-
     const regNameInput = document.getElementById('reg_name');
     const regNameError = document.getElementById('regNameError');
     if (regNameInput) {
@@ -1034,24 +1014,17 @@
     async function tryAutofill(sid) {
       const uid = new URLSearchParams(location.search).get('uid') || '';
       if (!uid) return;
-      const nameEl = document.getElementById('submitter_name');
-      if (nameEl && nameEl.readOnly) return;
       try {
         const res = await fetch(`/api/autofill?uid=${encodeURIComponent(uid)}&student_id=${encodeURIComponent(sid)}`);
         const d = await res.json();
         if (!d.found || !d.name) return;
-        if (nameEl && !nameEl.readOnly) {
-          nameEl.value = d.name;
-          nameEl.readOnly = true;
-          nameEl.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
-        }
         const regEl = document.getElementById('reg_name');
         if (regEl) { regEl.value = d.name; regEl.removeAttribute('required'); }
         if (studentIdInput && !studentIdInput.readOnly) {
           studentIdInput.readOnly = true;
           studentIdInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
         }
-        try { localStorage.setItem('kobe_profile', JSON.stringify({name: d.name, student_id: sid})); } catch(_) {}
+        try { localStorage.setItem('kobe_profile', JSON.stringify({ student_id: sid })); } catch(_) {}
       } catch(_) {}
     }
 
@@ -1077,7 +1050,6 @@
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          name: document.getElementById('submitter_name').value,
           nickname: document.getElementById('nickname').value,
           academic_year: document.getElementById('academic_year').value,
           course: document.getElementById('courseNameHidden').value,
@@ -1106,8 +1078,6 @@
         const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
         if (!d) return;
         if (d.academic_year) document.getElementById('academic_year').value = d.academic_year;
-        const _nameEl = document.getElementById('submitter_name');
-        if (d.name && _nameEl && !_nameEl.readOnly) _nameEl.value = d.name;
         if (d.nickname) document.getElementById('nickname').value = d.nickname;
         if (d.course) {
           selectCourse(d.course, d.instructors || []);
@@ -1188,7 +1158,7 @@
       } catch (_) {}
     }
 
-    const CARD_IDS = ['studentIdCard','nameCard','academicYearCard','courseCard','easeCard','ratingCard','gradingCard'];
+    const CARD_IDS = ['studentIdCard','academicYearCard','courseCard','easeCard','ratingCard','gradingCard'];
     function clearCardError(id) {
       const el = document.getElementById(id);
       if (el) { el.classList.remove('ring-2','ring-red-400'); el.style.background = ''; }
@@ -1200,7 +1170,6 @@
     function refreshCardErrors() {
       CARD_IDS.forEach(clearCardError);
       const map = [
-        ['submitterNameError','nameCard'],
         ['studentIdError','studentIdCard'],
         ['academicYearError','academicYearCard'],
         ['courseError','courseCard'],
@@ -1226,7 +1195,7 @@
         return;
       }
       // 全エラーを一旦リセット
-      ['submitterNameError','regNameError','studentIdError','academicYearError',
+      ['regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
        'classFormatError','formatCustomError','attendanceError','homeworkError',
        'homeworkFrequencyError','homeworkFrequencyCustomError','evalError','evalCustomError','evalPercentError'].forEach(id => {
@@ -1237,7 +1206,6 @@
 
       let valid = true;
 
-      if (submitterNameInput && submitterNameInput.type !== 'hidden' && !validateName(submitterNameInput, submitterNameError)) valid = false;
       if (regNameInput && !validateName(regNameInput, regNameError)) valid = false;
 
       if (studentIdInput) {
@@ -1335,13 +1303,6 @@
         return;
       }
 
-      // 次回アクセス時の自動補完用にプロフィールをキャッシュ
-      try {
-        const _n = document.getElementById('submitter_name').value;
-        const _s = document.getElementById('student_id').value;
-        if (_n && _s) localStorage.setItem('kobe_profile', JSON.stringify({name: _n, student_id: _s}));
-      } catch(_) {}
-
       updateGradingMethod();
       localStorage.removeItem(STORAGE_KEY);
       const btn = document.getElementById('submitBtn');
@@ -1353,25 +1314,14 @@
     buildEaseStars();
     loadData();
 
-    // プロフィールキャッシュの読み書き
+    // 学籍番号キャッシュの読み書き（uid なしでアクセスされた場合の保険）
     (function() {
       try {
-        const nameEl = document.getElementById('submitter_name');
-        const sidEl  = document.getElementById('student_id');
-        if (nameEl.readOnly) {
-          // サーバーが補完済み → ローカルキャッシュも更新（次回 uid なし時のため）
-          localStorage.setItem('kobe_profile', JSON.stringify({
-            name: nameEl.value,
-            student_id: sidEl.value
-          }));
+        const sidEl = document.getElementById('student_id');
+        if (sidEl.readOnly) {
+          localStorage.setItem('kobe_profile', JSON.stringify({ student_id: sidEl.value }));
         } else {
-          // サーバー未補完 → ローカルキャッシュから復元
           const p = JSON.parse(localStorage.getItem('kobe_profile') || 'null');
-          if (p && p.name && !nameEl.value) {
-            nameEl.value = p.name;
-            nameEl.readOnly = true;
-            nameEl.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
-          }
           if (p && p.student_id && !sidEl.value) {
             sidEl.value = p.student_id;
             sidEl.readOnly = true;

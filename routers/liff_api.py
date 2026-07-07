@@ -277,7 +277,6 @@ async def autofill_profile(uid: str = "", student_id: str = ""):
 @router.post("/submit")
 async def submit(
     request: Request,
-    submitter_name: str = Form(...),
     course_name: str = Form(...),
     rating: int = Form(...),
     ease_rating: str = Form(...),
@@ -316,28 +315,30 @@ async def submit(
             return _form_error("指定された科目が見つかりません")
 
         uid = line_user_id.strip()
-        if uid:
-            if not LINE_USER_ID_RE.match(uid):
-                return _form_error("LINE ユーザー ID の形式が不正です")
-            existing = (await session.execute(
-                select(UserProfile).where(UserProfile.line_user_id == uid)
-            )).scalar_one_or_none()
-            if existing is None:
-                if not reg_name.strip():
-                    return _form_error("お名前を入力してください")
-                try:
-                    session.add(UserProfile(
-                        line_user_id=uid,
-                        name=reg_name.strip()[:100],
-                        student_id=sid,
-                    ))
-                    await session.flush()
-                except Exception:
-                    await session.rollback()
-                    return _form_error("プロフィールの保存に失敗しました")
-            else:
-                if existing.student_id != sid:
-                    return _form_error("学籍番号が登録情報と一致しません")
+        if not uid or not LINE_USER_ID_RE.match(uid):
+            return _form_error("LINEアプリの「レビュー投稿」からアクセスしてください")
+
+        existing = (await session.execute(
+            select(UserProfile).where(UserProfile.line_user_id == uid)
+        )).scalar_one_or_none()
+        if existing is None:
+            if not reg_name.strip():
+                return _form_error("お名前を入力してください")
+            submitter_name = reg_name.strip()[:100]
+            try:
+                session.add(UserProfile(
+                    line_user_id=uid,
+                    name=submitter_name,
+                    student_id=sid,
+                ))
+                await session.flush()
+            except Exception:
+                await session.rollback()
+                return _form_error("プロフィールの保存に失敗しました")
+        else:
+            if existing.student_id != sid:
+                return _form_error("学籍番号が登録情報と一致しません")
+            submitter_name = existing.name
 
         # 担当教員に対応する course_section を探す
         instr_name = selected_instructor.strip()[:100] or None
@@ -362,7 +363,7 @@ async def submit(
 
         review = Review(
             course_section_id=cs_obj.id,
-            submitter_name=submitter_name.strip()[:100],
+            submitter_name=submitter_name,
             content=comment.strip()[:500],
             rating=rating,
             ease_rating=ease_rating,
