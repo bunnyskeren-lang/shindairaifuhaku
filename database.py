@@ -260,13 +260,17 @@ async def init_db():
             except Exception:
                 pass
         # 開講区分: 旧termカラムの値をterm_typeへバックフィルしてからtermを削除（term_typeに一本化）
+        # 修正理由: term='' (空文字) の行が424件存在し、そのままバックフィルすると
+        # term_type用のCHECK制約(subjects_term_type_check)に違反してDO $$ブロックが例外を投げ、
+        # init_db()全体がロールバックされていた（結果、gpaカラム追加など後続の全マイグレーションが
+        # 毎回無効化されていた）。空文字はNULL相当として扱いバックフィル対象から除外する。
         await conn.execute(text("""
             DO $$ BEGIN
               IF EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'subjects' AND column_name = 'term'
               ) THEN
-                UPDATE subjects SET term_type = term WHERE term_type IS NULL AND term IS NOT NULL;
+                UPDATE subjects SET term_type = term WHERE term_type IS NULL AND term IS NOT NULL AND term <> '';
                 ALTER TABLE subjects DROP COLUMN term;
               END IF;
             END $$
