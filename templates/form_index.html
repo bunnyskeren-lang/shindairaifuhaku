@@ -327,6 +327,16 @@
           <input type="text" id="gradingExtra"
             class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white"
             placeholder="例：持ち込み可、内職可 など" maxlength="100">
+
+          <!-- プロンプトチップ -->
+          <div class="mt-2">
+            <p class="text-xs text-gray-400 mb-2">📌 タップして書くきっかけに</p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="prompt-chip" data-prompt="【テストの難易度】">📝 テストの難易度</button>
+              <button type="button" class="prompt-chip" data-prompt="【課題のだるさ】">😩 課題のだるさ</button>
+              <button type="button" class="prompt-chip" data-prompt="【注意点】">⚠️ 注意点</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -336,16 +346,6 @@
           💬 コメント <span class="text-red-500">*</span>
         </label>
         <p class="text-xs text-gray-400 mb-3">後輩のためにできるだけ詳しく書いてもらえると嬉しいです🙏</p>
-
-        <!-- プロンプトチップ -->
-        <div class="mb-3">
-          <p class="text-xs text-gray-400 mb-2">📌 タップして書くきっかけに</p>
-          <div class="flex flex-wrap gap-2">
-            <button type="button" class="prompt-chip" data-prompt="【テストの難易度】">📝 テストの難易度</button>
-            <button type="button" class="prompt-chip" data-prompt="【課題のだるさ】">😩 課題のだるさ</button>
-            <button type="button" class="prompt-chip" data-prompt="【注意点】">⚠️ 注意点</button>
-          </div>
-        </div>
 
         <textarea name="comment" id="comment" rows="7"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
@@ -1107,14 +1107,13 @@
 
     document.querySelectorAll('.prompt-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        const ta = document.getElementById('comment');
+        const el = document.getElementById('gradingExtra');
         const prompt = chip.dataset.prompt;
-        const cur = ta.value;
-        if (cur && !cur.endsWith('\n')) ta.value = cur + '\n';
-        ta.value += prompt;
-        ta.focus();
-        ta.setSelectionRange(ta.value.length, ta.value.length);
-        updateCommentFeedback(ta.value.length);
+        const cur = el.value;
+        if (cur && !cur.endsWith('、') && !cur.endsWith(' ')) el.value = cur + '、';
+        el.value += prompt;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
         saveData();
       });
     });
