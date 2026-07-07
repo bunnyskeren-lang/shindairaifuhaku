@@ -25,6 +25,7 @@ FACULTY_PATH: dict[str, str] = {
     "U": "20",
     "B": "06",
     "X": "15",  # システム情報学部
+    "G": "20",  # 教養科目の一部で使われるコード（Uと同じpath）
 }
 
 def make_syllabus_url(code: str) -> str | None:
@@ -163,7 +164,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         category="専門",
                         faculty=dept_faculty or None,
                         reading="",
-                        term=c["term"],
+                        term_type=c["term"],
                         credits=None,
                     )
                     session.add(subj)
