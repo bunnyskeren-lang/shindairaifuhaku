@@ -400,6 +400,16 @@ async def handle_message(text: str, user_id: str = "") -> list:
             ])
         ))]
 
+    if t in ["生協", "生協アプリ", "coop"]:
+        return [FlexMessage(alt_text="🛒 生協アプリ", contents=FlexBubble(
+            body=FlexBox(layout="vertical", spacing="md", contents=[
+                FlexText(text="🛒 生協アプリ", weight="bold", size="lg"),
+                FlexText(text="タップして生協アプリを開く（未インストールの場合は反応しません）", size="sm", color="#64748b", wrap=True),
+                FlexButton(action=URIAction(label="生協アプリを開く", uri="univcoop://"),
+                           style="primary", color="#6366f1", margin="md"),
+            ])
+        ))]
+
     if t in ["ヘルプ", "help", "使い方", "？", "?"]:
         return [make_help_flex()]
 
