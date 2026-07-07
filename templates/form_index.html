@@ -311,7 +311,8 @@
 
           <!-- 評価方法の割合（2つ以上選択時のみ表示） -->
           <div id="evalPercentContainer" class="hidden mt-3 pt-3 border-t border-indigo-200">
-            <p class="text-xs font-bold text-indigo-700 mb-2">📊 それぞれの割合 <span class="font-normal text-indigo-400">バーを動かして調整</span></p>
+            <p class="text-xs font-bold text-indigo-700 mb-2">📊 それぞれの割合</p>
+            <p class="text-xs text-indigo-400 mb-2">👆 ⇔ の付いたつまみを左右にドラッグして割合を調整できます</p>
             <div id="evalSliderBar" class="eval-slider-bar">
               <div id="evalSliderTrack" class="eval-slider-track"></div>
             </div>
@@ -450,11 +451,14 @@
       position: absolute;
       top: -4px;
       bottom: -4px;
-      width: 20px;
-      margin-left: -10px;
-      cursor: ew-resize;
+      width: 28px;
+      margin-left: -14px;
+      cursor: grab;
       touch-action: none;
       z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .eval-slider-divider::before {
       content: '';
@@ -464,11 +468,31 @@
       bottom: 4px;
       width: 4px;
       margin-left: -2px;
-      background: #fff;
+      background: rgba(255,255,255,0.6);
       border-radius: 2px;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
     }
-    .eval-slider-divider:active::before { background: #e0e7ff; }
+    .eval-slider-divider::after {
+      content: '⇔';
+      position: relative;
+      width: 26px;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+      border-radius: 50%;
+      background: #fff;
+      color: #6366f1;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.1);
+    }
+    .eval-slider-divider:active { cursor: grabbing; }
+    .eval-slider-divider:active::after { background: #eef2ff; }
+    .eval-slider-divider.hint::after { animation: eval-slider-wiggle 1s ease-in-out 2; }
+    @keyframes eval-slider-wiggle {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
   </style>
 
   <script>
@@ -724,13 +748,15 @@
       const cumulatives = percents.map(p => (cumulative += p));
       for (let i = 0; i < vals.length - 1; i++) {
         const divider = document.createElement('div');
-        divider.className = 'eval-slider-divider';
+        divider.className = 'eval-slider-divider' + (evalSliderDragged ? '' : ' hint');
         divider.style.left = cumulatives[i] + '%';
         divider.dataset.index = i;
         barEl.appendChild(divider);
         attachDividerDrag(divider, i, vals);
       }
     }
+
+    let evalSliderDragged = false;
 
     function attachDividerDrag(divider, index, vals) {
       const barEl = document.getElementById('evalSliderBar');
@@ -771,11 +797,15 @@
       };
       divider.addEventListener('mousedown', (e) => {
         e.preventDefault();
+        evalSliderDragged = true;
+        divider.classList.remove('hint');
         document.addEventListener('mousemove', onPointerMove);
         document.addEventListener('mouseup', onPointerUp);
       });
       divider.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        evalSliderDragged = true;
+        divider.classList.remove('hint');
         document.addEventListener('touchmove', onPointerMove, { passive: false });
         document.addEventListener('touchend', onPointerUp);
       }, { passive: false });
