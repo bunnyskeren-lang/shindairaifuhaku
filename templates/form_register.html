@@ -137,7 +137,7 @@
     facultySel.addEventListener('change', () => populateDepartments(facultySel.value, ''));
 
     document.getElementById('registerForm').addEventListener('submit', function(e) {
-      const sid = document.getElementById('student_id').value.trim();
+      const sid = document.getElementById('student_id').value.replace(/[\s　]+/g, '').toUpperCase();
       const re = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
       if (!re.test(sid)) {
         e.preventDefault();
