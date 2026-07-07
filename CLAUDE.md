@@ -234,7 +234,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
 │   ├── templates.py               ← Jinja2Templates・jstフィルタ
 │   ├── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
-│   └── backup.py                    ← DB自動バックアップ（毎日JST3:00に全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
+│   └── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
@@ -357,11 +357,11 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 
 **DB自動バックアップ（`core/backup.py`）**
 
-- Supabase Freeプランには自動バックアップが無く、ローカル開発環境はNetwork Restrictionsにより本番DBへ直接接続できない。そのため「本番DBに到達できる本番アプリ自身」が日次バックアップを生成する設計にした
-- `backup_loop()`（`self_ping()`と同じ無限ループ+`asyncio.sleep`パターン、`main.py`のlifespanで`asyncio.create_task`）が毎日JST 3:00に`dump_all_tables_to_sql()`（`Base.metadata.sorted_tables`のFK依存順で全テーブルをSELECTしINSERT文形式のSQLを生成・gzip圧縮）を実行し、`upload_backup_to_storage()`でSupabase Storageの`BACKUP_BUCKET`（既定`db-backups`）へアップロード、`BACKUP_RETENTION_DAYS`（既定15日）より古い世代を削除する
+- Supabase Freeプランには自動バックアップが無く、ローカル開発環境はNetwork Restrictionsにより本番DBへ直接接続できない。そのため「本番DBに到達できる本番アプリ自身」が定期バックアップを生成する設計にした
+- `backup_loop()`（`self_ping()`と同じ無限ループ+`asyncio.sleep`パターン、`main.py`のlifespanで`asyncio.create_task`）が起動30秒後から`BACKUP_INTERVAL_HOURS`（既定1時間）間隔で`dump_all_tables_to_sql()`（`Base.metadata.sorted_tables`のFK依存順で全テーブルをSELECTしINSERT文形式のSQLを生成・gzip圧縮）を実行し、`upload_backup_to_storage()`でSupabase Storageの`BACKUP_BUCKET`（既定`db-backups`）へアップロード、`BACKUP_RETENTION_DAYS`（既定15日）より古い世代を削除する
 - `BACKUP_ENABLED`が`true`でない環境では`backup_loop()`は即returnして何もしない（既定false。dev/本番それぞれ明示的に有効化するまで安全）
 - ローカルPCへの取り込みは`programing files/download_prod_backup.py --env dev|prod`で、Supabase Storageからまだ無いファイルだけを`backups/{env}/`へ差分ダウンロードする（Windowsタスクスケジューラ等で定期実行する想定）
-- 必要な環境変数: `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `BACKUP_BUCKET` / `BACKUP_ENABLED` / `BACKUP_RETENTION_DAYS`（dev/本番でSupabaseプロジェクトが別なので値も別々に設定する）
+- 必要な環境変数: `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `BACKUP_BUCKET` / `BACKUP_ENABLED` / `BACKUP_RETENTION_DAYS` / `BACKUP_INTERVAL_HOURS`（dev/本番でSupabaseプロジェクトが別なので値も別々に設定する）
 - 復元は「`init_db()`で空スキーマを作ってから、ダウンロードした`.sql.gz`を解凍してINSERT文を流し込む」想定（CREATE TABLE等のスキーマDDLは含まない）
 
 ---
