@@ -198,13 +198,13 @@ async function main() {
   const meta = document.getElementById("meta");
   if (data.classification)
     meta.insertAdjacentHTML("beforeend",
-      `<span class="badge badge-cls">📂 ${data.classification}</span>`);
+      `<span class="badge badge-cls">📂 ${esc(data.classification)}</span>`);
   if (data.term)
     meta.insertAdjacentHTML("beforeend",
-      `<span class="badge badge-term">📅 ${data.term}</span>`);
+      `<span class="badge badge-term">📅 ${esc(data.term)}</span>`);
   if (data.credits)
     meta.insertAdjacentHTML("beforeend",
-      `<span class="badge badge-cr">🎓 ${data.credits}単位</span>`);
+      `<span class="badge badge-cr">🎓 ${esc(data.credits)}単位</span>`);
 
   // ── 総合評価 ──
   const RATING_LABELS = ['', 'ほぼ学びなし', 'ちょい学び', 'まあまあ学びあり', 'かなり学べた', 'めちゃくちゃ学べた'];
