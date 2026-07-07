@@ -86,6 +86,11 @@ async def liff_review(request: Request):
     )
 
 
+@router.get("/coop", response_class=HTMLResponse)
+async def coop_redirect(request: Request):
+    return templates.TemplateResponse("coop_redirect.html", {"request": request})
+
+
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
