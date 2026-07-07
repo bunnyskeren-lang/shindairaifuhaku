@@ -8,7 +8,7 @@ from models import CourseSection, Instructor, Schedule, Subject, Syllabus, UserP
 
 router = APIRouter()
 
-_VALID_DAYS = {"月", "火", "水", "木", "金", "土", "日"}
+_VALID_DAYS = {"月", "火", "水", "木", "金", "土", "日", "集"}
 
 # academic_term は自由文字列のため、時系列順に並べるための明示的な優先度
 _TERM_ORDER = case(
