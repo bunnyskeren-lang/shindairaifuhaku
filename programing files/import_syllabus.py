@@ -189,12 +189,15 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             if not is_tt:
                 continue
 
-            # Instructor を find-or-create
+            # Instructor を find-or-create（日本語名は空白を除去して統一する）
+            instructor_name = c["instructor"]
+            if any('぀' <= ch <= '鿿' for ch in instructor_name):
+                instructor_name = instructor_name.replace(' ', '').replace('　', '')
             instr = (await session.execute(
-                select(Instructor).where(Instructor.name == c["instructor"])
+                select(Instructor).where(Instructor.name == instructor_name)
             )).scalar_one_or_none()
             if instr is None:
-                instr = Instructor(name=c["instructor"])
+                instr = Instructor(name=instructor_name)
                 session.add(instr)
                 await session.flush()
 
