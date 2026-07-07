@@ -259,3 +259,7 @@ async def init_db():
                     )
             except Exception:
                 pass
+        # 開講区分: 旧termカラムの値をterm_typeへバックフィル（term_typeに一本化のため）
+        await conn.execute(text(
+            "UPDATE subjects SET term_type = term WHERE term_type IS NULL AND term IS NOT NULL"
+        ))

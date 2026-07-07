@@ -93,7 +93,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 "category": c.category or "",
                 "syllabus_url": "",
                 "faculty": c.faculty or "",
-                "term": c.term or "",
+                "term_type": c.term_type or "",
                 "credits": float(c.credits) if c.credits is not None else 0,
                 "hide_from_timetable": c.hide_from_timetable,
             }
@@ -372,7 +372,7 @@ async def admin_courses_add(
     name: str = Form(...),
     classification: str = Form(""),
     category: str = Form("専門"),
-    term: str = Form(""),
+    term_type: str = Form(""),
     credits: float = Form(0),
     syllabus_url: str = Form(""),
     faculty: str = Form(""),
@@ -392,7 +392,7 @@ async def admin_courses_add(
             classification=classification.strip() or None,
             category=category,
             reading=reading(name_s),
-            term=term.strip() or None,
+            term_type=term_type.strip() or None,
             credits=credits if credits else None,
             faculty=faculty.strip() or None,
         ))
@@ -571,7 +571,7 @@ async def admin_courses_update(
     name: str = Form(...),
     classification: str = Form(""),
     category: str = Form("専門"),
-    term: str = Form(""),
+    term_type: str = Form(""),
     credits: float = Form(0),
     syllabus_url: str = Form(""),
     faculty: str = Form(""),
@@ -584,7 +584,7 @@ async def admin_courses_update(
             course.classification = classification.strip() or None
             course.category = category
             course.reading = reading(new_name)
-            course.term = term.strip() or None
+            course.term_type = term_type.strip() or None
             course.credits = credits if credits else None
             course.faculty = faculty.strip() or None
             await session.commit()

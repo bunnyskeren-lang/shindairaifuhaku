@@ -36,8 +36,8 @@ async def get_course_flex(course: Subject, user_id: str) -> FlexMessage:
     liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
 
     meta_parts = []
-    if getattr(course, "term", None):
-        meta_parts.append(course.term)
+    if getattr(course, "term_type", None):
+        meta_parts.append(course.term_type)
     if getattr(course, "credits", None):
         meta_parts.append(f"{course.credits}単位")
     if course.classification:

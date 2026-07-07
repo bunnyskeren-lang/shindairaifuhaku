@@ -52,8 +52,8 @@
       <label>学部・学科（任意）<input type="text" name="faculty" maxlength="100" placeholder="例：経営学部"></label>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:10px">
-      <label style="flex:1">開講
-        <select name="term" style="margin-top:4px">
+      <label style="flex:1">開講区分
+        <select name="term_type" style="margin-top:4px">
           <option value="">未設定</option>
           <option value="クオーター">クオーター</option>
           <option value="セメスター">セメスター</option>
@@ -217,7 +217,7 @@
   <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
     <td>
       {{ c.name }}
-      {% if c.term %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term }}</span>{% endif %}
+      {% if c.term_type %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term_type }}</span>{% endif %}
       {% if c.credits %}<span style="font-size:10px;color:#059669;background:#ecfdf5;padding:1px 5px;border-radius:4px;margin-left:2px">{{ c.credits }}単位</span>{% endif %}
     </td>
     <td><span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">{{ c.category }}</span></td>
@@ -328,7 +328,7 @@
   <tr class="{{ gid }}" style="display:none">
     <td>
       {{ c.name }}
-      {% if c.term %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term }}</span>{% endif %}
+      {% if c.term_type %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term_type }}</span>{% endif %}
       {% if c.credits %}<span style="font-size:10px;color:#059669;background:#ecfdf5;padding:1px 5px;border-radius:4px;margin-left:2px">{{ c.credits }}単位</span>{% endif %}
     </td>
     <td>
@@ -467,8 +467,8 @@
         <label>学部・学科（任意）<input type="text" id="editFaculty" name="faculty" maxlength="100" placeholder="例：経営学部"></label>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:10px">
-        <label style="flex:1">開講
-          <select id="editTerm" name="term" style="margin-top:4px">
+        <label style="flex:1">開講区分
+          <select id="editTermType" name="term_type" style="margin-top:4px">
             <option value="">未設定</option>
             <option value="クオーター">クオーター</option>
             <option value="セメスター">セメスター</option>
@@ -555,7 +555,7 @@ function openEdit(id) {
   document.getElementById('editName').value = c.name;
   document.getElementById('editClassification').value = c.classification;
   document.getElementById('editCategory').value = c.category;
-  document.getElementById('editTerm').value = c.term || '';
+  document.getElementById('editTermType').value = c.term_type || '';
   document.getElementById('editCredits').value = c.credits || 0;
   document.getElementById('editFaculty').value = c.faculty || '';
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
