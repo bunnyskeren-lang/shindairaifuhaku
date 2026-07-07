@@ -311,22 +311,32 @@ tbody td:first-child {
   display:flex; flex-direction:column; gap:4px;
 }
 .credits-cat-name { font-size:10px; color:#374151; font-weight:600; line-height:1.3; }
-.credits-inputs { display:flex; align-items:center; gap:4px; }
-.credits-mini-field { display:flex; flex-direction:column; align-items:center; gap:1px; }
-.credits-mini-label { font-size:9px; color:#94a3b8; }
+.credits-inputs { display:flex; align-items:center; gap:6px; }
+.credits-mini-field { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.credits-mini-label { font-size:9px; color:#64748b; font-weight:700; letter-spacing:.02em; }
 .credits-mini-input {
-  width:40px; padding:4px 2px; border-radius:6px;
-  border:1px solid #e2e8f0; font-size:13px; font-weight:700;
-  text-align:center; color:#1e293b; background:#f8fafc;
+  width:38px; padding:4px 2px; border-radius:6px;
+  border:1.5px solid #bfdbfe; font-size:13px; font-weight:700;
+  text-align:center; color:#1e40af; background:#eff6ff;
 }
 .credits-mini-input:focus { outline:none; border-color:{% if IS_DEV %}#ea580c{% else %}#6366f1{% endif %}; background:#fff; }
 .credits-earn-val {
-  width:40px; padding:4px 2px; border-radius:6px;
+  width:38px; padding:4px 2px; border-radius:6px;
+  border:1.5px solid #cbd5e1;
   font-size:13px; font-weight:700; text-align:center;
-  color:#475569; background:#e2e8f0; line-height:1.5;
+  color:#334155; background:#e2e8f0; line-height:1.5;
 }
-.credits-remain { width:26px; font-size:10px; font-weight:700; text-align:right; color:#cbd5e1; }
-.credits-remain.done { color:#10b981; }
+.credits-remain-box {
+  width:30px; padding:4px 2px; border-radius:6px;
+  border:1.5px solid #fde68a;
+  font-size:13px; font-weight:700; text-align:center;
+  color:#b45309; background:#fef3c7; line-height:1.5;
+}
+.credits-remain-box.done { color:#059669; background:#d1fae5; border-color:#a7f3d0; }
+.credits-remain-box.blank { color:transparent; background:transparent; border-color:transparent; }
+.credits-legend { display:flex; gap:12px; font-size:10px; color:#64748b; margin:-6px 0 10px; }
+.credits-legend span { display:inline-flex; align-items:center; gap:4px; }
+.credits-legend i { width:9px; height:9px; border-radius:3px; display:inline-block; }
 .credits-divider { height:1px; background:#f1f5f9; margin:10px 0 8px; }
 .credits-total {
   display:flex; justify-content:space-between; align-items:baseline;
@@ -424,13 +434,18 @@ tbody td:first-child {
 <div class="credits-wrap" id="credits-wrap">
   <div class="credits-card">
     <div class="credits-title">📊 単位チェッカー</div>
+    <div class="credits-legend">
+      <span><i style="background:#eff6ff;border:1.5px solid #bfdbfe"></i>必要</span>
+      <span><i style="background:#e2e8f0;border:1.5px solid #cbd5e1"></i>取得</span>
+      <span><i style="background:#fef3c7;border:1.5px solid #fde68a"></i>残り</span>
+    </div>
     <button class="credits-pdf-btn" id="credits-pdf-btn" onclick="openSeisekiPicker()">📄 成績表PDFから自動入力</button>
     <input type="file" id="credits-pdf-input" accept=".pdf" style="display:none" onchange="handleSeisekiFile(this.files[0])">
     <div id="credits-rows"></div>
     <div class="credits-divider"></div>
     <div class="credits-total">
       <span>合計</span>
-      <span><strong id="credits-total-earned">0</strong> / <input type="number" id="credits-total-req" class="credits-mini-input" style="width:46px;display:inline-block;vertical-align:baseline;font-size:13px;font-weight:700" min="0" max="999" value="0"> 単位</span>
+      <span>取得 <strong id="credits-total-earned">0</strong> / 必要 <input type="number" id="credits-total-req" class="credits-mini-input" style="width:44px;display:inline-block;vertical-align:baseline;font-size:13px;font-weight:700" min="0" max="999" value="0"> 単位</span>
     </div>
     <div class="credits-progress-wrap">
       <div class="credits-progress-bar" id="credits-bar"></div>
@@ -1138,7 +1153,10 @@ function renderCreditRows() {
           <div class="credits-mini-label">取得</div>
           <div class="credits-earn-val" id="earn-${cat.id}">${earned}</div>
         </div>
-        <div class="credits-remain" id="remain-${cat.id}"></div>
+        <div class="credits-mini-field">
+          <div class="credits-mini-label">残り</div>
+          <div class="credits-remain-box" id="remain-${cat.id}"></div>
+        </div>
       </div>
     `;
     currentGrid.appendChild(item);
@@ -1172,7 +1190,10 @@ function renderCreditRows() {
           <div class="credits-mini-label">取得</div>
           <div class="credits-earn-val" id="earn-combined-98">0</div>
         </div>
-        <div class="credits-remain" id="remain-combined-98"></div>
+        <div class="credits-mini-field">
+          <div class="credits-mini-label">残り</div>
+          <div class="credits-remain-box" id="remain-combined-98"></div>
+        </div>
       </div>
     `;
     container.appendChild(row98);
@@ -1192,7 +1213,10 @@ function renderCreditRows() {
             <div class="credits-mini-label">取得</div>
             <div class="credits-earn-val" id="earn-combined-senmon">0</div>
           </div>
-          <div class="credits-remain" id="remain-combined-senmon"></div>
+          <div class="credits-mini-field">
+            <div class="credits-mini-label">残り</div>
+            <div class="credits-remain-box" id="remain-combined-senmon"></div>
+          </div>
         </div>
       `;
       senmonGrid.appendChild(row);
@@ -1213,11 +1237,11 @@ function updateCredits() {
     const remainEl = document.getElementById(`remain-${cat.id}`);
     if (remainEl) {
       if (req === 0) {
-        remainEl.textContent = ''; remainEl.className = 'credits-remain';
+        remainEl.textContent = ''; remainEl.className = 'credits-remain-box blank';
       } else if (earned >= req) {
-        remainEl.textContent = '✓'; remainEl.className = 'credits-remain done';
+        remainEl.textContent = '✓'; remainEl.className = 'credits-remain-box done';
       } else {
-        remainEl.textContent = String(req - earned); remainEl.className = 'credits-remain';
+        remainEl.textContent = String(req - earned); remainEl.className = 'credits-remain-box';
       }
     }
     totalEarned += earned;
@@ -1236,9 +1260,9 @@ function updateCredits() {
       const sonotaReq  = parseInt(document.getElementById('req-sonota')?.value) || 0;
       const sonotaRem  = document.getElementById('remain-sonota');
       if (sonotaRem) {
-        if (sonotaReq === 0) { sonotaRem.textContent = ''; sonotaRem.className = 'credits-remain'; }
-        else if (sonotaAdj >= sonotaReq) { sonotaRem.textContent = '✓'; sonotaRem.className = 'credits-remain done'; }
-        else { sonotaRem.textContent = String(sonotaReq - sonotaAdj); sonotaRem.className = 'credits-remain'; }
+        if (sonotaReq === 0) { sonotaRem.textContent = ''; sonotaRem.className = 'credits-remain-box blank'; }
+        else if (sonotaAdj >= sonotaReq) { sonotaRem.textContent = '✓'; sonotaRem.className = 'credits-remain-box done'; }
+        else { sonotaRem.textContent = String(sonotaReq - sonotaAdj); sonotaRem.className = 'credits-remain-box'; }
       }
       totalEarned += kyotsuOverflow;
       if (_creditData.sonota) _creditData.sonota.earned = sonotaAdj;
@@ -1249,8 +1273,8 @@ function updateCredits() {
     if (combinedEl) combinedEl.textContent = combinedEarned;
     const combinedRem = document.getElementById('remain-combined-senmon');
     if (combinedRem) {
-      if (combinedEarned >= 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain done'; }
-      else { combinedRem.textContent = String(55 - combinedEarned); combinedRem.className = 'credits-remain'; }
+      if (combinedEarned >= 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain-box done'; }
+      else { combinedRem.textContent = String(55 - combinedEarned); combinedRem.className = 'credits-remain-box'; }
     }
     // 専門98単位合計チェック（初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他）
     const combined98 = (_creditData.shonen?.earned || 0) + (_creditData.senmon1?.earned || 0)
@@ -1261,8 +1285,8 @@ function updateCredits() {
     if (el98) el98.textContent = combined98;
     const rem98 = document.getElementById('remain-combined-98');
     if (rem98) {
-      if (combined98 >= 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain done'; }
-      else { rem98.textContent = String(98 - combined98); rem98.className = 'credits-remain'; }
+      if (combined98 >= 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain-box done'; }
+      else { rem98.textContent = String(98 - combined98); rem98.className = 'credits-remain-box'; }
     }
   }
   document.getElementById('credits-total-earned').textContent = totalEarned;
