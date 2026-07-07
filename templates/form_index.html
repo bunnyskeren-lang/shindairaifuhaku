@@ -883,7 +883,11 @@
 
     // ── プリロードキャッシュ ──
     let _preload = null;
-    fetch('/api/preload').then(r => r.json()).then(d => { _preload = d; }).catch(() => {});
+    // 修正理由: res.okを確認せずJSON化していたため、サーバーエラー時に
+    // {"detail": "..."}のような形の異なるレスポンスが_preloadに入り、
+    // 検索欄に1文字入力した瞬間 `_preload.courses.filter` がTypeErrorで無言クラッシュしていた。
+    // res.ok以外なら_preloadをnullのままにし、既存の/api/coursesフォールバックへ委ねる。
+    fetch('/api/preload').then(r => r.ok ? r.json() : Promise.reject(new Error(r.status))).then(d => { _preload = d; }).catch(() => {});
 
     function _normStr(s) { return s.replace(/[・･（）()]/g, '').toLowerCase(); }
 
@@ -1147,7 +1151,11 @@
     });
     function validateName(inputEl, errorEl) {
       const v = inputEl.value.trim();
-      const invalid = v && !NAME_RE.test(v);
+      // 修正理由: `v && !NAME_RE.test(v)` は空文字だと常にfalse（=valid扱い）になり、
+      // 初回ユーザーの氏名必須入力（*マーク付き、required属性あり）を空欄のまま送信できてしまい、
+      // サーバー側で弾かれた時には既にlocalStorageの自動保存データが消去された後だった。
+      // required属性がある場合は空文字も不正値として扱う。
+      const invalid = inputEl.hasAttribute('required') ? (!v || !NAME_RE.test(v)) : (v && !NAME_RE.test(v));
       errorEl.classList.toggle('hidden', !invalid);
       inputEl.classList.toggle('border-red-400', invalid);
       inputEl.classList.toggle('ring-2', invalid);
