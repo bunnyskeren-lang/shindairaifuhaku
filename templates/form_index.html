@@ -274,12 +274,7 @@
             <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="毎授業">毎授業</button>
             <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="数回">数回</button>
             <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="なし">なし</button>
-            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="__hwfreq_custom__">✏️ その他</button>
           </div>
-          <input type="text" id="homeworkFrequencyCustomInput"
-            class="hidden w-full mt-2 border border-amber-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 transition bg-white"
-            placeholder="例：隔週など" maxlength="30">
-          <p id="homeworkFrequencyCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
           <p id="homeworkFrequencyError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
@@ -576,34 +571,18 @@
             formatInput.value = '';
           }
         }
-        if (btn.dataset.value === '__hwfreq_custom__') {
-          const hwFreqInput = document.getElementById('homeworkFrequencyCustomInput');
-          if (btn.classList.contains('active')) {
-            hwFreqInput.classList.remove('hidden');
-            hwFreqInput.focus();
-          } else {
-            hwFreqInput.classList.add('hidden');
-            hwFreqInput.value = '';
-          }
-        }
         if (btn.dataset.group === 'eval') renderEvalPercents();
         updateGradingMethod();
         saveData();
       };
     });
 
-    ['evalCustomInput', 'formatCustomInput', 'homeworkFrequencyCustomInput', 'gradingExtra'].forEach(id => {
+    ['evalCustomInput', 'formatCustomInput', 'gradingExtra'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
         if (id === 'evalCustomInput') renderEvalPercents();
         updateGradingMethod();
         saveData();
       });
-    });
-    document.getElementById('homeworkFrequencyCustomInput').addEventListener('input', () => {
-      if (document.getElementById('homeworkFrequencyCustomInput').value.trim()) {
-        document.getElementById('homeworkFrequencyCustomError').classList.add('hidden');
-        document.getElementById('homeworkFrequencyCustomInput').classList.remove('border-red-400');
-      }
     });
     document.getElementById('evalCustomInput').addEventListener('input', () => {
       if (document.getElementById('evalCustomInput').value.trim()) {
@@ -644,12 +623,7 @@
       const hw = document.querySelector('[data-group="homework"].active');
       if (hw) parts.push(`課題:${hw.dataset.value}`);
       const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
-      if (hwFreq) {
-        const hwFreqVal = hwFreq.dataset.value === '__hwfreq_custom__'
-          ? document.getElementById('homeworkFrequencyCustomInput').value.trim()
-          : hwFreq.dataset.value;
-        if (hwFreqVal) parts.push(`頻度:${hwFreqVal}`);
-      }
+      if (hwFreq) parts.push(`頻度:${hwFreq.dataset.value}`);
       const evalBtns = [...document.querySelectorAll('[data-group="eval"].active')];
       const evalPercents = {};
       document.querySelectorAll('.eval-percent-input').forEach(inp => {
@@ -1193,7 +1167,6 @@
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
           homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
           homeworkFrequency: document.querySelector('[data-group="homework_frequency"].active')?.dataset.value || '',
-          homeworkFrequencyCustom: document.getElementById('homeworkFrequencyCustomInput').value,
           evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
           evalCustom: document.getElementById('evalCustomInput').value,
           evalPercents: Object.fromEntries([...document.querySelectorAll('.eval-percent-input')].map(i => [i.dataset.percentFor, i.value])),
@@ -1256,11 +1229,6 @@
           document.querySelectorAll('[data-group="homework_frequency"]').forEach(b => {
             b.classList.toggle('active', b.dataset.value === d.homeworkFrequency);
           });
-          if (d.homeworkFrequency === '__hwfreq_custom__') {
-            const hwFreqInput = document.getElementById('homeworkFrequencyCustomInput');
-            hwFreqInput.classList.remove('hidden');
-            if (d.homeworkFrequencyCustom) hwFreqInput.value = d.homeworkFrequencyCustom;
-          }
         }
         if (d.evals?.length) {
           document.querySelectorAll('[data-group="eval"]').forEach(b => {
@@ -1322,7 +1290,7 @@
       ['regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
        'classFormatError','formatCustomError','attendanceError','homeworkError',
-       'homeworkFrequencyError','homeworkFrequencyCustomError','evalError','evalCustomError','evalPercentError'].forEach(id => {
+       'homeworkFrequencyError','evalError','evalCustomError','evalPercentError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -1373,11 +1341,6 @@
       const hwFreqActive = document.querySelector('[data-group="homework_frequency"].active');
       if (!hwFreqActive) {
         document.getElementById('homeworkFrequencyError').classList.remove('hidden');
-        valid = false;
-      } else if (hwFreqActive.dataset.value === '__hwfreq_custom__' &&
-                 !document.getElementById('homeworkFrequencyCustomInput').value.trim()) {
-        document.getElementById('homeworkFrequencyCustomError').classList.remove('hidden');
-        document.getElementById('homeworkFrequencyCustomInput').classList.add('border-red-400');
         valid = false;
       }
       // 評価方法
