@@ -383,7 +383,7 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str], revi
         rows.append(
             FlexBox(
                 layout="vertical",
-                action=PostbackAction(label=name[:40], data=name),
+                action=PostbackAction(label=name[:20], data=name),
                 contents=[FlexText(text=name, wrap=True, size="sm", color=color)],
                 padding_top="sm",
                 padding_bottom="sm",
@@ -419,7 +419,7 @@ def make_category_select_flex() -> FlexMessage:
     btns = [
         FlexBox(
             layout="vertical",
-            action=MessageAction(label=label[:40], text=text),
+            action=MessageAction(label=label[:20], text=text),
             contents=[
                 FlexText(text=label, size="lg", color=fg, weight="bold", align="center"),
                 FlexText(text=desc,  size="xs", color="#64748b", align="center", wrap=True),
@@ -467,7 +467,7 @@ def make_classification_select_flex(
     btns = [
         FlexBox(
             layout="vertical",
-            action=PostbackAction(label=cls[:40], data=f"{data_prefix}{cls}"),
+            action=PostbackAction(label=cls[:20], data=f"{data_prefix}{cls}"),
             contents=[
                 FlexText(
                     text=cls,

@@ -212,7 +212,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
 
             name_box = FlexBox(
                 layout="horizontal",
-                action=PostbackAction(label=display[:40], data=name),
+                action=PostbackAction(label=display[:20], data=name),
                 contents=[FlexText(text=display_text, wrap=True, size="sm", color=text_color, flex=1)],
             )
 
