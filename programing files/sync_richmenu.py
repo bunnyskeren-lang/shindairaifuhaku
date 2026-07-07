@@ -26,6 +26,11 @@ def post(url, token, data, content_type="application/json"):
 
 import json
 
+confirm = input("本番のリッチメニューを削除し、dev の内容で上書きします。よろしいですか？ (yes/no): ")
+if confirm.strip().lower() != "yes":
+    print("キャンセルしました。")
+    raise SystemExit(0)
+
 # 1. dev のデフォルトリッチメニューID取得
 dev_id_raw = get("https://api.line.me/v2/bot/user/all/richmenu", DEV_TOKEN)
 dev_id = json.loads(dev_id_raw)["richMenuId"]
