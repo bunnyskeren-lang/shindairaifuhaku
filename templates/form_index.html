@@ -293,6 +293,22 @@
           <p id="homeworkError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
+        <!-- 課題の頻度 -->
+        <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 mb-3">
+          <p class="text-xs font-bold text-amber-700 mb-2">📅 課題の頻度 <span class="text-red-500">*</span></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="毎授業ごと">毎授業ごと</button>
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="数回">数回</button>
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="なし">なし</button>
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="__hwfreq_custom__">✏️ 手入力</button>
+          </div>
+          <input type="text" id="homeworkFrequencyCustomInput"
+            class="hidden w-full mt-2 border border-amber-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 transition bg-white"
+            placeholder="例：隔週など" maxlength="30">
+          <p id="homeworkFrequencyCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
+          <p id="homeworkFrequencyError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
+        </div>
+
         <!-- 評価方法 -->
         <div class="rounded-xl bg-indigo-50 border border-indigo-100 p-3 mb-3">
           <p class="text-xs font-bold text-indigo-700 mb-2">🎯 評価方法 <span class="text-red-500">*</span> <span class="font-normal text-indigo-400">複数選択可</span></p>
@@ -303,6 +319,7 @@
             <button type="button" class="chip-btn multi" data-group="eval" data-value="小テスト">小テスト</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="発表・プレゼン">発表・プレゼン</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="出席点">出席点</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="普段の課題">普段の課題</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="__custom__">✏️ 手入力</button>
           </div>
           <input type="text" id="evalCustomInput"
@@ -310,6 +327,14 @@
             placeholder="例：口頭試問、実技など" maxlength="50">
           <p id="evalCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
           <p id="evalError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
+
+          <!-- 評価方法の割合（2つ以上選択時のみ表示） -->
+          <div id="evalPercentContainer" class="hidden mt-3 pt-3 border-t border-indigo-200">
+            <p class="text-xs font-bold text-indigo-700 mb-2">📊 それぞれの割合 <span class="text-red-500">*</span> <span class="font-normal text-indigo-400">合計100%になるように</span></p>
+            <div id="evalPercentList" class="space-y-2"></div>
+            <p id="evalPercentTotal" class="text-xs mt-1.5 text-gray-400"></p>
+            <p id="evalPercentError" class="hidden mt-1.5 text-red-500 text-xs">割合を入力してください（合計100%になるように）</p>
+          </div>
         </div>
 
         <!-- 補足 -->
@@ -494,7 +519,7 @@
         } else {
           btn.classList.toggle('active');
         }
-        const errMap = { attendance: 'attendanceError', homework: 'homeworkError', eval: 'evalError', class_format: 'classFormatError' };
+        const errMap = { attendance: 'attendanceError', homework: 'homeworkError', homework_frequency: 'homeworkFrequencyError', eval: 'evalError', class_format: 'classFormatError' };
         if (errMap[btn.dataset.group]) document.getElementById(errMap[btn.dataset.group]).classList.add('hidden');
         if (btn.dataset.value === '__custom__') {
           const customInput = document.getElementById('evalCustomInput');
@@ -516,13 +541,34 @@
             formatInput.value = '';
           }
         }
+        if (btn.dataset.value === '__hwfreq_custom__') {
+          const hwFreqInput = document.getElementById('homeworkFrequencyCustomInput');
+          if (btn.classList.contains('active')) {
+            hwFreqInput.classList.remove('hidden');
+            hwFreqInput.focus();
+          } else {
+            hwFreqInput.classList.add('hidden');
+            hwFreqInput.value = '';
+          }
+        }
+        if (btn.dataset.group === 'eval') renderEvalPercents();
         updateGradingMethod();
         saveData();
       };
     });
 
-    ['evalCustomInput', 'formatCustomInput', 'gradingExtra'].forEach(id => {
-      document.getElementById(id).addEventListener('input', () => { updateGradingMethod(); saveData(); });
+    ['evalCustomInput', 'formatCustomInput', 'homeworkFrequencyCustomInput', 'gradingExtra'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        if (id === 'evalCustomInput') renderEvalPercents();
+        updateGradingMethod();
+        saveData();
+      });
+    });
+    document.getElementById('homeworkFrequencyCustomInput').addEventListener('input', () => {
+      if (document.getElementById('homeworkFrequencyCustomInput').value.trim()) {
+        document.getElementById('homeworkFrequencyCustomError').classList.add('hidden');
+        document.getElementById('homeworkFrequencyCustomInput').classList.remove('border-red-400');
+      }
     });
     document.getElementById('evalCustomInput').addEventListener('input', () => {
       if (document.getElementById('evalCustomInput').value.trim()) {
@@ -562,16 +608,86 @@
       if (att) parts.push(`出席:${att.dataset.value}`);
       const hw = document.querySelector('[data-group="homework"].active');
       if (hw) parts.push(`課題:${hw.dataset.value}`);
-      const evals = [...document.querySelectorAll('[data-group="eval"].active')].map(b => {
-        if (b.dataset.value === '__custom__') {
-          return document.getElementById('evalCustomInput').value.trim() || null;
-        }
-        return b.dataset.value;
+      const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
+      if (hwFreq) {
+        const hwFreqVal = hwFreq.dataset.value === '__hwfreq_custom__'
+          ? document.getElementById('homeworkFrequencyCustomInput').value.trim()
+          : hwFreq.dataset.value;
+        if (hwFreqVal) parts.push(`頻度:${hwFreqVal}`);
+      }
+      const evalBtns = [...document.querySelectorAll('[data-group="eval"].active')];
+      const evalPercents = {};
+      document.querySelectorAll('.eval-percent-input').forEach(inp => {
+        evalPercents[inp.dataset.percentFor] = inp.value.trim();
+      });
+      const evals = evalBtns.map(b => {
+        const label = b.dataset.value === '__custom__'
+          ? (document.getElementById('evalCustomInput').value.trim() || null)
+          : b.dataset.value;
+        if (!label) return null;
+        const pct = evalBtns.length >= 2 ? evalPercents[b.dataset.value] : '';
+        return pct ? `${label}(${pct}%)` : label;
       }).filter(Boolean);
       if (evals.length) parts.push(`評価:${evals.join('・')}`);
       const extra = document.getElementById('gradingExtra').value.trim();
       if (extra) parts.push(`補足:${extra}`);
       document.getElementById('gradingMethodHidden').value = parts.join(' / ');
+    }
+
+    function renderEvalPercents() {
+      const activeBtns = [...document.querySelectorAll('[data-group="eval"].active')];
+      const container = document.getElementById('evalPercentContainer');
+      const listEl = document.getElementById('evalPercentList');
+      if (activeBtns.length < 2) {
+        container.classList.add('hidden');
+        listEl.innerHTML = '';
+        document.getElementById('evalPercentError').classList.add('hidden');
+        return;
+      }
+      const existing = {};
+      listEl.querySelectorAll('.eval-percent-input').forEach(inp => {
+        existing[inp.dataset.percentFor] = inp.value;
+      });
+      container.classList.remove('hidden');
+      listEl.innerHTML = '';
+      activeBtns.forEach(b => {
+        const val = b.dataset.value;
+        const label = val === '__custom__'
+          ? (document.getElementById('evalCustomInput').value.trim() || '手入力')
+          : val;
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2';
+        row.innerHTML = `
+          <span class="text-xs text-gray-600 flex-1">${escapeHtml(label)}</span>
+          <input type="number" min="1" max="100" step="1" inputmode="numeric"
+            class="eval-percent-input w-16 border border-indigo-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white"
+            placeholder="%">
+          <span class="text-xs text-gray-400">%</span>
+        `;
+        const inp = row.querySelector('input');
+        inp.dataset.percentFor = val;
+        if (existing[val]) inp.value = existing[val];
+        inp.addEventListener('input', () => {
+          document.getElementById('evalPercentError').classList.add('hidden');
+          updateEvalPercentTotal();
+          updateGradingMethod();
+          saveData();
+        });
+        listEl.appendChild(row);
+      });
+      updateEvalPercentTotal();
+    }
+
+    function updateEvalPercentTotal() {
+      const totalEl = document.getElementById('evalPercentTotal');
+      if (!totalEl) return;
+      const inputs = [...document.querySelectorAll('.eval-percent-input')];
+      if (!inputs.length) { totalEl.textContent = ''; return; }
+      const total = inputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
+      totalEl.textContent = `合計: ${total}%`;
+      totalEl.classList.toggle('text-red-500', total !== 100);
+      totalEl.classList.toggle('text-gray-400', total !== 100);
+      totalEl.classList.toggle('text-green-600', total === 100);
     }
 
     let searchMode = 'course';
@@ -973,8 +1089,11 @@
           formatCustom: document.getElementById('formatCustomInput').value,
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
           homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
+          homeworkFrequency: document.querySelector('[data-group="homework_frequency"].active')?.dataset.value || '',
+          homeworkFrequencyCustom: document.getElementById('homeworkFrequencyCustomInput').value,
           evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
           evalCustom: document.getElementById('evalCustomInput').value,
+          evalPercents: Object.fromEntries([...document.querySelectorAll('.eval-percent-input')].map(i => [i.dataset.percentFor, i.value])),
           gradingExtra: document.getElementById('gradingExtra').value,
           comment: document.getElementById('comment').value,
         }));
@@ -1032,6 +1151,16 @@
             b.classList.toggle('active', b.dataset.value === d.homework);
           });
         }
+        if (d.homeworkFrequency) {
+          document.querySelectorAll('[data-group="homework_frequency"]').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === d.homeworkFrequency);
+          });
+          if (d.homeworkFrequency === '__hwfreq_custom__') {
+            const hwFreqInput = document.getElementById('homeworkFrequencyCustomInput');
+            hwFreqInput.classList.remove('hidden');
+            if (d.homeworkFrequencyCustom) hwFreqInput.value = d.homeworkFrequencyCustom;
+          }
+        }
         if (d.evals?.length) {
           document.querySelectorAll('[data-group="eval"]').forEach(b => {
             b.classList.toggle('active', d.evals.includes(b.dataset.value));
@@ -1040,6 +1169,14 @@
             const customInput = document.getElementById('evalCustomInput');
             customInput.classList.remove('hidden');
             if (d.evalCustom) customInput.value = d.evalCustom;
+          }
+          renderEvalPercents();
+          if (d.evalPercents) {
+            document.querySelectorAll('.eval-percent-input').forEach(inp => {
+              const v = d.evalPercents[inp.dataset.percentFor];
+              if (v) inp.value = v;
+            });
+            updateEvalPercentTotal();
           }
         }
         if (d.gradingExtra) document.getElementById('gradingExtra').value = d.gradingExtra;
@@ -1073,6 +1210,7 @@
         ['classFormatError','gradingCard'],
         ['attendanceError','gradingCard'],
         ['homeworkError','gradingCard'],
+        ['homeworkFrequencyError','gradingCard'],
         ['evalError','gradingCard'],
       ];
       map.forEach(([errId, cardId]) => {
@@ -1090,7 +1228,8 @@
       // 全エラーを一旦リセット
       ['submitterNameError','regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
-       'classFormatError','formatCustomError','attendanceError','homeworkError','evalError','evalCustomError'].forEach(id => {
+       'classFormatError','formatCustomError','attendanceError','homeworkError',
+       'homeworkFrequencyError','homeworkFrequencyCustomError','evalError','evalCustomError','evalPercentError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -1139,6 +1278,16 @@
         document.getElementById('homeworkError').classList.remove('hidden');
         valid = false;
       }
+      const hwFreqActive = document.querySelector('[data-group="homework_frequency"].active');
+      if (!hwFreqActive) {
+        document.getElementById('homeworkFrequencyError').classList.remove('hidden');
+        valid = false;
+      } else if (hwFreqActive.dataset.value === '__hwfreq_custom__' &&
+                 !document.getElementById('homeworkFrequencyCustomInput').value.trim()) {
+        document.getElementById('homeworkFrequencyCustomError').classList.remove('hidden');
+        document.getElementById('homeworkFrequencyCustomInput').classList.add('border-red-400');
+        valid = false;
+      }
       // 評価方法
       const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
       if (evalActives.length === 0) {
@@ -1149,6 +1298,15 @@
         document.getElementById('evalCustomError').classList.remove('hidden');
         document.getElementById('evalCustomInput').classList.add('border-red-400');
         valid = false;
+      } else if (evalActives.length >= 2) {
+        const percentInputs = [...document.querySelectorAll('.eval-percent-input')];
+        const total = percentInputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
+        const allFilled = percentInputs.length === evalActives.length &&
+          percentInputs.every(i => i.value.trim() !== '' && parseFloat(i.value) > 0);
+        if (!allFilled || total !== 100) {
+          document.getElementById('evalPercentError').classList.remove('hidden');
+          valid = false;
+        }
       }
       // 授業形式
       const fmtActives = [...document.querySelectorAll('[data-group="class_format"].active')];
