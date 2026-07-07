@@ -472,14 +472,14 @@ def make_classification_select_flex(
                 FlexText(
                     text=cls,
                     size="lg",
-                    color="#4f46e5" if cls in reviewed_cls else "#475569",
+                    color="#0f172a" if cls in reviewed_cls else "#94a3b8",
                     weight="bold",
                     align="center",
                 )
             ],
             background_color="#eef2ff" if cls in reviewed_cls else "#f8fafc",
             border_width="2px",
-            border_color="#4f46e5" if cls in reviewed_cls else "#cbd5e1",
+            border_color="#0f172a" if cls in reviewed_cls else "#cbd5e1",
             corner_radius="20px",
             padding_all="md",
         )
