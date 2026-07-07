@@ -247,7 +247,7 @@
             <button type="button" class="chip-btn multi" data-group="class_format" data-value="対面">対面</button>
             <button type="button" class="chip-btn multi" data-group="class_format" data-value="リアルタイム配信">リアルタイム配信</button>
             <button type="button" class="chip-btn multi" data-group="class_format" data-value="オンデマンド">オンデマンド</button>
-            <button type="button" class="chip-btn multi" data-group="class_format" data-value="__format_custom__">✏️ 手入力</button>
+            <button type="button" class="chip-btn multi" data-group="class_format" data-value="__format_custom__">✏️ その他</button>
           </div>
           <input type="text" id="formatCustomInput"
             class="hidden w-full mt-2 border border-purple-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition bg-white"
@@ -267,6 +267,22 @@
           <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
+        <!-- 課題の頻度 -->
+        <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 mb-3">
+          <p class="text-xs font-bold text-amber-700 mb-2">📅 普段の課題の頻度 <span class="text-red-500">*</span></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="毎授業">毎授業</button>
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="数回">数回</button>
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="なし">なし</button>
+            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="__hwfreq_custom__">✏️ その他</button>
+          </div>
+          <input type="text" id="homeworkFrequencyCustomInput"
+            class="hidden w-full mt-2 border border-amber-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 transition bg-white"
+            placeholder="例：隔週など" maxlength="30">
+          <p id="homeworkFrequencyCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
+          <p id="homeworkFrequencyError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
+        </div>
+
         <!-- 課題の量 -->
         <div class="rounded-xl bg-orange-50 border border-orange-100 p-3 mb-3">
           <p class="text-xs font-bold text-orange-700 mb-2">📝 普段の課題の量 <span class="text-red-500">*</span></p>
@@ -277,22 +293,6 @@
             <button type="button" class="chip-btn single" data-group="homework" data-value="なし">なし</button>
           </div>
           <p id="homeworkError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
-        </div>
-
-        <!-- 課題の頻度 -->
-        <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 mb-3">
-          <p class="text-xs font-bold text-amber-700 mb-2">📅 課題の頻度 <span class="text-red-500">*</span></p>
-          <div class="flex flex-wrap gap-2">
-            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="毎授業ごと">毎授業ごと</button>
-            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="数回">数回</button>
-            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="なし">なし</button>
-            <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="__hwfreq_custom__">✏️ 手入力</button>
-          </div>
-          <input type="text" id="homeworkFrequencyCustomInput"
-            class="hidden w-full mt-2 border border-amber-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 transition bg-white"
-            placeholder="例：隔週など" maxlength="30">
-          <p id="homeworkFrequencyCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
-          <p id="homeworkFrequencyError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
         </div>
 
         <!-- 評価方法 -->
@@ -306,7 +306,7 @@
             <button type="button" class="chip-btn multi" data-group="eval" data-value="発表・プレゼン">発表・プレゼン</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="出席点">出席点</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="普段の課題">普段の課題</button>
-            <button type="button" class="chip-btn multi" data-group="eval" data-value="__custom__">✏️ 手入力</button>
+            <button type="button" class="chip-btn multi" data-group="eval" data-value="__custom__">✏️ その他</button>
           </div>
           <input type="text" id="evalCustomInput"
             class="hidden w-full mt-2 border border-indigo-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white"
@@ -316,9 +316,11 @@
 
           <!-- 評価方法の割合（2つ以上選択時のみ表示） -->
           <div id="evalPercentContainer" class="hidden mt-3 pt-3 border-t border-indigo-200">
-            <p class="text-xs font-bold text-indigo-700 mb-2">📊 それぞれの割合 <span class="text-red-500">*</span> <span class="font-normal text-indigo-400">合計100%になるように</span></p>
-            <div id="evalPercentList" class="space-y-2"></div>
-            <p id="evalPercentTotal" class="text-xs mt-1.5 text-gray-400"></p>
+            <p class="text-xs font-bold text-indigo-700 mb-2">📊 それぞれの割合 <span class="font-normal text-indigo-400">バーを動かして調整</span></p>
+            <div id="evalSliderBar" class="eval-slider-bar">
+              <div id="evalSliderTrack" class="eval-slider-track"></div>
+            </div>
+            <div id="evalPercentList" class="mt-2 space-y-1"></div>
             <p id="evalPercentError" class="hidden mt-1.5 text-red-500 text-xs">割合を入力してください（合計100%になるように）</p>
           </div>
         </div>
@@ -343,15 +345,15 @@
         <div class="mb-3">
           <p class="text-xs text-gray-400 mb-2">📌 タップして書くきっかけに</p>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="prompt-chip" data-prompt="【テスト・課題】">📝 テスト・課題</button>
-            <button type="button" class="prompt-chip" data-prompt="【おすすめポイント】">💡 おすすめポイント</button>
+            <button type="button" class="prompt-chip" data-prompt="【テストの難易度】">📝 テストの難易度</button>
+            <button type="button" class="prompt-chip" data-prompt="【課題のだるさ】">😩 課題のだるさ</button>
             <button type="button" class="prompt-chip" data-prompt="【注意点】">⚠️ 注意点</button>
           </div>
         </div>
 
         <textarea name="comment" id="comment" rows="7"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
-          placeholder="例）&#13;&#10;【テスト・課題】期末レポートのみ、テーマ自由&#13;&#10;【おすすめポイント】実践的で就活にも役立った！&#13;&#10;【注意点】出席が厳しいので注意"
+          placeholder="例）&#13;&#10;【テストの難易度】期末レポートのみ、テーマ自由で簡単&#13;&#10;【課題のだるさ】毎週レポートがあって大変&#13;&#10;【注意点】出席が厳しいので注意"
           required maxlength="500"></textarea>
 
         <!-- 文字数フィードバック -->
@@ -425,6 +427,53 @@
       -webkit-tap-highlight-color: transparent;
     }
     .prompt-chip:active { transform: scale(0.95); background: #ede9fe; }
+
+    .eval-slider-bar {
+      position: relative;
+      height: 40px;
+      touch-action: none;
+    }
+    .eval-slider-track {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .eval-slider-segment {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      transition: flex-basis 0.05s linear;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .eval-slider-divider {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 20px;
+      margin-left: -10px;
+      cursor: ew-resize;
+      touch-action: none;
+      z-index: 10;
+    }
+    .eval-slider-divider::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 4px;
+      bottom: 4px;
+      width: 4px;
+      margin-left: -2px;
+      background: #fff;
+      border-radius: 2px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
+    }
+    .eval-slider-divider:active::before { background: #e0e7ff; }
   </style>
 
   <script>
@@ -620,60 +669,142 @@
       document.getElementById('gradingMethodHidden').value = parts.join(' / ');
     }
 
-    function renderEvalPercents() {
+    const EVAL_SLIDER_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6'];
+
+    function renderEvalPercents(overridePercents) {
       const activeBtns = [...document.querySelectorAll('[data-group="eval"].active')];
       const container = document.getElementById('evalPercentContainer');
-      const listEl = document.getElementById('evalPercentList');
+      const trackEl = document.getElementById('evalSliderTrack');
+      const legendEl = document.getElementById('evalPercentList');
       if (activeBtns.length < 2) {
         container.classList.add('hidden');
-        listEl.innerHTML = '';
+        trackEl.innerHTML = '';
+        legendEl.innerHTML = '';
         document.getElementById('evalPercentError').classList.add('hidden');
         return;
       }
       const existing = {};
-      listEl.querySelectorAll('.eval-percent-input').forEach(inp => {
-        existing[inp.dataset.percentFor] = inp.value;
+      document.querySelectorAll('.eval-percent-input').forEach(inp => {
+        existing[inp.dataset.percentFor] = parseFloat(inp.value);
       });
+      const source = overridePercents || existing;
       container.classList.remove('hidden');
-      listEl.innerHTML = '';
+
+      const vals = activeBtns.map(b => b.dataset.value);
+      const labels = {};
       activeBtns.forEach(b => {
-        const val = b.dataset.value;
-        const label = val === '__custom__'
-          ? (document.getElementById('evalCustomInput').value.trim() || '手入力')
-          : val;
-        const row = document.createElement('div');
-        row.className = 'flex items-center gap-2';
-        row.innerHTML = `
-          <span class="text-xs text-gray-600 flex-1">${escapeHtml(label)}</span>
-          <input type="number" min="1" max="100" step="1" inputmode="numeric"
-            class="eval-percent-input w-16 border border-indigo-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white"
-            placeholder="%">
-          <span class="text-xs text-gray-400">%</span>
-        `;
-        const inp = row.querySelector('input');
-        inp.dataset.percentFor = val;
-        if (existing[val]) inp.value = existing[val];
-        inp.addEventListener('input', () => {
-          document.getElementById('evalPercentError').classList.add('hidden');
-          updateEvalPercentTotal();
-          updateGradingMethod();
-          saveData();
-        });
-        listEl.appendChild(row);
+        labels[b.dataset.value] = b.dataset.value === '__custom__'
+          ? (document.getElementById('evalCustomInput').value.trim() || 'その他')
+          : b.dataset.value;
       });
-      updateEvalPercentTotal();
+
+      let percents = vals.map(v => parseFloat(source[v]));
+      if (!percents.every(p => Number.isFinite(p) && p > 0)) {
+        const base = Math.floor(100 / vals.length);
+        percents = vals.map(() => base);
+        percents[percents.length - 1] += 100 - base * vals.length;
+      } else {
+        const sum = percents.reduce((a, b) => a + b, 0);
+        if (sum !== 100) {
+          percents = percents.map(p => Math.round(p / sum * 100));
+          percents[percents.length - 1] += 100 - percents.reduce((a, b) => a + b, 0);
+        }
+      }
+
+      buildEvalSliderBar(vals, labels, percents);
     }
 
-    function updateEvalPercentTotal() {
-      const totalEl = document.getElementById('evalPercentTotal');
-      if (!totalEl) return;
-      const inputs = [...document.querySelectorAll('.eval-percent-input')];
-      if (!inputs.length) { totalEl.textContent = ''; return; }
-      const total = inputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
-      totalEl.textContent = `合計: ${total}%`;
-      totalEl.classList.toggle('text-red-500', total !== 100);
-      totalEl.classList.toggle('text-gray-400', total !== 100);
-      totalEl.classList.toggle('text-green-600', total === 100);
+    function buildEvalSliderBar(vals, labels, percents) {
+      const trackEl = document.getElementById('evalSliderTrack');
+      const barEl = document.getElementById('evalSliderBar');
+      const legendEl = document.getElementById('evalPercentList');
+      trackEl.innerHTML = '';
+      barEl.querySelectorAll('.eval-slider-divider').forEach(d => d.remove());
+      legendEl.innerHTML = '';
+
+      vals.forEach((val, i) => {
+        const color = EVAL_SLIDER_COLORS[i % EVAL_SLIDER_COLORS.length];
+        const seg = document.createElement('div');
+        seg.className = 'eval-slider-segment';
+        seg.style.background = color;
+        seg.style.flexBasis = percents[i] + '%';
+        seg.dataset.percentFor = val;
+        seg.textContent = percents[i] + '%';
+        trackEl.appendChild(seg);
+
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.className = 'eval-percent-input';
+        hidden.dataset.percentFor = val;
+        hidden.value = percents[i];
+        legendEl.appendChild(hidden);
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-1.5 text-xs text-gray-600';
+        row.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${color}"></span><span class="flex-1">${escapeHtml(labels[val])}</span>`;
+        legendEl.appendChild(row);
+      });
+
+      // 区切り線（隣接する2項目の割合をドラッグで調整）
+      let cumulative = 0;
+      const cumulatives = percents.map(p => (cumulative += p));
+      for (let i = 0; i < vals.length - 1; i++) {
+        const divider = document.createElement('div');
+        divider.className = 'eval-slider-divider';
+        divider.style.left = cumulatives[i] + '%';
+        divider.dataset.index = i;
+        barEl.appendChild(divider);
+        attachDividerDrag(divider, i, vals);
+      }
+    }
+
+    function attachDividerDrag(divider, index, vals) {
+      const barEl = document.getElementById('evalSliderBar');
+      const onMove = (clientX) => {
+        const rect = barEl.getBoundingClientRect();
+        const inputs = vals.map(v => document.querySelector(`.eval-percent-input[data-percent-for="${v}"]`));
+        const percents = inputs.map(inp => parseFloat(inp.value));
+        let cumulative = 0;
+        const cumulatives = percents.map(p => (cumulative += p));
+        const prevBoundary = index === 0 ? 0 : cumulatives[index - 1];
+        const nextBoundary = cumulatives[index + 1];
+        let newBoundary = ((clientX - rect.left) / rect.width) * 100;
+        newBoundary = Math.max(prevBoundary + 1, Math.min(nextBoundary - 1, Math.round(newBoundary)));
+
+        percents[index] = newBoundary - prevBoundary;
+        percents[index + 1] = nextBoundary - newBoundary;
+
+        inputs[index].value = percents[index];
+        inputs[index + 1].value = percents[index + 1];
+        divider.style.left = newBoundary + '%';
+
+        const track = document.getElementById('evalSliderTrack');
+        track.children[index].style.flexBasis = percents[index] + '%';
+        track.children[index].textContent = percents[index] + '%';
+        track.children[index + 1].style.flexBasis = percents[index + 1] + '%';
+        track.children[index + 1].textContent = percents[index + 1] + '%';
+
+        document.getElementById('evalPercentError').classList.add('hidden');
+        updateGradingMethod();
+        saveData();
+      };
+      const onPointerMove = (e) => onMove(e.touches ? e.touches[0].clientX : e.clientX);
+      const onPointerUp = () => {
+        document.removeEventListener('mousemove', onPointerMove);
+        document.removeEventListener('mouseup', onPointerUp);
+        document.removeEventListener('touchmove', onPointerMove);
+        document.removeEventListener('touchend', onPointerUp);
+      };
+      divider.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+      });
+      divider.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+      }, { passive: false });
     }
 
     let searchMode = 'course';
@@ -1140,14 +1271,7 @@
             customInput.classList.remove('hidden');
             if (d.evalCustom) customInput.value = d.evalCustom;
           }
-          renderEvalPercents();
-          if (d.evalPercents) {
-            document.querySelectorAll('.eval-percent-input').forEach(inp => {
-              const v = d.evalPercents[inp.dataset.percentFor];
-              if (v) inp.value = v;
-            });
-            updateEvalPercentTotal();
-          }
+          renderEvalPercents(d.evalPercents);
         }
         if (d.gradingExtra) document.getElementById('gradingExtra').value = d.gradingExtra;
         if (d.comment) {
