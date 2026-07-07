@@ -53,6 +53,26 @@ async def _registration_incomplete(user_id: str) -> bool:
         profile = await session.get(UserProfile, user_id)
         return not is_profile_complete(profile)
 
+# ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
+# 文字（A/B/C/D等）はトピック・担当教員違いの「本当の選択肢」、数字はクォーター進行を表す
+# ケースが多い（例: 生物学各論A1/A2/C1/C2 → A/Cが選択肢、1/2はどちらも履修が必要）。
+# そのため「同じベース名で文字違いが2種類以上ある」場合のみバリアントとして統合する。
+_FULLWIDTH_UPPER = str.maketrans(
+    "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+)
+_VNUM = _re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+)$')
+
+
+def _vnum_match(name: str) -> tuple[str, str, int] | None:
+    m = _VNUM.match(name)
+    if not m:
+        return None
+    base = m.group(1).strip()
+    letter = (m.group(2) or "").translate(_FULLWIDTH_UPPER)
+    return base, letter, int(m.group(3))
+
+
 # ── Course list carousel ────────────────────────────────────────
 
 
@@ -83,17 +103,26 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     course_name_set = {c.name for c in rows}
     seen_base: set[str] = set()
 
-    # Pre-compute numeric variant groups (plain digits OR letter+digits e.g. T1)
-    _VNUM = _re.compile(r'^(.*?)[\s　]*([A-Z]?\d+)$')
-    _num_bases: dict[str, list] = defaultdict(list)
+    # Pre-compute numeric variant groups: letter+digit（例: 生物学各論A1/A2/C1/C2）は
+    # 文字違い（A/C）だけを「選択肢」としてまとめる。文字のない純粋な連番
+    # （例: 微分積分1/2/3/4）はどちらも履修必須のクォーター進行なのでまとめない。
+    _num_groups: dict[tuple[str, str], list[tuple[str, int]]] = defaultdict(list)
     for _c in rows:
-        _m = _VNUM.match(_c.name)
-        if _m:
-            _b = _m.group(1).strip()
-            _sk = int(_re.search(r'\d+', _m.group(2)).group())
-            _num_bases[_b].append((_c.name, _sk))
-    _num_variant_names = {n for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
-    _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _ in _items}
+        _match = _vnum_match(_c.name)
+        if _match:
+            _b, _letter, _sk = _match
+            _num_groups[(_b, _letter)].append((_c.name, _sk))
+    _letters_per_base: dict[str, set[str]] = defaultdict(set)
+    for _b, _letter in _num_groups:
+        if _letter:
+            _letters_per_base[_b].add(_letter)
+    _num_bases: dict[str, list] = defaultdict(list)
+    for _b, _letters in _letters_per_base.items():
+        if len(_letters) >= 2:
+            for _letter in _letters:
+                _num_bases[_b].extend(_num_groups[(_b, _letter)])
+    _num_variant_names = {n for _items in _num_bases.values() for n, _ in _items}
+    _num_base_for = {n: _b for _b, _items in _num_bases.items() for n, _ in _items}
     seen_num_base: set[str] = set()
 
     # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
@@ -142,11 +171,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             base = _num_base_for[name]
             if base not in seen_num_base:
                 seen_num_base.add(base)
-                nums_sorted = sorted(_num_bases[base], key=lambda x: x[1])
-                suffix = "/".join(
-                    _m2.group(2) if (_m2 := _VNUM.match(n)) else str(sk)
-                    for n, sk in nums_sorted
-                )
+                suffix = "/".join(sorted(_letters_per_base[base]))
                 groups[cls].append((base, f"numvariant:{suffix}"))
             continue
         groups[cls].append((name, "single"))
@@ -499,13 +524,14 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if len(variant_courses) >= 2:
         return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
 
-    # Numeric variant group (e.g. 「英語1」「英語2」or「第三外国語(ドイツ語)T1」)
-    _num_pat = _re.compile(r'^' + _re.escape(t) + r'(?<!\d)[\s　]*[A-Z]?\d+$')
-    _num_variants = sorted(
-        [c for c in call if c.name.startswith(t) and _num_pat.match(c.name)],
-        key=lambda c: int(_re.search(r'\d+', c.name[len(t):]).group()),
-    )
-    if len(_num_variants) >= 2:
+    # Numeric variant group（文字違い2種類以上のときだけ選択肢としてまとめる。例: 生物学各論A1/A2/C1/C2）
+    _num_groups2: dict[str, list] = defaultdict(list)
+    for c in call:
+        _match = _vnum_match(c.name)
+        if _match and _match[0] == t and _match[1]:
+            _num_groups2[_match[1]].append(c)
+    if len(_num_groups2) >= 2:
+        _num_variants = sorted((c for cs in _num_groups2.values() for c in cs), key=lambda c: c.name)
         return [make_variant_selection_bubble(t, [c.name for c in _num_variants], _reviewed_names)]
 
     # インメモリキーワード検索（DBアクセスなし）
@@ -540,12 +566,21 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 if _b + _s in _all_names:
                     base_variants[_b].append(_b + _s)
 
-        # Numeric variants
-        _kw_num_bases: dict[str, list[str]] = defaultdict(list)
+        # Numeric variants（文字違いが2種類以上あるベースだけを選択肢としてまとめる）
+        _kw_num_pairs: dict[tuple[str, str], list[str]] = defaultdict(list)
         for c in courses:
-            _m = _re.match(r'^(.*?)[\s　]*(\d+)$', c.name)
-            if _m:
-                _kw_num_bases[_m.group(1).strip()].append(c.name)
+            _match = _vnum_match(c.name)
+            if _match:
+                _b, _letter, _ = _match
+                _kw_num_pairs[(_b, _letter)].append(c.name)
+        _kw_letters_per_base: dict[str, set[str]] = defaultdict(set)
+        for _b, _letter in _kw_num_pairs:
+            if _letter:
+                _kw_letters_per_base[_b].add(_letter)
+        _kw_num_bases: dict[str, list[str]] = defaultdict(list)
+        for (_b, _letter), _names in _kw_num_pairs.items():
+            if _letter and len(_kw_letters_per_base[_b]) >= 2:
+                _kw_num_bases[_b].extend(_names)
 
         seen_base: set[str] = set()
         seen_num_base: set[str] = set()
@@ -561,9 +596,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
                     seen_base.add(base)
                     result.append(make_variant_selection_bubble(base, variants, _reviewed_names))
                     continue
-            _m2 = _re.match(r'^(.*?)[\s　]*[A-Z]?\d+$', name)
+            _m2 = _vnum_match(name)
             if _m2:
-                base = _m2.group(1).strip()
+                base = _m2[0]
                 if base in seen_num_base:
                     continue
                 num_vs = _kw_num_bases.get(base, [])
