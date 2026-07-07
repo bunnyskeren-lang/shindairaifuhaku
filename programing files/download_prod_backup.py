@@ -11,9 +11,11 @@ Supabase Storage に溜まった本番/dev DBバックアップを、ローカ�
   SUPABASE_URL
   SUPABASE_SERVICE_ROLE_KEY
   BACKUP_BUCKET  (省略時 db-backups)
+  ONEDRIVE_BACKUP_DIR  (任意。設定するとPC故障時用にOneDrive配下へも複製する)
 """
 import argparse
 import os
+import shutil
 import sys
 
 import httpx
@@ -44,6 +46,11 @@ HEADERS = {
 DEST_DIR = os.path.join(os.path.dirname(__file__), "..", "backups", args.env)
 os.makedirs(DEST_DIR, exist_ok=True)
 
+ONEDRIVE_BACKUP_DIR = os.environ.get("ONEDRIVE_BACKUP_DIR", "")
+if ONEDRIVE_BACKUP_DIR:
+    ONEDRIVE_BACKUP_DIR = os.path.join(ONEDRIVE_BACKUP_DIR, args.env)
+    os.makedirs(ONEDRIVE_BACKUP_DIR, exist_ok=True)
+
 
 def main():
     with httpx.Client(timeout=60) as client:
@@ -69,6 +76,10 @@ def main():
                 f.write(dl.content)
             print(f"ダウンロード: {name}")
             new_count += 1
+
+            if ONEDRIVE_BACKUP_DIR:
+                shutil.copy2(local_path, os.path.join(ONEDRIVE_BACKUP_DIR, name))
+                print(f"  OneDriveへ複製: {ONEDRIVE_BACKUP_DIR}")
 
         if new_count == 0:
             print("新規バックアップはありませんでした。")
