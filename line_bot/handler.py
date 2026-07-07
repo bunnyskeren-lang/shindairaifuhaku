@@ -10,6 +10,7 @@ from linebot.v3.messaging import (
     FlexButton,
     FlexCarousel,
     FlexMessage,
+    FlexSeparator,
     FlexText,
     PostbackAction,
     TextMessage,
@@ -172,14 +173,15 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
 
     def _make_bubble(classification: str, entries: list) -> FlexBubble:
         btn_contents = []
-        for name, kind in entries:
+        for idx, (name, kind) in enumerate(entries):
             if kind.startswith("variant:") or kind.startswith("numvariant:"):
                 suffix = kind.split(":", 1)[1]
                 display = f"{name} ({suffix})"
             else:
                 display = name
             has_review = _entry_has_review(name, kind)
-            text_color = "#4f46e5" if has_review else "#94a3b8"
+            text_color = "#4f46e5" if has_review else "#334155"
+            display_text = f"✓{display}" if has_review else display
             syl_url = course_syllabus_urls.get(name, "")
             if kind == "single":
                 liff_url = course_liff_urls.get(name, "")
@@ -191,40 +193,32 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
                 liff_url = course_liff_urls.get(first_name, "")
             else:
                 liff_url = ""
+
             name_box = FlexBox(
                 layout="horizontal",
                 action=PostbackAction(label=display[:40], data=name),
-                contents=[FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1)],
+                contents=[FlexText(text=display_text, wrap=True, size="sm", color=text_color, flex=1)],
             )
-            if liff_url or syl_url:
-                link_items = []
-                if liff_url:
-                    link_items.append(FlexText(text="レビュー", size="xxs", color="#4f46e5", flex=0,
-                                               action=URIAction(label="レビュー", uri=liff_url)))
-                if syl_url:
-                    if link_items:
-                        link_items.append(FlexText(text="  ", size="xxs", color="#cbd5e1", flex=0))
-                    link_items.append(FlexText(text="シラバス", size="xxs", color="#2563eb", flex=0,
-                                               action=URIAction(label="シラバス", uri=syl_url)))
-                btn_contents.append(FlexBox(
-                    layout="vertical",
-                    contents=[
-                        name_box,
-                        FlexBox(layout="horizontal", contents=link_items, margin="xs"),
-                    ],
-                    padding_top="sm",
-                    padding_bottom="sm",
-                ))
-            else:
-                btn_contents.append(
-                    FlexBox(
-                        layout="vertical",
-                        action=PostbackAction(label=display[:40], data=name),
-                        contents=[FlexText(text=display, wrap=True, size="sm", color=text_color)],
-                        padding_top="sm",
-                        padding_bottom="sm",
-                    )
-                )
+
+            row_contents = [name_box]
+            link_items = []
+            if liff_url:
+                link_items.append(FlexText(text="📝レビュー", size="xxs", color="#4f46e5", flex=0,
+                                           action=URIAction(label="レビュー", uri=liff_url)))
+            if syl_url:
+                link_items.append(FlexText(text="📄シラバス", size="xxs", color="#2563eb", flex=0,
+                                           action=URIAction(label="シラバス", uri=syl_url)))
+            if link_items:
+                row_contents.append(FlexBox(layout="horizontal", contents=link_items, margin="sm", spacing="md"))
+
+            if idx > 0:
+                btn_contents.append(FlexSeparator(margin="md"))
+            btn_contents.append(FlexBox(
+                layout="vertical",
+                contents=row_contents,
+                padding_top="sm",
+                padding_bottom="sm",
+            ))
         base_cls = classification.rstrip("①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮")
         faculty_str = cls_faculty.get(base_cls, "")
         header_contents = [FlexText(text=classification, weight="bold", color="#ffffff", size="sm")]
