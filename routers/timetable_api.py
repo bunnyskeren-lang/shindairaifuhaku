@@ -50,11 +50,14 @@ async def api_timetable_profile_set(request: Request):
         raise HTTPException(status_code=400, detail="department does not match faculty")
     async with AsyncSessionLocal() as session:
         p = await session.get(UserProfile, user_id)
-        if p:
-            p.faculty = faculty
-            p.grade = grade
-            p.department = department
-            await session.commit()
+        # 修正理由: UserProfileが存在しない場合は何も更新していないのに
+        # 常に{"ok": True}を返しており、保存失敗が呼び出し元から検知できなかった。
+        if not p:
+            raise HTTPException(status_code=404, detail="user profile not found")
+        p.faculty = faculty
+        p.grade = grade
+        p.department = department
+        await session.commit()
     return {"ok": True}
 
 
