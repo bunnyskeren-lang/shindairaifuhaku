@@ -2,6 +2,7 @@
 {% block title %}ユーザー設定{% endblock %}
 {% block heading %}👤 ユーザー設定{% endblock %}
 
+{% from "admin/base.html" import pager %}
 {% block content %}
 <table>
   <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th></tr>
@@ -16,4 +17,5 @@
   <tr><td colspan="4" style="color:#999;text-align:center;padding:16px">ユーザーなし</td></tr>
   {% endfor %}
 </table>
+{{ pager(page, total_pages, total, url_prefix) }}
 {% endblock %}

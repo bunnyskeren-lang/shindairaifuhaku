@@ -11,24 +11,38 @@ router = APIRouter()
 
 
 @router.get("/admin/users", response_class=HTMLResponse)
-async def admin_users(request: Request, _: str = Depends(check_admin)):
+async def admin_users(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
+    per_page = 50
     async with AsyncSessionLocal() as session:
+        # message_logsはユーザー数に比例して増え続けるため、user_id別の
+        # 最終受信日時をサブクエリで先に集約してからページングする
+        last_seen_subq = (
+            select(MessageLog.user_id, func.max(MessageLog.created_at).label("last_seen"))
+            .where(MessageLog.direction == "in")
+            .group_by(MessageLog.user_id)
+            .subquery()
+        )
+        total = (await session.execute(select(func.count()).select_from(last_seen_subq))).scalar_one()
         users = (await session.execute(
             select(
-                MessageLog.user_id,
-                func.max(MessageLog.created_at).label("last_seen"),
+                last_seen_subq.c.user_id,
+                last_seen_subq.c.last_seen,
                 UserProfile.name,
                 UserProfile.student_id,
             )
-            .outerjoin(UserProfile, UserProfile.line_user_id == MessageLog.user_id)
-            .where(MessageLog.direction == "in")
-            .group_by(MessageLog.user_id, UserProfile.name, UserProfile.student_id)
-            .order_by(func.max(MessageLog.created_at).desc())
+            .outerjoin(UserProfile, UserProfile.line_user_id == last_seen_subq.c.user_id)
+            .order_by(last_seen_subq.c.last_seen.desc())
+            .offset((page - 1) * per_page).limit(per_page)
         )).all()
+    total_pages = max(1, (total + per_page - 1) // per_page)
 
     return templates.TemplateResponse("admin/users.html", {
         "request": request,
         "users": users,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "url_prefix": "/admin/users?page=",
     })
 
 
