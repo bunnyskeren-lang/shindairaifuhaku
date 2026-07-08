@@ -117,6 +117,33 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 </div>
 
 
+<!-- 共通専門基礎科目のカテゴリ割当 -->
+<div class="card">
+  <h2 style="margin-top:0">📎 共通専門基礎科目のカテゴリ割当</h2>
+  <p style="font-size:12px;color:#6b7280;margin-top:0">各カテゴリに属する科目をチェックしてください（マイ時間割の単位取得状況の判定に使用）</p>
+  {% if kyotsu_candidates %}
+  {% for r in reqs %}
+  <details style="margin-bottom:10px">
+    <summary style="cursor:pointer">{{ r.label }} <span id="{{ r.category_id }}-status" style="font-size:11px;color:#6b7280;margin-left:6px"></span></summary>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 4px">
+      {% for name, credits in kyotsu_candidates %}
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px">
+        <input type="checkbox" data-cat="{{ r.category_id }}" value="{{ name }}"
+               {% if name in approved_by_cat.get(r.category_id, []) %}checked{% endif %}
+               onchange="saveCatCourse(this)">
+        {{ name }}
+      </label>
+      {% endfor %}
+    </div>
+  </details>
+  {% else %}
+  <p style="color:#999;font-size:13px">単位要件カテゴリがありません</p>
+  {% endfor %}
+  {% else %}
+  <p style="color:#999;font-size:13px">共通専門基礎科目（classification に「共通専門基礎」を含む科目）が登録されていません</p>
+  {% endif %}
+</div>
+
 <!-- 科目群マッピング -->
 <div class="card">
   <h2 style="margin-top:0">📚 専門科目 群設定
