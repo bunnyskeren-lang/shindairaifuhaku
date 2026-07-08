@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from sqlalchemy import or_, select
 
@@ -29,7 +31,8 @@ async def api_parse_seiseki(
     if len(data) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="ファイルサイズが大きすぎます（10MB 以下）")
     try:
-        result = parse_seiseki_pdf(data)
+        # pdfplumberのCPU拘束処理はイベントループをブロックしないよう別スレッドで実行する
+        result = await asyncio.to_thread(parse_seiseki_pdf, data)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"PDF の解析に失敗しました: {e}")
     raw_data = result["raw"]
