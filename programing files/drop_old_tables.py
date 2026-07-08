@@ -13,16 +13,24 @@
 """
 import argparse
 import asyncio
+import os
 import ssl
 import sys
 import asyncpg
+from dotenv import load_dotenv
 
 sys.stdout.reconfigure(encoding="utf-8")
 
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_SCRIPT_DIR, ".env"), override=True)
+
 DB_URLS = {
-    "dev":  "postgresql://postgres.ofsvkcptzngbsxtdbqzj:Developerr6363st@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres",
-    "prod": "postgresql://postgres.sagubqrhjnzrtcvlmzqy:Linebot6363st@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres",
+    "dev": os.environ.get("DEV_DATABASE_URL", ""),
+    "prod": os.environ.get("DATABASE_URL", ""),
 }
+if not DB_URLS["dev"] or not DB_URLS["prod"]:
+    print("programing files/.env に DEV_DATABASE_URL / DATABASE_URL が設定されていません。")
+    sys.exit(1)
 
 # 削除順序（FK依存関係に従い子テーブルから削除）
 DROP_ORDER = [

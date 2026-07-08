@@ -120,10 +120,14 @@ python -X utf8 sync_db_to_prod.py
 
 ## データベース接続情報
 
-| 環境 | DATABASE_URL |
+**実際の接続文字列（パスワード含む）はこのファイルには記載しない。** 以下を参照すること：
+- Render各サービスの Environment タブ（`DATABASE_URL`）
+- ローカル: `programing files/.env`（本番用 `DATABASE_URL` / dev用 `DEV_DATABASE_URL`）、`programing files/.env.dev`（dev用 `DATABASE_URL`）
+
+| 環境 | Supabaseプロジェクト（リージョン） |
 |---|---|
-| **dev** | `postgresql://postgres.ofsvkcptzngbsxtdbqzj:Developerr6363st@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres` |
-| **本番** | `postgresql://postgres.sagubqrhjnzrtcvlmzqy:Linebot6363st@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres` |
+| **dev** | `ofsvkcptzngbsxtdbqzj`（aws-1-ap-northeast-1） |
+| **本番** | `sagubqrhjnzrtcvlmzqy`（aws-1-ap-northeast-2） |
 
 ## シラバスURL生成ルール
 
