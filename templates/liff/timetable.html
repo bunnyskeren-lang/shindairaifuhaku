@@ -503,6 +503,18 @@ tbody td:first-child {
 <script>
 const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
+
+// 修正理由: 以前は user_id をクライアントから送られた値のまま信用しており、
+// 任意のLINEユーザーIDを偽装してマイ時間割の改ざん・閲覧が可能だった。
+// liff.getIDToken()で取得した署名付きID tokenをサーバー側で検証させる。
+async function getIdToken() {
+  try {
+    if (!liff.isLoggedIn()) return null;
+    return await liff.getIDToken();
+  } catch (e) {
+    return null;
+  }
+}
 const KYOTSU_KEIEI_APPROVED = new Set([
   "情報科学１","情報科学２",
   "線形代数入門1","線形代数入門2",
@@ -552,7 +564,10 @@ async function loadProfile() {
   updateProfileChip();
   if (!userId) return;
   try {
-    const res = await fetch(`${BASE_URL}/api/timetable/profile?user_id=${encodeURIComponent(userId)}`);
+    const idToken = await getIdToken();
+    const res = await fetch(`${BASE_URL}/api/timetable/profile`, {
+      headers: idToken ? { 'X-Liff-Id-Token': idToken } : {},
+    });
     const data = await res.json();
     if (data.faculty !== undefined || data.grade !== undefined) {
       window._userProfile = { faculty: data.faculty, grade: data.grade, department: data.department };
@@ -645,11 +660,14 @@ async function submitProfile() {
   updateCreditsVisibility();
   if (currentSlot) setFilter(currentQuarter);
   if (userId) {
-    fetch(`${BASE_URL}/api/timetable/profile`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, faculty, grade, department }),
-    }).catch(() => {});
+    getIdToken().then(idToken => {
+      if (!idToken) return;
+      fetch(`${BASE_URL}/api/timetable/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken, faculty, grade, department }),
+      }).catch(() => {});
+    });
   }
 }
 
@@ -660,23 +678,19 @@ async function init() {
   });
   loadFacultyOptions();
   try {
-    {% if IS_DEV %}
-    const devUid = new URLSearchParams(location.search).get("dev_uid");
-    if (devUid) {
-      userId = devUid;
-      await Promise.all([loadMyCourses(), loadProfile()]);
-      await loadCredits();
-      updateCreditsVisibility();
-      buildGrid();
-      document.getElementById("loading-screen").style.display = "none";
-      return;
-    }
-    {% endif %}
+    // 修正理由: 以前は dev_uid クエリでLIFFログインを完全にバイパスできたが、
+    // バックエンドがLIFF ID token検証必須になったため、このバイパスは
+    // 認証系APIが軒並み失敗するだけの無意味な分岐になった。削除する。
     await liff.init({ liffId: LIFF_ID });
     userId = liff.getContext()?.userId || "";
     if (!userId) throw new Error("LINE アプリから開いてください");
     try {
-      const statusRes = await fetch(`${BASE_URL}/api/profile/status?uid=${userId}`);
+      const idToken = await liff.getIDToken();
+      const statusRes = await fetch(`${BASE_URL}/api/profile/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: idToken }),
+      });
       const status = await statusRes.json();
       if (!status.complete) {
         location.href = `${BASE_URL}/register?uid=${userId}`;
@@ -703,7 +717,10 @@ async function init() {
 }
 
 async function loadMyCourses() {
-  const res = await fetch(`${BASE_URL}/api/timetable/my?user_id=${encodeURIComponent(userId)}`);
+  const idToken = await getIdToken();
+  const res = await fetch(`${BASE_URL}/api/timetable/my`, {
+    headers: idToken ? { 'X-Liff-Id-Token': idToken } : {},
+  });
   const data = await res.json();
   myCourseIds = new Set(data.courses.map(c => c.id));
   window._myCourses = {};
@@ -838,8 +855,10 @@ async function openDrawer(day, period) {
     document.getElementById("drawer-sub").textContent = "読み込み中...";
     document.getElementById("course-list").innerHTML = "";
     try {
+      const idToken = await getIdToken();
       const res = await fetch(
-        `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?user_id=${encodeURIComponent(userId)}&year=${CURRENT_ACADEMIC_YEAR}`
+        `${BASE_URL}/api/timetable/slots/${encodeURIComponent(day)}/${period}?year=${CURRENT_ACADEMIC_YEAR}`,
+        { headers: idToken ? { 'X-Liff-Id-Token': idToken } : {} }
       );
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();
@@ -986,9 +1005,12 @@ async function toggleRegister(btn, course) {
   btn.disabled = true;
   const isRegistered = btn.dataset.registered === "1";
   try {
+    const idToken = await getIdToken();
+    if (!idToken) throw new Error("not logged in");
     if (isRegistered) {
-      const res = await fetch(`${BASE_URL}/api/timetable/register/${course.id}?user_id=${encodeURIComponent(userId)}`, {
-        method: "DELETE"
+      const res = await fetch(`${BASE_URL}/api/timetable/register/${course.id}`, {
+        method: "DELETE",
+        headers: { "X-Liff-Id-Token": idToken },
       });
       if (!res.ok) throw new Error(res.status);
       btn.dataset.registered = "0";
@@ -1000,7 +1022,7 @@ async function toggleRegister(btn, course) {
       const res = await fetch(`${BASE_URL}/api/timetable/register/${course.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify({ id_token: idToken }),
       });
       if (!res.ok) throw new Error(res.status);
       btn.dataset.registered = "1";
@@ -1100,16 +1122,19 @@ async function loadCredits() {
   // サーバーに保存された raw から最新ロジックで再分類（バグ修正時に自動反映される）
   if (userId) {
     try {
+      const idToken = await getIdToken();
       // 既存ユーザーの移行: localStorage に _raw があれば DB に保存して削除
-      if (_creditData._raw) {
+      if (_creditData._raw && idToken) {
         fetch(BASE_URL + '/api/seiseki/save_raw', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: userId, raw: _creditData._raw, gpa: _creditData._gpa?.value }),
+          body: JSON.stringify({ id_token: idToken, raw: _creditData._raw, gpa: _creditData._gpa?.value }),
         }).catch(() => {});
         delete _creditData._raw;
       }
-      const res = await fetch(`${BASE_URL}/api/seiseki/credits?uid=${encodeURIComponent(userId)}`);
+      const res = await fetch(`${BASE_URL}/api/seiseki/credits`, {
+        headers: idToken ? { 'X-Liff-Id-Token': idToken } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.credits) {
@@ -1349,9 +1374,10 @@ async function handleSeisekiFile(file) {
   try {
     const fd = new FormData();
     fd.append('file', file);
+    const idToken = await getIdToken();
     const res = await fetch(BASE_URL + '/api/parse_seiseki', {
       method: 'POST', body: fd,
-      headers: userId ? { 'X-Line-User-Id': userId } : {},
+      headers: idToken ? { 'X-Liff-Id-Token': idToken } : {},
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

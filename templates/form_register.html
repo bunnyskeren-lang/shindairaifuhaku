@@ -29,8 +29,13 @@
       <span>登録が完了するまで、Botの機能はご利用いただけません。</span>
     </div>
 
+    <!-- 修正理由: 以前はサーバー側で ?uid= から直接DBを引いて氏名・学籍番号・
+         学部・学年・学科をテンプレートに埋め込んでいたため、任意のuidを指定
+         するだけで他人の個人情報が閲覧できるIDOR/PII漏洩になっていた。現在は
+         LIFF ID token検証済みの本人にのみ /api/profile/prefill 経由で
+         JSからプリフィルする。 -->
     <form id="registerForm" action="/api/register" method="post" novalidate class="space-y-4">
-      <input type="hidden" name="uid" value="{{ uid }}">
+      <input type="hidden" name="id_token" id="idTokenHidden" value="">
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
@@ -38,7 +43,7 @@
         </label>
         <input type="text" name="name" id="name"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
-          placeholder="例：神戸 太郎" required maxlength="50" value="{{ stored_name }}">
+          placeholder="例：神戸 太郎" required maxlength="50">
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -49,8 +54,7 @@
         <input type="text" name="student_id" id="student_id"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
-          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-          value="{{ stored_student_id }}">
+          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM／アルファベットは大文字で入力してください）</p>
       </div>
 
@@ -62,7 +66,7 @@
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white">
           <option value="">選択してください</option>
           {% for f in faculties %}
-          <option value="{{ f }}" {% if f == stored_faculty %}selected{% endif %}>{{ f }}</option>
+          <option value="{{ f }}">{{ f }}</option>
           {% endfor %}
         </select>
       </div>
@@ -85,7 +89,7 @@
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white">
           <option value="">選択してください</option>
           {% for g in range(1, 7) %}
-          <option value="{{ g }}" {% if g == stored_grade %}selected{% endif %}>{{ g }}年</option>
+          <option value="{{ g }}">{{ g }}年</option>
           {% endfor %}
         </select>
       </div>
@@ -100,18 +104,13 @@
   <script>
     const LIFF_ID = "{{ liff_id }}";
     const FACULTY_DEPARTMENTS = {{ faculty_departments_json | safe }};
-    const STORED_DEPARTMENT = "{{ stored_department }}";
 
-    if (LIFF_ID) {
-      (async () => {
-        try {
-          await liff.init({ liffId: LIFF_ID });
-          if (liff.isLoggedIn()) {
-            const profile = await liff.getProfile();
-            document.querySelector('input[name="uid"]').value = profile.userId;
-          }
-        } catch (e) {}
-      })();
+    let _liffInitPromise = null;
+    function ensureLiffInit() {
+      if (!_liffInitPromise) {
+        _liffInitPromise = liff.init({ liffId: LIFF_ID });
+      }
+      return _liffInitPromise;
     }
 
     function populateDepartments(faculty, selected) {
@@ -133,18 +132,58 @@
     }
 
     const facultySel = document.getElementById('faculty');
-    populateDepartments(facultySel.value, STORED_DEPARTMENT);
+    populateDepartments(facultySel.value, '');
     facultySel.addEventListener('change', () => populateDepartments(facultySel.value, ''));
 
-    document.getElementById('registerForm').addEventListener('submit', function(e) {
+    // 修正理由: 以前は ?uid= をサーバー側でDB照会してテンプレートに直接
+    // 埋め込んでいたため他人のPIIが閲覧できてしまっていた。ID token検証済みの
+    // /api/profile/prefill から取得した本人の既存プロフィールのみを反映する。
+    if (LIFF_ID) {
+      (async () => {
+        try {
+          await ensureLiffInit();
+          if (!liff.isLoggedIn()) return;
+          const idToken = await liff.getIDToken();
+          if (!idToken) return;
+          const res = await fetch('/api/profile/prefill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_token: idToken }),
+          });
+          const d = await res.json();
+          if (!d.found) return;
+          if (d.name) document.getElementById('name').value = d.name;
+          if (d.student_id) document.getElementById('student_id').value = d.student_id;
+          if (d.faculty) {
+            facultySel.value = d.faculty;
+            populateDepartments(d.faculty, d.department || '');
+          }
+          if (d.grade) document.getElementById('grade').value = d.grade;
+        } catch (e) {}
+      })();
+    }
+
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
       const sid = document.getElementById('student_id').value.replace(/[\s　]+/g, '').toUpperCase();
       const re = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
       if (!re.test(sid)) {
-        e.preventDefault();
         document.getElementById('studentIdError').classList.remove('hidden');
         return;
       }
       document.getElementById('studentIdError').classList.add('hidden');
+      document.getElementById('student_id').value = sid;
+
+      try {
+        await ensureLiffInit();
+        const idToken = liff.isLoggedIn() ? await liff.getIDToken() : null;
+        if (!idToken) throw new Error('not logged in');
+        document.getElementById('idTokenHidden').value = idToken;
+      } catch (err) {
+        alert('LINEアプリでのログイン確認に失敗しました。LINEアプリから開き直してください。');
+        return;
+      }
+      e.target.submit();
     });
   </script>
 </body>

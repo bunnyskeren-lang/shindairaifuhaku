@@ -1,12 +1,20 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from core.config import FACULTY_DEPARTMENTS, LINE_USER_ID_RE
+from core.config import FACULTY_DEPARTMENTS
+from core.liff_auth import verify_liff_id_token
 from database import AsyncSessionLocal
 from models import CourseSection, Instructor, Schedule, Subject, Syllabus, UserProfile, UserSyllabus
 
 router = APIRouter()
+
+
+async def _require_liff_user(id_token: str) -> str:
+    uid = await verify_liff_id_token(id_token or "")
+    if not uid:
+        raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
+    return uid
 
 _VALID_DAYS = {"月", "火", "水", "木", "金", "土", "日", "集"}
 
@@ -23,7 +31,8 @@ _TERM_ORDER = case(
 
 
 @router.get("/api/timetable/profile")
-async def api_timetable_profile_get(user_id: str = Query("")):
+async def api_timetable_profile_get(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
+    user_id = await verify_liff_id_token(x_liff_id_token)
     if not user_id:
         return {"faculty": None, "grade": None, "department": None}
     async with AsyncSessionLocal() as session:
@@ -36,9 +45,7 @@ async def api_timetable_profile_get(user_id: str = Query("")):
 @router.post("/api/timetable/profile")
 async def api_timetable_profile_set(request: Request):
     data = await request.json()
-    user_id = data.get("user_id", "")
-    if not user_id or not LINE_USER_ID_RE.match(user_id):
-        raise HTTPException(status_code=400, detail="user_id required")
+    user_id = await _require_liff_user(data.get("id_token", ""))
     faculty = data.get("faculty") or None
     grade = data.get("grade")
     if grade is not None:
@@ -65,9 +72,13 @@ async def api_timetable_profile_set(request: Request):
 
 
 @router.get("/api/timetable/slots/{day}/{period}")
-async def api_timetable_slots(day: str, period: int, user_id: str = Query(""), year: int | None = Query(None)):
+async def api_timetable_slots(
+    day: str, period: int, year: int | None = Query(None),
+    x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
     if day not in _VALID_DAYS:
         raise HTTPException(status_code=400, detail="invalid day")
+    user_id = await verify_liff_id_token(x_liff_id_token)
     async with AsyncSessionLocal() as session:
         stmt = (
             select(Syllabus, Subject, Instructor)
@@ -132,7 +143,8 @@ def _credits_from_term(term: str | None) -> int:
 
 
 @router.get("/api/timetable/my")
-async def api_timetable_my(user_id: str = Query("")):
+async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
+    user_id = await verify_liff_id_token(x_liff_id_token)
     if not user_id:
         return {"courses": []}
     async with AsyncSessionLocal() as session:
@@ -166,9 +178,7 @@ async def api_timetable_my(user_id: str = Query("")):
 @router.post("/api/timetable/register/{syllabus_id}")
 async def api_timetable_register(syllabus_id: int, request: Request):
     body = await request.json()
-    user_id = body.get("user_id", "")
-    if not user_id or not LINE_USER_ID_RE.match(user_id):
-        raise HTTPException(status_code=400, detail="user_id required")
+    user_id = await _require_liff_user(body.get("id_token", ""))
     async with AsyncSessionLocal() as session:
         syl = await session.get(Syllabus, syllabus_id)
         if not syl:
@@ -183,9 +193,10 @@ async def api_timetable_register(syllabus_id: int, request: Request):
 
 
 @router.delete("/api/timetable/register/{syllabus_id}")
-async def api_timetable_unregister(syllabus_id: int, user_id: str = Query("")):
-    if not user_id or not LINE_USER_ID_RE.match(user_id):
-        raise HTTPException(status_code=400, detail="user_id required")
+async def api_timetable_unregister(
+    syllabus_id: int, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
+    user_id = await _require_liff_user(x_liff_id_token)
     async with AsyncSessionLocal() as session:
         us = (await session.execute(
             select(UserSyllabus).where(

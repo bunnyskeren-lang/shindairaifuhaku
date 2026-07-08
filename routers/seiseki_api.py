@@ -1,8 +1,8 @@
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
 from sqlalchemy import or_, select
 
 from core import cache
-from core.config import LINE_USER_ID_RE
+from core.liff_auth import verify_liff_id_token
 from core.seiseki import PDFPLUMBER_OK, classify_seiseki_raw, parse_seiseki_pdf
 from database import AsyncSessionLocal
 from models import CreditRequirement, Subject, SubjectCreditCategory, UserSeisekiRaw
@@ -11,7 +11,10 @@ router = APIRouter()
 
 
 @router.post("/api/parse_seiseki")
-async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
+async def api_parse_seiseki(
+    file: UploadFile = File(...),
+    x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
     if not PDFPLUMBER_OK:
         raise HTTPException(status_code=503, detail="PDF parsing not available")
     if not file.filename.lower().endswith(".pdf"):
@@ -26,8 +29,8 @@ async def api_parse_seiseki(request: Request, file: UploadFile = File(...)):
     raw_data = result["raw"]
     if not raw_data.get("gaigo_courses") and not raw_data.get("senmon_courses") and not any(raw_data.get("summaries", {}).values()):
         raise HTTPException(status_code=422, detail="成績表の内容を読み取れませんでした。神戸大学の成績表PDFかご確認ください。")
-    uid = request.headers.get("X-Line-User-Id", "").strip()
-    if uid and LINE_USER_ID_RE.match(uid):
+    uid = await verify_liff_id_token(x_liff_id_token)
+    if uid:
         async with AsyncSessionLocal() as session:
             existing = await session.get(UserSeisekiRaw, uid)
             if existing:
@@ -50,8 +53,9 @@ async def api_reclassify_seiseki(request: Request):
 
 
 @router.get("/api/seiseki/credits")
-async def api_seiseki_credits(uid: str):
-    if not uid or not LINE_USER_ID_RE.match(uid):
+async def api_seiseki_credits(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
+    uid = await verify_liff_id_token(x_liff_id_token)
+    if not uid:
         return {}
     async with AsyncSessionLocal() as session:
         row = await session.get(UserSeisekiRaw, uid)
@@ -64,11 +68,11 @@ async def api_seiseki_credits(uid: str):
 @router.post("/api/seiseki/save_raw")
 async def api_seiseki_save_raw(request: Request):
     body = await request.json()
-    uid = body.get("uid", "").strip()
+    uid = await verify_liff_id_token((body.get("id_token") or "").strip())
     raw = body.get("raw")
     gpa = body.get("gpa")
-    if not uid or not LINE_USER_ID_RE.match(uid) or not raw:
-        raise HTTPException(status_code=400, detail="uid and raw required")
+    if not uid or not raw:
+        raise HTTPException(status_code=400, detail="id_token and raw required")
     async with AsyncSessionLocal() as session:
         existing = await session.get(UserSeisekiRaw, uid)
         if existing:

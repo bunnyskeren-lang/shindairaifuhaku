@@ -162,14 +162,40 @@ async def search_instructors(q: str = ""):
     return {"instructors": result}
 
 
-@router.get("/api/profile/status")
-async def profile_status(uid: str = ""):
-    uid = uid.strip()
+@router.post("/api/profile/status")
+async def profile_status(request: Request):
+    body = await request.json()
+    uid = await verify_liff_id_token((body.get("id_token") or "").strip())
     if not uid:
         return {"complete": False}
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
         return {"complete": is_profile_complete(profile)}
+
+
+@router.post("/api/profile/prefill")
+async def profile_prefill(request: Request):
+    """LIFF ID token検証済みの本人の既存プロフィールを返す（新規登録フォームのプリフィル用）。
+
+    修正理由: 以前は ?uid= から直接DB照会してテンプレートに埋め込んでいたため、
+    任意のuidを指定するだけで他人の氏名・学籍番号等が閲覧できるIDOR/PII漏洩になっていた。
+    """
+    body = await request.json()
+    uid = await verify_liff_id_token((body.get("id_token") or "").strip())
+    if not uid:
+        return {"found": False}
+    async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, uid)
+    if not profile:
+        return {"found": False}
+    return {
+        "found": True,
+        "name": profile.name,
+        "student_id": profile.student_id,
+        "faculty": profile.faculty,
+        "grade": profile.grade,
+        "department": profile.department,
+    }
 
 
 @router.post("/api/register")

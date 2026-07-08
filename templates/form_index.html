@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>授業レビュー投稿 | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
 
@@ -40,34 +41,35 @@
 
     <form id="reviewForm" action="/submit" method="post" novalidate class="space-y-4">
 
-      {% if is_new_user and uid %}
-      <div class="bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 mb-1 text-sm text-purple-700 flex items-start gap-2">
+      <!-- 修正理由: 以前はサーバー側で ?uid= から直接DBを引いて氏名・学籍番号を
+           テンプレートに埋め込んでいたため、任意のuidを指定するだけで他人の
+           個人情報が閲覧できるIDOR/PII漏洩になっていた。現在はLIFF ID token
+           検証済みの本人にのみ /api/profile/prefill 経由でJSからプリフィルする。 -->
+      <div id="newUserNotice" class="hidden bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 mb-1 text-sm text-purple-700 items-start gap-2">
         <span class="text-lg leading-none mt-0.5">🎓</span>
         <span>初めての投稿です。プロフィールを登録してください（管理者のみ確認できます）。</span>
       </div>
 
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div id="regNameCard" class="hidden bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-2">
           🪪 お名前（漢字） <span class="text-red-500">*</span>
         </label>
         <input type="text" name="reg_name" id="reg_name"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          placeholder="例：神戸 太郎" required maxlength="50">
+          placeholder="例：神戸 太郎" maxlength="50">
         <p id="regNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
       </div>
-      {% endif %}
 
-      <input type="hidden" name="line_user_id" value="{{ uid }}">
+      <input type="hidden" name="id_token" id="idTokenHidden" value="">
 
       <div id="studentIdCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-1">
           🎓 学籍番号 <span class="text-red-500">*</span>
         </label>
         <input type="text" name="student_id" id="student_id"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition{% if stored_student_id %} bg-gray-50 text-gray-500 cursor-not-allowed{% endif %}"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
-          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-          value="{{ stored_student_id }}"{% if stored_student_id %} readonly{% endif %}>
+          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
       </div>
 
@@ -524,6 +526,51 @@
         }
       }
     })();
+
+    // ── LIFF初期化とプロフィールプリフィル ──
+    // 修正理由: 以前は line_user_id/uid をクライアントから送られた値のまま
+    // サーバーが信用しており、任意のLINEユーザーIDを偽装してなりすまし投稿・
+    // プロフィール改ざんが可能だった。liff.getIDToken()で取得した署名付き
+    // ID tokenをサーバー側でLINEのverifyエンドポイントに照会し、真正な
+    // ユーザーIDのみを信用するように変更した。
+    const LIFF_ID = "{{ liff_id }}";
+    let _liffInitPromise = null;
+    function ensureLiffInit() {
+      if (!_liffInitPromise) {
+        _liffInitPromise = liff.init({ liffId: LIFF_ID });
+      }
+      return _liffInitPromise;
+    }
+
+    async function initProfilePrefill() {
+      try {
+        await ensureLiffInit();
+        if (!liff.isLoggedIn()) return;
+        const idToken = await liff.getIDToken();
+        if (!idToken) return;
+        const res = await fetch('/api/profile/prefill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken }),
+        });
+        const d = await res.json();
+        if (d.found) {
+          const sidInput = document.getElementById('student_id');
+          if (d.student_id) {
+            sidInput.value = d.student_id;
+            sidInput.readOnly = true;
+            sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+          }
+        } else {
+          document.getElementById('newUserNotice').classList.remove('hidden');
+          document.getElementById('newUserNotice').classList.add('flex');
+          document.getElementById('regNameCard').classList.remove('hidden');
+          document.getElementById('reg_name').setAttribute('required', 'required');
+        }
+      } catch (e) {}
+    }
+    initProfilePrefill();
+
     const RATING_LABELS = ['', 'ほぼ学びなし 😔', 'ちょい学び 🙂', 'まあまあ学びあり 😊', 'かなり学べた 😄', 'めちゃくちゃ学べた 🤩'];
     const EASE_VALS   = ['', 'C', 'B', 'A', 'S', 'SS'];
     const EASE_LABELS = ['', '修羅場 😱', '大変 😤', '標準 😐', '楽々 😌', '天国 😇'];
@@ -1175,10 +1222,16 @@
     const NAME_RE = /^[a-zA-Z0-9぀-ヿ一-鿿\s　]+$/;
     let _autofillTimer;
     async function tryAutofill(sid) {
-      const uid = new URLSearchParams(location.search).get('uid') || '';
-      if (!uid) return;
       try {
-        const res = await fetch(`/api/autofill?uid=${encodeURIComponent(uid)}&student_id=${encodeURIComponent(sid)}`);
+        await ensureLiffInit();
+        if (!liff.isLoggedIn()) return;
+        const idToken = await liff.getIDToken();
+        if (!idToken) return;
+        const res = await fetch('/api/autofill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken, student_id: sid }),
+        });
         const d = await res.json();
         if (!d.found || !d.name) return;
         const regEl = document.getElementById('reg_name');
@@ -1340,10 +1393,14 @@
       });
     }
 
-    document.getElementById('reviewForm').addEventListener('submit', e => {
+    document.getElementById('reviewForm').addEventListener('submit', async e => {
+      // 修正理由: id_tokenを送信直前に非同期取得する必要があるため、常にpreventDefault()
+      // してから、バリデーション通過後にliff.getIDToken()→hidden inputセット→
+      // form.submit()（ネイティブ送信。'submit'イベントは再発火しないため無限ループしない）
+      // という順で処理する。
+      e.preventDefault();
       // 送信ボタン以外（スマホキーボードのGoキーなど）からの送信は静かに止める
       if (!e.submitter || e.submitter.id !== 'submitBtn') {
-        e.preventDefault();
         return;
       }
       // 全エラーを一旦リセット
@@ -1449,7 +1506,6 @@
         valid = false;
       }
       if (!valid) {
-        e.preventDefault();
         refreshCardErrors();
         setTimeout(() => {
           const firstErr = document.querySelector('.text-red-500:not(.hidden)');
@@ -1460,10 +1516,24 @@
       }
 
       updateGradingMethod();
-      localStorage.removeItem(STORAGE_KEY);
       const btn = document.getElementById('submitBtn');
       btn.textContent = '送信中...';
       btn.disabled = true;
+
+      try {
+        await ensureLiffInit();
+        const idToken = liff.isLoggedIn() ? await liff.getIDToken() : null;
+        if (!idToken) throw new Error('not logged in');
+        document.getElementById('idTokenHidden').value = idToken;
+      } catch (err) {
+        btn.textContent = '送信する';
+        btn.disabled = false;
+        alert('LINEアプリでのログイン確認に失敗しました。LINEアプリの「レビュー投稿」メニューから開き直してください。');
+        return;
+      }
+
+      localStorage.removeItem(STORAGE_KEY);
+      e.target.submit();
     });
 
     buildStars();

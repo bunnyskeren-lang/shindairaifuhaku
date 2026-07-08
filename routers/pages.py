@@ -2,7 +2,6 @@ import json
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
-from sqlalchemy import select
 
 from core import cache
 from core.activity_log import save_error_log
@@ -11,34 +10,22 @@ from core.config import (
     LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, REVIEW_LIFF_ID, TIMETABLE_LIFF_ID,
 )
 from core.templates import templates
-from database import AsyncSessionLocal
-from models import UserProfile
 
 router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, uid: str = Query(default="")):
-    is_new_user = False
-    stored_name = ""
-    stored_student_id = ""
-    if uid:
-        async with AsyncSessionLocal() as session:
-            profile = (await session.execute(
-                select(UserProfile).where(UserProfile.line_user_id == uid)
-            )).scalar_one_or_none()
-            is_new_user = profile is None
-            if profile:
-                stored_name = profile.name
-                stored_student_id = profile.student_id
+    # 修正理由: 以前はここでクライアント指定の uid をそのままDB照会し、氏名・
+    # 学籍番号をテンプレートに埋め込んでいたため、任意のuidを指定するだけで
+    # 他人の個人情報が閲覧できるIDOR/PII漏洩になっていた。プリフィルは
+    # LIFF ID token検証済みの /api/profile/prefill 経由でJSから行う。
     response = templates.TemplateResponse(
         "form_index.html",
         {
             "request": request,
             "uid": uid,
-            "is_new_user": is_new_user,
-            "stored_name": stored_name,
-            "stored_student_id": stored_student_id,
+            "liff_id": REVIEW_LIFF_ID,
             "IS_DEV": IS_DEV,
         },
     )
@@ -50,20 +37,15 @@ async def index(request: Request, uid: str = Query(default="")):
 
 @router.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request, uid: str = Query(default="")):
-    profile = None
-    if uid:
-        async with AsyncSessionLocal() as session:
-            profile = await session.get(UserProfile, uid)
+    # 修正理由: 以前はここでクライアント指定の uid をそのままDB照会し、氏名・
+    # 学籍番号・学部・学年・学科をテンプレートに埋め込んでいたため、任意の
+    # uidを指定するだけで他人の個人情報が閲覧できるIDOR/PII漏洩になっていた。
+    # プリフィルはLIFF ID token検証済みの /api/profile/prefill 経由でJSから行う。
     response = templates.TemplateResponse(
         "form_register.html",
         {
             "request": request,
             "uid": uid,
-            "stored_name": profile.name if profile else "",
-            "stored_student_id": profile.student_id if profile else "",
-            "stored_faculty": profile.faculty if profile else "",
-            "stored_grade": profile.grade if profile else "",
-            "stored_department": profile.department if profile else "",
             "faculties": await cache.get_faculty_order(),
             "faculty_departments_json": json.dumps(FACULTY_DEPARTMENTS, ensure_ascii=False),
             "liff_id": REGISTER_LIFF_ID,

@@ -167,7 +167,12 @@ async function main() {
 
   if (userId) {
     try {
-      const statusRes = await fetch(`${BASE_URL}/api/profile/status?uid=${userId}`);
+      const idToken = await liff.getIDToken();
+      const statusRes = await fetch(`${BASE_URL}/api/profile/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: idToken }),
+      });
       const status = await statusRes.json();
       if (!status.complete) {
         location.href = `${BASE_URL}/register?uid=${userId}`;
