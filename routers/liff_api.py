@@ -13,6 +13,7 @@ from core.config import (
     EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
     is_profile_complete, make_syllabus_url,
 )
+from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -174,7 +175,7 @@ async def profile_status(uid: str = ""):
 @router.post("/api/register")
 async def register_profile(
     request: Request,
-    uid: str = Form(...),
+    id_token: str = Form(...),
     name: str = Form(...),
     student_id: str = Form(...),
     faculty: str = Form(...),
@@ -186,9 +187,9 @@ async def register_profile(
             "form_error.html", {"request": request, "message": msg}, status_code=400
         )
 
-    uid = uid.strip()
+    uid = await verify_liff_id_token(id_token)
     if not uid or not LINE_USER_ID_RE.match(uid):
-        return _form_error("LINE ユーザー ID の形式が不正です")
+        return _form_error("LINEログインの確認に失敗しました。LINEアプリから開き直してください")
     name = _re.sub(r'[\s　]+', '', name)
     if not name:
         return _form_error("お名前を入力してください")
@@ -241,9 +242,12 @@ async def register_profile(
     )
 
 
-@router.get("/api/autofill")
-async def autofill_profile(uid: str = "", student_id: str = ""):
-    uid = uid.strip()
+@router.post("/api/autofill")
+async def autofill_profile(request: Request):
+    body = await request.json()
+    id_token = (body.get("id_token") or "").strip()
+    student_id = (body.get("student_id") or "")
+    uid = await verify_liff_id_token(id_token)
     sid = student_id.strip().upper()
     if not uid or not sid or not STUDENT_ID_RE.match(sid):
         return {"found": False}
@@ -283,7 +287,7 @@ async def submit(
     ease_rating: str = Form(...),
     grading_method: str = Form(default=""),
     comment: str = Form(...),
-    line_user_id: str = Form(default=""),
+    id_token: str = Form(default=""),
     reg_name: str = Form(default=""),
     student_id: str = Form(default=""),
     selected_instructor: str = Form(default=""),
@@ -308,16 +312,16 @@ async def submit(
     if not STUDENT_ID_RE.match(sid):
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 
+    uid = await verify_liff_id_token(id_token)
+    if not uid or not LINE_USER_ID_RE.match(uid):
+        return _form_error("LINEログインの確認に失敗しました。LINEアプリの「レビュー投稿」から開き直してください")
+
     async with AsyncSessionLocal() as session:
         subject = (await session.execute(
             select(Subject).where(Subject.name == course_name.strip())
         )).scalar_one_or_none()
         if not subject:
             return _form_error("指定された科目が見つかりません")
-
-        uid = line_user_id.strip()
-        if not uid or not LINE_USER_ID_RE.match(uid):
-            return _form_error("LINEアプリの「レビュー投稿」からアクセスしてください")
 
         existing = (await session.execute(
             select(UserProfile).where(UserProfile.line_user_id == uid)
