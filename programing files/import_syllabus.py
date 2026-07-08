@@ -26,6 +26,7 @@ FACULTY_PATH: dict[str, str] = {
     "B": "06",
     "X": "15",  # システム情報学部
     "G": "20",  # 教養科目の一部で使われるコード（Uと同じpath）
+    "Z": "14",  # 海洋政策科学部
 }
 
 def make_syllabus_url(code: str) -> str | None:
@@ -82,6 +83,19 @@ def parse_slots(slot_str: str) -> list[tuple[str, int]]:
 
 def _is_timetable_term(term: str) -> bool:
     return term.startswith("第3") or term.startswith("第4") or term in ("後期", "集中")
+
+
+def normalize_term_type(term: str) -> str | None:
+    """開講区分の生値をsubjects.term_typeのCHECK制約値（通年/セメスター/クオーター/集中）へ変換する。"""
+    if term.startswith("第") and "クォーター" in term:
+        return "クオーター"
+    if term in ("前期", "後期"):
+        return "セメスター"
+    if term in ("通年", "年度"):
+        return "通年"
+    if term == "集中":
+        return "集中"
+    return None
 
 
 def parse_file(filepath: str) -> list[dict]:
@@ -164,7 +178,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         category="専門",
                         faculty=dept_faculty or None,
                         reading="",
-                        term_type=c["term"],
+                        term_type=normalize_term_type(c["term"]),
                         credits=None,
                     )
                     session.add(subj)

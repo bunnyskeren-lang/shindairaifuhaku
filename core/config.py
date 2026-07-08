@@ -84,7 +84,7 @@ RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
 VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
 VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
 
-_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20"}
+_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20", "Z": "14"}
 
 
 def make_syllabus_url(timetable_code: str) -> str:
