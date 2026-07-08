@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse as _JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from core import backup, cache, liff_auth, line_client, prewarm
-from core.activity_log import save_error_log
+from core.activity_log import log_cleanup_loop, save_error_log
 from database import engine, init_db
 from routers import health, liff_api, pages, richmenu, seiseki_api, timetable_api, webhook
 from routers.admin import (
@@ -43,17 +43,16 @@ async def lifespan(app: FastAPI):
     await liff_auth.startup()
     ping_task = asyncio.create_task(line_client.self_ping())
     backup_task = asyncio.create_task(backup.backup_loop())
+    cleanup_task = asyncio.create_task(log_cleanup_loop())
     yield
     ping_task.cancel()
     backup_task.cancel()
-    try:
-        await ping_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await backup_task
-    except asyncio.CancelledError:
-        pass
+    cleanup_task.cancel()
+    for task in (ping_task, backup_task, cleanup_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await line_client.shutdown()
     await liff_auth.shutdown()
 

@@ -1,3 +1,4 @@
+import asyncio
 import traceback as _traceback
 from datetime import datetime, timedelta, timezone
 
@@ -6,6 +7,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database import AsyncSessionLocal
 from models import ErrorLog, MessageLog, UserActivity
+
+_LOG_RETENTION_DAYS = 30
 
 
 async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None):
@@ -50,10 +53,24 @@ async def save_log_bg(user_id: str, direction: str, message: str) -> None:
 
 
 async def cleanup_old_logs():
+    """message_logs / error_logsの古い行を削除する（Supabase Freeプランの
+    ストレージ上限対策。両テーブルともreviews等と異なり永続保存が前提の
+    データではない）。"""
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_LOG_RETENTION_DAYS)
         async with AsyncSessionLocal() as session:
             await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
+            await session.execute(delete(ErrorLog).where(ErrorLog.created_at < cutoff))
             await session.commit()
     except Exception as exc:
         await save_error_log(exc, action="cleanup")
+
+
+async def log_cleanup_loop() -> None:
+    """1日に1回cleanup_old_logs()を実行する。着信イベント頻度に依存する
+    確率トリガーだと低トラフィック期間に掃除が走らない懸念があったため、
+    backup_loopと同じ固定間隔ループ方式に変更した。"""
+    await asyncio.sleep(60)
+    while True:
+        await cleanup_old_logs()
+        await asyncio.sleep(24 * 3600)

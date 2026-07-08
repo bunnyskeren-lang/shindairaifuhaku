@@ -1,6 +1,5 @@
 import asyncio
 import math
-import random
 import re as _re
 from collections import defaultdict
 
@@ -20,7 +19,7 @@ from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMe
 from sqlalchemy import func, select
 
 from core import cache, line_client
-from core.activity_log import cleanup_old_logs, save_error_log, save_log_bg
+from core.activity_log import save_error_log, save_log_bg
 from core.config import (
     APP_URL,
     EASE_ORDER,
@@ -601,9 +600,6 @@ async def handle_message(text: str, user_id: str = "") -> list:
 # ── Webhook event processing ────────────────────────────────────
 
 async def process_events(events) -> None:
-    if random.random() < 0.02:
-        asyncio.create_task(cleanup_old_logs())
-
     try:
         for event in events:
             if isinstance(event, FollowEvent):
