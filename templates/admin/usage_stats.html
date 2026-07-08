@@ -19,6 +19,7 @@
 .count-badge { background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:bold; }
 {% endblock %}
 
+{% from "admin/base.html" import pager %}
 {% block content %}
 
 <!-- ① 科目詳細 閲覧数 -->
@@ -135,5 +136,7 @@
 {% if not activity_rows %}
 <p style="color:#9ca3af;text-align:center;padding:32px">データなし</p>
 {% endif %}
+
+{{ pager(page, total_pages, total, url_prefix) }}
 
 {% endblock %}
