@@ -19,6 +19,33 @@ label{font-size:13px;font-weight:600;color:#374151}
 .btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold}
 .btn-primary{background:#6366f1;color:white}
 .btn-danger{background:#ef4444;color:white}
+.empty{color:#9ca3af;text-align:center;padding:16px}
+.section-title{font-size:12px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:20px 0 8px}
+/* 集計バー（統計・リッチメニュー画面で共通） */
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.bar-label{width:180px;font-size:12px;font-weight:600;color:#374151;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-wrap{flex:1;background:#e5e7eb;border-radius:999px;height:16px;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px;transition:width .4s}
+.bar-count{width:48px;text-align:right;font-size:12px;font-weight:bold;color:#4338ca;flex-shrink:0}
+/* ユーザー別利用履歴ブロック（統計・利用履歴画面で共通） */
+.user-block{background:#fff;border-radius:8px;margin-bottom:12px;overflow:hidden;border:1px solid #e5e7eb}
+.user-header{background:{{ '#ea580c' if IS_DEV else '#6366f1' }};color:#fff;padding:8px 14px;font-size:13px;font-weight:bold;display:flex;justify-content:space-between;align-items:center}
+.user-header span{font-weight:normal;font-size:11px;opacity:.8;margin-left:8px}
+.action-table{width:100%;border-collapse:collapse;font-size:13px}
+.action-table td{padding:6px 14px;border-bottom:1px solid #e5e7eb}
+.action-table tr:last-child td{border-bottom:none}
+.count-badge{background:#e0e7ff;color:#4338ca;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:bold}
+/* 単位要件エディタの入力欄（経営学部・システム情報学部画面で共通） */
+.req-input,.sort-input{padding:4px 6px;font-size:13px;text-align:center;margin:0;border:1px solid #d1d5db;border-radius:6px}
+.req-input{width:60px}
+.sort-input{width:54px}
+.label-input,.group-input{width:100%;padding:4px 7px;border:1px solid #d1d5db;border-radius:6px;margin:0}
+.label-input{font-size:13px}
+.group-input{font-size:12px}
+.note-input{width:100%;padding:5px 7px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;resize:vertical;min-height:44px;font-family:inherit;color:#374151;margin:0}
+.note-input:focus,.label-input:focus,.group-input:focus,.req-input:focus,.sort-input:focus{outline:none;border-color:#6366f1}
+.btn-del{background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:.6}
+.btn-del:hover{opacity:1}
 {% block extra_style %}{% endblock %}
   </style>
 </head>

@@ -14,16 +14,6 @@
 .gna { background:#f1f5f9; color:#94a3b8; }
 .auto-badge { font-style:italic; opacity:.75; }
 select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
-.req-input   { width:60px;  padding:4px 6px; font-size:13px; text-align:center; margin:0; border:1px solid #e2e8f0; border-radius:6px; }
-.sort-input  { width:54px;  padding:4px 6px; font-size:13px; text-align:center; margin:0; border:1px solid #e2e8f0; border-radius:6px; }
-.label-input { width:100%;  padding:4px 7px; font-size:13px; border:1px solid #e2e8f0; border-radius:6px; }
-.group-input { width:100%;  padding:4px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px; }
-.note-input  { width:100%;  padding:5px 7px; font-size:12px; border:1px solid #e2e8f0; border-radius:6px;
-  resize:vertical; min-height:44px; font-family:inherit; color:#374151; }
-.note-input:focus, .label-input:focus, .group-input:focus, .req-input:focus, .sort-input:focus {
-  outline:none; border-color:#6366f1; }
-.btn-del { background:none; border:none; cursor:pointer; font-size:15px; padding:2px 4px; opacity:.6; }
-.btn-del:hover { opacity:1; }
 {% endblock %}
 
 {% block content %}
@@ -137,10 +127,10 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
     </div>
   </details>
   {% else %}
-  <p style="color:#999;font-size:13px">単位要件カテゴリがありません</p>
+  <p style="color:#9ca3af;font-size:13px">単位要件カテゴリがありません</p>
   {% endfor %}
   {% else %}
-  <p style="color:#999;font-size:13px">共通専門基礎科目（classification に「共通専門基礎」を含む科目）が登録されていません</p>
+  <p style="color:#9ca3af;font-size:13px">共通専門基礎科目（classification に「共通専門基礎」を含む科目）が登録されていません</p>
   {% endif %}
 </div>
 
@@ -174,7 +164,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="3" style="color:#999;text-align:center;padding:16px">経営学部の科目がありません</td></tr>
+    <tr><td colspan="3" class="empty">経営学部の科目がありません</td></tr>
     {% endfor %}
   </table>
 </div>

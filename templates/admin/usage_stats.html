@@ -2,23 +2,6 @@
 {% block title %}統計{% endblock %}
 {% block heading %}📊 統計{% endblock %}
 
-{% block extra_style %}
-.bar-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-.bar-label { width:180px; font-size:12px; font-weight:600; color:#374151; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bar-wrap { flex:1; background:#e5e7eb; border-radius:999px; height:16px; overflow:hidden; }
-.bar-fill { height:100%; border-radius:999px; }
-.bar-count { width:48px; text-align:right; font-size:12px; font-weight:bold; color:#4338ca; flex-shrink:0; }
-.section-title { font-size:12px; font-weight:bold; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; margin:20px 0 8px; }
-.user-block { background:#fff; border-radius:8px; margin-bottom:12px; overflow:hidden; border:1px solid #e5e7eb; }
-.user-header { background:#6366f1; color:#fff; padding:8px 14px; font-size:13px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; }
-.user-header span { font-weight:normal; font-size:11px; opacity:.8; margin-left:8px; }
-.user-total { font-size:11px; opacity:.9; white-space:nowrap; }
-.action-table { width:100%; border-collapse:collapse; font-size:13px; }
-.action-table td { padding:6px 14px; border-bottom:1px solid #e5e7eb; }
-.action-table tr:last-child td { border-bottom:none; }
-.count-badge { background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:bold; }
-{% endblock %}
-
 {% from "admin/base.html" import pager %}
 {% block content %}
 

@@ -106,7 +106,7 @@
           <button type="submit" class="btn" style="padding:2px 8px;font-size:11px;background:#f0fdf4;color:#15803d;white-space:nowrap">設定</button>
         </form>
       </td>
-      <td style="color:#666">{{ cnt }}科目</td>
+      <td style="color:#6b7280">{{ cnt }}科目</td>
       <td>
         <form method="post" action="/admin/courses/classification/delete" style="margin:0"
               data-confirm="削除しますか？">
@@ -116,7 +116,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="5" style="color:#999;text-align:center;padding:12px">分類なし</td></tr>
+    <tr><td colspan="5" class="empty">分類なし</td></tr>
     {% endfor %}
   </table>
 </div>
@@ -441,7 +441,7 @@
   {% endfor %}
   {% endfor %}
   {% else %}
-  <tr><td colspan="4" style="color:#999;text-align:center;padding:16px">科目なし</td></tr>
+  <tr><td colspan="4" class="empty">科目なし</td></tr>
   {% endif %}
 </table>
 <!-- 編集モーダル -->
