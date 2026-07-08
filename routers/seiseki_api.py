@@ -1,19 +1,25 @@
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from sqlalchemy import or_, select
 
 from core import cache
 from core.liff_auth import verify_liff_id_token
+from core.rate_limit import rate_limiter
 from core.seiseki import PDFPLUMBER_OK, classify_seiseki_raw, parse_seiseki_pdf
 from database import AsyncSessionLocal
 from models import CreditRequirement, Subject, SubjectCreditCategory, UserSeisekiRaw
 
 router = APIRouter()
 
+# 修正理由: PDF解析(pdfplumber)はCPU負荷が高く、認証不要で誰でも叩けるため
+# IPアドレス単位で1分あたり5回までに制限する
+_parse_seiseki_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
+
 
 @router.post("/api/parse_seiseki")
 async def api_parse_seiseki(
     file: UploadFile = File(...),
     x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+    _rl: None = Depends(_parse_seiseki_rate_limit),
 ):
     if not PDFPLUMBER_OK:
         raise HTTPException(status_code=503, detail="PDF parsing not available")

@@ -7,6 +7,7 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from core import backup, cache, line_client, prewarm
 from core.activity_log import save_error_log
@@ -55,6 +56,29 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# 修正理由: リクエストボディサイズの上限が一切なく、JSON受信エンドポイント
+# （/api/timetable/profile、/api/seiseki/save_raw 等）に巨大なペイロードを
+# 送りつけるとメモリ枯渇DoSになり得た。/api/parse_seiseki はPDFアップロード用に
+# 既存の10MB上限（ハンドラ内でファイル読み込み後にチェック）があるため除外する。
+_MAX_BODY_BYTES = 2 * 1024 * 1024
+_BODY_LIMIT_EXEMPT_PATHS = {"/api/parse_seiseki"}
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path not in _BODY_LIMIT_EXEMPT_PATHS:
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    if int(content_length) > _MAX_BODY_BYTES:
+                        return _JSONResponse(status_code=413, content={"detail": "リクエストが大きすぎます"})
+                except ValueError:
+                    pass
+        return await call_next(request)
+
+
+app.add_middleware(BodySizeLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

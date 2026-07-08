@@ -2,7 +2,7 @@ import asyncio
 import re as _re
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -15,6 +15,7 @@ from core.config import (
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
+from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, CourseSectionView, Instructor, Review, Subject, Syllabus, UserProfile
@@ -22,6 +23,8 @@ from models import CourseSection, CourseSectionView, Instructor, Review, Subject
 router = APIRouter()
 
 _FORM_PUNCT = '・･（）()'
+# 修正理由: レビュー連投によるスパム・審査キュー圧迫を防ぐため、IPアドレス単位で1分あたり3回までに制限する
+_submit_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
 
 def _normalize_form_q(s: str) -> str:
@@ -319,6 +322,7 @@ async def submit(
     selected_instructor: str = Form(default=""),
     nickname: str = Form(default=""),
     academic_year: int = Form(default=0),
+    _rl: None = Depends(_submit_rate_limit),
 ):
     def _form_error(msg: str):
         return templates.TemplateResponse(

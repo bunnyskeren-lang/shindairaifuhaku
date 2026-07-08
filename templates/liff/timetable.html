@@ -1420,7 +1420,11 @@ function applySeisekiResult(data) {
 }
 
 function esc(str) {
-  return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // 修正理由: "/'をエスケープしていなかったため、href="${esc(x)}"のような
+  // 属性値コンテキストで理論上の属性インジェクション（onerror=等の追加）の
+  // 余地があった。
+  return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
 init();
