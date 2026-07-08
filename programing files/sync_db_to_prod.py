@@ -14,6 +14,7 @@ dev → 本番 DB の同期スクリプト
 import asyncio
 import ssl
 import sys
+from collections import Counter
 sys.stdout.reconfigure(encoding="utf-8")
 import asyncpg
 
@@ -52,33 +53,51 @@ async def main():
                 )
         print(f"display_orders: {len(cls_rows)}件")
 
-        # ── 2. subjects: UPSERT by id ─────────────────────────────────────────
-        # course_sections/reviews が subjects に CASCADE 依存するため TRUNCATE せず UPSERT
+        # ── 2. subjects: UPSERT by name ────────────────────────────────────────
+        # id直接UPSERTだと、devとprodのシーケンスが独立して進むため、本番管理画面から
+        # 個別追加された科目のidとdevの新規科目idが偶然一致すると、無関係な科目が
+        # 無警告に上書きされる事故が起こりうる（instructorsと同じくnameで名寄せする）。
+        # course_sections/subject_credit_categories は下でdev id→prod idに変換して同期する。
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, classification, "
             "category, senmon_group, sort_order, term_type, credits "
             "FROM subjects ORDER BY id"
         )
+        dup_names = [name for name, cnt in
+                     Counter(r["name"] for r in subj_rows).items() if cnt > 1]
+        if dup_names:
+            raise RuntimeError(f"dev subjects.name に重複があるため同期を中止しました: {dup_names[:10]}")
+
         async with prod.transaction():
             await prod.executemany(
                 """
                 INSERT INTO subjects
-                  (id, name, reading, faculty, classification,
+                  (name, reading, faculty, classification,
                    category, senmon_group, sort_order, term_type, credits)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-                ON CONFLICT (id) DO UPDATE SET
-                  name=EXCLUDED.name, reading=EXCLUDED.reading, faculty=EXCLUDED.faculty,
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                ON CONFLICT (name) DO UPDATE SET
+                  reading=EXCLUDED.reading, faculty=EXCLUDED.faculty,
                   classification=EXCLUDED.classification,
                   category=EXCLUDED.category, senmon_group=EXCLUDED.senmon_group,
                   sort_order=EXCLUDED.sort_order,
                   term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
                 """,
-                [(r["id"], r["name"], r["reading"], r["faculty"],
+                [(r["name"], r["reading"], r["faculty"],
                   r["classification"], r["category"], r["senmon_group"], r["sort_order"],
                   r["term_type"], r["credits"])
                  for r in subj_rows]
             )
         print(f"subjects: {len(subj_rows)}件 upsert")
+
+        # prod の subject name→id マッピングを取得（devとprodでidが異なりうる）
+        prod_subj_map: dict[str, int] = {
+            r["name"]: r["id"]
+            for r in await prod.fetch("SELECT id, name FROM subjects")
+        }
+        dev_subj_id_to_prod_id: dict[int, int] = {
+            r["id"]: prod_subj_map[r["name"]]
+            for r in subj_rows if r["name"] in prod_subj_map
+        }
 
         # ── 3. instructors: UPSERT by name ────────────────────────────────────
         instr_rows = await dev.fetch("SELECT id, name, sort_order FROM instructors ORDER BY id")
@@ -98,8 +117,7 @@ async def main():
         dev_instr_name: dict[int, str] = {r["id"]: r["name"] for r in instr_rows}
 
         # ── 4. course_sections: UPSERT by (subject_id, instructor_id) ─────────
-        # subjects は id で UPSERT 済みなので subject_id はそのまま使える
-        # instructor_id は prod での ID に変換する必要あり
+        # subject_id・instructor_id ともに prod での ID に変換する必要あり
         cs_rows = await dev.fetch(
             "SELECT id, subject_id, instructor_id, syllabus_url "
             "FROM course_sections ORDER BY id"
@@ -107,13 +125,18 @@ async def main():
         cs_params = []
         skipped = 0
         for r in cs_rows:
+            prod_subj_id = dev_subj_id_to_prod_id.get(r["subject_id"])
+            if prod_subj_id is None:
+                print(f"  WARNING: subject_id {r['subject_id']} が prod に見つかりません（course_section {r['id']} をスキップ）")
+                skipped += 1
+                continue
             instr_name = dev_instr_name.get(r["instructor_id"])
             prod_instr_id = prod_instr_map.get(instr_name) if instr_name else None
             if prod_instr_id is None:
                 print(f"  WARNING: instructor '{instr_name}' が prod に見つかりません（course_section {r['id']} をスキップ）")
                 skipped += 1
                 continue
-            cs_params.append((r["subject_id"], prod_instr_id, r["syllabus_url"]))
+            cs_params.append((prod_subj_id, prod_instr_id, r["syllabus_url"]))
 
         async with prod.transaction():
             await prod.executemany(
@@ -128,19 +151,27 @@ async def main():
         print(f"course_sections: {len(cs_params)}件 upsert, {skipped}件スキップ")
 
         # ── 5. subject_credit_categories ──────────────────────────────────────
-        # ユーザーデータへの依存なし → DELETE + INSERT で上書き
+        # ユーザーデータへの依存なし → DELETE + INSERT で上書き（subject_id は prod ID に変換）
         scc_rows = await dev.fetch(
             "SELECT subject_id, category_id, credits FROM subject_credit_categories ORDER BY id"
         )
+        scc_params = []
+        scc_skipped = 0
+        for r in scc_rows:
+            prod_subj_id = dev_subj_id_to_prod_id.get(r["subject_id"])
+            if prod_subj_id is None:
+                scc_skipped += 1
+                continue
+            scc_params.append((prod_subj_id, r["category_id"], r["credits"]))
         async with prod.transaction():
             await prod.execute("DELETE FROM subject_credit_categories")
-            if scc_rows:
+            if scc_params:
                 await prod.executemany(
                     "INSERT INTO subject_credit_categories (subject_id, category_id, credits) "
                     "VALUES ($1, $2, $3)",
-                    [(r["subject_id"], r["category_id"], r["credits"]) for r in scc_rows]
+                    scc_params
                 )
-        print(f"subject_credit_categories: {len(scc_rows)}件")
+        print(f"subject_credit_categories: {len(scc_params)}件, {scc_skipped}件スキップ")
 
     finally:
         await dev.close()

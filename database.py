@@ -285,6 +285,15 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE push_subscriptions DROP COLUMN IF EXISTS line_user_id"
         ))
+        # subjects.name の UNIQUE制約（dev→prod同期スクリプトが id直接コピーではなく
+        # name基準のON CONFLICT UPSERTを使うために必要。既存データに重複name行が
+        # 残っている環境ではunique_violationで追加自体をスキップする）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE subjects ADD CONSTRAINT uq_subjects_name UNIQUE (name);
+            EXCEPTION WHEN duplicate_object OR duplicate_table OR unique_violation THEN NULL;
+            END $$
+        """))
         # GPAをlocalStorageだけでなくDBにも永続化する
         await conn.execute(text(
             "ALTER TABLE user_seiseki_raw ADD COLUMN IF NOT EXISTS gpa DOUBLE PRECISION"

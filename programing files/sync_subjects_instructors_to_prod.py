@@ -10,6 +10,7 @@ dev → 本番 DB の同期スクリプト（科目名・教員のみ）
 import asyncio
 import ssl
 import sys
+from collections import Counter
 sys.stdout.reconfigure(encoding="utf-8")
 import asyncpg
 
@@ -32,28 +33,36 @@ async def main():
     prod = await asyncpg.connect(PROD_URL, ssl=_ssl())
 
     try:
-        # ── subjects: UPSERT by id ─────────────────────────────────────────
-        # course_sections/reviews が subjects に CASCADE 依存するため TRUNCATE せず UPSERT
+        # ── subjects: UPSERT by name ────────────────────────────────────────
+        # id直接UPSERTだと、devとprodのシーケンスが独立して進むため、本番管理画面から
+        # 個別追加された科目のidとdevの新規科目idが偶然一致すると、無関係な科目が
+        # 無警告に上書きされる事故が起こりうる（instructorsと同じくnameで名寄せする）。
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, classification, "
             "category, senmon_group, sort_order, term_type, credits "
             "FROM subjects ORDER BY id"
         )
+        dup_names = [name for name, cnt in
+                     Counter(r["name"] for r in subj_rows).items() if cnt > 1]
+        if dup_names:
+            print(f"ERROR: dev subjects.name に重複があるため同期を中止しました: {dup_names[:10]}")
+            return
+
         async with prod.transaction():
             await prod.executemany(
                 """
                 INSERT INTO subjects
-                  (id, name, reading, faculty, classification,
+                  (name, reading, faculty, classification,
                    category, senmon_group, sort_order, term_type, credits)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-                ON CONFLICT (id) DO UPDATE SET
-                  name=EXCLUDED.name, reading=EXCLUDED.reading, faculty=EXCLUDED.faculty,
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                ON CONFLICT (name) DO UPDATE SET
+                  reading=EXCLUDED.reading, faculty=EXCLUDED.faculty,
                   classification=EXCLUDED.classification,
                   category=EXCLUDED.category, senmon_group=EXCLUDED.senmon_group,
                   sort_order=EXCLUDED.sort_order,
                   term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
                 """,
-                [(r["id"], r["name"], r["reading"], r["faculty"],
+                [(r["name"], r["reading"], r["faculty"],
                   r["classification"], r["category"], r["senmon_group"], r["sort_order"],
                   r["term_type"], r["credits"])
                  for r in subj_rows]
