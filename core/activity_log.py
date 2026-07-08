@@ -23,8 +23,10 @@ async def save_error_log(exc: Exception, user_id: str | None = None, action: str
                 traceback=tb[:4000],
             ))
             await session.commit()
-    except Exception:
-        pass
+    except Exception as log_exc:
+        # DB書き込み自体が失敗した場合でも、Renderの標準ログには残す
+        # （ここでのraiseは呼び出し元の処理を止めてしまうため行わない）
+        print(f"[error_log_failed] {type(log_exc).__name__}: {log_exc} (original: {type(exc).__name__}: {exc})", flush=True)
 
 
 async def save_log_bg(user_id: str, direction: str, message: str) -> None:

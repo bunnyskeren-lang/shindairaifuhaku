@@ -1,4 +1,5 @@
 import asyncio
+import time
 import traceback as _traceback
 from contextlib import asynccontextmanager
 
@@ -80,6 +81,28 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+# 修正理由: リクエストごとの処理時間・ステータスコードを記録する仕組みが
+# 皆無で、障害調査やボトルネック検出ができなかった。Renderの標準stdoutログに
+# 1行で出力する（既存コードもprint()ベースのため踏襲、外部依存を増やさない）。
+_SLOW_REQUEST_MS = 3000
+
+
+class RequestTimingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            print(f"[access] {request.method} {request.url.path} 500 {duration_ms:.0f}ms", flush=True)
+            raise
+        duration_ms = (time.perf_counter() - start) * 1000
+        marker = " SLOW" if duration_ms >= _SLOW_REQUEST_MS else ""
+        print(f"[access] {request.method} {request.url.path} {response.status_code} {duration_ms:.0f}ms{marker}", flush=True)
+        return response
+
+
+app.add_middleware(RequestTimingMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
 
 app.add_middleware(
