@@ -157,7 +157,8 @@ pip install -r requirements.txt
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` | - | Web Push 通知用 VAPID 鍵 |
 | `SELF_URL` / `APP_URL` | - | 自己 ping・リンク生成に使う自身の URL |
 | `KYOYO_REQUIRED_CREDITS` | - | 教養科目の必要単位数（デフォルト: 1） |
-| `ENABLE_SSL_VERIFY` | - | DB 接続の SSL 証明書検証を有効化 |
+| `DB_POOL_SIZE` / `DB_POOL_MAX_OVERFLOW` | - | DB接続プールのサイズ調整（デフォルト: 10 / 20） |
+| `DISABLE_SSL_VERIFY` | - | DB 接続の SSL 証明書検証を無効化（緊急時の切り戻し用。既定で有効） |
 | `ENV` | - | `dev` を指定すると開発モード扱い |
 
 ### ローカル起動
