@@ -1,8 +1,22 @@
+import asyncio
+
 import httpx
 
 from core.config import LIFF_ID, REGISTER_LIFF_ID, REVIEW_LIFF_ID, TIMETABLE_LIFF_ID
 
 LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify"
+
+_http_client: httpx.AsyncClient | None = None
+
+
+async def startup() -> None:
+    global _http_client
+    _http_client = httpx.AsyncClient(timeout=6.0)
+
+
+async def shutdown() -> None:
+    if _http_client:
+        await _http_client.aclose()
 
 
 def _channel_id(liff_id: str) -> str | None:
@@ -30,17 +44,28 @@ async def verify_liff_id_token(id_token: str) -> str | None:
     """
     if not id_token or not LIFF_CHANNEL_IDS:
         return None
-    async with httpx.AsyncClient(timeout=6.0) as client:
-        for client_id in LIFF_CHANNEL_IDS:
+    client = _http_client
+    if client is None:
+        # startup()未実行（テスト等）の場合のフォールバック
+        client = httpx.AsyncClient(timeout=6.0)
+    for client_id in LIFF_CHANNEL_IDS:
+        resp = None
+        # タイムアウト・接続エラーなど一時的な障害のみ1回だけ再試行する。
+        # 非200応答（トークン不正等）は正当な拒否のため再試行しない。
+        for attempt in range(2):
             try:
                 resp = await client.post(
                     LINE_VERIFY_URL,
                     data={"id_token": id_token, "client_id": client_id},
                 )
+                break
             except httpx.HTTPError:
-                continue
-            if resp.status_code == 200:
-                sub = resp.json().get("sub")
-                if sub:
-                    return sub
+                if attempt == 1:
+                    resp = None
+                    break
+                await asyncio.sleep(0.5)
+        if resp is not None and resp.status_code == 200:
+            sub = resp.json().get("sub")
+            if sub:
+                return sub
     return None

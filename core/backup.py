@@ -64,22 +64,41 @@ def _storage_headers() -> dict:
     }
 
 
+async def _request_with_retry(client: httpx.AsyncClient, method: str, url: str, *, retries: int = 2, **kwargs):
+    """Supabase Storage APIへの呼び出しを一時的な障害に限り指数バックオフで再試行する。
+
+    全操作（アップロード/一覧/削除）は同一パスへの再実行が安全な設計
+    （アップロードはx-upsert、一覧・削除は冪等）なので単純リトライで問題ない。
+    """
+    for attempt in range(retries + 1):
+        try:
+            resp = await client.request(method, url, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except (httpx.HTTPStatusError, httpx.TransportError) as e:
+            is_5xx = isinstance(e, httpx.HTTPStatusError) and e.response.status_code >= 500
+            is_transport = isinstance(e, httpx.TransportError)
+            if attempt == retries or not (is_5xx or is_transport):
+                raise
+            await asyncio.sleep(1.0 * (2 ** attempt))
+
+
 async def upload_backup_to_storage(data: bytes) -> None:
     filename = f"backup_{_dt.datetime.now(JST).strftime('%Y%m%d_%H%M')}.sql.gz"
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
+        await _request_with_retry(
+            client, "POST",
             f"{SUPABASE_URL}/storage/v1/object/{BACKUP_BUCKET}/{filename}",
             headers={**_storage_headers(), "Content-Type": "application/gzip", "x-upsert": "true"},
             content=data,
         )
-        resp.raise_for_status()
 
-        list_resp = await client.post(
+        list_resp = await _request_with_retry(
+            client, "POST",
             f"{SUPABASE_URL}/storage/v1/object/list/{BACKUP_BUCKET}",
             headers=_storage_headers(),
             json={"prefix": "", "limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
         )
-        list_resp.raise_for_status()
 
         cutoff = _dt.datetime.now(JST) - _dt.timedelta(days=BACKUP_RETENTION_DAYS)
         stale = []
@@ -96,13 +115,12 @@ async def upload_backup_to_storage(data: bytes) -> None:
                 stale.append(name)
 
         if stale:
-            del_resp = await client.request(
-                "DELETE",
+            await _request_with_retry(
+                client, "DELETE",
                 f"{SUPABASE_URL}/storage/v1/object/{BACKUP_BUCKET}",
                 headers=_storage_headers(),
                 json={"prefixes": stale},
             )
-            del_resp.raise_for_status()
 
 
 async def backup_loop() -> None:

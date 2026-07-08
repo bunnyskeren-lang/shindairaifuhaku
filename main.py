@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from core import backup, cache, line_client, prewarm
+from core import backup, cache, liff_auth, line_client, prewarm
 from core.activity_log import save_error_log
 from database import engine, init_db
 from routers import health, liff_api, pages, richmenu, seiseki_api, timetable_api, webhook
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
         await engine.dispose()
         print("Engine disposed and reset after startup error", flush=True)
     await line_client.startup()
+    await liff_auth.startup()
     ping_task = asyncio.create_task(line_client.self_ping())
     backup_task = asyncio.create_task(backup.backup_loop())
     yield
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     await line_client.shutdown()
+    await liff_auth.shutdown()
 
 
 app = FastAPI(lifespan=lifespan)

@@ -2,6 +2,7 @@ import asyncio
 
 from linebot.v3 import WebhookParser
 from linebot.v3.messaging import AsyncApiClient, AsyncMessagingApi, Configuration, ReplyMessageRequest
+from linebot.v3.messaging.exceptions import ApiException
 
 from core.config import CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET, SELF_URL
 
@@ -23,18 +24,37 @@ async def shutdown() -> None:
         await _client.close()
 
 
+async def _with_retry(coro_fn, *, retries: int = 2, base_delay: float = 0.5):
+    """LINE API呼び出しを一時的な障害（タイムアウト・5xx）に限り指数バックオフで再試行する。
+
+    4xx（トークン不正・権限不足等）は再試行しても成功しないため即座に上げる。
+    """
+    for attempt in range(retries + 1):
+        try:
+            return await coro_fn()
+        except ApiException as e:
+            if e.status is not None and e.status < 500:
+                raise
+            if attempt == retries:
+                raise
+        except (asyncio.TimeoutError, OSError):
+            if attempt == retries:
+                raise
+        await asyncio.sleep(base_delay * (2 ** attempt))
+
+
 async def reply(reply_token: str, messages: list) -> None:
-    await _api.reply_message(ReplyMessageRequest(reply_token=reply_token, messages=messages))
+    await _with_retry(lambda: _api.reply_message(ReplyMessageRequest(reply_token=reply_token, messages=messages)))
 
 
 async def link_rich_menu(user_id: str, rich_menu_id: str) -> None:
     if not rich_menu_id:
         return
-    await _api.link_rich_menu_id_to_user(user_id, rich_menu_id)
+    await _with_retry(lambda: _api.link_rich_menu_id_to_user(user_id, rich_menu_id))
 
 
 async def unlink_rich_menu(user_id: str) -> None:
-    await _api.unlink_rich_menu_id_from_user(user_id)
+    await _with_retry(lambda: _api.unlink_rich_menu_id_from_user(user_id))
 
 
 async def self_ping() -> None:
