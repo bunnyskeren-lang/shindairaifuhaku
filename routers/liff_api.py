@@ -25,6 +25,8 @@ router = APIRouter()
 _FORM_PUNCT = '・･（）()'
 # 修正理由: レビュー連投によるスパム・審査キュー圧迫を防ぐため、IPアドレス単位で1分あたり3回までに制限する
 _submit_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
+# 修正理由: student_idの総当たりによる他人の氏名取得を防ぐため、IPアドレス単位で1分あたり10回までに制限する
+_autofill_rate_limit = rate_limiter(max_requests=10, window_seconds=60)
 
 
 def _normalize_form_q(s: str) -> str:
@@ -272,7 +274,7 @@ async def register_profile(
 
 
 @router.post("/api/autofill")
-async def autofill_profile(request: Request):
+async def autofill_profile(request: Request, _rl: None = Depends(_autofill_rate_limit)):
     body = await request.json()
     id_token = (body.get("id_token") or "").strip()
     student_id = (body.get("student_id") or "")
