@@ -24,19 +24,16 @@
       <p class="text-gray-500 text-sm mt-1">みんなの声が後輩の授業選びをサポート！</p>
     </div>
 
-    <!-- Auto-save banner (prominent) -->
-    <div class="bg-green-50 border-2 border-green-300 rounded-2xl px-4 py-3 mb-4 flex items-center gap-3">
-      <span class="text-2xl">💾</span>
-      <div>
-        <p class="text-sm font-bold text-green-700">入力内容は自動保存されます</p>
-        <p class="text-xs text-green-600 mt-0.5">ページを閉じても次に開いたとき続きから入力できます</p>
+    <!-- Notice（自動保存＋公開までの流れをまとめて1枚に） -->
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 space-y-1.5">
+      <div class="flex items-start gap-2">
+        <span class="text-lg leading-none mt-0.5">💾</span>
+        <span>入力内容は自動保存。閉じても続きから入力できます</span>
       </div>
-    </div>
-
-    <!-- Notice -->
-    <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 flex items-start gap-2">
-      <span class="text-lg leading-none mt-0.5">✋</span>
-      <span>送信後、内容を確認してから公開されます。</span>
+      <div class="flex items-start gap-2">
+        <span class="text-lg leading-none mt-0.5">✋</span>
+        <span>送信後、内容を確認してから公開されます</span>
+      </div>
     </div>
 
     <form id="reviewForm" action="/submit" method="post" novalidate class="space-y-4">

@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache, line_client
 from core.activity_log import save_error_log
 from core.config import (
-    EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
+    APP_URL, EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
     is_profile_complete, make_syllabus_url,
 )
 from core.liff_auth import verify_liff_id_token
@@ -425,6 +425,11 @@ async def submit(
         session.add(review)
         await session.commit()
 
+        review_count = (await session.execute(
+            select(func.count(Review.id)).where(Review.student_id == sid)
+        )).scalar_one()
+        course_id = subject.id
+
     # 修正理由: レビューは既にcommit済みのため、この後のpush通知処理で例外が起きても
     # 投稿自体は成功として扱う必要がある。ここでtry/exceptしないと、ユーザーには
     # エラー画面が表示されてしまい（実際は投稿済み）、再送信による重複投稿を誘発していた。
@@ -439,7 +444,13 @@ async def submit(
         await save_error_log(exc, user_id=uid, action="submit_push_notification")
 
     return templates.TemplateResponse(
-        "form_success.html", {"request": request, "course_name": course_name}
+        "form_success.html", {
+            "request": request,
+            "course_name": course_name,
+            "course_id": course_id,
+            "review_count": review_count,
+            "base_url": APP_URL,
+        }
     )
 
 

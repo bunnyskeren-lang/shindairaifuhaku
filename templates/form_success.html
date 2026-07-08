@@ -12,10 +12,29 @@
       <div class="text-6xl mb-4">🎉</div>
       <h1 class="text-xl font-bold text-gray-800 mb-2">レビューを受け付けました！</h1>
       <p class="text-gray-500 text-sm mb-1">「{{ course_name }}」のレビューをありがとうございます。</p>
-      <p class="text-gray-400 text-sm mb-8">確認後に公開されます。後輩のためにありがとう✨</p>
+      <p class="text-gray-400 text-sm mb-4">確認後に公開されます。後輩のためにありがとう✨</p>
+
+      {% if review_count == 1 %}
+      <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 mb-6 text-sm font-bold text-indigo-600">
+        🔰 初レビュー投稿、おめでとうございます！
+      </div>
+      {% elif review_count in (5, 10, 20, 30, 50) %}
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-6 text-sm font-bold text-amber-600">
+        🏅 累計{{ review_count }}件目の投稿達成！すごい貢献度です
+      </div>
+      {% else %}
+      <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 mb-6 text-sm font-bold text-indigo-600">
+        📝 これで累計{{ review_count }}件目のレビューです
+      </div>
+      {% endif %}
+
       <a href="/"
         class="block w-full bg-indigo-600 text-white font-bold py-3 rounded-2xl hover:bg-indigo-700 transition text-sm">
         別の授業もレビューする →
+      </a>
+      <a href="{{ base_url }}/liff/course?course_id={{ course_id }}"
+        class="block w-full mt-3 bg-indigo-50 text-indigo-600 font-bold py-3 rounded-2xl hover:bg-indigo-100 transition text-sm">
+        投稿した科目を見る
       </a>
     </div>
   </div>
