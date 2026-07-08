@@ -1,5 +1,3 @@
-import ssl
-
 import asyncpg
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -8,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache
 from core.config import DEV_DATABASE_URL
+from core.db_ssl import make_ssl_context
 from core.security import check_admin
 from database import AsyncSessionLocal, engine
 from models import (
@@ -51,13 +50,6 @@ async def inspect_legacy_tables(_: str = Depends(check_admin)):
     return JSONResponse(result)
 
 
-def _dev_ssl_context() -> ssl.SSLContext:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    return ctx
-
-
 @router.post("/admin/sync/master_data")
 async def sync_master_data_from_dev(_: str = Depends(check_admin)):
     """dev DBのマスタデータ（display_orders/subjects/instructors/course_sections/
@@ -72,7 +64,7 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
     if not DEV_DATABASE_URL:
         return JSONResponse({"ok": False, "error": "DEV_DATABASE_URL が未設定です"}, status_code=500)
 
-    dev_conn = await asyncpg.connect(DEV_DATABASE_URL, ssl=_dev_ssl_context())
+    dev_conn = await asyncpg.connect(DEV_DATABASE_URL, ssl=make_ssl_context())
     try:
         order_rows = await dev_conn.fetch(
             "SELECT kind, name, sort_order, parent_group, faculty FROM display_orders ORDER BY id"

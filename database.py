@@ -1,7 +1,8 @@
 import os
-import ssl
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+
+from core.db_ssl import make_ssl_context
 
 _url = os.environ["DATABASE_URL"]
 if _url.startswith("postgres://"):
@@ -9,11 +10,7 @@ if _url.startswith("postgres://"):
 elif _url.startswith("postgresql://") and "+asyncpg" not in _url:
     _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-ssl_ctx = ssl.create_default_context()
-# ENABLE_SSL_VERIFY=1 で証明書検証を有効化できる（デフォルト無効: Supabase pooler との互換性のため）
-if os.environ.get("ENABLE_SSL_VERIFY", "").lower() not in ("1", "true", "yes"):
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+ssl_ctx = make_ssl_context()
 
 engine = create_async_engine(
     _url,
