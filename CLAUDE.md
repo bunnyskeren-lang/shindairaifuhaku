@@ -278,10 +278,11 @@ shindairaifuhaku/          ← Renderがデプロイするルート
     ├── import_syllabus.py         ← 時間割データをDB投入
     ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング
     ├── import_kyoyo_courses.py    ← 教養科目インポート
-    ├── setup_richmenu.py / sync_richmenu.py ← LINEリッチメニュー設定・dev→本番同期
+    ├── setup_richmenu.py          ← LINEリッチメニュー設定（--env dev/prod）
     ├── sync_db_to_prod.py         ← dev→本番DBの5テーブル同期
     ├── download_prod_backup.py    ← Supabase Storage上のDBバックアップをローカルbackups/へ差分ダウンロード（--env dev/prod）
     ├── models.py / database.py    ← スクリプト群専用のDBアクセス層（ルートのmodels.pyとは別定義）
+    ├── assets/richmenu.png        ← リッチメニュー原本画像（setup_richmenu.pyのデフォルト画像、git管理下）
     └── .env / .env.dev            ← 環境変数（本番・dev）
 ```
 

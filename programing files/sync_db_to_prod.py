@@ -45,21 +45,28 @@ async def main():
     prod = await asyncpg.connect(PROD_URL, ssl=_ssl())
 
     try:
-        # ── 1. display_orders ──────────────────────────────────────────────────
-        # 分類/学部/単位要件グループの並び順マスタ。文字列一致で参照するのみで FK 依存がないため、TRUNCATE しても安全
+        # ── 1. display_orders: UPSERT by (kind, name, faculty) ──────────────────
+        # 分類/学部/単位要件グループの並び順マスタ。文字列一致で参照するのみで FK 依存はない。
+        # 以前はid直接コピー+DELETE&INSERTだったが、本番側のオートインクリメントの
+        # シーケンス値が更新されないまま既存idと同じ値の行が入るため、直後に管理画面から
+        # 新規追加すると id衝突でエラーになりうる不具合があった。他テーブルと同様に
+        # (kind, name, faculty)のUNIQUE制約を使った名前ベースUPSERTに統一する。
         cls_rows = await dev.fetch(
-            "SELECT id, kind, name, sort_order, parent_group, faculty FROM display_orders ORDER BY id"
+            "SELECT kind, name, sort_order, parent_group, faculty FROM display_orders ORDER BY id"
         )
         async with prod.transaction():
-            await prod.execute("DELETE FROM display_orders")
             if cls_rows:
                 await prod.executemany(
-                    "INSERT INTO display_orders (id, kind, name, sort_order, parent_group, faculty) "
-                    "VALUES ($1, $2, $3, $4, $5, $6)",
-                    [(r["id"], r["kind"], r["name"], r["sort_order"], r["parent_group"], r["faculty"])
+                    """
+                    INSERT INTO display_orders (kind, name, sort_order, parent_group, faculty)
+                    VALUES ($1, $2, $3, $4, $5)
+                    ON CONFLICT (kind, name, faculty) DO UPDATE SET
+                      sort_order=EXCLUDED.sort_order, parent_group=EXCLUDED.parent_group
+                    """,
+                    [(r["kind"], r["name"], r["sort_order"], r["parent_group"], r["faculty"])
                      for r in cls_rows]
                 )
-        print(f"display_orders: {len(cls_rows)}件")
+        print(f"display_orders: {len(cls_rows)}件 upsert")
 
         # ── 2. subjects: UPSERT by name ────────────────────────────────────────
         # id直接UPSERTだと、devとprodのシーケンスが独立して進むため、本番管理画面から

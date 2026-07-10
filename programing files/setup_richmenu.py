@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--env", choices=["dev", "prod"], required=True,
                     help="dev=.env.dev, prod=.env")
 parser.add_argument("image", nargs="?", default=None,
-                    help="カスタム画像パス (省略時: ../docs/picture/6.24リッチメニュー.png)")
+                    help="カスタム画像パス (省略時: assets/richmenu.png)")
 args = parser.parse_args()
 
 # ── 環境変数読み込み ─────────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ def _create_and_upload(api, name: str, areas: list, image_data: bytes) -> str:
 
 
 def main():
-    image_path = args.image or "../docs/picture/6.24リッチメニュー.png"
+    image_path = args.image or "assets/richmenu.png"
 
     config = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
