@@ -84,13 +84,34 @@ RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
 VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
 VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
 
-_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20", "Z": "14", "H": "13", "E": "05", "T": "0921"}
+_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20", "Z": "14", "H": "13", "E": "05", "A": "10", "L": "01"}
+
+# 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで「T」「N」を
+# 共有しており数字部分の範囲でしか判別できない（programing files/import_syllabus.pyの
+# ENGINEERING_RANGESと同じ対応表。学科を追加する際は両方を更新すること）
+_ENGINEERING_RANGES = [
+    (0, 99, "0921"),      # 工学部建築学科
+    (100, 149, "0922"),   # 工学部市民工学科
+    (150, 199, "0923"),   # 工学部電気電子工学科
+    (200, 249, "0924"),   # 工学部機械工学科
+    (250, 299, "0925"),   # 工学部応用化学科
+]
 
 
 def make_syllabus_url(timetable_code: str) -> str:
     if not timetable_code or len(timetable_code) < 2:
         return ""
-    path = _SYLLABUS_FACULTY_PATH.get(timetable_code[1].upper(), "")
+    letter = timetable_code[1].upper()
+    if letter in ("T", "N"):
+        digits = timetable_code[2:]
+        if not digits.isdigit():
+            return ""
+        num = int(digits)
+        for lo, hi, path in _ENGINEERING_RANGES:
+            if lo <= num <= hi:
+                return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
+        return ""
+    path = _SYLLABUS_FACULTY_PATH.get(letter, "")
     if not path:
         return ""
     return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"

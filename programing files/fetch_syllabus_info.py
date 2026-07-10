@@ -25,8 +25,21 @@ FACULTY_PATH: dict[str, str] = {
     "Z": "14",  # 海洋政策科学部
     "E": "05",  # 経済学部
     "H": "13",  # 国際人間科学部
-    "T": "0921",  # 工学部建築学科
+    "A": "10",  # 農学部
+    "L": "01",  # 文学部
 }
+
+# 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで「T」「N」を
+# 共有しており数字部分の範囲でしか判別できない（import_syllabus.pyのENGINEERING_RANGESと
+# 同じ対応表。学科を追加する際は両方を更新すること）
+ENGINEERING_RANGES: list[tuple[int, int, str]] = [
+    (0, 99, "0921"),      # 工学部建築学科
+    (100, 149, "0922"),   # 工学部市民工学科
+    (150, 199, "0923"),   # 工学部電気電子工学科
+    (200, 249, "0924"),   # 工学部機械工学科
+    (250, 299, "0925"),   # 工学部応用化学科
+]
+ENGINEERING_LETTERS = {"T", "N"}
 
 
 def load_env(env: str):
@@ -44,7 +57,17 @@ def load_env(env: str):
 def make_syllabus_url(code: str) -> str | None:
     if len(code) < 2:
         return None
-    path = FACULTY_PATH.get(code[1].upper())
+    letter = code[1].upper()
+    if letter in ENGINEERING_LETTERS:
+        digits = code[2:]
+        if not digits.isdigit():
+            return None
+        num = int(digits)
+        for lo, hi, path in ENGINEERING_RANGES:
+            if lo <= num <= hi:
+                return SYLLABUS_BASE.format(path=path, code=code)
+        return None
+    path = FACULTY_PATH.get(letter)
     if not path:
         return None
     return SYLLABUS_BASE.format(path=path, code=code)

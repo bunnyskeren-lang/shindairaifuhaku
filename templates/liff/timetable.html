@@ -536,7 +536,17 @@ const PERIOD_TIMES = {
   5: "17:00〜18:30",
   6: "18:50〜20:20",
 };
-const FACULTY_PATH_JS = { 'U': '20', 'B': '06', 'X': '15', 'G': '20', 'Z': '14', 'E': '05', 'H': '13', 'T': '0921' };
+const FACULTY_PATH_JS = { 'U': '20', 'B': '06', 'X': '15', 'G': '20', 'Z': '14', 'E': '05', 'H': '13', 'A': '10', 'L': '01' };
+// 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで「T」「N」を
+// 共有しており数字部分の範囲でしか判別できない（programing files/import_syllabus.pyの
+// ENGINEERING_RANGESと同じ対応表。学科を追加する際は両方を更新すること）
+const ENGINEERING_RANGES_JS = [
+  [0, 99, '0921'],      // 工学部建築学科
+  [100, 149, '0922'],   // 工学部市民工学科
+  [150, 199, '0923'],   // 工学部電気電子工学科
+  [200, 249, '0924'],   // 工学部機械工学科
+  [250, 299, '0925'],   // 工学部応用化学科
+];
 
 let userId = "";
 let myCourseIds = new Set();
@@ -548,7 +558,19 @@ let currentQuarter = localStorage.getItem('currentQuarter') || "3";
 
 function makeSyllabusUrl(code) {
   if (!code || code.length < 2) return null;
-  const path = FACULTY_PATH_JS[code[1].toUpperCase()];
+  const letter = code[1].toUpperCase();
+  if (letter === 'T' || letter === 'N') {
+    const digits = code.slice(2);
+    if (!/^\d+$/.test(digits)) return null;
+    const num = parseInt(digits, 10);
+    for (const [lo, hi, path] of ENGINEERING_RANGES_JS) {
+      if (num >= lo && num <= hi) {
+        return `https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/${path}/data/2026_${code}.html`;
+      }
+    }
+    return null;
+  }
+  const path = FACULTY_PATH_JS[letter];
   if (!path) return null;
   return `https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/${path}/data/2026_${code}.html`;
 }
