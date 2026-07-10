@@ -1,0 +1,11 @@
+No.	年度	開講区分	所属	科目名	成績入力担当	曜日・時限	時間割コード
+4	2026	第2クォーター	経済学部　昼間主コース	ＥＳＤ演習Ⅱ（環境経済学Ⅱ）	小島　理沙	集中	2E304
+5	2026	集中	経済学部　昼間主コース	Advanced Corporate Finance(主：Corporate Finance)	岩壷 健太郎	集中	2E305
+6	2026	集中	経済学部　昼間主コース	Advanced Macroeconomics and Public Policies(主：Macroeconomics and Public Policies)	瀧川　拓史	集中	2E306
+7	2026	後期	経済学部　昼間主コース	高度教養セミナー経済学部（研究指導B）	小林　照義	集中	3E356
+8	2026	後期	経済学部　昼間主コース	高度教養セミナー経済学部（研究指導B）	宮崎 智視	集中	3E357
+9	2026	後期	経済学部　昼間主コース	高度教養セミナー経済学部（研究指導B）	茂木　快治	集中	3E358
+10	2026	集中	経済学部　昼間主コース	Advanced Navigating Economic Uncertainly: Data, Models, and Decisions(主：Navigating Economic Uncertainly: Data, Models, and Devisions)	末石　直也	集中	3E359
+11	2026	集中	経済学部　昼間主コース	Advanced Empirical Macroeconomics(主：Empirical Macroeconomics)	宮崎 智視	集中	3E360
+12	2026	集中	経済学部　昼間主コース	Advanced Human and Machine Behavior(主：Human and Machine Behavior)	WIERZBOWSKA, AGATA	集中	3E361
+13	2026	集中	経済学部　昼間主コース	Advanced Topics on Institutions, Political Economy and Geopolitics(主：Topics on Institutions, Political Economy and Geopolitics)	胡 云芳	集中	4E303

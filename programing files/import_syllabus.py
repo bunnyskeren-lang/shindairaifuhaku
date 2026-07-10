@@ -31,6 +31,8 @@ FACULTY_PATH: dict[str, str] = {
     "X": "15",  # システム情報学部
     "G": "20",  # 教養科目の一部で使われるコード（Uと同じpath）
     "Z": "14",  # 海洋政策科学部
+    "E": "05",  # 経済学部
+    "H": "13",  # 国際人間科学部
 }
 
 def make_syllabus_url(code: str) -> str | None:
