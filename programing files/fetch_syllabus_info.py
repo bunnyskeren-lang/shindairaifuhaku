@@ -25,6 +25,7 @@ FACULTY_PATH: dict[str, str] = {
     "Z": "14",  # 海洋政策科学部
     "E": "05",  # 経済学部
     "H": "13",  # 国際人間科学部
+    "T": "0921",  # 工学部建築学科
 }
 
 
@@ -86,6 +87,17 @@ def parse_subject_category(html_text: str) -> str:
     return re.sub(r'<[^>]+>', '', m.group(1)).strip()
 
 
+def parse_credits(html_text: str) -> str:
+    """単位数を返す（例："2.0"）。
+    実際のHTML: <td class="gaibu-syllabus-kihon" align="center">単位数</th><td>2.0</td>
+    （サイト側の閉じタグ不整合で </td> ではなく </th> になっているため、
+    ラベル直後の </td> には固定せず次の <td> を拾う）"""
+    m = re.search(r'単位数.*?<td[^>]*>(.*?)</td>', html_text, re.DOTALL)
+    if not m:
+        return ""
+    return re.sub(r'<[^>]+>', '', m.group(1)).strip()
+
+
 async def run(dry_run: bool = False, force: bool = False):
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
@@ -139,6 +151,66 @@ async def run(dry_run: bool = False, force: bool = False):
     print(f"完了: 更新={updated}, スキップ={skipped}(未対応学部), 404={not_found}")
 
 
+async def run_credits(dry_run: bool = False, force: bool = False):
+    """単位数(subjects.credits)を補完する。
+    前期のみ開講の科目はsyllabiレコードを持たない（import_syllabus.pyの仕様）ため、
+    Syllabus経由ではなくcourse_sections.syllabus_url経由で辿る。"""
+    from sqlalchemy import select
+    from database import AsyncSessionLocal, init_db
+    from models import Subject, CourseSection
+
+    await init_db()
+
+    async with AsyncSessionLocal() as session:
+        q = select(Subject)
+        if not force:
+            q = q.where(Subject.credits.is_(None))
+        subjects = (await session.execute(q)).scalars().all()
+
+    print(f"単位数取得対象: {len(subjects)}件")
+    updated = skipped = not_found = 0
+
+    async with AsyncSessionLocal() as session:
+        for i, subj in enumerate(subjects):
+            cs = (await session.execute(
+                select(CourseSection).where(
+                    CourseSection.subject_id == subj.id,
+                    CourseSection.syllabus_url.isnot(None),
+                ).limit(1)
+            )).scalar_one_or_none()
+            if cs is None:
+                skipped += 1
+                continue
+
+            html_text = fetch_html(cs.syllabus_url)
+            if not html_text:
+                not_found += 1
+                continue
+
+            credits_raw = parse_credits(html_text)
+
+            if dry_run:
+                print(f"  {subj.name}: credits={credits_raw!r}")
+            elif credits_raw:
+                try:
+                    s = await session.get(Subject, subj.id)
+                    s.credits = float(credits_raw)
+                    updated += 1
+                except ValueError:
+                    pass
+
+            if (i + 1) % 20 == 0:
+                print(f"  進捗: {i+1}/{len(subjects)}")
+                if not dry_run:
+                    await session.commit()
+            time.sleep(0.3)  # サーバー負荷軽減
+
+        if not dry_run:
+            await session.commit()
+
+    print(f"単位数補完完了: 更新={updated}, スキップ={skipped}(セクション未登録), 404={not_found}")
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -148,6 +220,7 @@ def main():
     args = parser.parse_args()
     load_env(args.env)
     asyncio.run(run(args.dry_run, args.force))
+    asyncio.run(run_credits(args.dry_run, args.force))
 
 
 if __name__ == "__main__":

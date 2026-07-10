@@ -33,6 +33,7 @@ FACULTY_PATH: dict[str, str] = {
     "Z": "14",  # 海洋政策科学部
     "E": "05",  # 経済学部
     "H": "13",  # 国際人間科学部
+    "T": "0921",  # 工学部建築学科
 }
 
 def make_syllabus_url(code: str) -> str | None:
@@ -372,6 +373,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
     tt_skipped = 0
     tt_unmatched = 0
     c_added = 0
+    cs_added = 0
 
     async with AsyncSessionLocal() as session:
         for c in courses:
@@ -451,8 +453,9 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     if not is_kyoyo and cls:
                         await ensure_classification_bucket(session, cls, faculty)
 
-            if not is_tt:
-                continue
+            # Instructor / CourseSection は前期科目も含め全学期分を作成する
+            # （担当教員が空欄になるのを防ぐため。時間割表示に使うsyllabi/schedulesのみ
+            #   第3・第4クォーター・後期・集中に限定する）
 
             # Instructor を find-or-create（日本語名は空白を除去して統一する）
             instructor_name = c["instructor"]
@@ -483,8 +486,12 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 )
                 session.add(cs)
                 await session.flush()
+                cs_added += 1
             elif not cs.syllabus_url:
                 cs.syllabus_url = make_syllabus_url(c["timetable_code"])
+
+            if not is_tt:
+                continue
 
             # ── syllabi / schedules ──
             # timetable_code 重複チェック
@@ -531,6 +538,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
         await session.commit()
 
     _log(f"時間割DB: {tt_added}件追加, {tt_skipped}件スキップ（重複）")
+    _log(f"担当教員セクション(course_sections): {cs_added}件追加")
     if not auto_create and tt_unmatched:
         _log(f"科目DBに未登録のためスキップ: {tt_unmatched}件")
     if also_courses:
