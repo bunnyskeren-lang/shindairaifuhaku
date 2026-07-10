@@ -84,7 +84,7 @@ RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
 VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
 VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
 
-_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20", "Z": "14", "H": "13", "E": "05", "A": "10", "L": "01", "J": "04", "M": "0801"}
+_SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20", "Z": "14", "H": "13", "E": "05", "A": "10", "L": "01", "J": "04"}
 
 # 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで「T」「N」を
 # 共有しており数字部分の範囲でしか判別できない（programing files/import_syllabus.pyの
@@ -97,11 +97,15 @@ _ENGINEERING_RANGES = [
     (250, 299, "0925"),   # 工学部応用化学科
 ]
 
-# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く
-# （例: 医療創成工学科は "MB" のように英字が入る。医学科は数字がそのまま続く）
+# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く場合と、
+# 数字がそのまま続くが番号帯で学科が異なる場合がある
 _MEDICINE_SUBLETTERS = {
     "B": "0803",  # 医学部医療創成工学科
 }
+_MEDICINE_RANGES = [
+    (0, 399, "080201"),  # 医学部保健学科看護学専攻（暫定上限。他専攻データ確認後に調整）
+    (900, 999, "0801"),  # 医学部医学科
+]
 
 
 def make_syllabus_url(timetable_code: str) -> str:
@@ -117,11 +121,20 @@ def make_syllabus_url(timetable_code: str) -> str:
             if lo <= num <= hi:
                 return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
         return ""
-    if letter == "M" and len(timetable_code) >= 3 and timetable_code[2].isalpha():
-        path = _MEDICINE_SUBLETTERS.get(timetable_code[2].upper(), "")
-        if not path:
+    if letter == "M":
+        if len(timetable_code) >= 3 and timetable_code[2].isalpha():
+            path = _MEDICINE_SUBLETTERS.get(timetable_code[2].upper(), "")
+            if not path:
+                return ""
+            return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
+        digits = timetable_code[2:]
+        if not digits.isdigit():
             return ""
-        return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
+        num = int(digits)
+        for lo, hi, path in _MEDICINE_RANGES:
+            if lo <= num <= hi:
+                return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
+        return ""
     path = _SYLLABUS_FACULTY_PATH.get(letter, "")
     if not path:
         return ""

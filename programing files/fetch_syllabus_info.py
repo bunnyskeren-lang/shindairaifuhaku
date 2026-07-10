@@ -28,7 +28,6 @@ FACULTY_PATH: dict[str, str] = {
     "A": "10",  # 農学部
     "L": "01",  # 文学部
     "J": "04",  # 法学部
-    "M": "0801",  # 医学部医学科
 }
 
 # 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで「T」「N」を
@@ -43,11 +42,15 @@ ENGINEERING_RANGES: list[tuple[int, int, str]] = [
 ]
 ENGINEERING_LETTERS = {"T", "N"}
 
-# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く
-# （例: 医療創成工学科は "MB" のように英字が入る。医学科は数字がそのまま続く）
+# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く場合と、
+# 数字がそのまま続くが番号帯で学科が異なる場合がある
 MEDICINE_SUBLETTERS: dict[str, str] = {
     "B": "0803",  # 医学部医療創成工学科
 }
+MEDICINE_RANGES: list[tuple[int, int, str]] = [
+    (0, 399, "080201"),  # 医学部保健学科看護学専攻（暫定上限。他専攻データ確認後に調整）
+    (900, 999, "0801"),  # 医学部医学科
+]
 
 
 def load_env(env: str):
@@ -75,11 +78,20 @@ def make_syllabus_url(code: str) -> str | None:
             if lo <= num <= hi:
                 return SYLLABUS_BASE.format(path=path, code=code)
         return None
-    if letter == "M" and len(code) >= 3 and code[2].isalpha():
-        path = MEDICINE_SUBLETTERS.get(code[2].upper())
-        if not path:
+    if letter == "M":
+        if len(code) >= 3 and code[2].isalpha():
+            path = MEDICINE_SUBLETTERS.get(code[2].upper())
+            if not path:
+                return None
+            return SYLLABUS_BASE.format(path=path, code=code)
+        digits = code[2:]
+        if not digits.isdigit():
             return None
-        return SYLLABUS_BASE.format(path=path, code=code)
+        num = int(digits)
+        for lo, hi, path in MEDICINE_RANGES:
+            if lo <= num <= hi:
+                return SYLLABUS_BASE.format(path=path, code=code)
+        return None
     path = FACULTY_PATH.get(letter)
     if not path:
         return None
