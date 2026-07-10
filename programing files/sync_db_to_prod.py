@@ -30,10 +30,15 @@ if not DEV_URL or not PROD_URL:
     sys.exit(1)
 
 def _ssl():
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    return ctx
+    """ルートのcore/db_ssl.pyと同じくSupabaseのCA証明書をpinningして検証する。
+    DISABLE_SSL_VERIFY=1 で（緊急時の切り戻し用に）検証を無効化できる。"""
+    if os.environ.get("DISABLE_SSL_VERIFY", "").lower() in ("1", "true", "yes"):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    ca_path = os.path.join(_SCRIPT_DIR, "..", "certs", "supabase-ca.crt")
+    return ssl.create_default_context(cafile=ca_path)
 
 async def main():
     confirm = input("本番DBをdev DBの内容で上書きします。よろしいですか？ (yes/no): ")

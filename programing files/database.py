@@ -1,5 +1,6 @@
 import os
 import ssl
+from pathlib import Path
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -9,9 +10,20 @@ if _url.startswith("postgres://"):
 elif _url.startswith("postgresql://") and "+asyncpg" not in _url:
     _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-ssl_ctx = ssl.create_default_context()
-ssl_ctx.check_hostname = False
-ssl_ctx.verify_mode = ssl.CERT_NONE
+
+def _make_ssl_context() -> ssl.SSLContext:
+    """ルートのcore/db_ssl.pyと同じくSupabaseのCA証明書をpinningして検証する。
+    DISABLE_SSL_VERIFY=1 で（緊急時の切り戻し用に）検証を無効化できる。"""
+    if os.environ.get("DISABLE_SSL_VERIFY", "").lower() in ("1", "true", "yes"):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    ca_path = Path(__file__).resolve().parent.parent / "certs" / "supabase-ca.crt"
+    return ssl.create_default_context(cafile=str(ca_path))
+
+
+ssl_ctx = _make_ssl_context()
 
 engine = create_async_engine(
     _url,
