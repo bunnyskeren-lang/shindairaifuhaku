@@ -275,6 +275,35 @@ def is_kyoyo_department(department: str) -> bool:
     return department.strip().startswith(KYOYO_FACULTY)
 
 
+def default_classification(faculty_name: str) -> str | None:
+    """専門科目のclassification未指定時のデフォルト分類名。
+    学部名をそのまま使うとdisplay_ordersのparent_group（学部グループ名）と衝突し
+    LINE botのドリルダウンでその科目群が選べなくなるため、必ず接尾語を付ける。"""
+    return f"{faculty_name}専門科目" if faculty_name else None
+
+
+async def ensure_classification_bucket(session, cls_name: str, faculty_name: str) -> None:
+    """専門科目のclassificationがdisplay_orders(kind='classification')に無ければ、
+    学部名でグループ化された受け皿として自動作成する（未分類のまま埋もれるのを防ぐ）。"""
+    from sqlalchemy import select, func
+    from models import DisplayOrder
+
+    existing = (await session.execute(
+        select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == cls_name)
+    )).scalar_one_or_none()
+    if existing is not None:
+        return
+    max_order = (await session.execute(
+        select(func.max(DisplayOrder.sort_order)).where(DisplayOrder.kind == "classification")
+    )).scalar() or 0
+    session.add(DisplayOrder(
+        kind="classification", name=cls_name,
+        parent_group=faculty_name or None, faculty=faculty_name or "",
+        sort_order=max_order + 10,
+    ))
+    await session.flush()
+
+
 def classify_kyoyo(name: str) -> str | None:
     """教養科目の科目名から分類（教養(人文)等）を判定する。未知の科目名はNoneを返す。"""
     if name in _KYOYO_NAME_TO_CLASSIFICATION:
@@ -385,9 +414,10 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         )
                     else:
                         dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
+                        cls = classification or default_classification(dept_faculty)
                         subj = Subject(
                             name=c["name"],
-                            classification=classification or None,
+                            classification=cls,
                             category="専門",
                             faculty=dept_faculty or None,
                             reading="",
@@ -396,6 +426,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         )
                     session.add(subj)
                     await session.flush()
+                    if not is_kyoyo and cls:
+                        await ensure_classification_bucket(session, cls, dept_faculty)
                     c_added += 1
                 elif not is_tt:
                     continue
@@ -404,15 +436,18 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     continue
                 else:
                     # 時間割用だが科目が未登録 → subject を仮登録
+                    cls = classification or default_classification(faculty)
                     subj = Subject(
                         name=c["name"],
-                        classification=classification or None,
+                        classification=cls,
                         category="専門",
                         faculty=faculty or None,
                         reading="",
                     )
                     session.add(subj)
                     await session.flush()
+                    if not is_kyoyo and cls:
+                        await ensure_classification_bucket(session, cls, faculty)
 
             if not is_tt:
                 continue

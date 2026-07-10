@@ -195,6 +195,7 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 インポートスクリプト: `programing files/import_syllabus.py`
 - `--also-courses` を付けると `subjects`/`instructors`/`course_sections`（LINE bot用）にも登録
 - `--classification` / `--faculty` で分類・学部名を指定
+- **専門科目（教養教育院以外）は `--classification` 未指定でも「未分類」にはならない**: `faculty`（`--faculty`指定 or シラバスデータの所属列から自動推定）を元に `{学部名}専門科目`（例:「経営学部専門科目」）を自動で分類名に設定する。この分類が `display_orders`（kind='classification'）に無ければ `parent_group=学部名` で自動作成し、LINE bot「専門科目」→「{学部名} ▶」の中に自動的に表示される（分類名を学部名そのものにすると`parent_group`と文字列衝突しドリルダウンから選べなくなるため、必ず「専門科目」等の接尾語を付けること）
 
 ---
 
