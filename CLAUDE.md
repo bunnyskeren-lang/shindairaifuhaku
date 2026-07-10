@@ -178,9 +178,14 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 
 - ラベルは `<th>` ではなく `<td>`
 - 開講年次のラベルは **「対象年次」ではなく「開講年次」**（ここを間違えると全件空になる）
+- 単位数（`subjects.credits`）のみ、ラベル側の閉じタグが `</td>` ではなく `</th>` になっている
+  （例: `<td class="gaibu-syllabus-kihon">単位数</th><td>2.0</td>`）。正規表現でラベル直後の
+  閉じタグを固定せず、次の `<td>` を拾う書き方にすること
 - スクレイピングスクリプト: `programing files/fetch_syllabus_info.py`
   - `--env dev` で dev DB に書き込み、`--force` で既取得分も上書き
-  - 0.3秒スリープ/件、20件ごとにコミット
+  - 0.3秒スリープ/件、バッチ単位（`Syllabus`は20件、`Subject`は40件）でセッションを切り替えてコミット・失敗時リトライ
+  - 単位数（`subjects.credits`）は `run_credits()` が担当。`syllabi`レコードを持たない科目（前期のみ開講等）も
+    `course_sections.syllabus_url` 経由で辿るため、`run()`（target_grades/subject_category）とは独立して全件処理する
 
 ### 時間割DBテーブル構成（新スキーマ）
 

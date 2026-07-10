@@ -9,7 +9,9 @@
 所属列が「教養教育院」の行は科目名から分類（教養(人文)等）を自動判定するため、
 --classification/--faculty を指定する必要はない。他学部を一括登録する場合は
 --classification/--faculty で明示するか、無指定なら所属列から学部名を推定する。
-第3・第4クォーターおよび後期の科目のみインポートします。
+時間割（syllabi/schedules、マイ時間割に表示するコマ情報）は第3・第4クォーター・後期・集中の
+科目のみインポートします。担当教員（instructors/course_sections）は前期科目も含めて全学期分を
+作成します（前期のみ開講の科目で担当教員が空欄になるのを防ぐため）。
 """
 import asyncio
 import os
@@ -369,14 +371,9 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
 
     await init_db()
 
-    tt_added = 0
-    tt_skipped = 0
-    tt_unmatched = 0
-    c_added = 0
-    cs_added = 0
+    counts = {"tt_added": 0, "tt_skipped": 0, "tt_unmatched": 0, "c_added": 0, "cs_added": 0}
 
-    async with AsyncSessionLocal() as session:
-        for c in courses:
+    async def process_one(session, c):
             is_tt = _is_timetable_term(c["term"])
             is_kyoyo = is_kyoyo_department(c["department"])
 
@@ -403,6 +400,14 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     )).scalar_one_or_none()
                     if subj is not None:
                         break
+
+            if subj is None and is_kyoyo:
+                # 教養教育院由来だが、既存レコードがcategory="専門"（共通専門基礎科目等）として
+                # 意図的に区別されているケースがある。その場合は既存分類を壊さず再利用する
+                # （category="教養"限定で再検索すると見つからず、重複INSERTでunique制約違反になるため）
+                subj = (await session.execute(
+                    select(Subject).where(Subject.name == c["name"])
+                )).scalar_one_or_none()
 
             if subj is None:
                 if also_courses:
@@ -432,12 +437,12 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     await session.flush()
                     if not is_kyoyo and cls:
                         await ensure_classification_bucket(session, cls, dept_faculty)
-                    c_added += 1
+                    counts["c_added"] += 1
                 elif not is_tt:
-                    continue
+                    return
                 elif not auto_create:
-                    tt_unmatched += 1
-                    continue
+                    counts["tt_unmatched"] += 1
+                    return
                 else:
                     # 時間割用だが科目が未登録 → subject を仮登録
                     cls = classification or default_classification(faculty)
@@ -486,12 +491,12 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 )
                 session.add(cs)
                 await session.flush()
-                cs_added += 1
+                counts["cs_added"] += 1
             elif not cs.syllabus_url:
                 cs.syllabus_url = make_syllabus_url(c["timetable_code"])
 
             if not is_tt:
-                continue
+                return
 
             # ── syllabi / schedules ──
             # timetable_code 重複チェック
@@ -499,9 +504,9 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 select(Syllabus).where(Syllabus.timetable_code == c["timetable_code"])
             )).scalar_one_or_none()
             if existing_syl:
-                tt_skipped += 1
+                counts["tt_skipped"] += 1
                 _log(f"  [重複スキップ:コード既存] {c['name']} / {c['instructor']} / {c['term']} / コード:{c['timetable_code']}")
-                continue
+                return
 
             # 同一セクション×同一クォーターは1件のみ保持可能（DB制約）。
             # 同じ科目×同じ教員が同クォーターに複数コマ持つ場合は先勝ちでスキップする
@@ -513,9 +518,9 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 )
             )).scalar_one_or_none()
             if existing_term_syl is not None:
-                tt_skipped += 1
+                counts["tt_skipped"] += 1
                 _log(f"  [重複スキップ:同一セクション] {c['name']} / {c['instructor']} / {c['term']} / 既存コード:{existing_term_syl.timetable_code} 今回:{c['timetable_code']}")
-                continue
+                return
 
             syl = Syllabus(
                 course_section_id=cs.id,
@@ -533,16 +538,34 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     day_of_week=day,
                     period=period,
                 ))
-            tt_added += 1
+            counts["tt_added"] += 1
 
-        await session.commit()
+    # 数千件規模のバッチを1つのDBコネクションで抱え続けると、Supabase側の
+    # アイドルタイムアウト等で接続が切れて全体がロールバックすることがあるため、
+    # 一定件数ごとに新しいセッション（＝新しいコネクション）に切り替えてコミットする。
+    # 失敗したバッチだけ再試行すればよく、既に処理済みの行は重複チェックで安全にスキップされる。
+    BATCH_SIZE = 200
+    for batch_start in range(0, len(courses), BATCH_SIZE):
+        batch = courses[batch_start:batch_start + BATCH_SIZE]
+        for attempt in range(3):
+            try:
+                async with AsyncSessionLocal() as session:
+                    for c in batch:
+                        await process_one(session, c)
+                    await session.commit()
+                break
+            except Exception as e:
+                if attempt == 2:
+                    _log(f"  [バッチ失敗] rows {batch_start}-{batch_start + len(batch)}: {e!r}")
+                    raise
+                _log(f"  [バッチ再試行 {attempt + 1}/3] rows {batch_start}-{batch_start + len(batch)}: {e!r}")
 
-    _log(f"時間割DB: {tt_added}件追加, {tt_skipped}件スキップ（重複）")
-    _log(f"担当教員セクション(course_sections): {cs_added}件追加")
-    if not auto_create and tt_unmatched:
-        _log(f"科目DBに未登録のためスキップ: {tt_unmatched}件")
+    _log(f"時間割DB: {counts['tt_added']}件追加, {counts['tt_skipped']}件スキップ（重複）")
+    _log(f"担当教員セクション(course_sections): {counts['cs_added']}件追加")
+    if not auto_create and counts["tt_unmatched"]:
+        _log(f"科目DBに未登録のためスキップ: {counts['tt_unmatched']}件")
     if also_courses:
-        print(f"科目DB:  {c_added}件追加")
+        print(f"科目DB:  {counts['c_added']}件追加")
 
 
 def main():

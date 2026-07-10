@@ -168,47 +168,58 @@ async def run_credits(dry_run: bool = False, force: bool = False):
         subjects = (await session.execute(q)).scalars().all()
 
     print(f"単位数取得対象: {len(subjects)}件")
-    updated = skipped = not_found = 0
+    counts = {"updated": 0, "skipped": 0, "not_found": 0}
 
-    async with AsyncSessionLocal() as session:
-        for i, subj in enumerate(subjects):
-            cs = (await session.execute(
-                select(CourseSection).where(
-                    CourseSection.subject_id == subj.id,
-                    CourseSection.syllabus_url.isnot(None),
-                ).limit(1)
-            )).scalar_one_or_none()
-            if cs is None:
-                skipped += 1
-                continue
+    async def process_subject(session, subj):
+        cs = (await session.execute(
+            select(CourseSection).where(
+                CourseSection.subject_id == subj.id,
+                CourseSection.syllabus_url.isnot(None),
+            ).limit(1)
+        )).scalar_one_or_none()
+        if cs is None:
+            counts["skipped"] += 1
+            return
 
-            html_text = fetch_html(cs.syllabus_url)
-            if not html_text:
-                not_found += 1
-                continue
+        html_text = fetch_html(cs.syllabus_url)
+        if not html_text:
+            counts["not_found"] += 1
+            return
 
-            credits_raw = parse_credits(html_text)
+        credits_raw = parse_credits(html_text)
 
-            if dry_run:
-                print(f"  {subj.name}: credits={credits_raw!r}")
-            elif credits_raw:
-                try:
-                    s = await session.get(Subject, subj.id)
-                    s.credits = float(credits_raw)
-                    updated += 1
-                except ValueError:
-                    pass
+        if dry_run:
+            print(f"  {subj.name}: credits={credits_raw!r}")
+        elif credits_raw:
+            try:
+                s = await session.get(Subject, subj.id)
+                s.credits = float(credits_raw)
+                counts["updated"] += 1
+            except ValueError:
+                pass
+        time.sleep(0.3)  # サーバー負荷軽減
 
-            if (i + 1) % 20 == 0:
-                print(f"  進捗: {i+1}/{len(subjects)}")
-                if not dry_run:
-                    await session.commit()
-            time.sleep(0.3)  # サーバー負荷軽減
+    # 長時間の一括処理でSupabase側のアイドルタイムアウト等により接続が切れても
+    # 全体が失敗しないよう、一定件数ごとに新しいセッションへ切り替えてコミットする
+    BATCH_SIZE = 40
+    for batch_start in range(0, len(subjects), BATCH_SIZE):
+        batch = subjects[batch_start:batch_start + BATCH_SIZE]
+        for attempt in range(3):
+            try:
+                async with AsyncSessionLocal() as session:
+                    for subj in batch:
+                        await process_subject(session, subj)
+                    if not dry_run:
+                        await session.commit()
+                break
+            except Exception as e:
+                if attempt == 2:
+                    print(f"  [バッチ失敗] {batch_start}-{batch_start + len(batch)}: {e!r}")
+                    raise
+                print(f"  [バッチ再試行 {attempt + 1}/3] {batch_start}-{batch_start + len(batch)}: {e!r}")
+        print(f"  進捗: {min(batch_start + BATCH_SIZE, len(subjects))}/{len(subjects)}")
 
-        if not dry_run:
-            await session.commit()
-
-    print(f"単位数補完完了: 更新={updated}, スキップ={skipped}(セクション未登録), 404={not_found}")
+    print(f"単位数補完完了: 更新={counts['updated']}, スキップ={counts['skipped']}(セクション未登録), 404={counts['not_found']}")
 
 
 def main():
@@ -219,8 +230,16 @@ def main():
     parser.add_argument("--force", action="store_true", help="既取得分も上書き")
     args = parser.parse_args()
     load_env(args.env)
-    asyncio.run(run(args.dry_run, args.force))
-    asyncio.run(run_credits(args.dry_run, args.force))
+
+    async def _main():
+        # run()とrun_credits()を同一イベントループ内で実行する。
+        # asyncio.run()を2回に分けるとSQLAlchemyの非同期エンジンが保持する
+        # コネクションプールが前のイベントループに紐づいたままになり、
+        # 2回目の呼び出しで「Event loop is closed」になるため。
+        await run(args.dry_run, args.force)
+        await run_credits(args.dry_run, args.force)
+
+    asyncio.run(_main())
 
 
 if __name__ == "__main__":
