@@ -277,11 +277,9 @@ shindairaifuhaku/          ← Renderがデプロイするルート
     ├── import_syllabus.py         ← 時間割データをDB投入
     ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング
     ├── import_kyoyo_courses.py    ← 教養科目インポート
-    ├── update_senmon_classification.py ← 経営学部専門科目の分類コード更新
     ├── setup_richmenu.py / sync_richmenu.py ← LINEリッチメニュー設定・dev→本番同期
     ├── sync_db_to_prod.py         ← dev→本番DBの5テーブル同期
     ├── download_prod_backup.py    ← Supabase Storage上のDBバックアップをローカルbackups/へ差分ダウンロード（--env dev/prod）
-    ├── drop_old_tables.py         ← 旧スキーマテーブル削除（移行完了後用）
     ├── models.py / database.py    ← スクリプト群専用のDBアクセス層（ルートのmodels.pyとは別定義）
     └── .env / .env.dev            ← 環境変数（本番・dev）
 ```
