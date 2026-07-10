@@ -186,6 +186,8 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
   - 0.3秒スリープ/件、バッチ単位（`Syllabus`は20件、`Subject`は40件）でセッションを切り替えてコミット・失敗時リトライ
   - 単位数（`subjects.credits`）は `run_credits()` が担当。`syllabi`レコードを持たない科目（前期のみ開講等）も
     `course_sections.syllabus_url` 経由で辿るため、`run()`（target_grades/subject_category）とは独立して全件処理する
+  - `import_syllabus.py`の実行時に自動で呼ばれるため、単位数・開講年次の取得だけを目的に
+    単体で実行する必要は通常ない（既存分の再取得や`--force`上書きをしたい場合のみ単体実行する）
 
 ### 時間割DBテーブル構成（新スキーマ）
 
