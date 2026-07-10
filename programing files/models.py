@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
+from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
@@ -31,6 +31,9 @@ class UserProfile(Base):
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     student_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -44,19 +47,21 @@ class CreditRequirement(Base):
     required_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
+    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class UserSeisekiRaw(Base):
     __tablename__ = "user_seiseki_raw"
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    gpa: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Subject(Base):
     __tablename__ = "subjects"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -65,6 +70,7 @@ class Subject(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
+    hide_from_timetable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
 
 class Instructor(Base):
