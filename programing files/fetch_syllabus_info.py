@@ -52,6 +52,13 @@ MEDICINE_RANGES: list[tuple[int, int, str]] = [
     (900, 999, "0801"),  # 医学部医学科
 ]
 
+# 保健学科の専攻同士は数字部分の範囲が重なりうるため所属名を優先する
+# （import_syllabus.pyのDEPARTMENT_PATH_OVERRIDEと同じ対応表）
+DEPARTMENT_PATH_OVERRIDE: dict[str, str] = {
+    "医学部保健学科看護学専攻": "080201",
+    "医学部保健学科検査技術科学専攻": "080202",
+}
+
 
 def load_env(env: str):
     env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
@@ -65,9 +72,11 @@ def load_env(env: str):
             os.environ.setdefault(k.strip(), v.strip())
 
 
-def make_syllabus_url(code: str) -> str | None:
+def make_syllabus_url(code: str, department: str = "") -> str | None:
     if len(code) < 2:
         return None
+    if department in DEPARTMENT_PATH_OVERRIDE:
+        return SYLLABUS_BASE.format(path=DEPARTMENT_PATH_OVERRIDE[department], code=code)
     letter = code[1].upper()
     if letter in ENGINEERING_LETTERS:
         digits = code[2:]
@@ -164,7 +173,7 @@ async def run(dry_run: bool = False, force: bool = False):
 
     async with AsyncSessionLocal() as session:
         for i, c in enumerate(courses):
-            url = make_syllabus_url(c.timetable_code)
+            url = make_syllabus_url(c.timetable_code, c.department or "")
             if not url:
                 skipped += 1
                 continue

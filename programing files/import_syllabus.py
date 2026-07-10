@@ -53,6 +53,16 @@ MEDICINE_RANGES: list[tuple[int, int, str]] = [
     (900, 999, "0801"),  # 医学部医学科
 ]
 
+# 保健学科の専攻同士は数字部分の範囲が重なりうる（看護学専攻・検査技術科学専攻ともに
+# 000-300番台の数字を使う）ため、番号帯だけでは判別できない。import_syllabus.pyは
+# 元データの「所属」列を持っているため、ここに登録された所属名は範囲判定より優先して
+# 直接pathを決める。新しい専攻を追加する際は必ずこちらに追記すること
+# （番号帯が本当に重ならないと確認できない限り、MEDICINE_RANGESへの追加だけで済ませない）。
+DEPARTMENT_PATH_OVERRIDE: dict[str, str] = {
+    "医学部保健学科看護学専攻": "080201",
+    "医学部保健学科検査技術科学専攻": "080202",
+}
+
 # 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで
 # 「T」（現行カリキュラム）・「N」（旧カリキュラム科目、例: 創造思考ゼミナールⅠ-a（-21））を
 # 共有しており数字部分の範囲でしか判別できない（例: 建築学科は000-099番台、
@@ -68,9 +78,11 @@ ENGINEERING_RANGES: list[tuple[int, int, str]] = [
 ]
 ENGINEERING_LETTERS = {"T", "N"}
 
-def make_syllabus_url(code: str) -> str | None:
+def make_syllabus_url(code: str, department: str = "") -> str | None:
     if len(code) < 2:
         return None
+    if department in DEPARTMENT_PATH_OVERRIDE:
+        return SYLLABUS_BASE.format(path=DEPARTMENT_PATH_OVERRIDE[department], code=code)
     letter = code[1].upper()
     if letter in ENGINEERING_LETTERS:
         digits = code[2:]
@@ -547,13 +559,13 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 cs = CourseSection(
                     subject_id=subj.id,
                     instructor_id=instr.id,
-                    syllabus_url=make_syllabus_url(c["timetable_code"]),
+                    syllabus_url=make_syllabus_url(c["timetable_code"], c["department"]),
                 )
                 session.add(cs)
                 await session.flush()
                 counts["cs_added"] += 1
             elif not cs.syllabus_url:
-                cs.syllabus_url = make_syllabus_url(c["timetable_code"])
+                cs.syllabus_url = make_syllabus_url(c["timetable_code"], c["department"])
 
             if not is_tt:
                 return
