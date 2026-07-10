@@ -76,15 +76,16 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
         )
         instr_rows = await dev_conn.fetch("SELECT name, sort_order FROM instructors ORDER BY id")
         section_rows = await dev_conn.fetch(
-            "SELECT s.name AS subject_name, i.name AS instructor_name, "
-            "cs.syllabus_url "
+            "SELECT s.name AS subject_name, s.faculty AS subject_faculty, "
+            "i.name AS instructor_name, cs.syllabus_url "
             "FROM course_sections cs "
             "JOIN subjects s ON s.id = cs.subject_id "
             "JOIN instructors i ON i.id = cs.instructor_id "
             "ORDER BY cs.id"
         )
         credit_cat_rows = await dev_conn.fetch(
-            "SELECT s.name AS subject_name, scc.category_id, scc.credits "
+            "SELECT s.name AS subject_name, s.faculty AS subject_faculty, "
+            "scc.category_id, scc.credits "
             "FROM subject_credit_categories scc "
             "JOIN subjects s ON s.id = scc.subject_id "
             "ORDER BY scc.id"
@@ -103,7 +104,8 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
             )
             await session.execute(stmt)
 
-        # ── subjects: 自然キー = name（unique制約が無いため手動UPSERT） ──────
+        # ── subjects: 自然キー = (name, faculty)。学部をまたいで同名科目が実在するため
+        # nameだけでは名寄せできない（uq_subjects_name_facultyもこの複合キー） ──
         for r in subj_rows:
             values = {
                 "reading": r["reading"], "faculty": r["faculty"], "classification": r["classification"],
@@ -112,7 +114,7 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
                 "hide_from_timetable": r["hide_from_timetable"],
             }
             existing_id = (await session.execute(
-                select(Subject.id).where(Subject.name == r["name"])
+                select(Subject.id).where(Subject.name == r["name"], Subject.faculty == r["faculty"])
             )).scalar_one_or_none()
             if existing_id is not None:
                 await session.execute(
@@ -134,13 +136,18 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
 
         await session.flush()
 
-        subject_id_by_name = dict((await session.execute(select(Subject.name, Subject.id))).all())
+        subject_id_by_key = {
+            (name, faculty): sid
+            for name, faculty, sid in (
+                await session.execute(select(Subject.name, Subject.faculty, Subject.id))
+            ).all()
+        }
         instructor_id_by_name = dict((await session.execute(select(Instructor.name, Instructor.id))).all())
 
         # ── course_sections: 自然キー = (subject_id, instructor_id) ─────────
         cs_count = 0
         for r in section_rows:
-            sid = subject_id_by_name.get(r["subject_name"])
+            sid = subject_id_by_key.get((r["subject_name"], r["subject_faculty"]))
             iid = instructor_id_by_name.get(r["instructor_name"])
             if not sid or not iid:
                 continue
@@ -156,7 +163,7 @@ async def sync_master_data_from_dev(_: str = Depends(check_admin)):
         # ── subject_credit_categories: 自然キー = (subject_id, category_id) ─
         scc_count = 0
         for r in credit_cat_rows:
-            sid = subject_id_by_name.get(r["subject_name"])
+            sid = subject_id_by_key.get((r["subject_name"], r["subject_faculty"]))
             if not sid:
                 continue
             stmt = pg_insert(SubjectCreditCategory).values(

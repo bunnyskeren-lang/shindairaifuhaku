@@ -73,20 +73,25 @@ async def main():
                 )
         print(f"display_orders: {len(cls_rows)}件 upsert")
 
-        # ── 2. subjects: UPSERT by name ────────────────────────────────────────
+        # ── 2. subjects: UPSERT by (name, faculty) ─────────────────────────────
         # id直接UPSERTだと、devとprodのシーケンスが独立して進むため、本番管理画面から
         # 個別追加された科目のidとdevの新規科目idが偶然一致すると、無関係な科目が
-        # 無警告に上書きされる事故が起こりうる（instructorsと同じくnameで名寄せする）。
+        # 無警告に上書きされる事故が起こりうる（instructorsと同じく名前で名寄せする）。
+        # 「卒業研究」等、学部をまたいで同名科目が実在するため、名寄せキーはnameだけでなく
+        # (name, faculty)の組で行う（DB側もuq_subjects_name_facultyに変更済み）。
+        # 注意: faculty=NULLの行（共通専門基礎科目など2件）はPostgresの仕様上NULL同士が
+        # 一致しないため ON CONFLICT が発火せず、再同期のたびにINSERTが重複しうる。
+        # 該当は少数のためひとまず許容し、見つかった場合は手動で重複解消する。
         # course_sections/subject_credit_categories は下でdev id→prod idに変換して同期する。
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, classification, "
             "category, senmon_group, sort_order, term_type, credits "
             "FROM subjects ORDER BY id"
         )
-        dup_names = [name for name, cnt in
-                     Counter(r["name"] for r in subj_rows).items() if cnt > 1]
-        if dup_names:
-            raise RuntimeError(f"dev subjects.name に重複があるため同期を中止しました: {dup_names[:10]}")
+        dup_keys = [key for key, cnt in
+                    Counter((r["name"], r["faculty"]) for r in subj_rows).items() if cnt > 1]
+        if dup_keys:
+            raise RuntimeError(f"dev subjects.(name,faculty) に重複があるため同期を中止しました: {dup_keys[:10]}")
 
         async with prod.transaction():
             await prod.executemany(
@@ -95,8 +100,8 @@ async def main():
                   (name, reading, faculty, classification,
                    category, senmon_group, sort_order, term_type, credits)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                ON CONFLICT (name) DO UPDATE SET
-                  reading=EXCLUDED.reading, faculty=EXCLUDED.faculty,
+                ON CONFLICT (name, faculty) DO UPDATE SET
+                  reading=EXCLUDED.reading,
                   classification=EXCLUDED.classification,
                   category=EXCLUDED.category, senmon_group=EXCLUDED.senmon_group,
                   sort_order=EXCLUDED.sort_order,
@@ -109,14 +114,14 @@ async def main():
             )
         print(f"subjects: {len(subj_rows)}件 upsert")
 
-        # prod の subject name→id マッピングを取得（devとprodでidが異なりうる）
-        prod_subj_map: dict[str, int] = {
-            r["name"]: r["id"]
-            for r in await prod.fetch("SELECT id, name FROM subjects")
+        # prod の subject (name,faculty)→id マッピングを取得（devとprodでidが異なりうる）
+        prod_subj_map: dict[tuple, int] = {
+            (r["name"], r["faculty"]): r["id"]
+            for r in await prod.fetch("SELECT id, name, faculty FROM subjects")
         }
         dev_subj_id_to_prod_id: dict[int, int] = {
-            r["id"]: prod_subj_map[r["name"]]
-            for r in subj_rows if r["name"] in prod_subj_map
+            r["id"]: prod_subj_map[(r["name"], r["faculty"])]
+            for r in subj_rows if (r["name"], r["faculty"]) in prod_subj_map
         }
 
         # ── 3. instructors: UPSERT by name ────────────────────────────────────

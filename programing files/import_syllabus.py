@@ -35,13 +35,34 @@ FACULTY_PATH: dict[str, str] = {
     "Z": "14",  # 海洋政策科学部
     "E": "05",  # 経済学部
     "H": "13",  # 国際人間科学部
-    "T": "0921",  # 工学部建築学科
 }
+
+# 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで
+# 「T」（現行カリキュラム）・「N」（旧カリキュラム科目、例: 創造思考ゼミナールⅠ-a（-21））を
+# 共有しており数字部分の範囲でしか判別できない（例: 建築学科は000-099番台、
+# 市民工学科は100-149番台、電気電子工学科は150-199番台。TとNで番号帯とpathの
+# 対応は同じことを確認済み）。他学科を追加する際はこのリストに(下限, 上限, path)を追記すること。
+ENGINEERING_RANGES: list[tuple[int, int, str]] = [
+    (0, 99, "0921"),      # 工学部建築学科
+    (100, 149, "0922"),   # 工学部市民工学科
+    (150, 199, "0923"),   # 工学部電気電子工学科
+]
+ENGINEERING_LETTERS = {"T", "N"}
 
 def make_syllabus_url(code: str) -> str | None:
     if len(code) < 2:
         return None
-    path = FACULTY_PATH.get(code[1].upper())
+    letter = code[1].upper()
+    if letter in ENGINEERING_LETTERS:
+        digits = code[2:]
+        if not digits.isdigit():
+            return None
+        num = int(digits)
+        for lo, hi, path in ENGINEERING_RANGES:
+            if lo <= num <= hi:
+                return SYLLABUS_BASE.format(path=path, code=code)
+        return None
+    path = FACULTY_PATH.get(letter)
     if not path:
         return None
     return SYLLABUS_BASE.format(path=path, code=code)
@@ -376,12 +397,17 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
     async def process_one(session, c):
             is_tt = _is_timetable_term(c["term"])
             is_kyoyo = is_kyoyo_department(c["department"])
+            dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
 
             # ── subjects テーブル（LINE bot 用）──
-            # 教養教育院由来の行は、他学部の同名専門科目に誤って紐づかないよう category="教養" で絞り込む
+            # 教養教育院由来の行はcategory="教養"で、専門科目由来の行はfaculty（学部・学科）で
+            # 絞り込む。これが無いと「卒業研究」「国際関係論」等の汎用的な科目名が
+            # 別学部の同名科目に誤って相乗りしてしまう
             subj_filters = [Subject.name == c["name"]]
             if is_kyoyo:
                 subj_filters.append(Subject.category == "教養")
+            else:
+                subj_filters.append(Subject.faculty == dept_faculty)
             subj = (await session.execute(
                 select(Subject).where(*subj_filters)
             )).scalar_one_or_none()
@@ -395,6 +421,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     alt_filters = [Subject.name == alt_name]
                     if is_kyoyo:
                         alt_filters.append(Subject.category == "教養")
+                    else:
+                        alt_filters.append(Subject.faculty == dept_faculty)
                     subj = (await session.execute(
                         select(Subject).where(*alt_filters)
                     )).scalar_one_or_none()
@@ -422,7 +450,6 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                             credits=None,
                         )
                     else:
-                        dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
                         cls = classification or default_classification(dept_faculty)
                         subj = Subject(
                             name=c["name"],
@@ -445,18 +472,18 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     return
                 else:
                     # 時間割用だが科目が未登録 → subject を仮登録
-                    cls = classification or default_classification(faculty)
+                    cls = classification or default_classification(dept_faculty)
                     subj = Subject(
                         name=c["name"],
                         classification=cls,
                         category="専門",
-                        faculty=faculty or None,
+                        faculty=dept_faculty or None,
                         reading="",
                     )
                     session.add(subj)
                     await session.flush()
                     if not is_kyoyo and cls:
-                        await ensure_classification_bucket(session, cls, faculty)
+                        await ensure_classification_bucket(session, cls, dept_faculty)
 
             # Instructor / CourseSection は前期科目も含め全学期分を作成する
             # （担当教員が空欄になるのを防ぐため。時間割表示に使うsyllabi/schedulesのみ

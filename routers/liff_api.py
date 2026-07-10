@@ -349,9 +349,11 @@ async def submit(
         return _form_error("LINEログインの確認に失敗しました。LINEアプリの「レビュー投稿」から開き直してください")
 
     async with AsyncSessionLocal() as session:
+        # 学部をまたいで同名科目が実在しうるため、ここでは存在確認のみ行い
+        # .first()で1件だけ取得する（どの学部の科目かは後段の担当教員絞り込みで確定させる）
         subject = (await session.execute(
             select(Subject).where(Subject.name == course_name.strip())
-        )).scalar_one_or_none()
+        )).scalars().first()
         if not subject:
             return _form_error("指定された科目が見つかりません")
 
@@ -386,16 +388,16 @@ async def submit(
         instr_name = selected_instructor.strip()[:100] or None
         cs_obj = None
         if instr_name:
-            instr_obj = (await session.execute(
-                select(Instructor).where(Instructor.name == instr_name)
-            )).scalar_one_or_none()
-            if instr_obj:
-                cs_obj = (await session.execute(
-                    select(CourseSection).where(
-                        CourseSection.subject_id == subject.id,
-                        CourseSection.instructor_id == instr_obj.id,
-                    )
-                )).scalar_one_or_none()
+            # 科目名＋担当教員名でjoinし直すことで、学部をまたいで同名科目が存在する場合でも
+            # 正しいsubject（先頭取得のものとは限らない）とcourse_sectionを一意に特定する
+            row = (await session.execute(
+                select(Subject, CourseSection)
+                .join(CourseSection, CourseSection.subject_id == Subject.id)
+                .join(Instructor, Instructor.id == CourseSection.instructor_id)
+                .where(Subject.name == course_name.strip(), Instructor.name == instr_name)
+            )).first()
+            if row is not None:
+                subject, cs_obj = row
             # 修正理由: 教員名が指定されたのに一致するcourse_sectionが見つからない場合
             # （教員名変更・統合との競合など）、無条件で「科目の先頭のcourse_section」に
             # フォールバックしていたため、別教員のレビューとして紐づく恐れがあった。

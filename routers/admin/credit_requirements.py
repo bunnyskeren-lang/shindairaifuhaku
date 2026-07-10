@@ -70,8 +70,10 @@ async def admin_save_category_courses(cat_id: str, request: Request, _: str = De
             delete(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id)
         )
         for name in checked:
+            # 経営学部専用ページのため、経済学部等の同名科目に誤って紐づかないよう学部で絞り込む
             subj = (await session.execute(
-                select(Subject.id, Subject.credits).where(Subject.name == name)
+                select(Subject.id, Subject.credits)
+                .where(Subject.name == name, Subject.faculty.like("%経営学部%"))
             )).first()
             if subj:
                 session.add(SubjectCreditCategory(

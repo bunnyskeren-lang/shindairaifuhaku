@@ -284,12 +284,21 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE push_subscriptions DROP COLUMN IF EXISTS line_user_id"
         ))
-        # subjects.name の UNIQUE制約（dev→prod同期スクリプトが id直接コピーではなく
-        # name基準のON CONFLICT UPSERTを使うために必要。既存データに重複name行が
-        # 残っている環境ではunique_violationで追加自体をスキップする）
+        # subjects の UNIQUE制約は当初 name 単独だったが、「卒業研究」「国際関係論」等
+        # 学部をまたいで同名の専門科目が実在するケースで別学部の科目が誤って同じ行に
+        # 相乗りしてしまう問題があったため (name, faculty) の複合UNIQUEへ変更する。
+        # dev→prod同期スクリプト（sync_db_to_prod.py）のON CONFLICT句も(name, faculty)に
+        # 合わせて修正済み。既存データに重複(name, faculty)行が残っている環境では
+        # unique_violationで追加自体をスキップする
         await conn.execute(text("""
             DO $$ BEGIN
-              ALTER TABLE subjects ADD CONSTRAINT uq_subjects_name UNIQUE (name);
+              ALTER TABLE subjects DROP CONSTRAINT uq_subjects_name;
+            EXCEPTION WHEN undefined_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE subjects ADD CONSTRAINT uq_subjects_name_faculty UNIQUE (name, faculty);
             EXCEPTION WHEN duplicate_object OR duplicate_table OR unique_violation THEN NULL;
             END $$
         """))

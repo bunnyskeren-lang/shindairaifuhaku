@@ -412,9 +412,11 @@ async def admin_courses_add(
     faculty: str = Form(""),
 ):
     name_s = name.strip()
+    faculty_s = faculty.strip() or None
     async with AsyncSessionLocal() as session:
+        # 学部をまたいで同名科目が実在しうるため、重複判定はname単独ではなく(name, faculty)で行う
         existing = (await session.execute(
-            select(Subject).where(Subject.name == name_s)
+            select(Subject).where(Subject.name == name_s, Subject.faculty == faculty_s)
         )).scalar_one_or_none()
         if existing:
             return RedirectResponse(
@@ -428,7 +430,7 @@ async def admin_courses_add(
             reading=reading(name_s),
             term_type=term_type.strip() or None,
             credits=credits if credits else None,
-            faculty=faculty.strip() or None,
+            faculty=faculty_s,
         ))
         await session.commit()
     cache.invalidate_courses_cache()

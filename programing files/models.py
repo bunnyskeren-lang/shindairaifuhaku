@@ -60,8 +60,9 @@ class UserSeisekiRaw(Base):
 
 class Subject(Base):
     __tablename__ = "subjects"
+    __table_args__ = (UniqueConstraint("name", "faculty", name="uq_subjects_name_faculty"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
