@@ -1,10 +1,14 @@
 """
-シラバスデータインポートスクリプト
+シラバスデータインポートスクリプト（全学部・教養共通の入り口）
 使い方:
-  python -X utf8 import_syllabus.py <データファイル.txt> [--env dev|prod]
-  python -X utf8 import_syllabus.py <データファイル.txt> --env dev --also-courses --classification 共通専門科目 --faculty 経営学部
+  python -X utf8 import_syllabus.py <データファイル.txt> [<データファイル2.txt> ...] [--env dev|prod]
+  python -X utf8 import_syllabus.py ../data/syllabus_*.txt --env dev --also-courses
 
 データファイルはシラバスサイトからコピペしたテキストをそのまま保存したもの。
+1ファイルに複数学部・教養が混在していてもよい（所属列から判定する）。
+所属列が「教養教育院」の行は科目名から分類（教養(人文)等）を自動判定するため、
+--classification/--faculty を指定する必要はない。他学部を一括登録する場合は
+--classification/--faculty で明示するか、無指定なら所属列から学部名を推定する。
 第3・第4クォーターおよび後期の科目のみインポートします。
 """
 import asyncio
@@ -98,6 +102,196 @@ def normalize_term_type(term: str) -> str | None:
     return None
 
 
+# ══════════════════════════════════════════════
+# 教養科目の分類判定（旧import_kyoyo_courses.pyのCOURSE_MAPを移植）
+# 所属列が「教養教育院」の行はここで科目名から分類を自動判定する
+# ══════════════════════════════════════════════
+
+def _ab(names):
+    return [f"{n}{s}" for n in names for s in ('A', 'B')]
+
+def _abc(names):
+    return [f"{n}{s}" for n in names for s in ('A', 'B', 'C')]
+
+def _abcd(names):
+    return [f"{n}{s}" for n in names for s in ('A', 'B', 'C', 'D')]
+
+
+_KIBAN = [
+    "教養とは何か", "多言語と多文化の世界", "情報基礎", "データサイエンス基礎学",
+]
+
+_JINBUN = (
+    ["哲学", "論理学", "倫理学", "科学技術と倫理", "教育と人間形成"]
+    + _ab(["心理学", "教育学", "言語科学", "文学",
+           "芸術と文化", "芸術史", "美術史", "科学史",
+           "日本史", "東洋史", "アジア史", "西洋史", "考古学"])
+)
+
+_SHAKAI = (
+    ["社会生活と法", "国家と法", "政治と社会", "経済社会の発展",
+     "経営学", "社会学", "教育と社会", "地理学",
+     "社会思想史", "文化人類学", "越境する文化", "生活環境と技術"]
+    + _ab(["法学", "政治学", "経済学", "現代の経済", "現代社会論"])
+)
+
+_SHIZEN = (
+    ["現代物理学が描く世界", "身近な物理法則"]
+    + _ab(["統計学", "物理学", "化学", "生命科学",
+           "医学", "保健学", "健康科学", "惑星学", "情報学"])
+    + _abcd(["数学", "生物学"])
+)
+
+_SOGO = (
+    ["ESD論(持続可能な社会づくり)基礎",
+     "海への誘い", "瀬戸内海学入門", "阪神・淡路大震災と都市の安全",
+     "地域社会形成基礎論", "ひょうご神戸学", "日本酒学入門",
+     "神戸大学史", "神戸大学研究最前線", "社会基礎学",
+     "価値創造論基礎", "アントレプレナーシップ入門"]
+    + _ab(["ESD論(持続可能な社会づくり)", "環境学入門",
+           "ジェンダーとセクシュアリティ", "ボランティアと社会貢献活動",
+           "職業と学び-キャリアデザインを考える"])
+    + _abc(["価値創造論", "社会と人権"])
+)
+
+# 外国語第1: 英語 (0.5単位)
+_GAIGO1 = [
+    "Academic English Communication A1",
+    "Academic English Communication A2",
+    "Academic English Communication B1",
+    "Academic English Communication B2",
+    "Academic English Communication B1（ACE）",
+    "Academic English Communication B2（ACE）",
+    "Academic English Literacy A1",
+    "Academic English Literacy A2",
+    "Academic English Literacy B1",
+    "Academic English Literacy B2",
+    "Academic English Literacy B1（ACE）",
+    "Academic English Literacy B2（ACE）",
+]
+
+# 外国語第2: ドイツ語・フランス語・中国語・ロシア語の個別コース (0.5単位)
+_GAIGO2 = [
+    "ドイツ語初級A1", "ドイツ語初級A2", "ドイツ語初級B1", "ドイツ語初級B2",
+    "ドイツ語初級A3", "ドイツ語初級A4", "ドイツ語初級B3", "ドイツ語初級B4",
+    "ドイツ語初級SA3", "ドイツ語初級SA4", "ドイツ語初級SB3", "ドイツ語初級SB4",
+    "ドイツ語中級C1", "ドイツ語中級C2",
+    "フランス語初級A1", "フランス語初級A2", "フランス語初級B1", "フランス語初級B2",
+    "フランス語初級A3", "フランス語初級A4", "フランス語初級B3", "フランス語初級B4",
+    "フランス語初級SA3", "フランス語初級SA4", "フランス語初級SB3", "フランス語初級SB4",
+    "フランス語中級C1", "フランス語中級C2",
+    "中国語初級A1", "中国語初級A2", "中国語初級B1", "中国語初級B2",
+    "中国語初級A3", "中国語初級A4", "中国語初級B3", "中国語初級B4",
+    "中国語初級SA3", "中国語初級SA4", "中国語初級SB3", "中国語初級SB4",
+    "中国語中級C1", "中国語中級C2",
+    "ロシア語初級A1", "ロシア語初級A2", "ロシア語初級B1", "ロシア語初級B2",
+    "ロシア語初級A3", "ロシア語初級A4", "ロシア語初級B3", "ロシア語初級B4",
+    "ロシア語中級C1", "ロシア語中級C2",
+    "第二外国語（ドイツ語）T1", "第二外国語（ドイツ語）T2", "第二外国語（ドイツ語）T3",
+]
+
+# 外国語第3: セミナー形式 (1単位)
+_GAIGO3 = [
+    "外国語セミナーA（中国語）", "外国語セミナーB（中国語）",
+    "外国語セミナーC（中国語）", "外国語セミナーD（中国語）",
+    "外国語セミナーE（中国語）", "外国語セミナーF（中国語）",
+    "外国語セミナーA（ロシア語）", "外国語セミナーB（ロシア語）",
+    "外国語セミナーC（ロシア語）", "外国語セミナーD（ロシア語）",
+    "外国語セミナーE（ロシア語）", "外国語セミナーF（ロシア語）",
+    "多言語セミナー1（スペイン語）", "多言語セミナー2（スペイン語）",
+    "多言語セミナー3（スペイン語）", "多言語セミナー4（スペイン語）",
+    "多言語セミナー1（イタリア語）", "多言語セミナー2（イタリア語）",
+    "多言語セミナー3（イタリア語）", "多言語セミナー4（イタリア語）",
+    "多言語セミナー1（韓国語）", "多言語セミナー2（韓国語）",
+    "多言語セミナー3（韓国語）", "多言語セミナー4（韓国語）",
+]
+
+# 健康・スポーツ科学系
+_KENKO = [
+    "健康・スポーツ科学実習基礎",
+    "健康・スポーツ科学講義A", "健康・スポーツ科学講義B",
+    "健康・スポーツ科学実習1", "健康・スポーツ科学実習2",
+]
+
+_KYOYO_COURSE_MAP = [
+    (_KIBAN,  "教養(基盤)"),
+    (_JINBUN, "教養(人文)"),
+    (_SHAKAI, "教養(社会)"),
+    (_SHIZEN, "教養(自然)"),
+    (_SOGO,   "教養(総合)"),
+    (_GAIGO1, "教養(外国語第1)"),
+    (_GAIGO2, "教養(外国語第2)"),
+    (_GAIGO3, "教養(外国語第3)"),
+    (_KENKO,  "教養(健康・スポーツ)"),
+]
+
+_KYOYO_NAME_TO_CLASSIFICATION: dict[str, str] = {
+    name: cls for names, cls in _KYOYO_COURSE_MAP for name in names
+}
+
+# 完全一致リストに無い科目名向けのパターンフォールバック
+# （学籍番号条件・偶奇・T機械等のサフィックスが付いた科目名を吸収する）
+_KYOYO_PATTERN_MAP: list[tuple[re.Pattern, str]] = [
+    (re.compile(r'^力学基礎[12]'), "教養(自然)"),
+    (re.compile(r'^化学実験[12]$'), "教養(自然)"),
+    (re.compile(r'^基礎地学[12]$'), "教養(自然)"),
+    (re.compile(r'^基礎(有機化学|無機化学|物理化学)[12]$'), "教養(自然)"),
+    (re.compile(r'^微分積分(入門)?[1234]'), "教養(自然)"),
+    (re.compile(r'^線形代数(入門)?[1234]'), "教養(自然)"),
+    (re.compile(r'^数理統計[12]'), "教養(自然)"),
+    (re.compile(r'^熱力学基礎'), "教養(自然)"),
+    (re.compile(r'^物理学(入門|実験)'), "教養(自然)"),
+    (re.compile(r'^生物学(各論|実験|概論)'), "教養(自然)"),
+    (re.compile(r'^生物資源と農業'), "教養(自然)"),
+    (re.compile(r'^相対論基礎$'), "教養(自然)"),
+    (re.compile(r'^科学技術と社会'), "教養(自然)"),
+    (re.compile(r'^連続体力学基礎$'), "教養(自然)"),
+    (re.compile(r'^量子力学基礎$'), "教養(自然)"),
+    (re.compile(r'^電磁気学基礎[12]$'), "教養(自然)"),
+    (re.compile(r'^放射線科学$'), "教養(自然)"),
+    (re.compile(r'^情報科学[12]$'), "教養(自然)"),
+    (re.compile(r'^第三外国語（(ドイツ語|フランス語)）T[1234]$'), "教養(外国語第2)"),
+    (re.compile(r'^外国語セミナー[A-F]（(ドイツ語|フランス語|英語)）$'), "教養(外国語第3)"),
+    (re.compile(r'^多言語セミナー[1234]（(ウクライナ語|ハンガリー語|モンゴル語|ラテン語)）$'), "教養(外国語第3)"),
+    (re.compile(r'^グローバルチャレンジ実習'), "教養(総合)"),
+    (re.compile(r'^グローバル(リーダーシップ育成基礎演習|ラーニングスキルズ|エキスパートセミナー)$'), "教養(総合)"),
+    (re.compile(r'^国際協力'), "教養(総合)"),
+    (re.compile(r'^多文化共生のための日本語コミュニケーション$'), "教養(総合)"),
+    (re.compile(r'^多文化共修セミナー'), "教養(総合)"),
+    (re.compile(r'^複言語共修セミナー'), "教養(総合)"),
+    (re.compile(r'^海外留学のすすめ[AB]$'), "教養(総合)"),
+    (re.compile(r'^カタチの(文化学|自然学)'), "教養(総合)"),
+    (re.compile(r'^データサイエンス'), "教養(基盤)"),
+    (re.compile(r'^食と健康[AB]$'), "教養(健康・スポーツ)"),
+    (re.compile(r'^大学教育論$'), "教養(人文)"),
+    (re.compile(r'^心と行動$'), "教養(人文)"),
+]
+
+KYOYO_FACULTY = "教養教育院"
+KYOYO_UNCLASSIFIED = "教養(未分類)"
+
+
+def is_kyoyo_department(department: str) -> bool:
+    return department.strip().startswith(KYOYO_FACULTY)
+
+
+def classify_kyoyo(name: str) -> str | None:
+    """教養科目の科目名から分類（教養(人文)等）を判定する。未知の科目名はNoneを返す。"""
+    if name in _KYOYO_NAME_TO_CLASSIFICATION:
+        return _KYOYO_NAME_TO_CLASSIFICATION[name]
+    # 括弧・ダッシュの全角/半角表記ゆれを吸収して完全一致を再試行
+    for alt in {
+        name.translate(_PAREN_F2H).replace('－', '-'),
+        name.translate(_PAREN_H2F).replace('-', '－'),
+    } - {name}:
+        if alt in _KYOYO_NAME_TO_CLASSIFICATION:
+            return _KYOYO_NAME_TO_CLASSIFICATION[alt]
+    for pattern, cls in _KYOYO_PATTERN_MAP:
+        if pattern.match(name):
+            return cls
+    return None
+
+
 def parse_file(filepath: str) -> list[dict]:
     text = Path(filepath).read_text(encoding="utf-8", errors="ignore")
     courses = []
@@ -151,10 +345,15 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
     async with AsyncSessionLocal() as session:
         for c in courses:
             is_tt = _is_timetable_term(c["term"])
+            is_kyoyo = is_kyoyo_department(c["department"])
 
             # ── subjects テーブル（LINE bot 用）──
+            # 教養教育院由来の行は、他学部の同名専門科目に誤って紐づかないよう category="教養" で絞り込む
+            subj_filters = [Subject.name == c["name"]]
+            if is_kyoyo:
+                subj_filters.append(Subject.category == "教養")
             subj = (await session.execute(
-                select(Subject).where(Subject.name == c["name"])
+                select(Subject).where(*subj_filters)
             )).scalar_one_or_none()
 
             if subj is None:
@@ -163,24 +362,38 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     c["name"].translate(_PAREN_F2H),
                     c["name"].translate(_PAREN_H2F),
                 } - {c["name"]}:
+                    alt_filters = [Subject.name == alt_name]
+                    if is_kyoyo:
+                        alt_filters.append(Subject.category == "教養")
                     subj = (await session.execute(
-                        select(Subject).where(Subject.name == alt_name)
+                        select(Subject).where(*alt_filters)
                     )).scalar_one_or_none()
                     if subj is not None:
                         break
 
             if subj is None:
                 if also_courses:
-                    dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
-                    subj = Subject(
-                        name=c["name"],
-                        classification=classification or None,
-                        category="専門",
-                        faculty=dept_faculty or None,
-                        reading="",
-                        term_type=normalize_term_type(c["term"]),
-                        credits=None,
-                    )
+                    if is_kyoyo:
+                        subj = Subject(
+                            name=c["name"],
+                            classification=classify_kyoyo(c["name"]) or KYOYO_UNCLASSIFIED,
+                            category="教養",
+                            faculty=KYOYO_FACULTY,
+                            reading="",
+                            term_type=normalize_term_type(c["term"]),
+                            credits=None,
+                        )
+                    else:
+                        dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
+                        subj = Subject(
+                            name=c["name"],
+                            classification=classification or None,
+                            category="専門",
+                            faculty=dept_faculty or None,
+                            reading="",
+                            term_type=normalize_term_type(c["term"]),
+                            credits=None,
+                        )
                     session.add(subj)
                     await session.flush()
                     c_added += 1
@@ -290,22 +503,25 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("file", help="シラバスデータファイルのパス")
+    parser.add_argument("files", nargs="+", help="シラバスデータファイルのパス（複数指定可）")
     parser.add_argument("--env", choices=["dev", "prod"], default="dev")
     parser.add_argument("--dry-run", action="store_true", help="DBに書き込まず件数だけ表示")
     parser.add_argument("--also-courses", action="store_true",
-                        help="subjects テーブル（LINE bot 用）にも登録する")
+                        help="subjects テーブル（LINE bot 用）にも登録する。"
+                             "所属列が「教養教育院」の行は科目名から分類・学部を自動判定する")
     parser.add_argument("--classification", default="",
-                        help="subjects テーブルの分類名（例：共通専門科目）")
+                        help="subjects テーブルの分類名（例：共通専門科目）。教養科目には適用されない")
     parser.add_argument("--faculty", default="",
-                        help="subjects テーブルの学部名（例：経営学部）")
+                        help="subjects テーブルの学部名（例：経営学部）。教養科目には適用されない")
     parser.add_argument("--no-auto-create", action="store_true",
                         help="科目名がsubjectsに未登録の場合、仮登録せずスキップする")
     args = parser.parse_args()
 
     load_env(args.env)
 
-    courses = parse_file(args.file)
+    courses = []
+    for f in args.files:
+        courses.extend(parse_file(f))
     tt_courses = [c for c in courses if _is_timetable_term(c["term"])]
     print(f"パース結果: {len(courses)}件全学期 / うち時間割対象（第3・第4Q・後期・集中）: {len(tt_courses)}件")
 
