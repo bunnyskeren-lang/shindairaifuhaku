@@ -57,6 +57,8 @@ MEDICINE_RANGES: list[tuple[int, int, str]] = [
 DEPARTMENT_PATH_OVERRIDE: dict[str, str] = {
     "医学部保健学科看護学専攻": "080201",
     "医学部保健学科検査技術科学専攻": "080202",
+    "医学部保健学科理学療法学専攻": "080203",
+    "医学部保健学科作業療法学専攻": "080204",
 }
 
 
