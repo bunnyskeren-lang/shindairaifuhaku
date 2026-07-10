@@ -606,13 +606,27 @@ def main():
             print("中止しました")
             return
 
-    asyncio.run(import_courses(
-        courses,
-        also_courses=args.also_courses,
-        classification=args.classification,
-        faculty=args.faculty,
-        auto_create=not args.no_auto_create,
-    ))
+    async def _main_async():
+        await import_courses(
+            courses,
+            also_courses=args.also_courses,
+            classification=args.classification,
+            faculty=args.faculty,
+            auto_create=not args.no_auto_create,
+        )
+        # 取り込み直後に開講年次・科目分類・単位数も自動で補完する。
+        # run()/run_credits()はどちらも「まだ値が無いもの」だけを対象にするため、
+        # 今回追加した科目・時間割だけが処理され、全件再スキャンにはならない。
+        # import_courses()と同じイベントループ内で呼ぶ必要がある（別のasyncio.run()に
+        # 分けるとSQLAlchemyの非同期コネクションプールが前のループに紐づいたまま
+        # 「Event loop is closed」になるため）。
+        import fetch_syllabus_info as fsi
+        print("開講年次・科目分類を取得中...")
+        await fsi.run(dry_run=False, force=False)
+        print("単位数を取得中...")
+        await fsi.run_credits(dry_run=False, force=False)
+
+    asyncio.run(_main_async())
 
 if __name__ == "__main__":
     main()
