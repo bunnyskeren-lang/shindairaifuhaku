@@ -43,6 +43,12 @@ ENGINEERING_RANGES: list[tuple[int, int, str]] = [
 ]
 ENGINEERING_LETTERS = {"T", "N"}
 
+# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く
+# （例: 医療創成工学科は "MB" のように英字が入る。医学科は数字がそのまま続く）
+MEDICINE_SUBLETTERS: dict[str, str] = {
+    "B": "0803",  # 医学部医療創成工学科
+}
+
 
 def load_env(env: str):
     env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
@@ -69,6 +75,11 @@ def make_syllabus_url(code: str) -> str | None:
             if lo <= num <= hi:
                 return SYLLABUS_BASE.format(path=path, code=code)
         return None
+    if letter == "M" and len(code) >= 3 and code[2].isalpha():
+        path = MEDICINE_SUBLETTERS.get(code[2].upper())
+        if not path:
+            return None
+        return SYLLABUS_BASE.format(path=path, code=code)
     path = FACULTY_PATH.get(letter)
     if not path:
         return None

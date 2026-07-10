@@ -97,6 +97,12 @@ _ENGINEERING_RANGES = [
     (250, 299, "0925"),   # 工学部応用化学科
 ]
 
+# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く
+# （例: 医療創成工学科は "MB" のように英字が入る。医学科は数字がそのまま続く）
+_MEDICINE_SUBLETTERS = {
+    "B": "0803",  # 医学部医療創成工学科
+}
+
 
 def make_syllabus_url(timetable_code: str) -> str:
     if not timetable_code or len(timetable_code) < 2:
@@ -111,6 +117,11 @@ def make_syllabus_url(timetable_code: str) -> str:
             if lo <= num <= hi:
                 return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
         return ""
+    if letter == "M" and len(timetable_code) >= 3 and timetable_code[2].isalpha():
+        path = _MEDICINE_SUBLETTERS.get(timetable_code[2].upper(), "")
+        if not path:
+            return ""
+        return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
     path = _SYLLABUS_FACULTY_PATH.get(letter, "")
     if not path:
         return ""

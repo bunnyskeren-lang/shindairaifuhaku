@@ -38,7 +38,14 @@ FACULTY_PATH: dict[str, str] = {
     "A": "10",  # 農学部
     "L": "01",  # 文学部
     "J": "04",  # 法学部
-    "M": "0801",  # 医学部医学科（保健学科等は別pathの可能性あり、コード判明時に要確認）
+    "M": "0801",  # 医学部医学科
+}
+
+# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く
+# （例: 医療創成工学科は "MB" のように英字が入る。医学科は数字がそのまま続く）。
+# 保健学科の各専攻を追加する際もこの方式で判別できるか確認し、必要ならここに追記すること。
+MEDICINE_SUBLETTERS: dict[str, str] = {
+    "B": "0803",  # 医学部医療創成工学科
 }
 
 # 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで
@@ -69,6 +76,11 @@ def make_syllabus_url(code: str) -> str | None:
             if lo <= num <= hi:
                 return SYLLABUS_BASE.format(path=path, code=code)
         return None
+    if letter == "M" and len(code) >= 3 and code[2].isalpha():
+        path = MEDICINE_SUBLETTERS.get(code[2].upper())
+        if not path:
+            return None
+        return SYLLABUS_BASE.format(path=path, code=code)
     path = FACULTY_PATH.get(letter)
     if not path:
         return None

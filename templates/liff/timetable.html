@@ -547,6 +547,9 @@ const ENGINEERING_RANGES_JS = [
   [200, 249, '0924'],   // 工学部機械工学科
   [250, 299, '0925'],   // 工学部応用化学科
 ];
+// 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く
+// （例: 医療創成工学科は "MB" のように英字が入る。医学科は数字がそのまま続く）
+const MEDICINE_SUBLETTERS_JS = { 'B': '0803' };
 
 let userId = "";
 let myCourseIds = new Set();
@@ -569,6 +572,11 @@ function makeSyllabusUrl(code) {
       }
     }
     return null;
+  }
+  if (letter === 'M' && code.length >= 3 && /[A-Za-z]/.test(code[2])) {
+    const path = MEDICINE_SUBLETTERS_JS[code[2].toUpperCase()];
+    if (!path) return null;
+    return `https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/${path}/data/2026_${code}.html`;
   }
   const path = FACULTY_PATH_JS[letter];
   if (!path) return null;
