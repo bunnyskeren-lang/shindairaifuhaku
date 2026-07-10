@@ -49,6 +49,7 @@
 
 - `models.py` でクラスを追加・削除したら、**必ず `database.py` の `init_db()` 内の import も同時に更新すること**
 - 新しいモデルを追加した場合は import に追加、削除した場合は import から除去する
+- `programing files/models.py` はルートの `models.py` とは別定義（スクリプト群専用）。scriptsが触るテーブル（`subjects`/`instructors`/`course_sections`/`syllabi`/`schedules`等）の列を追加・変更・削除したら、`programing files/models.py` 側の対応するカラム定義も忘れずに確認・更新すること
 
 ## データ保護ルール
 
