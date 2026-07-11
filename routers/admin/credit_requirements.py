@@ -117,6 +117,12 @@ async def admin_keiei_update_requirements(request: Request, _: str = Depends(che
                     values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
                 except ValueError:
                     pass
+            if f"max_{cat_id}" in form:
+                max_val = form[f"max_{cat_id}"].strip()
+                try:
+                    values["max_credits"] = max(0, int(max_val)) if max_val else None
+                except ValueError:
+                    pass
             if f"note_{cat_id}" in form:
                 note_val = form[f"note_{cat_id}"].strip()
                 values["note"] = note_val or None
@@ -278,6 +284,12 @@ async def admin_sysinfo_update_requirements(request: Request, _: str = Depends(c
             if f"req_{cat_id}" in form:
                 try:
                     values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
+                except ValueError:
+                    pass
+            if f"max_{cat_id}" in form:
+                max_val = form[f"max_{cat_id}"].strip()
+                try:
+                    values["max_credits"] = max(0, int(max_val)) if max_val else None
                 except ValueError:
                     pass
             if f"note_{cat_id}" in form:

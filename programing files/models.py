@@ -48,6 +48,8 @@ class CreditRequirement(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    combined_of: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    max_credits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class UserSeisekiRaw(Base):

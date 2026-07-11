@@ -1124,11 +1124,13 @@ async function loadCreditRequirements() {
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     CREDIT_CATS = data.map(r => ({
-      id:    r.category_id,
-      group: r.group_name,
-      name:  r.label,
-      def:   r.required_credits,
-      note:  r.note || '',
+      id:       r.category_id,
+      group:    r.group_name,
+      name:     r.label,
+      def:      r.required_credits,
+      max:      r.max_credits,
+      combined: r.combined_of || null,
+      note:     r.note || '',
     }));
   } catch(e) {
     if (CREDIT_CATS.length === 0) {
@@ -1217,8 +1219,10 @@ function renderCreditRows() {
   container.innerHTML = '';
   let currentGroup = null;
   let currentGrid  = null;
-  let senmonGrid   = null;
-  CREDIT_CATS.forEach(cat => {
+  const gridsByGroup = {};
+  const leafCats     = CREDIT_CATS.filter(cat => !cat.combined);
+  const combinedCats = CREDIT_CATS.filter(cat => cat.combined);
+  leafCats.forEach(cat => {
     if (cat.group !== currentGroup) {
       const hdr = document.createElement('div');
       hdr.className = 'credits-group-header';
@@ -1228,9 +1232,9 @@ function renderCreditRows() {
       currentGrid.className = 'credits-grid';
       container.appendChild(currentGrid);
       currentGroup = cat.group;
-      if (cat.group === '専門科目') senmonGrid = currentGrid;
+      gridsByGroup[cat.group] = currentGrid;
     }
-    const req    = (_creditData[cat.id]?.required != null) ? _creditData[cat.id].required : cat.def;
+    const req    = (_creditData[cat.id]?.required != null) ? _creditData[cat.id].required : (cat.def || cat.max || 0);
     const earned = (_creditData[cat.id]?.earned   != null) ? _creditData[cat.id].earned   : 0;
     const item = document.createElement('div');
     item.className = 'credits-row-item';
@@ -1261,71 +1265,49 @@ function renderCreditRows() {
     }
     item.querySelector(`#req-${cat.id}`).addEventListener('input', updateCredits);
   });
-  // 経営学部専用の合計行
-  if ((window._userProfile || {}).faculty === '経営学部') {
-    const combinedStyle = 'background:#eef2ff;border-radius:8px;padding:8px 10px;margin-top:10px;border:1px solid #c7d2fe';
-    // 初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他 計98単位行
-    const row98 = document.createElement('div');
-    row98.className = 'credits-row-item';
-    row98.style.cssText = combinedStyle;
-    row98.innerHTML = `
+  // 合算行（複数区分の取得単位を合計して判定する行。DBのcombined_ofを持つ区分から動的に生成）
+  combinedCats.forEach(cat => {
+    const grid = gridsByGroup[cat.group] || currentGrid || container;
+    const row = document.createElement('div');
+    row.className = 'credits-row-item';
+    row.style.cssText = 'background:#eef2ff;border-radius:8px;padding:8px 10px;margin-top:10px;border:1px solid #c7d2fe';
+    row.innerHTML = `
       <span class="credits-cat-name" style="display:block;line-height:1.5">
-        <span style="font-weight:700;font-size:12px;color:#4338ca">選択必修 98単位計</span><br>
-        <span style="font-size:10px;color:#6366f1;font-weight:500">初年次＋第1群＋第2群＋グローバル＋第3群<br>＋関連科目＋その他必要と認める科目</span>
+        <span style="font-weight:700;font-size:12px;color:#4338ca">${cat.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
       </span>
       <div class="credits-inputs">
         <div class="credits-mini-field">
           <div class="credits-mini-label">必要</div>
-          <div class="credits-earn-val">98</div>
+          <div class="credits-earn-val">${cat.def}</div>
         </div>
         <div class="credits-mini-field">
           <div class="credits-mini-label">取得</div>
-          <div class="credits-earn-val" id="earn-combined-98">0</div>
+          <div class="credits-earn-val" id="earn-${cat.id}">0</div>
         </div>
         <div class="credits-mini-field">
           <div class="credits-mini-label">残り</div>
-          <div class="credits-remain-box" id="remain-combined-98"></div>
+          <div class="credits-remain-box" id="remain-${cat.id}"></div>
         </div>
       </div>
     `;
-    container.appendChild(row98);
-    // 第2群＋第3群＋グローバル 合計行
-    if (senmonGrid) {
-      const row = document.createElement('div');
-      row.className = 'credits-row-item';
-      row.style.cssText = combinedStyle;
-      row.innerHTML = `
-        <span class="credits-cat-name" style="font-weight:700;font-size:11px;color:#4338ca">第2群＋第3群＋グローバル計</span>
-        <div class="credits-inputs">
-          <div class="credits-mini-field">
-            <div class="credits-mini-label">必要</div>
-            <div class="credits-earn-val">55</div>
-          </div>
-          <div class="credits-mini-field">
-            <div class="credits-mini-label">取得</div>
-            <div class="credits-earn-val" id="earn-combined-senmon">0</div>
-          </div>
-          <div class="credits-mini-field">
-            <div class="credits-mini-label">残り</div>
-            <div class="credits-remain-box" id="remain-combined-senmon"></div>
-          </div>
-        </div>
-      `;
-      senmonGrid.appendChild(row);
-    }
-  }
+    grid.appendChild(row);
+  });
 }
 
 function updateCredits() {
   let totalEarned = 0;
   let kyotsuEarned = 0;
-  CREDIT_CATS.forEach(cat => {
+  const leafCats     = CREDIT_CATS.filter(cat => !cat.combined);
+  const combinedCats = CREDIT_CATS.filter(cat => cat.combined);
+  leafCats.forEach(cat => {
     const req = parseInt(document.getElementById(`req-${cat.id}`)?.value) || 0;
     // sonota は DOM 値でなく base 値を使う（overflow の二重加算を防ぐ）
     const earned = cat.id === 'sonota'
       ? (_creditData.sonota_base || 0)
       : (parseInt(document.getElementById(`earn-${cat.id}`)?.textContent) || 0);
     if (cat.id === 'kyotsu') kyotsuEarned = earned;
+    // max_credits がある区分は、卒業要件・合算行への算入をその上限で頭打ちにする
+    const cappedEarned = (cat.max != null) ? Math.min(earned, cat.max) : earned;
     const remainEl = document.getElementById(`remain-${cat.id}`);
     if (remainEl) {
       if (req === 0) {
@@ -1336,17 +1318,19 @@ function updateCredits() {
         remainEl.textContent = String(req - earned); remainEl.className = 'credits-remain-box';
       }
     }
-    totalEarned += earned;
+    totalEarned += cappedEarned;
     if (!_creditData[cat.id]) _creditData[cat.id] = {};
     _creditData[cat.id].required = req;
-    _creditData[cat.id].earned   = earned;
+    _creditData[cat.id].earned   = cappedEarned;
   });
   // 経営学部専用：共通専門基礎科目が6単位超えた分（上限2）をその他必要と認める科目へ
   if ((window._userProfile || {}).faculty === '経営学部') {
     const kyotsuOverflow = Math.min(Math.max(0, kyotsuEarned - 6), 2);
     if (kyotsuOverflow > 0) {
+      const sonotaCat  = CREDIT_CATS.find(c => c.id === 'sonota');
       const sonotaBase = _creditData.sonota_base || 0;
-      const sonotaAdj  = sonotaBase + kyotsuOverflow;
+      let   sonotaAdj  = sonotaBase + kyotsuOverflow;
+      if (sonotaCat?.max != null) sonotaAdj = Math.min(sonotaAdj, sonotaCat.max);
       const sonotaEl   = document.getElementById('earn-sonota');
       if (sonotaEl) sonotaEl.textContent = sonotaAdj;
       const sonotaReq  = parseInt(document.getElementById('req-sonota')?.value) || 0;
@@ -1359,28 +1343,18 @@ function updateCredits() {
       totalEarned += kyotsuOverflow;
       if (_creditData.sonota) _creditData.sonota.earned = sonotaAdj;
     }
-    // 第2群＋第3群＋グローバル 合計チェック（totalEarned には加算しない）
-    const combinedEarned = (_creditData.senmon2?.earned || 0) + (_creditData.senmon3?.earned || 0) + (_creditData.global?.earned || 0);
-    const combinedEl = document.getElementById('earn-combined-senmon');
-    if (combinedEl) combinedEl.textContent = combinedEarned;
-    const combinedRem = document.getElementById('remain-combined-senmon');
-    if (combinedRem) {
-      if (combinedEarned > 55) { combinedRem.textContent = '✓'; combinedRem.className = 'credits-remain-box done'; }
-      else { combinedRem.textContent = String(55 - combinedEarned); combinedRem.className = 'credits-remain-box'; }
-    }
-    // 専門98単位合計チェック（初年次＋第1群＋第2群＋グローバル＋第3群＋関連科目＋その他）
-    const combined98 = (_creditData.shonen?.earned || 0) + (_creditData.senmon1?.earned || 0)
-      + (_creditData.senmon2?.earned || 0) + (_creditData.global?.earned || 0)
-      + (_creditData.senmon3?.earned || 0) + (_creditData.kanren?.earned || 0)
-      + (_creditData.sonota?.earned || 0);
-    const el98 = document.getElementById('earn-combined-98');
-    if (el98) el98.textContent = combined98;
-    const rem98 = document.getElementById('remain-combined-98');
-    if (rem98) {
-      if (combined98 > 98) { rem98.textContent = '✓'; rem98.className = 'credits-remain-box done'; }
-      else { rem98.textContent = String(98 - combined98); rem98.className = 'credits-remain-box'; }
-    }
   }
+  // 合算行（複数区分の取得単位を合計して判定。totalEarned には加算しない＝二重計上防止）
+  combinedCats.forEach(cat => {
+    const combinedEarned = cat.combined.reduce((sum, memberId) => sum + (_creditData[memberId]?.earned || 0), 0);
+    const earnEl = document.getElementById(`earn-${cat.id}`);
+    if (earnEl) earnEl.textContent = combinedEarned;
+    const remainEl = document.getElementById(`remain-${cat.id}`);
+    if (remainEl) {
+      if (combinedEarned > cat.def) { remainEl.textContent = '✓'; remainEl.className = 'credits-remain-box done'; }
+      else { remainEl.textContent = String(cat.def - combinedEarned); remainEl.className = 'credits-remain-box'; }
+    }
+  });
   document.getElementById('credits-total-earned').textContent = totalEarned;
   const totalReqEl = document.getElementById('credits-total-req');
   const totalReq   = parseInt(totalReqEl.value) || 0;

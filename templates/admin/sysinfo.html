@@ -37,15 +37,20 @@
         <th style="width:90px">グループ</th>
         <th style="width:60px">並び</th>
         <th style="width:70px">必要単位</th>
+        <th style="width:70px">上限</th>
         <th>ⓘ 注記テキスト</th>
         <th style="width:48px"></th>
       </tr>
       {% for r in reqs %}
       <tr>
-        <td><input type="text" class="label-input" name="label_{{ r.category_id }}" value="{{ r.label }}"></td>
+        <td>
+          <input type="text" class="label-input" name="label_{{ r.category_id }}" value="{{ r.label }}">
+          {% if r.combined_of %}<div style="font-size:10px;color:#7e22ce;margin-top:2px">Σ合算: {{ r.combined_of | join('+') }}</div>{% endif %}
+        </td>
         <td><input type="text" class="group-input" name="group_{{ r.category_id }}" value="{{ r.group_name }}" list="group-list"></td>
         <td><input type="number" class="sort-input" name="sort_{{ r.category_id }}" value="{{ r.sort_order }}" min="0" max="9999"></td>
         <td><input type="number" class="req-input" name="req_{{ r.category_id }}" value="{{ r.required_credits }}" min="0" max="200"></td>
+        <td><input type="number" class="req-input" name="max_{{ r.category_id }}" value="{{ r.max_credits if r.max_credits is not none else '' }}" min="0" max="200" placeholder="—"></td>
         <td><textarea class="note-input" name="note_{{ r.category_id }}" placeholder="（注記なし）">{{ r.note or '' }}</textarea></td>
         <td>
           <button type="button" class="btn-del"
@@ -55,7 +60,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="empty">単位要件がまだ登録されていません</td></tr>
+      <tr><td colspan="7" class="empty">単位要件がまだ登録されていません</td></tr>
       {% endfor %}
     </table>
     {% if reqs %}

@@ -102,6 +102,12 @@ class CreditRequirement(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    # 複数区分の合計に対する合算制約を表す行の場合、対象category_idのリスト（例: 第2群+第3群+グローバル=55単位）
+    # NULLなら通常の区分（自区分の取得単位のみで判定）
+    combined_of: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=None)
+    # 取得単位数がこれを超えても卒業要件には超過分を算入しない上限（例: その他必要と認める科目=12単位）
+    # NULLなら上限なし
+    max_credits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
 
 
 class UserSeisekiRaw(Base):

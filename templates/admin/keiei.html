@@ -51,15 +51,20 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
         <th style="width:90px">グループ</th>
         <th style="width:60px">並び</th>
         <th style="width:70px">必要単位</th>
+        <th style="width:70px">上限</th>
         <th>ⓘ 注記テキスト</th>
         <th style="width:48px"></th>
       </tr>
       {% for r in reqs %}
       <tr>
-        <td><input type="text" class="label-input" name="label_{{ r.category_id }}" value="{{ r.label }}"></td>
+        <td>
+          <input type="text" class="label-input" name="label_{{ r.category_id }}" value="{{ r.label }}">
+          {% if r.combined_of %}<div style="font-size:10px;color:#7e22ce;margin-top:2px">Σ合算: {{ r.combined_of | join('+') }}</div>{% endif %}
+        </td>
         <td><input type="text" class="group-input" name="group_{{ r.category_id }}" value="{{ r.group_name }}" list="group-list"></td>
         <td><input type="number" class="sort-input" name="sort_{{ r.category_id }}" value="{{ r.sort_order }}" min="0" max="9999"></td>
         <td><input type="number" class="req-input" name="req_{{ r.category_id }}" value="{{ r.required_credits }}" min="0" max="200"></td>
+        <td><input type="number" class="req-input" name="max_{{ r.category_id }}" value="{{ r.max_credits if r.max_credits is not none else '' }}" min="0" max="200" placeholder="—"></td>
         <td><textarea class="note-input" name="note_{{ r.category_id }}" placeholder="（注記なし）">{{ r.note or '' }}</textarea></td>
         <td>
           <button type="button" class="btn-del"
@@ -113,6 +118,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
   <p style="font-size:12px;color:#6b7280;margin-top:0">各カテゴリに属する科目をチェックしてください（マイ時間割の単位取得状況の判定に使用）</p>
   {% if kyotsu_candidates %}
   {% for r in reqs %}
+  {% if not r.combined_of %}
   <details style="margin-bottom:10px">
     <summary style="cursor:pointer">{{ r.label }} <span id="{{ r.category_id }}-status" style="font-size:11px;color:#6b7280;margin-left:6px"></span></summary>
     <div style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 4px">
@@ -126,6 +132,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
       {% endfor %}
     </div>
   </details>
+  {% endif %}
   {% else %}
   <p style="color:#9ca3af;font-size:13px">単位要件カテゴリがありません</p>
   {% endfor %}

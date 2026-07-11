@@ -1,3 +1,4 @@
+import json
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
@@ -306,3 +307,37 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_seiseki_raw ADD COLUMN IF NOT EXISTS gpa DOUBLE PRECISION"
         ))
+        # 単位チェッカー: 複数区分の合計に対する合算制約（例:第2群+第3群+グローバル=55単位）と、
+        # 取得単位数の上限（例:その他必要と認める科目=12単位まで）に対応する列
+        await conn.execute(text(
+            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS combined_of JSONB"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS max_credits INTEGER"
+        ))
+        # sonota(その他必要と認める科目)はrequired_creditsを上限の代用にしていたが、
+        # 学生便覧上は必要最低数ではなく上限（自由選択・12単位以内）のためmax_creditsへ移す
+        await conn.execute(text("""
+            UPDATE credit_requirements SET max_credits = required_credits, required_credits = 0
+            WHERE category_id = 'sonota' AND max_credits IS NULL AND required_credits > 0
+        """))
+        # 経営学部: 学生便覧「経営学部規則 別表第2 履修要件」に明記された合算制約
+        # （第2群+第3群+グローバル科目群=55単位以上、専門科目全体=98単位以上）を追加
+        _keiei_combined = [
+            ("senmon_55", "第2群＋第3群＋グローバル科目群 計", "専門科目", 85, 55,
+             ["senmon2", "senmon3", "global"]),
+            ("senmon_98", "初年次＋第1群＋第2群＋第3群＋グローバル科目群 計", "専門科目", 95, 98,
+             ["shonen", "senmon1", "senmon2", "senmon3", "global"]),
+        ]
+        for cat_id, label, group_name, sort_order, req, members in _keiei_combined:
+            await conn.execute(text(
+                "INSERT INTO credit_requirements "
+                "  (category_id, label, group_name, sort_order, required_credits, faculty, combined_of) "
+                "VALUES (:cat, :label, :gname, :sort, :req, '経営学部', CAST(:members AS JSONB)) "
+                "ON CONFLICT (category_id) DO UPDATE SET "
+                "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order, "
+                "  required_credits = EXCLUDED.required_credits, combined_of = EXCLUDED.combined_of"
+            ), {
+                "cat": cat_id, "label": label, "gname": group_name,
+                "sort": sort_order, "req": req, "members": json.dumps(members),
+            })

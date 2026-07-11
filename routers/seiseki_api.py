@@ -123,6 +123,8 @@ async def api_credit_requirements(faculty: str = Query("経営学部"), departme
             "group_name":       r.group_name,
             "sort_order":       r.sort_order,
             "required_credits": r.required_credits,
+            "max_credits":      r.max_credits,
+            "combined_of":      r.combined_of,
             "note":             r.note or "",
             "approved_courses": courses_by_cat.get(r.category_id, []),
         }
