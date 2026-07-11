@@ -92,8 +92,10 @@ async def init_db():
             "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS department TEXT"
         ))
         # (cat_id, req, note, label, group_name, sort_order)
+        # kyoyo_kei（人文系・自然系をまとめた1区分）は2026-07-11、jinbun/shizen/shakai/sougou
+        # の4区分＋合算行（jinbun_shizen/kyoyo_all）に置き換え済み（このファイル末尾の
+        # 「経営学部: 教養科目（人文系・自然系・社会系・総合系）」ブロック参照）
         defaults = [
-            ("kyoyo_kei",   12, "人文科学系・自然科学系・社会科学系・総合科学系の4系に分類される総合教養科目が対象。", "系科目（人文・自然・社会・総合）", "教養科目", 10),
             ("kyoyo_kiban",  4, "基礎教養科目（情報リテラシー等）と情報科目を合算したもの。",                       "基盤系",                          "教養科目", 20),
             ("gaigo1",       4, "Academic English Communication / Literacy など英語科目が対象。",                  "外国語第1",                       "教養科目", 30),
             ("gaigo2",       4, "ドイツ語・フランス語・中国語・韓国語・ロシア語など第二外国語が対象。",             "外国語第2",                       "教養科目", 40),
@@ -114,10 +116,10 @@ async def init_db():
                 "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order "
                 "WHERE credit_requirements.label = ''"
             ), {"cat": cat_id, "req": req, "note": note, "label": label, "gname": group_name, "sort": sort_order})
-        await conn.execute(text(
-            "UPDATE credit_requirements SET required_credits = 12 "
-            "WHERE category_id = 'sonota' AND required_credits = 0"
-        ))
+        # sonota(その他必要と認める科目)の上限12単位は2026-07-11、required_creditsの代用ではなく
+        # max_creditsで正しく表現するよう変更済み（このファイル後方の該当UPDATE文を参照）。
+        # 旧: "UPDATE credit_requirements SET required_credits = 12 WHERE category_id='sonota' AND required_credits=0"
+        # は毎起動ごとにmax_credits化した後のrequired_credits=0を12へ巻き戻してしまうバグがあったため削除。
         # display_orders(kind='credit_requirement_group') の初期シード
         # 各(faculty, group_name)の現行sort_order最小値を引き継ぐ（未登録の場合のみ）
         await conn.execute(text(
@@ -340,4 +342,33 @@ async def init_db():
             ), {
                 "cat": cat_id, "label": label, "gname": group_name,
                 "sort": sort_order, "req": req, "members": json.dumps(members),
+            })
+        # 経営学部: 教養科目（人文系・自然系・社会系・総合系）を成績表の新カリキュラム区分に合わせて
+        # 4区分に分割し、「人文系+自然系=8単位以上」「4区分合計=12単位」の合算制約を追加。
+        # 旧 kyoyo_kei(人文系・自然系をまとめた1区分)/syakaisogo(社会系・総合系)は
+        # subject_credit_categoriesの参照が無いことを確認済みのため削除して置き換える
+        await conn.execute(text(
+            "DELETE FROM credit_requirements WHERE category_id IN ('kyoyo_kei', 'syakaisogo')"
+        ))
+        _keiei_kyoyo = [
+            ("jinbun", "人文系", "教養科目", 10, 0, None),
+            ("shizen", "自然系", "教養科目", 11, 0, None),
+            ("shakai", "社会系", "教養科目", 12, 0, None),
+            ("sougou", "総合系", "教養科目", 13, 0, None),
+            ("jinbun_shizen", "人文系＋自然系 計", "教養科目", 14, 8, ["jinbun", "shizen"]),
+            ("kyoyo_all", "人文系＋自然系＋社会系＋総合系 計", "教養科目", 16, 12,
+             ["jinbun", "shizen", "shakai", "sougou"]),
+        ]
+        for cat_id, label, group_name, sort_order, req, members in _keiei_kyoyo:
+            await conn.execute(text(
+                "INSERT INTO credit_requirements "
+                "  (category_id, label, group_name, sort_order, required_credits, faculty, combined_of) "
+                "VALUES (:cat, :label, :gname, :sort, :req, '経営学部', CAST(:members AS JSONB)) "
+                "ON CONFLICT (category_id) DO UPDATE SET "
+                "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order, "
+                "  required_credits = EXCLUDED.required_credits, combined_of = EXCLUDED.combined_of"
+            ), {
+                "cat": cat_id, "label": label, "gname": group_name,
+                "sort": sort_order, "req": req,
+                "members": json.dumps(members) if members else None,
             })

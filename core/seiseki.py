@@ -100,7 +100,16 @@ def extract_seiseki_raw(text: str) -> dict:
     for line in text.splitlines():
         sec_m = _re.search(r'【(.*?)】', line)
         if sec_m:
-            current_sec = sec_m.group(1)
+            # 修正理由: 部分一致(in)だと「共通専門基礎科目」が「専門科目」を含んでしまい、
+            # 誤って専門科目欄に混入していたため、前後の空白を除いた完全一致にする
+            current_sec = sec_m.group(1).strip()
+            continue
+        # 教養科目の内訳（基盤系/人文系/自然系/総合系/外国語系）は【】でなく（）の小見出しで
+        # 区切られる。行全体が「（見出し）」のみの場合だけ更新する
+        # （成績明細行の右側に印字される集計欄「教養科目（基盤系） 4.0」等を誤検出しないため）
+        sub_m = _re.match(r'^[（(]([^）)]+)[）)]\s*$', line.strip())
+        if sub_m:
+            current_sec = sub_m.group(1).strip()
             continue
         m = course_re.match(line.strip())
         if not m:
@@ -113,7 +122,7 @@ def extract_seiseki_raw(text: str) -> dict:
                 "is_english": 'Academic English' in name,
                 "is_foreign": any(name.startswith(p) for p in _GAIGO_FOREIGN),
             })
-        elif '専門科目' in current_sec:
+        elif current_sec == '専門科目':
             senmon_courses.append({"name": name, "credits": cr})
 
     def _summary(label: str) -> float:
@@ -124,12 +133,19 @@ def extract_seiseki_raw(text: str) -> dict:
         "gaigo_courses": gaigo_courses,
         "senmon_courses": senmon_courses,
         "summaries": {
+            # 旧カリキュラム（教養科目を人文/自然/社会/総合の内訳なしで一括集計していた表記）
             "総合教養科目":   _summary('総合教養科目'),
             "基礎教養科目":   _summary('基礎教養科目'),
             "情報科目":       _summary('情報科目'),
+            "外国語科目":     _summary('外国語科目'),
+            # 新カリキュラム（区分表に「教養科目（○○系）」として内訳が個別に印字される）
+            "人文系":         _summary('教養科目（人文系）'),
+            "自然系":         _summary('教養科目（自然系）'),
+            "社会系":         _summary('教養科目（社会系）'),
+            "総合系":         _summary('教養科目（総合系）'),
+            "基盤系":         _summary('教養科目（基盤系）'),
             "共通専門基礎科目": _summary('共通専門基礎科目'),
             "専門科目":       _summary('専門科目'),
-            "外国語科目":     _summary('外国語科目'),
         },
     }
 
@@ -162,9 +178,19 @@ def classify_seiseki_raw(raw: dict) -> dict:
 
     senmon_total = s.get("専門科目", 0.0)
     senmon3 = max(0.0, round(senmon_total - shonen - senmon1 - senmon2 - global_c, 1))
+
+    # 教養科目（基盤系）は新カリキュラムの区分名。旧カリキュラム（基礎教養科目＋情報科目）の
+    # 成績表しか無い場合はそちらにフォールバックする
+    kiban = s.get("基盤系", 0.0) or (s.get("基礎教養科目", 0.0) + s.get("情報科目", 0.0))
+
     return {
-        "kyoyo_kei":   round(s.get("総合教養科目", 0.0), 1),
-        "kyoyo_kiban": round(s.get("基礎教養科目", 0.0) + s.get("情報科目", 0.0), 1),
+        # 人文系・自然系・社会系・総合系は新カリキュラムの成績表が区分別に集計値を印字するため、
+        # そのまま読み取る（旧カリキュラムの「総合教養科目」一括集計はもう使わない）
+        "jinbun":      round(s.get("人文系", 0.0), 1),
+        "shizen":      round(s.get("自然系", 0.0), 1),
+        "shakai":      round(s.get("社会系", 0.0), 1),
+        "sougou":      round(s.get("総合系", 0.0), 1),
+        "kyoyo_kiban": round(kiban, 1),
         "gaigo1":  round(gaigo1, 1), "gaigo2":  round(gaigo2, 1),
         "kyotsu":  round(s.get("共通専門基礎科目", 0.0), 1),
         "shonen":  round(shonen, 1),  "senmon1": round(senmon1, 1),
