@@ -536,7 +536,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             # （担当教員が空欄になるのを防ぐため。時間割表示に使うsyllabi/schedulesのみ
             #   第3・第4クォーター・後期・集中に限定する）
 
-            # Instructor を find-or-create（日本語名は空白を除去して統一する。
+            # Instructor を find-or-create（半角/全角スペースを除去して統一する。
             # 実際の正規化は models.Instructor の @validates("name") が保証するが、
             # 検索用の値もここで揃えておかないと既存レコードにヒットせず重複INSERTになる）
             instructor_name = normalize_instructor_name(c["instructor"])
