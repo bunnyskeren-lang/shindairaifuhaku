@@ -30,6 +30,15 @@ _TERM_ORDER = case(
 )
 
 
+@router.get("/api/timetable/years")
+async def api_timetable_years():
+    async with AsyncSessionLocal() as session:
+        years = (await session.execute(
+            select(Syllabus.year).distinct().order_by(Syllabus.year)
+        )).scalars().all()
+        return {"years": years}
+
+
 @router.get("/api/timetable/profile")
 async def api_timetable_profile_get(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
     user_id = await verify_liff_id_token(x_liff_id_token)
@@ -168,6 +177,7 @@ async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-To
                     "term": syl.academic_term,
                     "credits": _credits_from_term(syl.academic_term),
                     "timetable_code": syl.timetable_code or "",
+                    "subject_category": syl.subject_category or "",
                     "slots": [],
                 }
             result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})
