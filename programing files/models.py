@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+import re as _re
 from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
@@ -10,6 +11,21 @@ def normalize_instructor_name(name: str) -> str:
     if not name:
         return name
     return name.replace(' ', '').replace('　', '')
+
+
+# core/config.pyのnormalize_subject_nameと同じロジック（scripts専用のmodels.pyのため複製）。
+# 半角ローマ数字表記（I, II, III...）をDB上の表記（全角ローマ数字）へ統一する。
+_HALF_TO_FULL_ROMAN = {
+    'IX': 'Ⅸ', 'IV': 'Ⅳ', 'VIII': 'Ⅷ', 'VII': 'Ⅶ', 'VI': 'Ⅵ',
+    'III': 'Ⅲ', 'II': 'Ⅱ', 'I': 'Ⅰ', 'V': 'Ⅴ', 'X': 'Ⅹ',
+}
+_ROMAN_NUMERAL_RE = _re.compile(r'(?<![A-Za-z0-9])(IX|IV|VIII|VII|VI|III|II|I|V|X)(?![A-Za-z0-9])')
+
+
+def normalize_subject_name(name: str) -> str:
+    if not name:
+        return name
+    return _ROMAN_NUMERAL_RE.sub(lambda m: _HALF_TO_FULL_ROMAN[m.group(1)], name)
 
 
 class MessageLog(Base):
@@ -80,6 +96,10 @@ class Subject(Base):
     term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
     hide_from_timetable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
+
+    @validates("name")
+    def _normalize_name(self, key, value):
+        return normalize_subject_name(value)
 
 
 class Instructor(Base):

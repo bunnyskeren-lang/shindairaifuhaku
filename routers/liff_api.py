@@ -16,6 +16,7 @@ from core.config import (
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
 from core.rate_limit import rate_limiter
+from core.required_subjects import auto_register_required_subjects
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, CourseSectionView, Instructor, Review, Subject, Syllabus, UserProfile
@@ -249,15 +250,17 @@ async def register_profile(
             profile.grade = grade
             profile.department = department
         else:
-            session.add(UserProfile(
+            profile = UserProfile(
                 line_user_id=uid,
                 name=name[:100],
                 student_id=sid,
                 faculty=faculty,
                 grade=grade,
                 department=department,
-            ))
+            )
+            session.add(profile)
         try:
+            await auto_register_required_subjects(session, uid, profile)
             await session.commit()
         except Exception:
             await session.rollback()

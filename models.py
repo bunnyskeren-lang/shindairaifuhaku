@@ -4,7 +4,7 @@ from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, Numeric,
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
-from core.config import normalize_instructor_name
+from core.config import normalize_instructor_name, normalize_subject_name
 
 
 class MessageLog(Base):
@@ -139,6 +139,10 @@ class Subject(Base):
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
     hide_from_timetable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
+    @validates("name")
+    def _normalize_name(self, key, value):
+        return normalize_subject_name(value)
+
 
 class Instructor(Base):
     __tablename__ = "instructors"
@@ -222,6 +226,23 @@ class UserSyllabus(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class RequiredSubject(Base):
+    """学部・学科・学年ごとの必修科目マスタ。時間割登録時に自動でuser_syllabiへ登録する対象を管理する。
+    student_id_parity は学籍番号末尾1桁の偶奇でクラスが分かれる科目（機械工学科の実習/製図等）向けの絞り込み。
+    NULLなら全員が対象。"""
+    __tablename__ = "required_subjects"
+    __table_args__ = (UniqueConstraint("faculty", "department", "grade", "subject_id", name="uq_required_subjects"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    faculty: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    department: Mapped[str] = mapped_column(Text, nullable=False)
+    grade: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id_parity: Mapped[Optional[str]] = mapped_column(String(4), nullable=True, default=None)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

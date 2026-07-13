@@ -51,6 +51,10 @@
 - 新しいモデルを追加した場合は import に追加、削除した場合は import から除去する
 - `programing files/models.py` はルートの `models.py` とは別定義（スクリプト群専用）。scriptsが触るテーブル（`subjects`/`instructors`/`course_sections`/`syllabi`/`schedules`等）の列を追加・変更・削除したら、`programing files/models.py` 側の対応するカラム定義も忘れずに確認・更新すること
 
+### 科目名の表記統一
+
+`Subject.name` は `@validates("name")`（`core.config.normalize_subject_name`）で、半角ローマ数字表記（`I`/`II`/`III`...）を全角ローマ数字（`Ⅰ`/`Ⅱ`/`Ⅲ`...）へ自動変換する（前後が英数字の場合は対象外、`AI`や`TOEIC`等の誤爆を防止）。`programing files/models.py` 側にも同じロジックを複製済み。新しい正規化ルールを追加する際は両方の `models.py` を更新すること。
+
 ## データ保護ルール
 
 - **投稿されたレビュー（reviews テーブル）は、ユーザーから明示的な削除指示がない限り絶対に消去しないこと**

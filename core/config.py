@@ -45,6 +45,9 @@ except ValueError:
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
+# マイ時間割・必修科目自動登録が対象とする年度
+DEFAULT_ACADEMIC_YEAR = 2026
+
 # 登録フォーム用の学部・学科選択肢（templates/liff/timetable.html のプロフィール学部プルダウンと同じ11学部）
 FACULTIES = [
     "文学部", "国際人間科学部", "法学部", "経済学部", "経営学部",
@@ -158,6 +161,21 @@ def normalize_instructor_name(name: str) -> str:
     if not name:
         return name
     return name.replace(' ', '').replace('　', '')
+
+
+# 科目名の「I」「II」等の半角ローマ数字表記をDB上の表記（全角ローマ数字）へ統一する。
+# 前後が英数字でない場合のみ変換対象とし、"AI"や"TOEIC"等の単語中のI/II誤爆を防ぐ。
+_HALF_TO_FULL_ROMAN = {
+    'IX': 'Ⅸ', 'IV': 'Ⅳ', 'VIII': 'Ⅷ', 'VII': 'Ⅶ', 'VI': 'Ⅵ',
+    'III': 'Ⅲ', 'II': 'Ⅱ', 'I': 'Ⅰ', 'V': 'Ⅴ', 'X': 'Ⅹ',
+}
+_ROMAN_NUMERAL_RE = _re.compile(r'(?<![A-Za-z0-9])(IX|IV|VIII|VII|VI|III|II|I|V|X)(?![A-Za-z0-9])')
+
+
+def normalize_subject_name(name: str) -> str:
+    if not name:
+        return name
+    return _ROMAN_NUMERAL_RE.sub(lambda m: _HALF_TO_FULL_ROMAN[m.group(1)], name)
 
 
 def cls_order(name: str) -> int:
