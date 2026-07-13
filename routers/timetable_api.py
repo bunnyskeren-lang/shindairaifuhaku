@@ -9,6 +9,8 @@ from models import CourseSection, Instructor, Schedule, Subject, Syllabus, UserP
 
 router = APIRouter()
 
+DEFAULT_ACADEMIC_YEAR = 2026
+
 
 async def _require_liff_user(id_token: str) -> str:
     uid = await verify_liff_id_token(id_token or "")
@@ -36,6 +38,10 @@ async def api_timetable_years():
         years = (await session.execute(
             select(Syllabus.year).distinct().order_by(Syllabus.year)
         )).scalars().all()
+        # シラバスがまだ無い次年度も先行して選べるように、最大年度の翌年を常に候補へ加える
+        next_year = (years[-1] if years else DEFAULT_ACADEMIC_YEAR) + 1
+        if next_year not in years:
+            years.append(next_year)
         return {"years": years}
 
 
