@@ -29,34 +29,22 @@
 </head>
 <body>
   <div class="box">
-    <p id="msg">生協アプリを起動しています...</p>
+    <p id="msg">生協アプリのストアページへ移動します...</p>
     <a id="store-link" class="store-btn" href="#">ストアを開く</a>
   </div>
 
   <script>
-    // 注意: APP_SCHEME は正式なドキュメントが存在せず未検証の推測値。
-    // 実機で起動しなければ FALLBACK_MS 後に自動でストアページへ移動する（既存の安全な挙動を維持）。
-    const APP_SCHEME = "daigaku://";
+    // 正式なディープリンクスキームは非公開・未特定のため、推測スキームへの遷移は行わない
+    // （無効なスキームへのアクセスはOS側の確認ダイアログが余計に増えるだけで開けないため）。
+    // 正しいスキームが判明したら、ここで location.href = "scheme://" を試行してから
+    // フォールバックする方式に戻すこと。
     const IOS_STORE_URL = "https://apps.apple.com/jp/app/%E5%A4%A7%E5%AD%A6%E7%94%9F%E5%8D%94%E3%82%A2%E3%83%97%E3%83%AA-%E5%85%AC%E5%BC%8F/id1604711094";
     const ANDROID_STORE_URL = "https://play.google.com/store/apps/details?id=jp.coremobile.daigaku";
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const storeUrl = isIOS ? IOS_STORE_URL : ANDROID_STORE_URL;
-    const FALLBACK_MS = 1500;
 
     document.getElementById('store-link').href = storeUrl;
-
-    let fallbackTimer = setTimeout(() => {
-      location.replace(storeUrl);
-    }, FALLBACK_MS);
-
-    // アプリが開いてこのページがバックグラウンドに回ったらフォールバックを中止
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        clearTimeout(fallbackTimer);
-      }
-    });
-
-    location.href = APP_SCHEME;
+    location.replace(storeUrl);
   </script>
 </body>
 </html>
