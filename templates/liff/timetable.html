@@ -1396,7 +1396,9 @@ function updateCredits() {
     const cappedEarned = (cat.max != null) ? Math.min(earned, cat.max) : earned;
     const remainEl = document.getElementById(`remain-${cat.id}`);
     if (remainEl) {
-      if (req === 0) {
+      if (req === 0 && earned === 0) {
+        remainEl.textContent = '0'; remainEl.className = 'credits-remain-box';
+      } else if (req === 0) {
         remainEl.textContent = ''; remainEl.className = 'credits-remain-box blank';
       } else if (earned > req) {
         remainEl.textContent = '✓'; remainEl.className = 'credits-remain-box done';
