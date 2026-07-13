@@ -146,6 +146,27 @@ def parse_subject_category(html_text: str) -> str:
     return re.sub(r'<[^>]+>', '', m.group(1)).strip()
 
 
+def parse_numbering_code(html_text: str) -> str | None:
+    """科目ナンバリングコード（例: B1BB202）を返す"""
+    m = re.search(r'ナンバリングコード.*?([A-Z]\d[A-Z]{2}\d{3})', html_text, re.DOTALL)
+    return m.group(1) if m else None
+
+
+# ナンバリングコード末尾3桁 → 経営学部専門科目の群（経営学部規則 別表第2・科目ナンバリング一覧表より）
+# 100(初年次セミナー)は科目名の「初年次セミナー」判定で別途拾えるためここでは対象外。
+# 203/303はグローバル科目群と①〜⑥を除く第3群科目の両方で使われ番号だけでは判別不能、
+# 204は他学部生のみ履修を許可された科目で本学部生の卒業要件区分には該当しないため、
+# いずれも自動確定せず管理画面での目視レビューに委ねる。
+_KEIEI_NC_SUFFIX_TO_CLASSIFICATION: dict[str, str] = {
+    "101": "第1群科目",
+    "202": "第2群科目",
+    "103": "第3群科目",  # 会計プロフェッショナル育成プログラム授業科目
+    "300": "第3群科目",  # 経営学入門演習
+    "400": "第3群科目",  # 研究指導（第3群科目に含む）
+    "403": "第3群科目",  # 卒業論文・上級科目（第3群科目に含む）
+}
+
+
 def parse_credits(html_text: str) -> str:
     """単位数を返す（例："2.0"）。
     実際のHTML: <td class="gaibu-syllabus-kihon" align="center">単位数</th><td>2.0</td>
@@ -281,6 +302,88 @@ async def run_credits(dry_run: bool = False, force: bool = False):
     print(f"単位数補完完了: 更新={counts['updated']}, スキップ={counts['skipped']}(セクション未登録), 404={counts['not_found']}")
 
 
+async def run_senmon_classification(dry_run: bool = False, force: bool = False):
+    """経営学部専門科目の群(第1群/第2群/第3群/グローバル)をシラバスのナンバリングコードから
+    自動判定し、classification に反映する。前期のみ開講等でsyllabiレコードを持たない科目も
+    run_credits()と同様にcourse_sections.syllabus_url経由で辿る。
+    「初年次セミナー」は科目名判定で解決済み(core/seiseki.py)のため対象外。
+    203/303/204等ナンバリングだけでは群を確定できない科目、ページ取得に失敗した科目は
+    自動更新せず「要レビュー」として一覧表示するのみに留める(/admin/keieiで手動判定できる)。"""
+    from sqlalchemy import select
+    from database import AsyncSessionLocal, init_db
+    from models import Subject, CourseSection
+
+    await init_db()
+
+    async with AsyncSessionLocal() as session:
+        q = select(Subject).where(Subject.faculty.like("%経営学部%"))
+        if not force:
+            q = q.where(Subject.classification == "経営学部専門科目")
+        subjects = (await session.execute(q)).scalars().all()
+    subjects = [s for s in subjects if "初年次セミナー" not in s.name]
+
+    print(f"群判定対象: {len(subjects)}件")
+    counts = {"updated": 0, "review": 0, "skipped": 0, "not_found": 0}
+    review_list: list[str] = []
+
+    async def process_subject(session, subj):
+        cs = (await session.execute(
+            select(CourseSection).where(
+                CourseSection.subject_id == subj.id,
+                CourseSection.syllabus_url.isnot(None),
+            ).limit(1)
+        )).scalar_one_or_none()
+        if cs is None:
+            counts["skipped"] += 1
+            return
+
+        html_text = fetch_html(cs.syllabus_url)
+        if not html_text:
+            counts["not_found"] += 1
+            review_list.append(f"{subj.name}（404）")
+            return
+
+        nc = parse_numbering_code(html_text)
+        suffix = nc[-3:] if nc and len(nc) >= 3 else ""
+        new_cls = _KEIEI_NC_SUFFIX_TO_CLASSIFICATION.get(suffix)
+
+        if dry_run:
+            print(f"  {subj.name}: numbering_code={nc!r} → {new_cls!r}")
+        elif new_cls:
+            s = await session.get(Subject, subj.id)
+            s.classification = new_cls
+            counts["updated"] += 1
+        else:
+            counts["review"] += 1
+            review_list.append(f"{subj.name}（コード: {nc or '取得不可'}）")
+        time.sleep(0.3)  # サーバー負荷軽減
+
+    BATCH_SIZE = 20
+    for batch_start in range(0, len(subjects), BATCH_SIZE):
+        batch = subjects[batch_start:batch_start + BATCH_SIZE]
+        for attempt in range(3):
+            try:
+                async with AsyncSessionLocal() as session:
+                    for subj in batch:
+                        await process_subject(session, subj)
+                    if not dry_run:
+                        await session.commit()
+                break
+            except Exception as e:
+                if attempt == 2:
+                    print(f"  [バッチ失敗] {batch_start}-{batch_start + len(batch)}: {e!r}")
+                    raise
+                print(f"  [バッチ再試行 {attempt + 1}/3] {batch_start}-{batch_start + len(batch)}: {e!r}")
+        print(f"  進捗: {min(batch_start + BATCH_SIZE, len(subjects))}/{len(subjects)}")
+
+    print(f"群判定完了: 更新={counts['updated']}, 要レビュー={counts['review']}, "
+          f"スキップ={counts['skipped']}(セクション未登録), 404={counts['not_found']}")
+    if review_list:
+        print("要レビュー一覧（/admin/keiei で手動判定してください）:")
+        for name in review_list:
+            print(f"  - {name}")
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -291,12 +394,13 @@ def main():
     load_env(args.env)
 
     async def _main():
-        # run()とrun_credits()を同一イベントループ内で実行する。
-        # asyncio.run()を2回に分けるとSQLAlchemyの非同期エンジンが保持する
+        # run()・run_credits()・run_senmon_classificationを同一イベントループ内で実行する。
+        # asyncio.run()を分けるとSQLAlchemyの非同期エンジンが保持する
         # コネクションプールが前のイベントループに紐づいたままになり、
-        # 2回目の呼び出しで「Event loop is closed」になるため。
+        # 2回目以降の呼び出しで「Event loop is closed」になるため。
         await run(args.dry_run, args.force)
         await run_credits(args.dry_run, args.force)
+        await run_senmon_classification(args.dry_run, args.force)
 
     asyncio.run(_main())
 

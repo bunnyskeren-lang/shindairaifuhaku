@@ -145,6 +145,16 @@ _all_review_stats_cache_at: float = 0.0
 # senmon_group キャッシュ（PDFパーサーが同期的に参照する）
 _senmon_name_to_group: dict[str, str] = {}
 
+# 経営学部専門科目の classification ラベル→群名。senmon_group（管理画面での手動上書き）が
+# 未設定の科目は、シラバスの科目ナンバリングコード由来で既に正しく入っている classification から
+# 群を自動導出する（ハードコードされた科目名リストより優先）
+_KEIEI_CLASSIFICATION_TO_GROUP = {
+    "第1群科目":     "第1群",
+    "第2群科目":     "第2群",
+    "第3群科目":     "第3群",
+    "グローバル科目群": "グローバル",
+}
+
 
 async def get_courses_cached():
     global _course_by_name, _course_list_all, _course_cache_at
@@ -246,9 +256,15 @@ async def reload_senmon_cache():
     global _senmon_name_to_group
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
-            select(Subject.name, Subject.senmon_group).where(Subject.senmon_group.isnot(None))
+            select(Subject.name, Subject.senmon_group, Subject.classification)
         )).all()
-    _senmon_name_to_group = {r[0]: r[1] for r in rows}
+    mapping: dict[str, str] = {}
+    for name, senmon_group, classification in rows:
+        if senmon_group:
+            mapping[name] = senmon_group
+        elif classification in _KEIEI_CLASSIFICATION_TO_GROUP:
+            mapping[name] = _KEIEI_CLASSIFICATION_TO_GROUP[classification]
+    _senmon_name_to_group = mapping
 
 
 def get_senmon_group(name: str) -> str | None:
