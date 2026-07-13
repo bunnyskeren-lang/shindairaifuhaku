@@ -1060,24 +1060,28 @@ function renderCourseList(courses) {
     );
   }
 
-  // 時間割コードの2文字目で学部専門科目を判定（'B'=経営、'X'=システム情報）
+  // subject_category が「教養科目」以外は専門科目。時間割コードの2文字目で
+  // 経営('B')・システム情報('X')専門科目を判定し、それ以外は所属学科(department)ごとに分ける
   function _courseType(c) {
-    if (!c.timetable_code || c.timetable_code.length < 2) return 'kyoyo';
-    const ch = c.timetable_code[1].toUpperCase();
-    if (ch === 'B') return 'keiei';
-    if (ch === 'X') return 'sysinfo';
-    return 'kyoyo';
+    if (c.subject_category === "教養科目") return 'kyoyo';
+    if (c.timetable_code && c.timetable_code.length >= 2) {
+      const ch = c.timetable_code[1].toUpperCase();
+      if (ch === 'B') return 'keiei';
+      if (ch === 'X') return 'sysinfo';
+    }
+    return 'senmon_other';
   }
 
   const kyoyo = filtered.filter(c => _courseType(c) === 'kyoyo');
   let senmonKeiei   = filtered.filter(c => _courseType(c) === 'keiei');
   let senmonSysInfo = filtered.filter(c => _courseType(c) === 'sysinfo');
+  const senmonOther = filtered.filter(c => _courseType(c) === 'senmon_other');
 
   // 所属学部以外の専門科目を非表示
   if (userFaculty !== "経営学部")       senmonKeiei   = [];
   if (userFaculty !== "システム情報学部") senmonSysInfo = [];
 
-  if (kyoyo.length === 0 && senmonKeiei.length === 0 && senmonSysInfo.length === 0) {
+  if (kyoyo.length === 0 && senmonKeiei.length === 0 && senmonSysInfo.length === 0 && senmonOther.length === 0) {
     list.innerHTML = '<div class="empty-msg">この時間に科目がありません</div>';
     return;
   }
@@ -1104,6 +1108,23 @@ function renderCourseList(courses) {
     h.textContent = "システム情報学部専門科目";
     list.appendChild(h);
     senmonSysInfo.forEach(c => list.appendChild(makeCourseItem(c)));
+  }
+
+  // 経営・システム情報以外の専門科目は所属学科(department)ごとに見出しを分けて表示
+  if (senmonOther.length > 0) {
+    const groups = new Map();
+    senmonOther.forEach(c => {
+      const key = c.department || "専門科目";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    });
+    groups.forEach((groupCourses, dept) => {
+      const h = document.createElement("div");
+      h.className = "course-section-header";
+      h.textContent = dept;
+      list.appendChild(h);
+      groupCourses.forEach(c => list.appendChild(makeCourseItem(c)));
+    });
   }
 }
 
