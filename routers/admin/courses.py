@@ -178,7 +178,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
 
 @router.post("/admin/courses/{course_id}/instructors/add")
 async def add_instructor(course_id: int, request: Request, name: str = Form(...), url: str = Form(""), _: str = Depends(check_admin)):
-    name_s = normalize_instructor_name(name.strip())
+    name_s = normalize_instructor_name(name)
     url_s = url.strip() or None
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if name_s:

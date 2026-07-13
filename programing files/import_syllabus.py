@@ -435,7 +435,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                          auto_create: bool = True):
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
-    from models import Subject, Instructor, CourseSection, Syllabus, Schedule
+    from models import Subject, Instructor, CourseSection, Syllabus, Schedule, normalize_instructor_name
 
     await init_db()
 
@@ -536,10 +536,10 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             # （担当教員が空欄になるのを防ぐため。時間割表示に使うsyllabi/schedulesのみ
             #   第3・第4クォーター・後期・集中に限定する）
 
-            # Instructor を find-or-create（日本語名は空白を除去して統一する）
-            instructor_name = c["instructor"]
-            if any('぀' <= ch <= '鿿' for ch in instructor_name):
-                instructor_name = instructor_name.replace(' ', '').replace('　', '')
+            # Instructor を find-or-create（日本語名は空白を除去して統一する。
+            # 実際の正規化は models.Instructor の @validates("name") が保証するが、
+            # 検索用の値もここで揃えておかないと既存レコードにヒットせず重複INSERTになる）
+            instructor_name = normalize_instructor_name(c["instructor"])
             instr = (await session.execute(
                 select(Instructor).where(Instructor.name == instructor_name)
             )).scalar_one_or_none()

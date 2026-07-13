@@ -2,8 +2,17 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
+
+
+def normalize_instructor_name(name: str) -> str:
+    if not name:
+        return name
+    name = name.strip()
+    if any('぀' <= c <= '鿿' for c in name):
+        return name.replace(' ', '').replace('　', '')
+    return name
 
 
 class MessageLog(Base):
@@ -81,6 +90,10 @@ class Instructor(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True, unique=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+
+    @validates("name")
+    def _normalize_name(self, key, value):
+        return normalize_instructor_name(value)
 
 
 class CourseSection(Base):

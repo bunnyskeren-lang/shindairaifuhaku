@@ -155,6 +155,9 @@ def make_register_url(user_id: str) -> str:
 
 
 def normalize_instructor_name(name: str) -> str:
+    if not name:
+        return name
+    name = name.strip()
     if any('぀' <= c <= '鿿' for c in name):
         return name.replace(' ', '').replace('　', '')
     return name
