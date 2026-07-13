@@ -124,9 +124,14 @@ tbody td:first-child {
 .course-item {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 16px; border-bottom: 1px solid #f8fafc;
+  border-left: 3px solid transparent;
 }
+.course-item.kyoyo  { border-left-color: #047857; background: #ecfdf5; }
+.course-item.senmon { border-left-color: #1d4ed8; background: #eff6ff; }
 .course-info { flex: 1; min-width: 0; }
 .course-name { font-size: 13px; font-weight: 600; color: #1e293b; }
+.course-name.kyoyo  { color: #047857; }
+.course-name.senmon { color: #1d4ed8; }
 .course-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 .earned-badge {
   display: inline-block; font-size: 10px; font-weight: 700;
@@ -997,8 +1002,9 @@ function _getPdfCourseNames() {
 }
 
 function makeCourseItem(c) {
+  const categoryClass = c.subject_category === "教養科目" ? "kyoyo" : "senmon";
   const item = document.createElement("div");
-  item.className = "course-item";
+  item.className = `course-item ${categoryClass}`;
   item.dataset.id = c.id;
 
   const isEarned = _getPdfCourseNames().has(c.name);
@@ -1006,7 +1012,7 @@ function makeCourseItem(c) {
   info.className = "course-info";
   const sylUrl = makeSyllabusUrl(c.timetable_code);
   info.innerHTML = `
-    <div class="course-name">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
+    <div class="course-name ${categoryClass}">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
     <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
     ${sylUrl ? `<a href="${esc(sylUrl)}" target="_blank" class="syllabus-link">シラバス →</a>` : ''}
   `;
