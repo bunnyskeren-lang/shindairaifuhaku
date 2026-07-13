@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from sqlalchemy import case, select
+from sqlalchemy import and_, case, or_, select
 
 from core.config import DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS
 from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Schedule, Subject, Syllabus, UserProfile, UserSyllabus
+from models import (
+    CourseSection, CreditRequirement, Instructor, Schedule, Subject, Syllabus, UserProfile, UserSyllabus,
+)
 
 router = APIRouter()
 
@@ -28,6 +30,60 @@ _TERM_ORDER = case(
     (Syllabus.academic_term == "集中", 6),
     else_=99,
 )
+
+
+# credit_requirements.category_id のうち、他区分の合算値でありそのままでは科目に対応しないもの
+_COMBINED_CREDIT_CATEGORY_IDS = {"jinbun_shizen", "kyoyo_all", "senmon_55", "senmon_98"}
+
+# category_id の末尾（学科プレフィックスを除いた部分）→ 教養教育院科目の classification
+_KYOYO_CATEGORY_SUFFIX_TO_CLASSIFICATION = {
+    "jinbun": "教養(人文)",
+    "shizen": "教養(自然)",
+    "shakai": "教養(社会)",
+    "sougou": "教養(総合)",
+    "kiban": "教養(基盤)",
+    "kyoyo_kiban": "教養(基盤)",
+    "gaigo1": "教養(外国語第1)",
+    "gaigo2": "教養(外国語第2)",
+    "gaigo3": "教養(外国語第3)",
+    "kenko": "教養(健康・スポーツ)",
+}
+
+
+async def _build_credit_countable_filter(session, faculty: str | None, department: str | None):
+    """ユーザーの学部・学科に単位チェッカーの区分が定義されている場合のみ、
+    その区分に対応する科目だけを許可する絞り込み条件を返す。
+    単位チェッカー未対応の学部・学科（credit_requirementsに行が無い）ではNoneを返し、絞り込みを行わない。"""
+    if not faculty:
+        return None
+    category_ids = (await session.execute(
+        select(CreditRequirement.category_id).where(
+            CreditRequirement.faculty == faculty,
+            or_(CreditRequirement.department == department, CreditRequirement.department.is_(None)),
+        )
+    )).scalars().all()
+    if not category_ids:
+        return None
+
+    kyoyo_classifications = set()
+    for cat_id in category_ids:
+        if cat_id in _COMBINED_CREDIT_CATEGORY_IDS:
+            continue
+        for suffix, classification in _KYOYO_CATEGORY_SUFFIX_TO_CLASSIFICATION.items():
+            if cat_id == suffix or cat_id.endswith(f"_{suffix}"):
+                kyoyo_classifications.add(classification)
+                break
+
+    # 学部専門科目は Subject.faculty が「経営学部」のように学部名のみの場合と、
+    # 「工学部機械工学科」のように学部名+学科名で連結される場合があるため両方を候補にする
+    own_faculties = {faculty, f"{faculty}{department or ''}"}
+    conditions = [
+        and_(Subject.faculty.in_(own_faculties), Subject.category == "専門"),
+        and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"),
+    ]
+    if kyoyo_classifications:
+        conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification.in_(kyoyo_classifications)))
+    return or_(*conditions)
 
 
 @router.get("/api/timetable/years")
@@ -94,6 +150,11 @@ async def api_timetable_slots(
         raise HTTPException(status_code=400, detail="invalid day")
     user_id = await verify_liff_id_token(x_liff_id_token)
     async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, user_id) if user_id else None
+        credit_filter = await _build_credit_countable_filter(
+            session, profile.faculty if profile else None, profile.department if profile else None,
+        )
+
         stmt = (
             select(Syllabus, Subject, Instructor)
             .join(Schedule, Schedule.syllabus_id == Syllabus.id)
@@ -106,6 +167,8 @@ async def api_timetable_slots(
                 Subject.hide_from_timetable.is_(False),
             )
         )
+        if credit_filter is not None:
+            stmt = stmt.where(credit_filter)
         if year is not None:
             stmt = stmt.where(Syllabus.year == year)
         rows = (await session.execute(
