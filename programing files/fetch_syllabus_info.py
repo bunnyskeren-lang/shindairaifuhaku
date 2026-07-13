@@ -178,6 +178,34 @@ def parse_credits(html_text: str) -> str:
     return re.sub(r'<[^>]+>', '', m.group(1)).strip()
 
 
+# 科目分類がこの値の科目は「高度教養科目」（他学部生向けの乗り入れ枠で、本来の専門科目・
+# 教養科目の単位区分のいずれにも綺麗に収まらない）としてsubjects側に一切登録しない方針
+# （ユーザー指示、2026-07-13）。run()が検出した時点でSubject自体を削除する。
+KODO_KYOYO_CATEGORY = "高度教養科目"
+
+
+async def _delete_kodo_kyoyo_subject(session, course_section_id: int) -> bool:
+    """course_section_idから辿れるSubjectを削除する。レビューが付いていて削除できない場合はFalseを返す。"""
+    from sqlalchemy.exc import IntegrityError
+    from models import CourseSection, Subject
+
+    cs = await session.get(CourseSection, course_section_id)
+    if cs is None:
+        return False
+    subj = await session.get(Subject, cs.subject_id)
+    if subj is None:
+        return False
+    try:
+        # SAVEPOINTでスコープを絞る。レビュー付きでRESTRICT違反した場合でも、
+        # 同一バッチ内で既に溜まっている他の更新（target_grades等）を巻き込んでロールバックしない
+        async with session.begin_nested():
+            await session.delete(subj)
+            await session.flush()
+        return True
+    except IntegrityError:
+        return False
+
+
 async def run(dry_run: bool = False, force: bool = False):
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
@@ -192,7 +220,7 @@ async def run(dry_run: bool = False, force: bool = False):
         courses = (await session.execute(q)).scalars().all()
 
     print(f"対象コース: {len(courses)}件")
-    updated = skipped = not_found = 0
+    updated = skipped = not_found = removed_kodo_kyoyo = 0
 
     async with AsyncSessionLocal() as session:
         for i, c in enumerate(courses):
@@ -213,6 +241,15 @@ async def run(dry_run: bool = False, force: bool = False):
 
             if dry_run:
                 print(f"  {c.timetable_code}: grades={grades!r}, category={category!r}")
+            elif category == KODO_KYOYO_CATEGORY:
+                if await _delete_kodo_kyoyo_subject(session, c.course_section_id):
+                    removed_kodo_kyoyo += 1
+                else:
+                    print(f"  [レビューあり・削除スキップ] {c.timetable_code}")
+                    sc = await session.get(Syllabus, c.id)
+                    sc.target_grades = grades or None
+                    sc.subject_category = category or None
+                    updated += 1
             else:
                 sc = await session.get(Syllabus, c.id)
                 sc.target_grades = grades or None
@@ -227,6 +264,9 @@ async def run(dry_run: bool = False, force: bool = False):
 
         if not dry_run:
             await session.commit()
+
+    if removed_kodo_kyoyo:
+        print(f"高度教養科目のため削除: {removed_kodo_kyoyo}件")
 
     print(f"完了: 更新={updated}, スキップ={skipped}(未対応学部), 404={not_found}")
 
