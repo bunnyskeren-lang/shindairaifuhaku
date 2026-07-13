@@ -1120,7 +1120,10 @@ document.addEventListener('click', () => {
 async function loadCreditRequirements() {
   try {
     const faculty = (window._userProfile || {}).faculty || '経営学部';
-    const res = await fetch(`${BASE_URL}/api/credit_requirements?faculty=${encodeURIComponent(faculty)}`);
+    const department = (window._userProfile || {}).department || '';
+    const url = `${BASE_URL}/api/credit_requirements?faculty=${encodeURIComponent(faculty)}` +
+      (department ? `&department=${encodeURIComponent(department)}` : '');
+    const res = await fetch(url);
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     CREDIT_CATS = data.map(r => ({
@@ -1148,9 +1151,13 @@ async function loadCredits() {
   // loadCreditRequirements()が出したエラーメッセージが一瞬で消えていた。
   if (CREDIT_CATS.length > 0) renderCreditRows();
   // Restore or default total required credits
+  // 学部・学科ごとの卒業所要単位数（学生便覧の別表に基づく既知の値。CREDIT_CATSの
+  // required_creditsは合算行と個別行で二重に持つ区分があり単純合計できないため個別に保持する）
+  const DEPARTMENT_TOTAL_CREDITS = { '機械工学科': 127 };
+  const defaultTotalReq = DEPARTMENT_TOTAL_CREDITS[(window._userProfile || {}).department] || 124;
   const totalReqEl = document.getElementById('credits-total-req');
   if (totalReqEl) {
-    totalReqEl.value = _creditData._totalReq != null ? _creditData._totalReq : 124;
+    totalReqEl.value = _creditData._totalReq != null ? _creditData._totalReq : defaultTotalReq;
     if (!_totalReqListenerAdded) {
       totalReqEl.addEventListener('input', updateCredits);
       _totalReqListenerAdded = true;

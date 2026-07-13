@@ -174,6 +174,7 @@ def classify_seiseki_raw(raw: dict) -> dict:
 
     senmon_total = s.get("専門科目", 0.0)
     senmon3 = max(0.0, round(senmon_total - shonen - senmon1 - senmon2 - global_c, 1))
+    kyotsu_val = s.get("共通専門基礎科目", 0.0)
 
     # 教養科目（基盤系）は新カリキュラムの区分名。旧カリキュラム（基礎教養科目＋情報科目）の
     # 成績表しか無い場合はそちらにフォールバックする
@@ -188,10 +189,13 @@ def classify_seiseki_raw(raw: dict) -> dict:
         "sougou":      round(s.get("総合系", 0.0), 1),
         "kyoyo_kiban": round(kiban, 1),
         "gaigo1":  round(gaigo1, 1), "gaigo2":  round(gaigo2, 1),
-        "kyotsu":  round(s.get("共通専門基礎科目", 0.0), 1),
+        "kyotsu":  round(kyotsu_val, 1),
         "shonen":  round(shonen, 1),  "senmon1": round(senmon1, 1),
         "senmon2": round(senmon2, 1), "global":  round(global_c, 1),
         "senmon3": round(senmon3, 1),
+        # 経営学部の群分類ロジック（第1群〜第3群等）に依存しない、共通専門基礎科目＋専門科目の
+        # 素の合計。群分けの無い学科（機械工学科等）の単位チェッカーはこちらを使う
+        "senmon_all": round(kyotsu_val + senmon_total, 1),
     }
 
 
