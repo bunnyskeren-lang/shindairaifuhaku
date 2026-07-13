@@ -359,14 +359,33 @@ async def admin_sysinfo_delete_requirement(cat_id: str, request: Request, _: str
     return RedirectResponse("/admin/sysinfo", status_code=303)
 
 
-# ── 工学部機械工学科 管理ページ ────────────────────────────────────────────────
+# ── 工学部 各学科 管理ページ（学生便覧の別表第2に基づく卒業要件） ──────────────────
+# 学部内で学科ごとに卒業要件が異なるため、faculty="工学部" + department で絞り込む。
+# 5学科とも構造が同一（教養科目の内訳＋専門科目(選択科目含む)の合算1本）なため
+# 学科ごとにページを複製せず、departmentキーで挙動を切り替える汎用ルートにしている。
+KOUBU_DEPARTMENTS = {
+    "kenchiku": "建築学科",
+    "shimin": "市民工学科",
+    "denki": "電気電子工学科",
+    "kikai": "機械工学科",
+    "ouka": "応用化学科",
+}
 
-@router.get("/admin/kikai", response_class=HTMLResponse)
-async def admin_kikai(request: Request, _: str = Depends(check_admin)):
+
+def _koubu_department_name(dept_key: str) -> str:
+    name = KOUBU_DEPARTMENTS.get(dept_key)
+    if not name:
+        raise HTTPException(status_code=404, detail="unknown department")
+    return name
+
+
+@router.get("/admin/koubu/{dept_key}", response_class=HTMLResponse)
+async def admin_koubu_dept(dept_key: str, request: Request, _: str = Depends(check_admin)):
+    dept_name = _koubu_department_name(dept_key)
     async with AsyncSessionLocal() as session:
         reqs = (await session.execute(
             select(CreditRequirement)
-            .where(CreditRequirement.faculty == "工学部", CreditRequirement.department == "機械工学科")
+            .where(CreditRequirement.faculty == "工学部", CreditRequirement.department == dept_name)
             .order_by(CreditRequirement.sort_order)
         )).scalars().all()
         group_order = await cache.get_credit_group_order()
@@ -376,12 +395,14 @@ async def admin_kikai(request: Request, _: str = Depends(check_admin)):
         )
         courses = (await session.execute(
             select(Subject)
-            .where(Subject.faculty.like("%機械工学科%"))
+            .where(Subject.faculty.like(f"%{dept_name}%"))
             .order_by(Subject.name)
         )).scalars().all()
     group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
-    return templates.TemplateResponse("admin/kikai.html", {
+    return templates.TemplateResponse("admin/koubu_dept.html", {
         "request": request,
+        "dept_key": dept_key,
+        "dept_name": dept_name,
         "reqs": reqs,
         "courses": courses,
         "group_names": group_names,
@@ -389,14 +410,15 @@ async def admin_kikai(request: Request, _: str = Depends(check_admin)):
     })
 
 
-@router.post("/admin/kikai/credit_requirements/update")
-async def admin_kikai_update_requirements(request: Request, _: str = Depends(check_admin)):
+@router.post("/admin/koubu/{dept_key}/credit_requirements/update")
+async def admin_koubu_update_requirements(dept_key: str, request: Request, _: str = Depends(check_admin)):
+    dept_name = _koubu_department_name(dept_key)
     form = await request.form()
     async with AsyncSessionLocal() as session:
         existing_ids = {
             r for (r,) in (await session.execute(
                 select(CreditRequirement.category_id)
-                .where(CreditRequirement.faculty == "工学部", CreditRequirement.department == "機械工学科")
+                .where(CreditRequirement.faculty == "工学部", CreditRequirement.department == dept_name)
             )).all()
         }
         for cat_id in existing_ids:
@@ -431,23 +453,24 @@ async def admin_kikai_update_requirements(request: Request, _: str = Depends(che
                     .values(**values)
                 )
         await session.commit()
-    return RedirectResponse("/admin/kikai", status_code=303)
+    return RedirectResponse(f"/admin/koubu/{dept_key}", status_code=303)
 
 
-@router.post("/admin/kikai/credit_requirements/add")
-async def admin_kikai_add_requirement(request: Request, _: str = Depends(check_admin)):
+@router.post("/admin/koubu/{dept_key}/credit_requirements/add")
+async def admin_koubu_add_requirement(dept_key: str, request: Request, _: str = Depends(check_admin)):
+    dept_name = _koubu_department_name(dept_key)
     form = await request.form()
     label  = form.get("new_label", "").strip()
     group  = form.get("new_group", "").strip()
     note   = form.get("new_note", "").strip() or None
     if not label:
-        return RedirectResponse("/admin/kikai?error=invalid", status_code=303)
+        return RedirectResponse(f"/admin/koubu/{dept_key}?error=invalid", status_code=303)
     try:
         req    = max(0, int(form.get("new_req", "0")))
         sort_v = int(form.get("new_sort", "999"))
     except ValueError:
         req, sort_v = 0, 999
-    cat_id = f"kikai_{int(time.time() * 1000)}"
+    cat_id = f"{dept_key}_{int(time.time() * 1000)}"
     async with AsyncSessionLocal() as session:
         session.add(CreditRequirement(
             category_id=cat_id,
@@ -457,14 +480,15 @@ async def admin_kikai_add_requirement(request: Request, _: str = Depends(check_a
             required_credits=req,
             note=note,
             faculty="工学部",
-            department="機械工学科",
+            department=dept_name,
         ))
         await session.commit()
-    return RedirectResponse("/admin/kikai", status_code=303)
+    return RedirectResponse(f"/admin/koubu/{dept_key}", status_code=303)
 
 
-@router.post("/admin/kikai/credit_requirements/{cat_id}/delete")
-async def admin_kikai_delete_requirement(cat_id: str, request: Request, _: str = Depends(check_admin)):
+@router.post("/admin/koubu/{dept_key}/credit_requirements/{cat_id}/delete")
+async def admin_koubu_delete_requirement(dept_key: str, cat_id: str, request: Request, _: str = Depends(check_admin)):
+    _koubu_department_name(dept_key)
     async with AsyncSessionLocal() as session:
         row = await session.get(CreditRequirement, cat_id)
         if row:
@@ -474,7 +498,7 @@ async def admin_kikai_delete_requirement(cat_id: str, request: Request, _: str =
                 select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
             )).scalar_one_or_none()
             if in_use:
-                return RedirectResponse("/admin/kikai?error=in_use", status_code=303)
+                return RedirectResponse(f"/admin/koubu/{dept_key}?error=in_use", status_code=303)
             await session.delete(row)
             await session.commit()
-    return RedirectResponse("/admin/kikai", status_code=303)
+    return RedirectResponse(f"/admin/koubu/{dept_key}", status_code=303)

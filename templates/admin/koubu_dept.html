@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
-{% block title %}工学部機械工学科 管理{% endblock %}
-{% block heading %}⚙ 工学部機械工学科 管理{% endblock %}
+{% block title %}工学部{{ dept_name }} 管理{% endblock %}
+{% block heading %}⚙ 工学部{{ dept_name }} 管理{% endblock %}
 
 {% block content %}
 
@@ -30,7 +30,7 @@
   {% if request.query_params.get('error') == 'invalid' %}
   <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin-bottom:12px">⚠ 表示名は必須です</div>
   {% endif %}
-  <form method="post" action="/admin/kikai/credit_requirements/update">
+  <form method="post" action="/admin/koubu/{{ dept_key }}/credit_requirements/update">
     <table>
       <tr>
         <th>表示名</th>
@@ -78,7 +78,7 @@
   <!-- 新規追加 -->
   <details style="margin-top:20px" {% if not reqs %}open{% endif %}>
     <summary style="cursor:pointer;font-weight:600;color:#6366f1">＋ カテゴリを追加</summary>
-    <form method="post" action="/admin/kikai/credit_requirements/add" style="margin-top:12px">
+    <form method="post" action="/admin/koubu/{{ dept_key }}/credit_requirements/add" style="margin-top:12px">
       <table>
         <tr>
           <th>表示名</th>
@@ -102,7 +102,7 @@
 
 <!-- 登録済み科目一覧 -->
 <div class="card">
-  <h2 style="margin-top:0">📚 機械工学科 科目一覧
+  <h2 style="margin-top:0">📚 {{ dept_name }} 科目一覧
     <span style="font-size:11px;font-weight:normal;color:#6b7280">（import_syllabus.py で登録済み）</span>
   </h2>
   <table>
@@ -114,7 +114,7 @@
       <td style="font-size:12px;color:#6b7280">{{ c.term_type or '—' }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="3" class="empty">機械工学科の科目がありません<br><small>import_syllabus.py --also-courses --faculty 工学部機械工学科 で登録してください</small></td></tr>
+    <tr><td colspan="3" class="empty">{{ dept_name }}の科目がありません<br><small>import_syllabus.py --also-courses --faculty 工学部{{ dept_name }} で登録してください</small></td></tr>
     {% endfor %}
   </table>
 </div>
@@ -181,7 +181,7 @@ async function deleteReq(btn) {
   if (!await askConfirm(`「${label}」を削除しますか？`)) return;
   btn.disabled = true;
   try {
-    const res = await fetch(`/admin/kikai/credit_requirements/${encodeURIComponent(id)}/delete`, { method: 'POST' });
+    const res = await fetch(`/admin/koubu/{{ dept_key }}/credit_requirements/${encodeURIComponent(id)}/delete`, { method: 'POST' });
     if (!res.ok) throw new Error(res.status);
     location.reload();
   } catch(e) {
