@@ -169,26 +169,19 @@ tbody td:first-child {
   padding: 8px 12px; background: #fff;
   border-bottom: 1px solid #e2e8f0;
 }
-.year-toggle {
-  display: flex; gap: 4px; margin-right: 2px;
-}
-.year-btn {
-  font-size: 12px; font-weight: 600; padding: 6px 10px;
+.toggle-select {
+  -webkit-appearance: none; appearance: none;
+  font-size: 13px; font-weight: 600; padding: 6px 26px 6px 14px;
   border-radius: 999px; border: none; cursor: pointer;
-  background: #f1f5f9; color: #64748b; transition: all .15s;
+  background: #eef2ff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 8px center/12px;
+  background-size: 12px;
+  color: #4338ca;
 }
-.year-btn.active {
-  background: #4f46e5;
-  color: #fff;
+#year-select {
+  color: #4f46e5;
 }
-.q-btn {
-  font-size: 13px; font-weight: 600; padding: 6px 18px;
-  border-radius: 999px; border: none; cursor: pointer;
-  background: #f1f5f9; color: #64748b; transition: all .15s;
-}
-.q-btn.active {
-  background: #6366f1;
-  color: #fff;
+#quarter-select {
+  color: #6366f1;
 }
 
 /* ── CAP バー ── */
@@ -421,10 +414,12 @@ tbody td:first-child {
 </div>
 
 <div class="quarter-bar">
-  <div class="year-toggle" id="year-toggle"></div>
-  <button class="q-btn" data-q="2" onclick="selectQuarter('2')">第2Q</button>
-  <button class="q-btn active" data-q="3" onclick="selectQuarter('3')">第3Q</button>
-  <button class="q-btn" data-q="4" onclick="selectQuarter('4')">第4Q</button>
+  <select id="year-select" class="toggle-select" onchange="selectYear(parseInt(this.value, 10))"></select>
+  <select id="quarter-select" class="toggle-select" onchange="selectQuarter(this.value)">
+    <option value="2">第2Q</option>
+    <option value="3" selected>第3Q</option>
+    <option value="4">第4Q</option>
+  </select>
   <button class="profile-chip" id="profile-chip" onclick="openProfileModal()">👤 未設定</button>
 </div>
 
@@ -746,10 +741,8 @@ async function submitProfile() {
 }
 
 async function init() {
-  // localStorage の Q 選択をボタンに反映
-  document.querySelectorAll(".q-btn").forEach(b => {
-    b.classList.toggle("active", b.dataset.q === currentQuarter);
-  });
+  // localStorage の Q 選択をセレクトに反映
+  document.getElementById("quarter-select").value = currentQuarter;
   loadFacultyOptions();
   loadYears();
   try {
@@ -827,14 +820,14 @@ async function loadYears() {
     if (Array.isArray(data.years) && data.years.length > 0) years = data.years;
   } catch (e) {}
   if (!years.includes(currentYear)) currentYear = years[years.length - 1];
-  const wrap = document.getElementById("year-toggle");
-  wrap.innerHTML = "";
+  const sel = document.getElementById("year-select");
+  sel.innerHTML = "";
   years.forEach(y => {
-    const btn = document.createElement("button");
-    btn.className = `year-btn${y === currentYear ? " active" : ""}`;
-    btn.textContent = `${y}年度`;
-    btn.onclick = () => selectYear(y);
-    wrap.appendChild(btn);
+    const opt = document.createElement("option");
+    opt.value = y;
+    opt.textContent = `${y}年度`;
+    if (y === currentYear) opt.selected = true;
+    sel.appendChild(opt);
   });
 }
 
@@ -842,9 +835,6 @@ function selectYear(y) {
   if (y === currentYear) return;
   currentYear = y;
   localStorage.setItem('currentYear', y);
-  document.querySelectorAll(".year-btn").forEach(b => {
-    b.classList.toggle("active", b.textContent === `${y}年度`);
-  });
   _slotCache.clear();
   buildGrid();
 }
@@ -852,9 +842,6 @@ function selectYear(y) {
 function selectQuarter(q) {
   currentQuarter = q;
   localStorage.setItem('currentQuarter', q);
-  document.querySelectorAll(".q-btn").forEach(b => {
-    b.classList.toggle("active", b.dataset.q === q);
-  });
   buildGrid();
 }
 
@@ -1194,6 +1181,27 @@ document.addEventListener('click', () => {
   document.getElementById('credits-note-popup')?.classList.remove('visible');
 });
 
+// 取得単位の反映。CREDIT_CATSのidとdata.creditsのキーは基本1:1だが、工学部各学科の
+// 「専門科目（選択科目含む）」区分は学科ごとにcategory_idが違う一方、成績表の集計値は
+// classify_seiseki_raw()が返す共通キー senmon_all 1本しか無いため、id が `_senmon` で
+// 終わる区分にはそこから値を補う
+function applyEarnedCredits(credits) {
+  CREDIT_CATS.forEach(cat => {
+    const el = document.getElementById('earn-' + cat.id);
+    if (el) el.textContent = 0;
+  });
+  Object.entries(credits).forEach(([id, val]) => {
+    const el = document.getElementById('earn-' + id);
+    if (el) el.textContent = val;
+  });
+  if (credits.senmon_all != null) {
+    CREDIT_CATS.filter(cat => cat.id.endsWith('_senmon')).forEach(cat => {
+      const el = document.getElementById('earn-' + cat.id);
+      if (el) el.textContent = credits.senmon_all;
+    });
+  }
+}
+
 async function loadCreditRequirements() {
   try {
     const faculty = (window._userProfile || {}).faculty || '経営学部';
@@ -1230,7 +1238,9 @@ async function loadCredits() {
   // Restore or default total required credits
   // 学部・学科ごとの卒業所要単位数（学生便覧の別表に基づく既知の値。CREDIT_CATSの
   // required_creditsは合算行と個別行で二重に持つ区分があり単純合計できないため個別に保持する）
-  const DEPARTMENT_TOTAL_CREDITS = { '機械工学科': 127 };
+  const DEPARTMENT_TOTAL_CREDITS = {
+    '建築学科': 124, '市民工学科': 126, '電気電子工学科': 128, '機械工学科': 127, '応用化学科': 126,
+  };
   const defaultTotalReq = DEPARTMENT_TOTAL_CREDITS[(window._userProfile || {}).department] || 124;
   const totalReqEl = document.getElementById('credits-total-req');
   if (totalReqEl) {
@@ -1269,15 +1279,7 @@ async function loadCredits() {
       if (res.ok) {
         const data = await res.json();
         if (data.credits) {
-          CREDIT_CATS.forEach(cat => {
-            const el = document.getElementById('earn-' + cat.id);
-            if (el) el.textContent = 0;
-          });
-          _creditData.sonota_base = 0;
-          Object.entries(data.credits).forEach(([id, val]) => {
-            const el = document.getElementById('earn-' + id);
-            if (el) el.textContent = val;
-          });
+          applyEarnedCredits(data.credits);
           _creditData.sonota_base = data.credits.sonota || 0;
           _creditData._pdfLoaded = true;
           updateCredits();
@@ -1459,9 +1461,9 @@ function updateCredits() {
 }
 
 const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部']);
-// 工学部は学科ごとに卒業要件が異なり、まだ全学科分は整備できていないため
-// 単位要件が登録済みの学科のみ学科名で個別に許可する
-const _CREDIT_CHECKER_DEPARTMENTS = new Set(['機械工学科']);
+// 工学部は学科ごとに卒業要件が異なるため、単位要件が登録済みの学科のみ
+// 学科名で個別に許可する
+const _CREDIT_CHECKER_DEPARTMENTS = new Set(['建築学科', '市民工学科', '電気電子工学科', '機械工学科', '応用化学科']);
 function updateCreditsVisibility() {
   const wrap = document.getElementById('credits-wrap');
   if (!wrap) return;
@@ -1505,14 +1507,7 @@ async function handleSeisekiFile(file) {
 
 function applySeisekiResult(data) {
   if (data.credits) {
-    CREDIT_CATS.forEach(cat => {
-      const el = document.getElementById('earn-' + cat.id);
-      if (el) el.textContent = 0;
-    });
-    Object.entries(data.credits).forEach(([id, val]) => {
-      const el = document.getElementById('earn-' + id);
-      if (el) el.textContent = val;
-    });
+    applyEarnedCredits(data.credits);
     _creditData._pdfLoaded = true;
     _creditData.sonota_base = data.credits.sonota || 0;
     if (data.raw) _creditData._raw = data.raw;
