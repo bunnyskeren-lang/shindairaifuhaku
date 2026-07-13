@@ -6,7 +6,8 @@ from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
 from database import AsyncSessionLocal
 from models import (
-    CourseSection, CreditRequirement, Instructor, Schedule, Subject, Syllabus, UserProfile, UserSyllabus,
+    CourseSection, CreditRequirement, Instructor, RegistrationCap, Schedule, Subject, Syllabus, UserProfile,
+    UserSyllabus,
 )
 
 router = APIRouter()
@@ -32,57 +33,39 @@ _TERM_ORDER = case(
 )
 
 
-# credit_requirements.category_id のうち、他区分の合算値でありそのままでは科目に対応しないもの
-_COMBINED_CREDIT_CATEGORY_IDS = {"jinbun_shizen", "kyoyo_all", "senmon_55", "senmon_98"}
-
-# category_id の末尾（学科プレフィックスを除いた部分）→ 教養教育院科目の classification
-_KYOYO_CATEGORY_SUFFIX_TO_CLASSIFICATION = {
-    "jinbun": "教養(人文)",
-    "shizen": "教養(自然)",
-    "shakai": "教養(社会)",
-    "sougou": "教養(総合)",
-    "kiban": "教養(基盤)",
-    "kyoyo_kiban": "教養(基盤)",
-    "gaigo1": "教養(外国語第1)",
-    "gaigo2": "教養(外国語第2)",
-    "gaigo3": "教養(外国語第3)",
-    "kenko": "教養(健康・スポーツ)",
-}
-
-
 async def _build_credit_countable_filter(session, faculty: str | None, department: str | None):
     """ユーザーの学部・学科に単位チェッカーの区分が定義されている場合のみ、
     その区分に対応する科目だけを許可する絞り込み条件を返す。
-    単位チェッカー未対応の学部・学科（credit_requirementsに行が無い）ではNoneを返し、絞り込みを行わない。"""
+    単位チェッカー未対応の学部・学科（credit_requirementsに行が無い）ではNoneを返し、絞り込みを行わない。
+
+    credit_requirements.category_id / label は学部ごとに書式がバラバラ（例: 経営学部は
+    「外国語第1」、工学部各学科は「外国語第Ⅰ」、管理画面の「＋カテゴリを追加」で作成した
+    category_idはcat_<timestamp>等）で個別に対応させるのは非現実的なため、
+    admin/keiei.html・admin/sysinfo.html・admin/koubu系で一貫している group_name
+    （"教養科目"/"専門科目"）の有無だけを見る。新しい学部・学科の単位チェッカーが
+    同じ管理画面の仕組みで追加された場合、コード変更なしでこの絞り込みが自動適用される。"""
     if not faculty:
         return None
-    category_ids = (await session.execute(
-        select(CreditRequirement.category_id).where(
+    group_names = set((await session.execute(
+        select(CreditRequirement.group_name).where(
             CreditRequirement.faculty == faculty,
             or_(CreditRequirement.department == department, CreditRequirement.department.is_(None)),
         )
-    )).scalars().all()
-    if not category_ids:
+    )).scalars().all())
+    if not group_names:
         return None
-
-    kyoyo_classifications = set()
-    for cat_id in category_ids:
-        if cat_id in _COMBINED_CREDIT_CATEGORY_IDS:
-            continue
-        for suffix, classification in _KYOYO_CATEGORY_SUFFIX_TO_CLASSIFICATION.items():
-            if cat_id == suffix or cat_id.endswith(f"_{suffix}"):
-                kyoyo_classifications.add(classification)
-                break
 
     # 学部専門科目は Subject.faculty が「経営学部」のように学部名のみの場合と、
     # 「工学部機械工学科」のように学部名+学科名で連結される場合があるため両方を候補にする
     own_faculties = {faculty, f"{faculty}{department or ''}"}
-    conditions = [
-        and_(Subject.faculty.in_(own_faculties), Subject.category == "専門"),
-        and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"),
-    ]
-    if kyoyo_classifications:
-        conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification.in_(kyoyo_classifications)))
+    conditions = []
+    if "専門科目" in group_names:
+        conditions.append(and_(Subject.faculty.in_(own_faculties), Subject.category == "専門"))
+        conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"))
+    if "教養科目" in group_names:
+        conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification.like("教養(%")))
+    if not conditions:
+        return None
     return or_(*conditions)
 
 
@@ -253,6 +236,21 @@ async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-To
         return {"courses": list(result.values())}
 
 
+async def _get_registration_cap(session, faculty: str | None, department: str | None, year: int) -> int | None:
+    """学部・学科・年度に対応するCAP値を返す。学科一致の行を優先し、無ければ学部共通(department NULL)の行を使う。"""
+    if not faculty:
+        return None
+    return (await session.execute(
+        select(RegistrationCap.max_credits)
+        .where(
+            RegistrationCap.faculty == faculty,
+            RegistrationCap.year == year,
+            or_(RegistrationCap.department == department, RegistrationCap.department.is_(None)),
+        )
+        .order_by(RegistrationCap.department.is_(None))
+    )).scalars().first()
+
+
 @router.post("/api/timetable/register/{syllabus_id}")
 async def api_timetable_register(syllabus_id: int, request: Request):
     body = await request.json()
@@ -263,7 +261,24 @@ async def api_timetable_register(syllabus_id: int, request: Request):
             raise HTTPException(status_code=404, detail="course not found")
         await register_syllabus_for_user(session, user_id, syllabus_id)
         await session.commit()
-    return {"ok": True}
+
+        warning = None
+        profile = await session.get(UserProfile, user_id)
+        if profile and profile.faculty:
+            cap = await _get_registration_cap(session, profile.faculty, profile.department, syl.year)
+            if cap is not None:
+                terms = (await session.execute(
+                    select(Syllabus.academic_term)
+                    .join(UserSyllabus, UserSyllabus.syllabus_id == Syllabus.id)
+                    .where(UserSyllabus.line_user_id == user_id, Syllabus.year == syl.year)
+                )).scalars().all()
+                total_credits = sum(_credits_from_term(t) for t in terms)
+                if total_credits > cap:
+                    warning = (
+                        f"{syl.year}年度の登録単位数が上限（{cap}単位）を超えています"
+                        f"（現在{total_credits}単位登録済み）"
+                    )
+    return {"ok": True, "warning": warning}
 
 
 @router.delete("/api/timetable/register/{syllabus_id}")

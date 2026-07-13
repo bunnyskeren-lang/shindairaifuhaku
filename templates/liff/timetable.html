@@ -1125,6 +1125,7 @@ function renderCourseList(courses) {
 async function toggleRegister(btn, course) {
   btn.disabled = true;
   const isRegistered = btn.dataset.registered === "1";
+  let capWarning = null;
   try {
     const idToken = await getIdToken();
     if (!idToken) throw new Error("not logged in");
@@ -1146,6 +1147,8 @@ async function toggleRegister(btn, course) {
         body: JSON.stringify({ id_token: idToken }),
       });
       if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      capWarning = data.warning || null;
       btn.dataset.registered = "1";
       btn.className = "reg-btn unregister";
       btn.textContent = "登録済";
@@ -1170,6 +1173,7 @@ async function toggleRegister(btn, course) {
   } finally {
     btn.disabled = false;
   }
+  if (capWarning) alert(capWarning);
 }
 
 function showCreditNote(e) {

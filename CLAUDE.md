@@ -271,10 +271,11 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/activity
 │       ├── stats.py                         ← /admin/richmenu-stats, /admin/usage-stats
 │       ├── timetable_check.py                ← /admin/timetable/check
-│       └── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*, /admin/credit_requirements/group/move（グループ並び替え）
+│       ├── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*, /admin/credit_requirements/group/move（グループ並び替え）
+│       └── registration_caps.py                ← /admin/registration_caps*（学部・学科・年度別CAP＝履修登録上限単位数のCRUD）
 ├── templates/
 │   ├── admin/              ← courses / reviews / keiei / sysinfo / logs / users / errors /
-│   │                          activity / usage_stats / richmenu / timetable_check / login / base 等
+│   │                          activity / usage_stats / richmenu / timetable_check / registration_caps / login / base 等
 │   ├── liff/
 │   │   ├── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
 │   │   └── timetable.html ← マイ時間割（LIFFページ）
@@ -320,6 +321,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 |----------|------|
 | `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順、`credit_requirement_group`=単位要件グループの表示順（`faculty`列で経営学部/システム情報学部を区別）） |
 | `credit_requirements` | 単位要件定義（学部別、category_id, required_credits, label） |
+| `registration_caps` | 履修登録上限単位数（CAP制、faculty/department/yearごと。departmentがNULLなら学部共通値） |
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み） |
 | `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |
 | `message_logs` | LINEメッセージ送受信ログ |

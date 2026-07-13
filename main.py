@@ -19,6 +19,7 @@ from routers.admin import (
     courses as admin_courses,
     credit_requirements as admin_credit_requirements,
     dashboard as admin_dashboard,
+    registration_caps as admin_registration_caps,
     reviews as admin_reviews,
     stats as admin_stats,
     sync as admin_sync,
@@ -149,4 +150,5 @@ app.include_router(admin_users_errors.router)
 app.include_router(admin_stats.router)
 app.include_router(admin_timetable_check.router)
 app.include_router(admin_credit_requirements.router)
+app.include_router(admin_registration_caps.router)
 app.include_router(admin_sync.router)
