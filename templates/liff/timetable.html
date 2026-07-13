@@ -1437,10 +1437,15 @@ function updateCredits() {
 }
 
 const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部']);
+// 工学部は学科ごとに卒業要件が異なり、まだ全学科分は整備できていないため
+// 単位要件が登録済みの学科のみ学科名で個別に許可する
+const _CREDIT_CHECKER_DEPARTMENTS = new Set(['機械工学科']);
 function updateCreditsVisibility() {
   const wrap = document.getElementById('credits-wrap');
   if (!wrap) return;
-  wrap.style.display = _CREDIT_CHECKER_FACULTIES.has((window._userProfile || {}).faculty || '') ? 'block' : 'none';
+  const p = window._userProfile || {};
+  const visible = _CREDIT_CHECKER_FACULTIES.has(p.faculty || '') || _CREDIT_CHECKER_DEPARTMENTS.has(p.department || '');
+  wrap.style.display = visible ? 'block' : 'none';
 }
 
 function openSeisekiPicker() {
