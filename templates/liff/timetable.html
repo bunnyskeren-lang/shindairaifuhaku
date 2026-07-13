@@ -1085,15 +1085,10 @@ async function toggleRegister(btn, course) {
   // ここでの失敗（fetch一時エラー等）で「エラーが発生しました」と誤表示され、
   // 成功しているのにユーザーが再操作して登録⇄解除を繰り返す原因になっていた。
   try {
+    // 自動差し替えにより、クリックしたコマ以外の登録状況も変わりうるため全体を再描画する
     _slotCache.clear();
     await loadMyCourses();
-    updateIntensiveSection();
-    if (currentSlot && currentSlot.day !== "集") {
-      const div = document.querySelector(
-        `.cell[data-day="${currentSlot.day}"][data-period="${currentSlot.period}"]`
-      );
-      if (div) updateCell(div, currentSlot.day, currentSlot.period);
-    }
+    buildGrid();
   } catch (e) {
     // 表示更新の失敗は致命的ではないため無視する（次回の一覧表示時に再取得される）
   } finally {

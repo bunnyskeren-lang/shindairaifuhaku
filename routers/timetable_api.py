@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from sqlalchemy import case, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config import FACULTY_DEPARTMENTS
@@ -183,6 +183,36 @@ async def api_timetable_register(syllabus_id: int, request: Request):
         syl = await session.get(Syllabus, syllabus_id)
         if not syl:
             raise HTTPException(status_code=404, detail="course not found")
+
+        # 集中講義（day_of_week="集"）は固定コマを持たないため、曜日・時限の重複判定から除外する
+        new_slots = (await session.execute(
+            select(Schedule.day_of_week, Schedule.period).where(
+                Schedule.syllabus_id == syllabus_id,
+                Schedule.day_of_week != "集",
+            )
+        )).all()
+
+        if new_slots:
+            conflict_conditions = [
+                (Schedule.day_of_week == d) & (Schedule.period == p) for d, p in new_slots
+            ]
+            conflicting_ids = (await session.execute(
+                select(UserSyllabus.syllabus_id)
+                .join(Schedule, Schedule.syllabus_id == UserSyllabus.syllabus_id)
+                .where(
+                    UserSyllabus.line_user_id == user_id,
+                    UserSyllabus.syllabus_id != syllabus_id,
+                    or_(*conflict_conditions),
+                )
+            )).scalars().all()
+            if conflicting_ids:
+                await session.execute(
+                    UserSyllabus.__table__.delete().where(
+                        UserSyllabus.line_user_id == user_id,
+                        UserSyllabus.syllabus_id.in_(set(conflicting_ids)),
+                    )
+                )
+
         await session.execute(
             pg_insert(UserSyllabus)
             .values(line_user_id=user_id, syllabus_id=syllabus_id)
