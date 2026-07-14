@@ -157,6 +157,11 @@ async function main() {
     return;
   }
 
+  // 科目データはLIFF認証（ログイン確認・プロフィール完了チェック）と無関係なため、
+  // 認証処理を待たずに並行して取得を開始する（直列だと表示までに往復が4回積み重なっていた）
+  const coursePromise = fetch(`${BASE_URL}/api/course/${courseId}`)
+    .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
+
   let userId = null;
   try {
     if (liff.isLoggedIn()) {
@@ -186,9 +191,7 @@ async function main() {
 
   let data;
   try {
-    const res = await fetch(`${BASE_URL}/api/course/${courseId}`);
-    if (!res.ok) throw new Error(res.status);
-    data = await res.json();
+    data = await coursePromise;
   } catch(e) {
     document.getElementById("loading").style.display = "none";
     document.getElementById("error").style.display = "block";
