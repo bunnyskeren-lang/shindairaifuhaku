@@ -435,18 +435,20 @@ async def submit(
         )).scalar_one()
         course_id = subject.id
 
-    # 修正理由: レビューは既にcommit済みのため、この後のpush通知処理で例外が起きても
-    # 投稿自体は成功として扱う必要がある。ここでtry/exceptしないと、ユーザーには
-    # エラー画面が表示されてしまい（実際は投稿済み）、再送信による重複投稿を誘発していた。
-    try:
-        await send_push_notification(
-            course_name=course_name.strip(),
-            rating=rating,
-            ease_rating=ease_rating,
-            comment=comment.strip(),
-        )
-    except Exception as exc:
-        await save_error_log(exc, user_id=uid, action="submit_push_notification")
+    # レビューは既にcommit済みのため、push通知はレスポンスを待たせず
+    # バックグラウンドで送る（購読者数が増えても投稿完了レスポンスの速度に影響しないように）。
+    async def _notify() -> None:
+        try:
+            await send_push_notification(
+                course_name=course_name.strip(),
+                rating=rating,
+                ease_rating=ease_rating,
+                comment=comment.strip(),
+            )
+        except Exception as exc:
+            await save_error_log(exc, user_id=uid, action="submit_push_notification")
+
+    asyncio.create_task(_notify())
 
     return templates.TemplateResponse(
         "form_success.html", {
