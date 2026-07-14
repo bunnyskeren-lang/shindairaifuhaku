@@ -46,9 +46,13 @@ async def api_parse_seiseki(
                 existing.raw_json = raw_data
                 if result["gpa"] is not None:
                     existing.gpa = result["gpa"]
+                row = existing
             else:
-                session.add(UserSeisekiRaw(line_user_id=uid, raw_json=raw_data, gpa=result["gpa"]))
+                row = UserSeisekiRaw(line_user_id=uid, raw_json=raw_data, gpa=result["gpa"])
+                session.add(row)
             await session.commit()
+            await session.refresh(row)
+            result["updated_at"] = row.updated_at.isoformat() if row.updated_at else None
     return result
 
 
@@ -71,7 +75,11 @@ async def api_seiseki_credits(x_liff_id_token: str = Header("", alias="X-Liff-Id
     if not row:
         return {}
     raw = row.raw_json
-    return {"credits": classify_seiseki_raw(raw), "gpa": row.gpa}
+    return {
+        "credits": classify_seiseki_raw(raw),
+        "gpa": row.gpa,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
 
 
 @router.post("/api/seiseki/save_raw")

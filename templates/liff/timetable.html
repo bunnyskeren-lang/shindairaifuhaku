@@ -434,6 +434,13 @@ tbody td:first-child {
   transition:border-color .2s, background .2s;
 }
 .credits-pdf-btn:active { background:#f1f5f9; }
+.credits-pdf-btn.loaded {
+  border-style:solid; border-color:#a7f3d0; background:#ecfdf5; color:#059669;
+}
+.credits-pdf-btn.loaded:active { background:#d1fae5; }
+.credits-pdf-meta {
+  text-align:center; font-size:10px; color:#94a3b8; margin:-6px 0 10px;
+}
 .credits-gpa-row {
   display:flex; justify-content:space-between; align-items:center;
   padding:6px 0; font-size:12px; color:#64748b; border-top:1px solid #f1f5f9; margin-top:4px;
@@ -526,6 +533,7 @@ tbody td:first-child {
       <span><i style="background:#d1fae5;border:1.5px solid #a7f3d0"></i>達成</span>
     </div>
     <button class="credits-pdf-btn" id="credits-pdf-btn" onclick="openSeisekiPicker()">📄 成績表PDFから自動入力</button>
+    <div class="credits-pdf-meta" id="credits-pdf-meta" style="display:none"></div>
     <input type="file" id="credits-pdf-input" accept=".pdf" style="display:none" onchange="handleSeisekiFile(this.files[0])">
     <div id="credits-rows"></div>
     <div class="credits-divider"></div>
@@ -1445,8 +1453,7 @@ async function loadCredits() {
     document.getElementById('credits-gpa-row').style.display = 'flex';
   }
   if (_creditData._pdfLoaded) {
-    const btn = document.getElementById('credits-pdf-btn');
-    if (btn) btn.innerHTML = '✅ PDF読込済（再読込）';
+    setPdfLoadedUI(_creditData._pdfLoadedAt);
   }
   // サーバーに保存された raw から最新ロジックで再分類（バグ修正時に自動反映される）
   if (userId) {
@@ -1470,9 +1477,9 @@ async function loadCredits() {
           applyEarnedCredits(data.credits);
           _creditData.sonota_base = data.credits.sonota || 0;
           _creditData._pdfLoaded = true;
+          if (data.updated_at) _creditData._pdfLoadedAt = data.updated_at;
           updateCredits();
-          const btn = document.getElementById('credits-pdf-btn');
-          if (btn) btn.innerHTML = '✅ PDF読込済（再読込）';
+          setPdfLoadedUI(_creditData._pdfLoadedAt);
         }
         // GPAはDB側が正（ローカルより優先）
         if (data.gpa != null) {
@@ -1692,6 +1699,32 @@ function openSeisekiPicker() {
   document.getElementById('credits-pdf-input').click();
 }
 
+function formatPdfLoadedAt(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function setPdfLoadedUI(iso) {
+  const btn  = document.getElementById('credits-pdf-btn');
+  const meta = document.getElementById('credits-pdf-meta');
+  if (btn) {
+    btn.classList.add('loaded');
+    btn.innerHTML = '✅ PDF読込済（再読込）';
+  }
+  const label = formatPdfLoadedAt(iso);
+  if (meta) {
+    if (label) {
+      meta.textContent = `最終読み込み: ${label}`;
+      meta.style.display = 'block';
+    } else {
+      meta.style.display = 'none';
+    }
+  }
+}
+
 async function handleSeisekiFile(file) {
   if (!file) return;
   const btn = document.getElementById('credits-pdf-btn');
@@ -1715,7 +1748,11 @@ async function handleSeisekiFile(file) {
   } catch(e) {
     alert('通信エラー: ' + e.message);
   } finally {
-    btn.innerHTML = _creditData._pdfLoaded ? '✅ PDF読込済（再読込）' : '📄 成績表PDFから自動入力';
+    if (_creditData._pdfLoaded) {
+      setPdfLoadedUI(_creditData._pdfLoadedAt);
+    } else {
+      btn.innerHTML = '📄 成績表PDFから自動入力';
+    }
     btn.disabled = false;
     document.getElementById('credits-pdf-input').value = '';
   }
@@ -1725,6 +1762,7 @@ function applySeisekiResult(data) {
   if (data.credits) {
     applyEarnedCredits(data.credits);
     _creditData._pdfLoaded = true;
+    _creditData._pdfLoadedAt = data.updated_at || new Date().toISOString();
     _creditData.sonota_base = data.credits.sonota || 0;
     if (data.raw) _creditData._raw = data.raw;
     updateCredits();
