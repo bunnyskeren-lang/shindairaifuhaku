@@ -55,27 +55,38 @@ async def _registration_incomplete(user_id: str) -> bool:
 # ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
 # アルファベットや数字のみが異なる科目（ベースの漢字部分が完全一致するもの）は
 # 1行にまとめて選択バブル表示する。全角文字（Ｄ等）はASCIIに正規化して判定する。
+# 専門科目は末尾が全角ローマ数字（Ⅰ/Ⅱ/Ⅲ...）の命名が主流なため、数字と同様に扱う。
 _FULLWIDTH_UPPER = str.maketrans(
     "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
 )
-_VNUM = _re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+)$')
+_ROMAN_VAL = {chr(0x2160 + i): i + 1 for i in range(12)}  # Ⅰ→1 ... Ⅻ→12
+_VNUM = _re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])$')
 
 
-def _vnum_match(name: str) -> tuple[str, str, int] | None:
+def _vnum_match(name: str) -> tuple[str, str, int, str] | None:
+    """戻り値: (base, letter, sort_key, disp) の4-tuple。
+    disp は表示用の末尾テキスト（ローマ数字はそのまま、数字はASCIIに正規化）。"""
     m = _VNUM.match(name)
     if not m:
         return None
     base = m.group(1).strip()
     letter = (m.group(2) or "").translate(_FULLWIDTH_UPPER)
-    return base, letter, int(m.group(3))
+    raw = m.group(3)
+    if raw in _ROMAN_VAL:
+        sk = _ROMAN_VAL[raw]
+        disp = raw
+    else:
+        sk = int(raw)
+        disp = str(sk)
+    return base, letter, sk, disp
 
 
 # ── Course list carousel ────────────────────────────────────────
 
 
-async def handle_course_list(category: str = "", classification: str = "") -> list:
-    _cl_key = f"{category}:{classification}"
+async def handle_course_list(category: str = "", classification: str = "", faculty: str = "") -> list:
+    _cl_key = f"{category}:{classification}:{faculty}"
     _cached = cache.get_course_list_cache(_cl_key)
     if _cached is not None:
         return _cached
@@ -86,11 +97,14 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
     _cls_sort = make_cls_sort(cls_map)
     rows = [c for c in _all_c if
             (not category or c.category == category) and
-            (not classification or c.classification == classification)]
+            (not classification or c.classification == classification) and
+            (not faculty or c.faculty == faculty)]
     rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
 
     if not rows:
-        if classification:
+        if faculty:
+            label = f"{faculty}の"
+        elif classification:
             label = f"{classification}の"
         elif category:
             label = f"{category}の"
@@ -103,14 +117,14 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
 
     # Pre-compute numeric variant groups: ベースの漢字部分が同じで、末尾のアルファベット・
     # 数字だけが違う科目（例: 生物学各論A1/A2/C1/C2、微分積分1/2/3/4）を1行にまとめる。
-    _num_bases: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
+    _num_bases: dict[str, list[tuple[str, str, int, str]]] = defaultdict(list)
     for _c in rows:
         _match = _vnum_match(_c.name)
         if _match:
-            _b, _letter, _sk = _match
-            _num_bases[_b].append((_c.name, _letter, _sk))
-    _num_variant_names = {n for _items in _num_bases.values() if len(_items) >= 2 for n, _, _ in _items}
-    _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _, _ in _items}
+            _b, _letter, _sk, _disp = _match
+            _num_bases[_b].append((_c.name, _letter, _sk, _disp))
+    _num_variant_names = {n for _items in _num_bases.values() if len(_items) >= 2 for n, _, _, _ in _items}
+    _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _, _, _ in _items}
     seen_num_base: set[str] = set()
 
     # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
@@ -160,7 +174,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             if base not in seen_num_base:
                 seen_num_base.add(base)
                 items_sorted = sorted(_num_bases[base], key=lambda x: (x[1], x[2]))
-                suffix = "/".join(f"{letter}{sk}" for _, letter, sk in items_sorted)
+                suffix = "/".join(f"{letter}{disp}" for _, letter, _sk, disp in items_sorted)
                 groups[cls].append((base, f"numvariant:{suffix}"))
             continue
         groups[cls].append((name, "single"))
@@ -181,7 +195,7 @@ async def handle_course_list(category: str = "", classification: str = "") -> li
             return False
         if kind.startswith("numvariant:"):
             if name in _num_bases:
-                return any(n in reviewed_names for n, _, _ in _num_bases[name])
+                return any(n in reviewed_names for n, _, _, _ in _num_bases[name])
             return False
         return False
 
@@ -324,6 +338,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         cls = t[len("専門:"):]
         return await handle_course_list(category="専門", classification=cls)
 
+    if t.startswith("専門F:"):
+        fac = t[len("専門F:"):]
+        return await handle_course_list(category="専門", faculty=fac)
+
     # 分類名の直接タップ（例：「教養(社会)」）
     if t in await cache.get_cls_set():
         return await handle_course_list(classification=t)
@@ -332,71 +350,95 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
 
     if t in ["専門科目", "専門", "専門一覧"]:
-        cls_map = await cache.get_cls_order_map()
-        parent_map = await cache.get_cls_parent_map()
-        _cls_sort = make_cls_sort(cls_map)
         reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
             cache.get_reviewed_cached(),
             cache.get_courses_cached(),
         )
         sen_courses = [c for c in _all_courses if c.category == "専門" and c.classification]
-        all_cls = {c.classification for c in sen_courses}
-        reviewed_cls_sen = {c.classification for c in sen_courses if c.name in reviewed_names_sen}
+        faculty_order = await cache.get_faculty_order()
 
-        # DB駆動のグループ化: parent_groupが設定されている分類 + 親名自体を除外
-        child_cls_set = {cls for cls in parent_map if cls in all_cls}
-        parent_names = set(parent_map.values())
-        all_excluded = child_cls_set | (parent_names & all_cls)
+        # subjects.faculty の前方一致で学部ごとにグルーピングする。学科・専攻別に
+        # 科目が分かれている学部は faculty が「{学部名}{学科名}」になっているため、
+        # 学部名をprefixとして持つ科目が1件でもあればその学部を表示する。
+        faculties_present = [fac for fac in faculty_order
+                              if any((c.faculty or "").startswith(fac) for c in sen_courses)]
+        grouped_cls = {c.classification for c in sen_courses
+                       if any((c.faculty or "").startswith(fac) for fac in faculties_present)}
 
-        other_clss = sorted(all_cls - all_excluded, key=_cls_sort)
+        cls_map = await cache.get_cls_order_map()
+        _cls_sort = make_cls_sort(cls_map)
+        # どの学部にも属さない分類（共通専門基礎科目など）はそのまま個別表示
+        other_clss = sorted({c.classification for c in sen_courses} - grouped_cls, key=_cls_sort)
 
-        # 親グループボタンを生成
-        parent_buttons = []
-        display_reviewed = set(other_clss) & reviewed_cls_sen
-        for parent in sorted(parent_names):
-            children = {cls for cls in child_cls_set if parent_map[cls] == parent}
-            if children & all_cls or parent in all_cls:
-                parent_buttons.append(f"{parent} ▶")
-                if reviewed_cls_sen & (children | {parent}):
-                    display_reviewed.add(f"{parent} ▶")
+        reviewed_fac = {fac for fac in faculties_present
+                         if any(c.name in reviewed_names_sen and (c.faculty or "").startswith(fac)
+                                for c in sen_courses)}
+        reviewed_other = {cls for cls in other_clss
+                           if any(c.name in reviewed_names_sen and c.classification == cls
+                                  for c in sen_courses)}
 
-        display_clss = parent_buttons + other_clss
+        display_items = faculties_present + other_clss
+        display_reviewed = reviewed_fac | reviewed_other
 
-        if display_clss:
+        if display_items:
             return [make_classification_select_flex(
-                display_clss, display_reviewed,
+                display_items, display_reviewed,
                 title="🎓 専門科目",
-                subtitle="分類を選んでください",
+                subtitle="学部を選んでください",
                 header_color="#0ea5e9",
             )]
         return await handle_course_list(category="専門")
 
-    # 親グループ ▶ タップ（例: "経営学部 ▶"）
-    if t.endswith(" ▶"):
-        parent = t[:-2].strip()
-        cls_map = await cache.get_cls_order_map()
-        parent_map = await cache.get_cls_parent_map()
-        _cls_sort = make_cls_sort(cls_map)
+    # 学部名タップ（例："経営学部"）
+    if t in await cache.get_faculty_order():
         reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
             cache.get_reviewed_cached(),
             cache.get_courses_cached(),
         )
-        child_clss = sorted([cls for cls, pg in parent_map.items() if pg == parent], key=_cls_sort)
-        if child_clss:
-            child_set = set(child_clss)
-            child_courses = [c for c in _all_courses if c.category == "専門" and c.classification in child_set]
-            reviewed_cls = {c.classification for c in child_courses if c.name in reviewed_names_sen}
+        fac_courses = [c for c in _all_courses if c.category == "専門" and c.classification
+                        and (c.faculty or "").startswith(t)]
+        if not fac_courses:
+            return [TextMessage(text=f"「{t}」の専門科目はまだ登録されていません。")]
+
+        dept_values = {c.faculty for c in fac_courses}
+        cls_values = {c.classification for c in fac_courses}
+        cls_map = await cache.get_cls_order_map()
+        _cls_sort = make_cls_sort(cls_map)
+
+        if len(dept_values) > 1:
+            # 学科・専攻ごとに科目が分かれている学部（工学部・医学部・理学部等）→ 学科・専攻一覧
+            def _dept_sort_key(d: str) -> int:
+                cls_for_d = {c.classification for c in fac_courses if c.faculty == d}
+                return min((_cls_sort(cls) for cls in cls_for_d), default=0)
+            dept_sorted = sorted(dept_values, key=_dept_sort_key)
+            reviewed_dept_labels = {
+                (d[len(t):] or d) for d in dept_values
+                if any(c.name in reviewed_names_sen for c in fac_courses if c.faculty == d)
+            }
+            items = [((d[len(t):] or d), d) for d in dept_sorted]
             return [make_classification_select_flex(
-                child_clss, reviewed_cls,
-                title=f"🎓 {parent} 専門科目",
+                items, reviewed_dept_labels,
+                title=f"🎓 {t} 専門科目",
+                subtitle="学科・専攻を選んでください",
+                header_color="#0ea5e9",
+                data_prefix="専門F:",
+            )]
+
+        if len(cls_values) > 1:
+            # 学科・専攻の区別はないが、分類（群科目等）が複数ある学部（経営学部等）→ 分類一覧
+            cls_sorted = sorted(cls_values, key=_cls_sort)
+            reviewed_cls = {cls for cls in cls_sorted
+                             if any(c.name in reviewed_names_sen for c in fac_courses if c.classification == cls)}
+            return [make_classification_select_flex(
+                cls_sorted, reviewed_cls,
+                title=f"🎓 {t} 専門科目",
                 subtitle="分類を選んでください",
                 header_color="#0ea5e9",
                 data_prefix="専門:",
             )]
-        # 修正理由: 該当する子分類が無い場合（管理画面で親グループ設定が変更された直後の
-        # キャッシュずれ等）にreturnせず下の分岐へフォールスルーしていたため、
-        # 最終的に内部のpostback文字列（矢印記号込み）がそのままユーザーに露出していた。
-        return [TextMessage(text=f"「{parent}」の専門科目分類が見つかりませんでした。\n\n「専門科目」からやり直してください。")]
+
+        # 学科・専攻も複数分類も無い学部 → 即座に科目一覧
+        return await handle_course_list(category="専門", classification=next(iter(cls_values)))
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
