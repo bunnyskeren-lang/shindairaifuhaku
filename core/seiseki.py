@@ -66,6 +66,19 @@ _GLOBAL_PREFIXES = (
 _GAIGO_FOREIGN = ('ロシア語', 'ドイツ語', 'フランス語', '中国語', '韓国語', 'スペイン語',
                    'アラビア語', 'イタリア語', 'ポルトガル語', '朝鮮語')
 
+# ── 工学部機械工学科 必修科目判定 ──────────────────────────────────────────────
+# 学生便覧2026別表第1ホ（◎印）で確認済み。成績表印字はクォーター表記・(a)/(b)表記が
+# 付くことがあるため前方一致で判定する（例:「機械工学実習Ⅰ(1Q)」「プログラミング演習Ⅱ(b)」）
+_KIKAI_KYOTSU_HISSHU = ('線形代数1', '線形代数2', '微分積分1', '微分積分2')
+_KIKAI_SENMON_HISSHU = (
+    'プログラミング演習Ⅰ', 'プログラミング演習Ⅱ', 'プログラミング演習Ⅲ',
+    '初年次セミナー（機械工学）', '機械工学基礎',
+    '基礎力学Ⅰ', '基礎力学Ⅱ', '機械基礎数学Ⅰ', '機械基礎数学Ⅱ',
+    '材料力学Ⅰ', '流体工学', '熱力学Ⅰ', '安全工学・工学倫理Ⅰ',
+    '機械工学実習Ⅰ', '機械製図Ⅰ', '機械工学実験', '機械工学実習Ⅱ', '機械製図Ⅱ',
+    '機械設計製作演習Ⅰ', '機械設計製作演習Ⅱ', '先端機械工学詳論', '卒業研究',
+)
+
 
 def is_senmon2(name: str) -> bool:
     return name in _SENMON2_EXACT or any(name.startswith(p) for p in _SENMON2_PREFIX)
@@ -118,8 +131,8 @@ def extract_seiseki_raw(text: str) -> dict:
                 "is_english": 'Academic English' in name,
                 "is_foreign": any(name.startswith(p) for p in _GAIGO_FOREIGN),
             })
-        elif current_sec == '専門科目':
-            senmon_courses.append({"name": name, "credits": cr})
+        elif current_sec in ('専門科目', '共通専門基礎科目', '専門基礎科目'):
+            senmon_courses.append({"name": name, "credits": cr, "section": current_sec})
 
     def _summary(label: str) -> float:
         mt = _re.search(_re.escape(label) + r'\s+([\d.]+)', text)
@@ -142,6 +155,7 @@ def extract_seiseki_raw(text: str) -> dict:
             "基盤系":         _summary('教養科目（基盤系）'),
             "健康・スポーツ科学系": _summary('教養科目（健康・スポーツ科学系）'),
             "共通専門基礎科目": _summary('共通専門基礎科目'),
+            "専門基礎科目":   _summary('専門基礎科目'),
             "専門科目":       _summary('専門科目'),
         },
     }
@@ -177,6 +191,27 @@ def classify_seiseki_raw(raw: dict) -> dict:
     senmon3 = max(0.0, round(senmon_total - shonen - senmon1 - senmon2 - global_c, 1))
     kyotsu_val = s.get("共通専門基礎科目", 0.0)
 
+    # 機械工学科: 共通専門基礎科目／専門基礎科目／専門科目それぞれを必修・選択に仕分ける
+    # （専門基礎科目は便覧上すべて選択科目のため必修集計なし）
+    kikai_kyotsu_hisshu = kikai_kyotsu_sentaku = 0.0
+    kikai_senmonkiso_sentaku = 0.0
+    kikai_senmon_hisshu = kikai_senmon_sentaku = 0.0
+    for c in raw.get("senmon_courses", []):
+        section = c.get("section", "専門科目")
+        cr = c["credits"]
+        if section == '共通専門基礎科目':
+            if any(c["name"].startswith(p) for p in _KIKAI_KYOTSU_HISSHU):
+                kikai_kyotsu_hisshu += cr
+            else:
+                kikai_kyotsu_sentaku += cr
+        elif section == '専門基礎科目':
+            kikai_senmonkiso_sentaku += cr
+        elif section == '専門科目':
+            if any(c["name"].startswith(p) for p in _KIKAI_SENMON_HISSHU):
+                kikai_senmon_hisshu += cr
+            else:
+                kikai_senmon_sentaku += cr
+
     # 教養科目（基盤系）は新カリキュラムの区分名。旧カリキュラム（基礎教養科目＋情報科目）の
     # 成績表しか無い場合はそちらにフォールバックする
     kiban = s.get("基盤系", 0.0) or (s.get("基礎教養科目", 0.0) + s.get("情報科目", 0.0))
@@ -201,6 +236,12 @@ def classify_seiseki_raw(raw: dict) -> dict:
         # 共通専門基礎科目と専門科目の必要単位数が別枠で定められている学部（農学部等）向けに、
         # 専門科目のみ（共通専門基礎科目を含まない）の値も別途返す
         "senmon": round(senmon_total, 1),
+        # 機械工学科: 区分（共通専門基礎科目／専門基礎科目／専門科目）×必修・選択の内訳
+        "kikai_kyotsu_hisshu":      round(kikai_kyotsu_hisshu, 1),
+        "kikai_kyotsu_sentaku":     round(kikai_kyotsu_sentaku, 1),
+        "kikai_senmonkiso_sentaku": round(kikai_senmonkiso_sentaku, 1),
+        "kikai_senmon_hisshu":      round(kikai_senmon_hisshu, 1),
+        "kikai_senmon_sentaku":     round(kikai_senmon_sentaku, 1),
     }
 
 
