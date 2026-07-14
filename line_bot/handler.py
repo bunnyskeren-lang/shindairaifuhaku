@@ -199,6 +199,30 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             return False
         return False
 
+    def _group_syllabus_url(name: str, kind: str) -> str:
+        # 統合表示（variant/numvariant）はbase名がそのままSubject.nameと一致しないため、
+        # グループ内のいずれか1件からシラバスURLが見つかればそれを採用する。
+        if kind == "single":
+            return course_syllabus_urls.get(name, "")
+        if kind.startswith("variant:"):
+            if name in _sem_bases:
+                for n, _ in _sem_bases[name]:
+                    url = course_syllabus_urls.get(n, "")
+                    if url:
+                        return url
+                return ""
+            for s in kind.split(":", 1)[1].split("/"):
+                url = course_syllabus_urls.get(name + s, "")
+                if url:
+                    return url
+            return ""
+        if kind.startswith("numvariant:") and name in _num_bases:
+            for n, _, _, _ in _num_bases[name]:
+                url = course_syllabus_urls.get(n, "")
+                if url:
+                    return url
+        return ""
+
     def _make_bubble(classification: str, entries: list) -> FlexBubble:
         btn_contents = []
         for idx, (name, kind) in enumerate(entries):
@@ -208,7 +232,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             else:
                 display = name
             has_review = _entry_has_review(name, kind)
-            syl_url = course_syllabus_urls.get(name, "")
+            syl_url = _group_syllabus_url(name, kind)
             has_content = has_review or bool(syl_url)
             text_color = "#0f172a" if has_content else "#94a3b8"
             display_text = f"✓{display}" if has_review else display
