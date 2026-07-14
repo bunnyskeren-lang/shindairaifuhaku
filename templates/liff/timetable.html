@@ -52,6 +52,7 @@ tbody td:first-child {
 .cell:active { background: #f1f5f9; }
 .cell.has-course.senmon { background: #eff6ff; }
 .cell.has-course.kyoyo { background: #ecfdf5; }
+.cell.has-course.kyotsu { background: #f5f5f4; }
 
 .cell-name {
   font-size: 10px; font-weight: 600; line-height: 1.3;
@@ -59,6 +60,7 @@ tbody td:first-child {
 }
 .cell-name.senmon { color: #1d4ed8; }
 .cell-name.kyoyo { color: #047857; }
+.cell-name.kyotsu { color: #57534e; }
 
 .category-legend {
   display: flex; gap: 14px; align-items: center;
@@ -70,6 +72,7 @@ tbody td:first-child {
 }
 .category-legend .dot.senmon { background: #1d4ed8; }
 .category-legend .dot.kyoyo { background: #047857; }
+.category-legend .dot.kyotsu { background: #57534e; }
 .cell-plus {
   font-size: 20px; color: #cbd5e1;
 }
@@ -128,10 +131,12 @@ tbody td:first-child {
 }
 .course-item.kyoyo  { border-left-color: #047857; background: #ecfdf5; }
 .course-item.senmon { border-left-color: #1d4ed8; background: #eff6ff; }
+.course-item.kyotsu { border-left-color: #57534e; background: #f5f5f4; }
 .course-info { flex: 1; min-width: 0; }
 .course-name { font-size: 13px; font-weight: 600; color: #1e293b; }
 .course-name.kyoyo  { color: #047857; }
 .course-name.senmon { color: #1d4ed8; }
+.course-name.kyotsu { color: #57534e; }
 .course-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 .earned-badge {
   display: inline-block; font-size: 10px; font-weight: 700;
@@ -432,6 +437,7 @@ tbody td:first-child {
 <div class="category-legend">
   <span><span class="dot senmon"></span>専門科目</span>
   <span><span class="dot kyoyo"></span>教養科目</span>
+  <span><span class="dot kyotsu"></span>共通専門基礎科目</span>
 </div>
 
 <div class="grid-wrap">
@@ -921,6 +927,13 @@ function updateIntensiveSection() {
   }
 }
 
+// 教養科目=kyoyo(緑)、学部別専門科目=senmon(青)、共通専門基礎科目=kyotsu(グレー)の3色に分類
+function _categoryClass(c) {
+  if (c.subject_category === "教養科目") return "kyoyo";
+  if (c.department === "教養教育院") return "kyotsu";
+  return "senmon";
+}
+
 function updateCell(div, day, period) {
   const key = `${day}-${period}`;
   const courses = ((window._myCourses || {})[key] || []).filter(c => {
@@ -930,9 +943,9 @@ function updateCell(div, day, period) {
     return false;
   });
   div.innerHTML = "";
-  div.classList.remove("has-course", "kyoyo", "senmon");
+  div.classList.remove("has-course", "kyoyo", "senmon", "kyotsu");
   if (courses.length > 0) {
-    const categoryClass = courses[0].subject_category === "教養科目" ? "kyoyo" : "senmon";
+    const categoryClass = _categoryClass(courses[0]);
     div.classList.add("has-course", categoryClass);
     const nameDiv = document.createElement("div");
     nameDiv.className = `cell-name ${categoryClass}`;
@@ -1019,7 +1032,7 @@ function _getPdfCourseNames() {
 }
 
 function makeCourseItem(c) {
-  const categoryClass = c.subject_category === "教養科目" ? "kyoyo" : "senmon";
+  const categoryClass = _categoryClass(c);
   const item = document.createElement("div");
   item.className = `course-item ${categoryClass}`;
   item.dataset.id = c.id;
