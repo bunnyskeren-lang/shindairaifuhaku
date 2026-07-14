@@ -8,7 +8,6 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from core import backup, cache, liff_auth, line_client, prewarm
 from core.activity_log import log_cleanup_loop, save_error_log
@@ -68,17 +67,26 @@ _MAX_BODY_BYTES = 2 * 1024 * 1024
 _BODY_LIMIT_EXEMPT_PATHS = {"/api/parse_seiseki"}
 
 
-class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if request.url.path not in _BODY_LIMIT_EXEMPT_PATHS:
-            content_length = request.headers.get("content-length")
-            if content_length is not None:
-                try:
-                    if int(content_length) > _MAX_BODY_BYTES:
-                        return _JSONResponse(status_code=413, content={"detail": "リクエストが大きすぎます"})
-                except ValueError:
-                    pass
-        return await call_next(request)
+# Starlette の BaseHTTPMiddleware は各リクエストで追加タスク生成+anyioストリーム経由の
+# 中継が発生し全リクエストに一定のオーバーヘッドが乗るため、素のASGIミドルウェアとして実装する。
+class BodySizeLimitMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["path"] in _BODY_LIMIT_EXEMPT_PATHS:
+            return await self.app(scope, receive, send)
+        content_length = next(
+            (v for k, v in scope["headers"] if k == b"content-length"), None
+        )
+        if content_length is not None:
+            try:
+                if int(content_length) > _MAX_BODY_BYTES:
+                    response = _JSONResponse(status_code=413, content={"detail": "リクエストが大きすぎます"})
+                    return await response(scope, receive, send)
+            except ValueError:
+                pass
+        await self.app(scope, receive, send)
 
 
 # 修正理由: リクエストごとの処理時間・ステータスコードを記録する仕組みが
@@ -87,19 +95,32 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 _SLOW_REQUEST_MS = 3000
 
 
-class RequestTimingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+class RequestTimingMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        method = scope["method"]
+        path = scope["path"]
         start = time.perf_counter()
+        status_holder = {"status": 0}
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                status_holder["status"] = message["status"]
+            await send(message)
+
         try:
-            response = await call_next(request)
+            await self.app(scope, receive, send_wrapper)
         except Exception:
             duration_ms = (time.perf_counter() - start) * 1000
-            print(f"[access] {request.method} {request.url.path} 500 {duration_ms:.0f}ms", flush=True)
+            print(f"[access] {method} {path} 500 {duration_ms:.0f}ms", flush=True)
             raise
         duration_ms = (time.perf_counter() - start) * 1000
         marker = " SLOW" if duration_ms >= _SLOW_REQUEST_MS else ""
-        print(f"[access] {request.method} {request.url.path} {response.status_code} {duration_ms:.0f}ms{marker}", flush=True)
-        return response
+        print(f"[access] {method} {path} {status_holder['status']} {duration_ms:.0f}ms{marker}", flush=True)
 
 
 app.add_middleware(RequestTimingMiddleware)
