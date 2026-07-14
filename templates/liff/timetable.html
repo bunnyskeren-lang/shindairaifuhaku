@@ -427,7 +427,7 @@ tbody td:first-child {
 }
 .credits-summary { font-size:11px; color:#94a3b8; text-align:center; }
 .credits-pdf-btn {
-  display:flex; align-items:center; gap:5px; width:100%;
+  display:flex; flex-direction:column; align-items:center; gap:2px; width:100%;
   padding:8px 12px; border-radius:8px; border:1.5px dashed #cbd5e1;
   background:#f8fafc; color:#64748b; font-size:11px; font-weight:600;
   cursor:pointer; margin-bottom:10px; justify-content:center;
@@ -438,8 +438,8 @@ tbody td:first-child {
   border-style:solid; border-color:#a7f3d0; background:#ecfdf5; color:#059669;
 }
 .credits-pdf-btn.loaded:active { background:#d1fae5; }
-.credits-pdf-meta {
-  text-align:center; font-size:10px; color:#94a3b8; margin:-6px 0 10px;
+.credits-pdf-btn-date {
+  font-size:9.5px; font-weight:500; color:#6ea88a;
 }
 .credits-gpa-row {
   display:flex; justify-content:space-between; align-items:center;
@@ -533,7 +533,6 @@ tbody td:first-child {
       <span><i style="background:#d1fae5;border:1.5px solid #a7f3d0"></i>達成</span>
     </div>
     <button class="credits-pdf-btn" id="credits-pdf-btn" onclick="openSeisekiPicker()">📄 成績表PDFから自動入力</button>
-    <div class="credits-pdf-meta" id="credits-pdf-meta" style="display:none"></div>
     <input type="file" id="credits-pdf-input" accept=".pdf" style="display:none" onchange="handleSeisekiFile(this.files[0])">
     <div id="credits-rows"></div>
     <div class="credits-divider"></div>
@@ -1708,21 +1707,12 @@ function formatPdfLoadedAt(iso) {
 }
 
 function setPdfLoadedUI(iso) {
-  const btn  = document.getElementById('credits-pdf-btn');
-  const meta = document.getElementById('credits-pdf-meta');
-  if (btn) {
-    btn.classList.add('loaded');
-    btn.innerHTML = '✅ PDF読込済（再読込）';
-  }
+  const btn = document.getElementById('credits-pdf-btn');
+  if (!btn) return;
+  btn.classList.add('loaded');
   const label = formatPdfLoadedAt(iso);
-  if (meta) {
-    if (label) {
-      meta.textContent = `最終読み込み: ${label}`;
-      meta.style.display = 'block';
-    } else {
-      meta.style.display = 'none';
-    }
-  }
+  btn.innerHTML = '✅ PDF読込済（再読込）' +
+    (label ? `<span class="credits-pdf-btn-date">最終読み込み: ${label}</span>` : '');
 }
 
 async function handleSeisekiFile(file) {
