@@ -4,6 +4,10 @@
 
 **迷ったらコードを広範囲に読む前にユーザーに確認を取ること。**
 
+**作業がひと区切りついたら、ユーザーに指摘される前に自動でメモリ（永続記憶システム）を更新すること。** 新しい機能・仕様決定・DBスキーマ変更・ユーザーの指示や好みなど、次回以降のセッションに引き継ぐべき情報は都度メモリファイルに保存し、MEMORY.mdの索引も更新する。
+
+**このCLAUDE.mdを更新したら、必ず `AGENTS.md`（他AIツール用の同内容ファイル）にも同じ内容を反映すること。** AGENTS.mdはCLAUDE.mdの完全なコピーとして維持する（`cp CLAUDE.md AGENTS.md` でよい）。
+
 ---
 
 # デプロイルール
@@ -21,8 +25,12 @@
 ---
 
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
-- dev環境（shindairaifuhaku-1.onrender.com）のみ自由に操作してよい
-- `git push` の push先が `origin main` または `origin shindairaifuhaku` の場合は必ず確認を取ること
+- dev環境（shindairaifuhaku-1.onrender.com）に関するpush・デプロイ操作は、確認を取らず自由に実行してよい
+  - `git push origin dev`（devブランチへの通常push）
+  - `git push origin dev:shindairaifuhaku-dev`（dev環境へのデプロイ）
+  - `python setup_richmenu.py --env dev`（devリッチメニュー更新）
+  - その他 dev サービス・dev DB のみに影響する操作全般
+- `git push` の push先が `origin main` または `origin shindairaifuhaku`（本番相当ブランチ）の場合は必ず確認を取ること
 
 ## ブランチとRenderサービスの対応
 
@@ -43,6 +51,17 @@
 
 - `models.py` でクラスを追加・削除したら、**必ず `database.py` の `init_db()` 内の import も同時に更新すること**
 - 新しいモデルを追加した場合は import に追加、削除した場合は import から除去する
+- `programing files/models.py` はルートの `models.py` とは別定義（スクリプト群専用）。scriptsが触るテーブル（`subjects`/`instructors`/`course_sections`/`syllabi`/`schedules`等）の列を追加・変更・削除したら、`programing files/models.py` 側の対応するカラム定義も忘れずに確認・更新すること
+
+### 科目名を触るときのルール
+
+科目名の正規化（ローマ数字表記統一）・LINE bot一覧のバリアント統合表示など、詳細は `docs/SUBJECT_NAME_RULES.md` を参照。`models.py` でこの領域を変更したら同ドキュメントも更新すること。
+
+### LINE bot科目一覧の表示件数について（新学部・大量科目追加時に意識すること）
+
+LINE botの1回の返信には上限（40バブル≒240科目、`line_bot/handler.py`の`_split_to_bubbles`/`messages[:5]`参照）がある。`classification`が学部単位で1つにまとまっている学部（`import_syllabus.py`で分類を細分化しなかった場合）は、科目数が閾値（`_ALPHA_SPLIT_THRESHOLD`=48件）を超えると`handle_course_list()`が自動でよみがな順の均等分割メニューを挟むため、**新しい学部・大量の科目を追加する際に明示的な分類分け作業は不要**（2026-07-15、国際人間科学部1005件のうち76%が上限超過で非表示になっていたバグの修正で導入）。
+
+分割ラベルはよみがな（`subjects.reading`）の先頭文字を使うため、新規科目追加時に`reading`が空文字のまま残らないよう注意すること（`import_syllabus.py`は新規作成時に`reading=""`をプレースホルダで入れ、`database.py`の`init_db()`起動時バックフィルが`WHERE reading IS NULL OR reading = ''`で毎回自動生成する設計。バックフィル条件を`IS NULL`だけに戻すと空文字のまま埋まらなくなるので変更しないこと）。
 
 ## データ保護ルール
 
@@ -67,7 +86,7 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 **本番デプロイ時は、コードのプッシュに加えて必ず dev → prod のDB同期も行うこと。**
 
 同期対象（この5テーブルのみ）：
-- `classification_orders`
+- `display_orders`
 - `subjects`
 - `instructors`
 - `course_sections`
@@ -171,9 +190,16 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 
 - ラベルは `<th>` ではなく `<td>`
 - 開講年次のラベルは **「対象年次」ではなく「開講年次」**（ここを間違えると全件空になる）
+- 単位数（`subjects.credits`）のみ、ラベル側の閉じタグが `</td>` ではなく `</th>` になっている
+  （例: `<td class="gaibu-syllabus-kihon">単位数</th><td>2.0</td>`）。正規表現でラベル直後の
+  閉じタグを固定せず、次の `<td>` を拾う書き方にすること
 - スクレイピングスクリプト: `programing files/fetch_syllabus_info.py`
   - `--env dev` で dev DB に書き込み、`--force` で既取得分も上書き
-  - 0.3秒スリープ/件、20件ごとにコミット
+  - 0.3秒スリープ/件、バッチ単位（`Syllabus`は20件、`Subject`は40件）でセッションを切り替えてコミット・失敗時リトライ
+  - 単位数（`subjects.credits`）は `run_credits()` が担当。`syllabi`レコードを持たない科目（前期のみ開講等）も
+    `course_sections.syllabus_url` 経由で辿るため、`run()`（target_grades/subject_category）とは独立して全件処理する
+  - `import_syllabus.py`の実行時に自動で呼ばれるため、単位数・開講年次の取得だけを目的に
+    単体で実行する必要は通常ない（既存分の再取得や`--force`上書きをしたい場合のみ単体実行する）
 
 ### 時間割DBテーブル構成（新スキーマ）
 
@@ -182,11 +208,13 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 | `syllabi` | 時間割マスタ（course_section_id, timetable_code, term, target_grades, subject_category） |
 | `schedules` | 曜日・時限（syllabus_id, day_of_week, period） |
 | `user_syllabi` | ユーザーの登録科目（line_user_id, syllabus_id） |
-| `timetable_profiles` | ユーザーの学部・学年プロフィール |
+
+ユーザーの学部・学年・学科プロフィールは `user_profiles`（faculty/grade/department列）で管理する（旧`timetable_profiles`は2026-07-06に統合・廃止）。
 
 インポートスクリプト: `programing files/import_syllabus.py`
 - `--also-courses` を付けると `subjects`/`instructors`/`course_sections`（LINE bot用）にも登録
 - `--classification` / `--faculty` で分類・学部名を指定
+- **専門科目（教養教育院以外）は `--classification` 未指定でも「未分類」にはならない**: `faculty`（`--faculty`指定 or シラバスデータの所属列から自動推定）を元に `{学部名}専門科目`（例:「経営学部専門科目」）を自動で分類名に設定する。この分類が `display_orders`（kind='classification'）に無ければ `parent_group=学部名` で自動作成し、LINE bot「専門科目」→「{学部名} ▶」の中に自動的に表示される（分類名を学部名そのものにすると`parent_group`と文字列衝突しドリルダウンから選べなくなるため、必ず「専門科目」等の接尾語を付けること）
 
 ---
 
@@ -208,6 +236,7 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 | よみがな生成 | pykakasi |
 | プッシュ通知 | pywebpush（VAPID） |
 | ホスティング | Render（Web Service） |
+| HTTPクライアント | httpx（自己ping・DBバックアップのSupabase Storage API呼び出し） |
 
 ### ディレクトリ構成
 
@@ -229,30 +258,32 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── push.py                  ← Web Push (VAPID) 通知送信
 │   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
 │   ├── templates.py               ← Jinja2Templates・jstフィルタ
-│   └── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
+│   ├── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
+│   └── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
 ├── routers/                 ← FastAPI APIRouter（URLプレフィックス単位）
 │   ├── webhook.py             ← POST /callback（LINE Webhook）
 │   ├── health.py               ← /health
-│   ├── pages.py                  ← /, /privacy, /sw.js, /liff/course, /liff/timetable
+│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /privacy, /sw.js, /liff/course, /liff/timetable
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
-│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /submit, /api/course/{id}
+│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /api/faculties, /submit, /api/course/{id}
 │   ├── timetable_api.py             ← /api/timetable/*
 │   ├── seiseki_api.py                ← /api/parse_seiseki 等（成績PDF解析）
 │   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
 │       ├── auth.py                     ← /admin/login, /admin/logout
 │       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe
-│       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、最大ブロック）
+│       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、教員/学部/分類の並び替え）
 │       ├── reviews.py                     ← /admin/reviews*
 │       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/activity
 │       ├── stats.py                         ← /admin/richmenu-stats, /admin/usage-stats
 │       ├── timetable_check.py                ← /admin/timetable/check
-│       └── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*
+│       ├── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*, /admin/credit_requirements/group/move（グループ並び替え）
+│       └── registration_caps.py                ← /admin/registration_caps*（学部・学科・年度別CAP＝履修登録上限単位数のCRUD）
 ├── templates/
 │   ├── admin/              ← courses / reviews / keiei / sysinfo / logs / users / errors /
-│   │                          activity / usage_stats / richmenu / timetable_check / login / base 等
+│   │                          activity / usage_stats / richmenu / timetable_check / registration_caps / login / base 等
 │   ├── liff/
 │   │   ├── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
 │   │   └── timetable.html ← マイ時間割（LIFFページ）
@@ -263,15 +294,16 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
 ├── docs/                  ← ドキュメント類（.gitignore対象）
+├── backups/               ← download_prod_backup.pyのダウンロード先（.gitignore対象、env別サブフォルダ）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← 時間割データをDB投入
     ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング
     ├── import_kyoyo_courses.py    ← 教養科目インポート
-    ├── update_senmon_classification.py ← 経営学部専門科目の分類コード更新
-    ├── setup_richmenu.py / sync_richmenu.py ← LINEリッチメニュー設定・dev→本番同期
+    ├── setup_richmenu.py          ← LINEリッチメニュー設定（--env dev/prod）
     ├── sync_db_to_prod.py         ← dev→本番DBの5テーブル同期
-    ├── drop_old_tables.py         ← 旧スキーマテーブル削除（移行完了後用）
+    ├── download_prod_backup.py    ← Supabase Storage上のDBバックアップをローカルbackups/へ差分ダウンロード（--env dev/prod）
     ├── models.py / database.py    ← スクリプト群専用のDBアクセス層（ルートのmodels.pyとは別定義）
+    ├── assets/richmenu.png        ← リッチメニュー原本画像（setup_richmenu.pyのデフォルト画像、git管理下）
     └── .env / .env.dev            ← 環境変数（本番・dev）
 ```
 
@@ -295,11 +327,11 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 
 | テーブル | 用途 |
 |----------|------|
-| `classification_orders` | 分類の表示順・親グループ・学部 |
+| `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順、`credit_requirement_group`=単位要件グループの表示順（`faculty`列で経営学部/システム情報学部を区別）） |
 | `credit_requirements` | 単位要件定義（学部別、category_id, required_credits, label） |
-| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号） |
+| `registration_caps` | 履修登録上限単位数（CAP制、faculty/department/yearごと。departmentがNULLなら学部共通値） |
+| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み） |
 | `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |
-| `timetable_profiles` | ユーザーの学部・学年設定 |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
 | `error_logs` | サーバーエラーログ |
@@ -348,6 +380,15 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 
 - 同一 `AsyncSession` では `asyncio.gather` による並行クエリ禁止（InterfaceError）
 - 並行したい場合は各コルーチン内で `async with AsyncSessionLocal() as s:` を個別に開く
+
+**DB自動バックアップ（`core/backup.py`）**
+
+- Supabase Freeプランには自動バックアップが無く、ローカル開発環境はNetwork Restrictionsにより本番DBへ直接接続できない。そのため「本番DBに到達できる本番アプリ自身」が定期バックアップを生成する設計にした
+- `backup_loop()`（`self_ping()`と同じ無限ループ+`asyncio.sleep`パターン、`main.py`のlifespanで`asyncio.create_task`）が起動30秒後から`BACKUP_INTERVAL_HOURS`（既定1時間）間隔で`dump_all_tables_to_sql()`（`Base.metadata.sorted_tables`のFK依存順で全テーブルをSELECTしINSERT文形式のSQLを生成・gzip圧縮）を実行し、`upload_backup_to_storage()`でSupabase Storageの`BACKUP_BUCKET`（既定`db-backups`）へアップロード、`BACKUP_RETENTION_DAYS`（既定15日）より古い世代を削除する
+- `BACKUP_ENABLED`が`true`でない環境では`backup_loop()`は即returnして何もしない（既定false。dev/本番それぞれ明示的に有効化するまで安全）
+- ローカルPCへの取り込みは`programing files/download_prod_backup.py --env dev|prod`で、Supabase Storageからまだ無いファイルだけを`backups/{env}/`へ差分ダウンロードする（Windowsタスクスケジューラ等で定期実行する想定）
+- 必要な環境変数: `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `BACKUP_BUCKET` / `BACKUP_ENABLED` / `BACKUP_RETENTION_DAYS` / `BACKUP_INTERVAL_HOURS`（dev/本番でSupabaseプロジェクトが別なので値も別々に設定する）
+- 復元は「`init_db()`で空スキーマを作ってから、ダウンロードした`.sql.gz`を解凍してINSERT文を流し込む」想定（CREATE TABLE等のスキーマDDLは含まない）
 
 ---
 
