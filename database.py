@@ -373,3 +373,7 @@ async def init_db():
                 "sort": sort_order, "req": req,
                 "members": json.dumps(members) if members else None,
             })
+        # My時間割: ユーザーが登録科目ごとに教室名を自由入力できる欄
+        await conn.execute(text(
+            "ALTER TABLE user_syllabi ADD COLUMN IF NOT EXISTS classroom TEXT"
+        ))

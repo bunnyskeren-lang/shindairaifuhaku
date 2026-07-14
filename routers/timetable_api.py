@@ -242,11 +242,31 @@ async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-To
                     "timetable_code": syl.timetable_code or "",
                     "subject_category": syl.subject_category or "",
                     "department": syl.department or "",
+                    "classroom": us.classroom or "",
                     "slots": [],
                 }
             result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})
 
         return {"courses": list(result.values())}
+
+
+@router.post("/api/timetable/classroom/{syllabus_id}")
+async def api_timetable_classroom_set(syllabus_id: int, request: Request):
+    body = await request.json()
+    user_id = await _require_liff_user(body.get("id_token", ""))
+    classroom = (body.get("classroom") or "").strip()[:50]
+    async with AsyncSessionLocal() as session:
+        us = (await session.execute(
+            select(UserSyllabus).where(
+                UserSyllabus.line_user_id == user_id,
+                UserSyllabus.syllabus_id == syllabus_id,
+            )
+        )).scalar_one_or_none()
+        if not us:
+            raise HTTPException(status_code=404, detail="course not registered")
+        us.classroom = classroom or None
+        await session.commit()
+    return {"ok": True, "classroom": classroom}
 
 
 async def _get_registration_cap(session, faculty: str | None, department: str | None, year: int) -> int | None:

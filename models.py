@@ -226,6 +226,7 @@ class UserSyllabus(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
+    classroom: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
