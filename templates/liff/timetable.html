@@ -1273,7 +1273,8 @@ function applyEarnedCredits(credits) {
 async function loadCreditRequirements() {
   try {
     const faculty = (window._userProfile || {}).faculty || '経営学部';
-    const department = (window._userProfile || {}).department || '';
+    // コース未選択（農学部1年次等）の場合は代表コースの区分を暫定表示する
+    const department = (window._userProfile || {}).department || _CREDIT_CHECKER_DEFAULT_DEPARTMENT[faculty] || '';
     const url = `${BASE_URL}/api/credit_requirements?faculty=${encodeURIComponent(faculty)}` +
       (department ? `&department=${encodeURIComponent(department)}` : '');
     const res = await fetch(url);
@@ -1308,8 +1309,11 @@ async function loadCredits() {
   // required_creditsは合算行と個別行で二重に持つ区分があり単純合計できないため個別に保持する）
   const DEPARTMENT_TOTAL_CREDITS = {
     '建築学科': 124, '市民工学科': 126, '電気電子工学科': 128, '機械工学科': 127, '応用化学科': 126,
+    '生産環境工学コース': 126, '食料環境経済学コース': 126, '応用動物学コース': 126,
+    '応用植物学コース': 126, '応用生命化学コース': 126, '応用機能生物学コース': 126,
   };
-  const defaultTotalReq = DEPARTMENT_TOTAL_CREDITS[(window._userProfile || {}).department] || 124;
+  const defaultDept = (window._userProfile || {}).department || _CREDIT_CHECKER_DEFAULT_DEPARTMENT[(window._userProfile || {}).faculty] || '';
+  const defaultTotalReq = DEPARTMENT_TOTAL_CREDITS[defaultDept] || 124;
   const totalReqEl = document.getElementById('credits-total-req');
   if (totalReqEl) {
     totalReqEl.value = _creditData._totalReq != null ? _creditData._totalReq : defaultTotalReq;
@@ -1530,7 +1534,10 @@ function updateCredits() {
   localStorage.setItem('credit_data', JSON.stringify(_creditData));
 }
 
-const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部', '文学部']);
+// 農学部は2年次からコースに分かれるため1年次はdepartment未設定の学生がいるが、
+// その場合も単位チェッカー自体は非表示にせず、暫定的に代表コースの区分を表示する
+// （実際のコースを選択済みの学生にはloadCreditRequirements()側でその学生のコースが優先される）
+const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部', '文学部', '農学部']);
 // 工学部は学科ごとに卒業要件が異なるため、単位要件が登録済みの学科のみ
 // 学科名で個別に許可する
 const _CREDIT_CHECKER_DEPARTMENTS = new Set([
@@ -1538,6 +1545,8 @@ const _CREDIT_CHECKER_DEPARTMENTS = new Set([
   '生産環境工学コース', '食料環境経済学コース', '応用動物学コース',
   '応用植物学コース', '応用生命化学コース', '応用機能生物学コース',
 ]);
+// department未選択時にフォールバックとして表示するコース（学部単位）
+const _CREDIT_CHECKER_DEFAULT_DEPARTMENT = { '農学部': '生産環境工学コース' };
 function updateCreditsVisibility() {
   const wrap = document.getElementById('credits-wrap');
   if (!wrap) return;
