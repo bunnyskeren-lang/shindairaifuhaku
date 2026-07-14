@@ -8,6 +8,7 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
+from starlette.middleware.gzip import GZipMiddleware
 
 from core import backup, cache, liff_auth, line_client, prewarm
 from core.activity_log import log_cleanup_loop, save_error_log
@@ -133,6 +134,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
 )
+# 修正理由: JSONレスポンス（/api/preload等）が無圧縮のままだった。モバイル回線での
+# 転送時間短縮のため、他の全ミドルウェアより外側（最終的なレスポンスバイト列）で圧縮する。
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 @app.exception_handler(RequestValidationError)
