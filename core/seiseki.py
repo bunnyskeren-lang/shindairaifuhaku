@@ -140,6 +140,7 @@ def extract_seiseki_raw(text: str) -> dict:
             "社会系":         _summary('教養科目（社会系）'),
             "総合系":         _summary('教養科目（総合系）'),
             "基盤系":         _summary('教養科目（基盤系）'),
+            "健康・スポーツ科学系": _summary('教養科目（健康・スポーツ科学系）'),
             "共通専門基礎科目": _summary('共通専門基礎科目'),
             "専門科目":       _summary('専門科目'),
         },
@@ -190,12 +191,16 @@ def classify_seiseki_raw(raw: dict) -> dict:
         "kyoyo_kiban": round(kiban, 1),
         "gaigo1":  round(gaigo1, 1), "gaigo2":  round(gaigo2, 1),
         "kyotsu":  round(kyotsu_val, 1),
+        "kenko":   round(s.get("健康・スポーツ科学系", 0.0), 1),
         "shonen":  round(shonen, 1),  "senmon1": round(senmon1, 1),
         "senmon2": round(senmon2, 1), "global":  round(global_c, 1),
         "senmon3": round(senmon3, 1),
         # 経営学部の群分類ロジック（第1群〜第3群等）に依存しない、共通専門基礎科目＋専門科目の
         # 素の合計。群分けの無い学科（機械工学科等）の単位チェッカーはこちらを使う
         "senmon_all": round(kyotsu_val + senmon_total, 1),
+        # 共通専門基礎科目と専門科目の必要単位数が別枠で定められている学部（農学部等）向けに、
+        # 専門科目のみ（共通専門基礎科目を含まない）の値も別途返す
+        "senmon": round(senmon_total, 1),
     }
 
 

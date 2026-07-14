@@ -1234,10 +1234,23 @@ document.addEventListener('click', () => {
   document.getElementById('credits-note-popup')?.classList.remove('visible');
 });
 
-// 取得単位の反映。CREDIT_CATSのidとdata.creditsのキーは基本1:1だが、工学部各学科の
-// 「専門科目（選択科目含む）」区分は学科ごとにcategory_idが違う一方、成績表の集計値は
-// classify_seiseki_raw()が返す共通キー senmon_all 1本しか無いため、id が `_senmon` で
-// 終わる区分にはそこから値を補う
+// 取得単位の反映。CREDIT_CATSのidとdata.creditsのキーは経営学部（裸のid）なら基本1:1だが、
+// 学科・コースごとにcategory_idを前置する学部（工学部・農学部等）はcategory_idが
+// classify_seiseki_raw()の汎用キーと完全一致しないため、末尾の慣用サフィックスから
+// 対応するキーへ補完する（新学部を追加する場合は docs/BINRAN_READING_GUIDE.md 9章参照）
+const CREDIT_SUFFIX_KEY_MAP = [
+  ['_senmon_only', 'senmon'],     // 専門科目のみ（共通専門基礎科目を含まない）
+  ['_senmon', 'senmon_all'],      // 共通専門基礎科目＋専門科目の合算（学科別に区分を分けない学部用）
+  ['_kiban', 'kyoyo_kiban'],
+  ['_jinbun', 'jinbun'],
+  ['_shakai', 'shakai'],
+  ['_shizen', 'shizen'],
+  ['_sougou', 'sougou'],
+  ['_gaigo1', 'gaigo1'],
+  ['_gaigo2', 'gaigo2'],
+  ['_kyotsu', 'kyotsu'],
+  ['_kenko', 'kenko'],
+];
 function applyEarnedCredits(credits) {
   CREDIT_CATS.forEach(cat => {
     const el = document.getElementById('earn-' + cat.id);
@@ -1247,12 +1260,13 @@ function applyEarnedCredits(credits) {
     const el = document.getElementById('earn-' + id);
     if (el) el.textContent = val;
   });
-  if (credits.senmon_all != null) {
-    CREDIT_CATS.filter(cat => cat.id.endsWith('_senmon')).forEach(cat => {
+  CREDIT_CATS.forEach(cat => {
+    const hit = CREDIT_SUFFIX_KEY_MAP.find(([suffix]) => cat.id.endsWith(suffix));
+    if (hit && credits[hit[1]] != null) {
       const el = document.getElementById('earn-' + cat.id);
-      if (el) el.textContent = credits.senmon_all;
-    });
-  }
+      if (el) el.textContent = credits[hit[1]];
+    }
+  });
 }
 
 async function loadCreditRequirements() {

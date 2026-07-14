@@ -74,6 +74,18 @@ class CreditRequirement(Base):
     max_credits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
+class RegistrationCap(Base):
+    """学部・学科・年度ごとの履修登録上限単位数（CAP制）。departmentがNULLの行はその学部の学科共通値として扱う。"""
+    __tablename__ = "registration_caps"
+    __table_args__ = (UniqueConstraint("faculty", "department", "year", name="uq_registration_caps"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    faculty: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class UserSeisekiRaw(Base):
     __tablename__ = "user_seiseki_raw"
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
