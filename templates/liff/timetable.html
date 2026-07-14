@@ -748,7 +748,10 @@ async function shareTimetable() {
   try {
     await liff.shareTargetPicker([{ type: 'text', text: message }]);
     return;
-  } catch (e) {}
+  } catch (e) {
+    // 調査用: shareTargetPickerが失敗する原因を特定するため、実際のエラー内容を一時的に表示する
+    alert(`友達選択が開けませんでした（調査用ログ）\ncode: ${e && e.code}\nmessage: ${e && e.message}\nstr: ${String(e)}`);
+  }
   try {
     await navigator.clipboard.writeText(url);
     alert('共有リンクをコピーしました。LINEのトークで友達に送ってください。');
