@@ -343,6 +343,11 @@ tbody td:first-child {
 
 /* ── 共有モーダル ── */
 .share-modal-desc { font-size: 12px; color: #64748b; line-height: 1.6; }
+.share-modal-warn {
+  font-size: 11.5px; color: #92400e; line-height: 1.6;
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+  padding: 8px 10px; margin-top: 10px;
+}
 .share-stop-btn {
   background: #fff; border: 1.5px solid #fecaca; color: #dc2626;
 }
@@ -582,7 +587,8 @@ body.view-only .edit-only { display: none !important; }
       <span class="profile-modal-title">時間割を共有</span>
       <button class="profile-modal-close" onclick="closeShareModal()">×</button>
     </div>
-    <div class="share-modal-desc">友達に自分の時間割を見せられるリンクを送ります。相手はLINEにログインした状態でリンクを開くと閲覧できます（登録・編集はできません）。</div>
+    <div class="share-modal-desc">友達に自分の時間割を見せられるリンクを送ります。相手はLINEにログインした状態でリンクを開くと閲覧できます（登録・編集はできません）。リンクは「共有を停止する」を押すまで有効です。</div>
+    <div class="share-modal-warn">⚠️ このリンクを知っている人は誰でも閲覧できます。転送されると意図しない相手にも見られてしまうため、信頼できる相手だけに送ってください。</div>
     <button class="profile-save-btn" onclick="shareTimetable()">📤 友達に送る</button>
     <button class="profile-save-btn share-stop-btn" onclick="revokeShare()">🛑 共有を停止する</button>
     <div class="share-stop-note">停止すると、これまでに送ったリンクはすべて無効になります</div>
@@ -1153,13 +1159,18 @@ async function init() {
     buildGrid();
     document.getElementById("loading-screen").style.display = "none";
   } catch (e) {
-    document.getElementById("loading-screen").innerHTML =
-      `<p style="color:#ef4444;padding:16px;font-size:11px;word-break:break-all">
-        code: ${e.code || '(none)'}<br>
-        msg: ${e.message || '(none)'}<br>
-        str: ${String(e)}<br>
-        json: ${JSON.stringify(e)}
-      </p>`;
+    if (e.friendly) {
+      document.getElementById("loading-screen").innerHTML =
+        `<p style="padding:24px 16px;font-size:14px;text-align:center;color:#64748b;line-height:1.7">📭 ${esc(e.message)}</p>`;
+    } else {
+      document.getElementById("loading-screen").innerHTML =
+        `<p style="color:#ef4444;padding:16px;font-size:11px;word-break:break-all">
+          code: ${e.code || '(none)'}<br>
+          msg: ${e.message || '(none)'}<br>
+          str: ${String(e)}<br>
+          json: ${JSON.stringify(e)}
+        </p>`;
+    }
   }
 }
 
@@ -1172,7 +1183,17 @@ async function loadMyCourses() {
     headers: idToken ? { 'X-Liff-Id-Token': idToken } : {},
   });
   if (!res.ok) {
-    if (window.viewOnly) throw new Error("共有された時間割の取得に失敗しました");
+    if (window.viewOnly) {
+      // バックエンドの detail（「共有リンクが無効です（停止された可能性があります）」等）を
+      // そのまま閲覧者に見せる。共有停止で意図的にリンクを無効化したことが伝わるようにするため
+      let detail = "この時間割を表示できませんでした";
+      try {
+        detail = (await res.json()).detail || detail;
+      } catch (e) {}
+      const err = new Error(detail);
+      err.friendly = true;
+      throw err;
+    }
     return;
   }
   const data = await res.json();
