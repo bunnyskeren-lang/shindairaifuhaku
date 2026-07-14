@@ -743,15 +743,13 @@ async function shareTimetable() {
   }
   closeShareModal();
   const message = `私の時間割はこちら📅\n${url}`;
-  // isApiAvailable('shareTargetPicker')による事前チェックが環境によって不正確な場合があるため、
-  // 直接呼び出して失敗した場合のみクリップボードへフォールバックする
+  // shareTargetPickerはLINE公式アカウントが未認証だとFORBIDDENになる（LINE側の制限で
+  // コード側では回避不可）。認証済みになれば自動的にこちらが使われるよう、失敗時のみ
+  // クリップボードへフォールバックする形は維持する
   try {
     await liff.shareTargetPicker([{ type: 'text', text: message }]);
     return;
-  } catch (e) {
-    // 調査用: shareTargetPickerが失敗する原因を特定するため、実際のエラー内容を一時的に表示する
-    alert(`友達選択が開けませんでした（調査用ログ）\ncode: ${e && e.code}\nmessage: ${e && e.message}\nstr: ${String(e)}`);
-  }
+  } catch (e) {}
   try {
     await navigator.clipboard.writeText(url);
     alert('共有リンクをコピーしました。LINEのトークで友達に送ってください。');
