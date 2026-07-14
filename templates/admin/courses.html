@@ -165,15 +165,15 @@
 <div style="display:flex;gap:4px;margin:16px 0 0">
   <a href="/admin/courses{% if q %}?q={{ q }}{% endif %}"
      style="padding:8px 18px;border-radius:8px 8px 0 0;font-size:13px;font-weight:bold;text-decoration:none;
-            background:{{ '#6366f1' if not active_category else '#e5e7eb' }};
+            background:{{ 'var(--accent)' if not active_category else '#e5e7eb' }};
             color:{{ '#fff' if not active_category else '#374151' }}">すべて</a>
   <a href="/admin/courses?category=教養{% if q %}&q={{ q }}{% endif %}"
      style="padding:8px 18px;border-radius:8px 8px 0 0;font-size:13px;font-weight:bold;text-decoration:none;
-            background:{{ '#6366f1' if active_category == '教養' else '#e5e7eb' }};
+            background:{{ 'var(--accent)' if active_category == '教養' else '#e5e7eb' }};
             color:{{ '#fff' if active_category == '教養' else '#374151' }}">教養科目</a>
   <a href="/admin/courses?category=専門{% if q %}&q={{ q }}{% endif %}"
      style="padding:8px 18px;border-radius:8px 8px 0 0;font-size:13px;font-weight:bold;text-decoration:none;
-            background:{{ '#6366f1' if active_category == '専門' else '#e5e7eb' }};
+            background:{{ 'var(--accent)' if active_category == '専門' else '#e5e7eb' }};
             color:{{ '#fff' if active_category == '専門' else '#374151' }}">専門科目</a>
 </div>
 <div style="display:flex;align-items:center;gap:10px;margin:0 0 8px;flex-wrap:wrap;background:#fff;padding:10px 12px;border-radius:0 8px 8px 8px;border:1px solid #e5e7eb">
@@ -205,8 +205,8 @@
   {% for sub_cls, sub_courses in sub_items %}
   {% set sgid = pgid ~ "-sg-" ~ loop.index %}
   {% set sub_list = sub_courses | list %}
-  <tr class="{{ pgid }}" onclick="toggleSubGrp('{{ sgid }}', '{{ pgid }}', this)" style="background:#e0e7ff;cursor:pointer;user-select:none;display:none">
-    <td colspan="4" style="font-weight:bold;padding:8px 28px;color:#4338ca">
+  <tr class="{{ pgid }}" onclick="toggleSubGrp('{{ sgid }}', '{{ pgid }}', this)" style="background:var(--accent-chip-bg);cursor:pointer;user-select:none;display:none">
+    <td colspan="4" style="font-weight:bold;padding:8px 28px;color:var(--accent-text)">
       <span class="sub-arrow-{{ pgid }}">▶</span>
       {{ sub_cls }}
       <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ sub_list | length }}科目）</span>
@@ -227,7 +227,7 @@
       <button type="button" class="btn btn-icon" onclick="event.stopPropagation();moveCourse({{ c.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
     </td>
     <td class="actions">
-      <button type="button" class="btn" style="padding:4px 10px;background:#eef2ff;color:#4338ca"
+      <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
               onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
         👨‍🏫 担当教員{% if instructors_by_course[c.id] %} {{ instructors_by_course[c.id] | length }}人{% endif %}
       </button>
@@ -248,14 +248,14 @@
     </td>
   </tr>
   <tr id="inst-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="inst-row" style="display:none">
-    <td colspan="4" style="padding:12px 16px;background:#eef2ff;border-bottom:1px solid #c7d2fe">
-      <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
+    <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
+      <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員</div>
       <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         {% for inst in instructors_by_course[c.id] %}
         <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" class="chip">
-          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
+          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
           <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
-                  style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
+                  style="background:none;border:none;cursor:pointer;color:var(--accent-light);font-size:12px;padding:0;line-height:1" title="削除">✕</button>
         </span>
         {% else %}
         <span id="inst-empty-{{ c.id }}" style="color:#9ca3af;font-size:12px">まだ登録なし</span>
@@ -292,7 +292,7 @@
           <td style="padding:6px 12px">{% if r.is_approved %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>{% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">未承認</span>{% endif %}</td>
           <td style="padding:6px 12px">{{ r.submitter_name }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
-          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:#818cf8">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
+          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
           <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method or '―' }}</td>
           <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
@@ -316,8 +316,8 @@
   {% set gid = "grp-" ~ loop.index %}
   {% set group_list = group_courses | list %}
   <tr onclick="toggleGroup('{{ gid }}', this)"
-      style="background:#e0e7ff;cursor:pointer;user-select:none">
-    <td colspan="4" style="font-weight:bold;padding:10px 14px;color:#4338ca">
+      style="background:var(--accent-chip-bg);cursor:pointer;user-select:none">
+    <td colspan="4" style="font-weight:bold;padding:10px 14px;color:var(--accent-text)">
       <span class="grp-arrow">▶</span>
       {{ classification or "（未分類）" }}
       <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ group_list | length }}科目）</span>
@@ -340,7 +340,7 @@
       <button type="button" class="btn btn-icon" onclick="event.stopPropagation();moveCourse({{ c.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
     </td>
     <td class="actions">
-      <button type="button" class="btn" style="padding:4px 10px;background:#eef2ff;color:#4338ca"
+      <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
               onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
         👨‍🏫 担当教員{% if instructors_by_course[c.id] %} {{ instructors_by_course[c.id] | length }}人{% endif %}
       </button>
@@ -362,14 +362,14 @@
   </tr>
   <!-- 教員管理トグル行 -->
   <tr id="inst-{{ c.id }}" class="{{ gid }} inst-row" style="display:none">
-    <td colspan="4" style="padding:12px 16px;background:#eef2ff;border-bottom:1px solid #c7d2fe">
-      <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
+    <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
+      <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員</div>
       <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         {% for inst in instructors_by_course[c.id] %}
         <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" class="chip">
-          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
+          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
           <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
-                  style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
+                  style="background:none;border:none;cursor:pointer;color:var(--accent-light);font-size:12px;padding:0;line-height:1" title="削除">✕</button>
         </span>
         {% else %}
         <span id="inst-empty-{{ c.id }}" style="color:#9ca3af;font-size:12px">まだ登録なし</span>
@@ -412,7 +412,7 @@
           </td>
           <td style="padding:6px 12px">{{ r.submitter_name }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
-          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:#818cf8">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
+          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
           <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method or '―' }}</td>
           <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
@@ -615,7 +615,7 @@ function addInstructor(courseId) {
         nameLink.href = data.url;
         nameLink.target = '_blank';
         nameLink.rel = 'noopener';
-        nameLink.style.cssText = 'color:#4338ca;text-decoration:underline';
+        nameLink.style.cssText = 'color:var(--accent-text);text-decoration:underline';
         nameLink.textContent = data.name;
         chip.appendChild(nameLink);
       } else {
@@ -626,7 +626,7 @@ function addInstructor(courseId) {
       delBtn.type = 'button';
       delBtn.title = '削除';
       delBtn.textContent = '✕';
-      delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1';
+      delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--accent-light);font-size:12px;padding:0;line-height:1';
       delBtn.addEventListener('click', function() { deleteInstructor(courseId, data.id, delBtn); });
       chip.appendChild(delBtn);
       var inserted = false;

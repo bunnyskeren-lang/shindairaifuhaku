@@ -12,10 +12,10 @@
     {% for g in group_names %}
     <tr>
       <td style="white-space:nowrap;width:64px">
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveCreditGroup('{{ g }}','up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↑</button>
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveCreditGroup('{{ g }}','down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↓</button>
+        <button type="button" class="btn" style="padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"
+                onclick="moveCreditGroup('{{ g }}','up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"{% endif %}>↑</button>
+        <button type="button" class="btn" style="padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"
+                onclick="moveCreditGroup('{{ g }}','down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"{% endif %}>↓</button>
       </td>
       <td>{{ g }}</td>
     </tr>
@@ -77,7 +77,7 @@
 
   <!-- 新規追加 -->
   <details style="margin-top:20px" {% if not reqs %}open{% endif %}>
-    <summary style="cursor:pointer;font-weight:600;color:#6366f1">＋ カテゴリを追加</summary>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent)">＋ カテゴリを追加</summary>
     <form method="post" action="/admin/koubu/{{ dept_key }}/credit_requirements/add" style="margin-top:12px">
       <table>
         <tr>

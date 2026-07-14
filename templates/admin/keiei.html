@@ -26,10 +26,10 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
     {% for g in group_names %}
     <tr>
       <td style="white-space:nowrap;width:64px">
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveCreditGroup('{{ g }}','up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↑</button>
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveCreditGroup('{{ g }}','down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↓</button>
+        <button type="button" class="btn" style="padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"
+                onclick="moveCreditGroup('{{ g }}','up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"{% endif %}>↑</button>
+        <button type="button" class="btn" style="padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"
+                onclick="moveCreditGroup('{{ g }}','down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:var(--accent-chip-bg);color:var(--accent-text);font-size:14px"{% endif %}>↓</button>
       </td>
       <td>{{ g }}</td>
     </tr>
@@ -88,7 +88,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
 
   <!-- 新規追加 -->
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;font-weight:600;color:#6366f1">＋ カテゴリを追加</summary>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent)">＋ カテゴリを追加</summary>
     <form method="post" action="/admin/keiei/credit_requirements/add" style="margin-top:12px">
       <table>
         <tr>
@@ -153,7 +153,7 @@ select.grp-sel { width:auto; padding:3px 6px; font-size:12px; margin:0; }
     {% set is_auto = not c.senmon_group %}
     <tr>
       <td style="font-size:13px">{{ c.name }}
-        {% if c.term_type %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term_type }}</span>{% endif %}
+        {% if c.term_type %}<span style="font-size:10px;color:var(--accent);background:var(--accent-soft);padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term_type }}</span>{% endif %}
       </td>
       <td style="font-size:12px;color:#6b7280">{{ c.instructor }}</td>
       <td>
