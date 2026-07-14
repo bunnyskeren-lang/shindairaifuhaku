@@ -85,32 +85,26 @@ async def search_courses(q: str = ""):
 
 @router.get("/api/preload")
 async def api_preload():
-    async with AsyncSessionLocal() as session:
-        courses = (await session.execute(select(Subject).order_by(Subject.name))).scalars().all()
-        cs_rows = (await session.execute(
-            select(CourseSection, Instructor)
-            .join(Instructor, Instructor.id == CourseSection.instructor_id)
-            .order_by(Instructor.sort_order, Instructor.name)
-        )).all()
-    insts_by_course: dict = {}
-    inst_courses: dict = {}
-    course_by_id = {c.id: c.name for c in courses}
-    for cs, inst in cs_rows:
-        insts_by_course.setdefault(cs.subject_id, []).append({"name": inst.name})
-        cname = course_by_id.get(cs.subject_id)
-        if cname:
-            bucket = inst_courses.setdefault(inst.name, [])
-            if not any(x["name"] == cname for x in bucket):
-                bucket.append({"name": cname})
-    course_list = [
-        {"id": c.id, "name": c.name, "reading": c.reading or "", "instructors": insts_by_course.get(c.id, [])}
-        for c in courses
-    ]
-    instructor_list = [
-        {"name": name, "courses": clist}
-        for name, clist in sorted(inst_courses.items())
-    ]
-    res = JSONResponse({"courses": course_list, "instructors": instructor_list})
+    data = cache.get_preload_cache()
+    if data is None:
+        _, courses = await cache.get_courses_cached()
+        insts_by_course = await cache.get_all_instructors_cached()
+        inst_courses: dict[str, dict[str, None]] = {}
+        for c in courses:
+            for inst in insts_by_course.get(c.id, []):
+                inst_courses.setdefault(inst.name, {})[c.name] = None
+        course_list = [
+            {"id": c.id, "name": c.name, "reading": c.reading or "",
+             "instructors": [{"name": i.name} for i in insts_by_course.get(c.id, [])]}
+            for c in courses
+        ]
+        instructor_list = [
+            {"name": name, "courses": [{"name": cn} for cn in cnames]}
+            for name, cnames in sorted(inst_courses.items())
+        ]
+        data = {"courses": course_list, "instructors": instructor_list}
+        cache.set_preload_cache(data)
+    res = JSONResponse(data)
     res.headers["Cache-Control"] = "public, max-age=300"
     return res
 

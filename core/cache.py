@@ -281,6 +281,7 @@ def invalidate_courses_cache():
     global _all_instructors_cache, _all_instructors_cache_at
     global _course_flex_cache, _course_list_cache, _ranking_cache
     global _syllabus_url_cache, _syllabus_url_cache_at
+    global _preload_cache, _preload_cache_at
     _course_by_name = {}
     _course_list_all = []
     _course_cache_at = 0.0
@@ -293,6 +294,8 @@ def invalidate_courses_cache():
     # ここで一緒に無効化しないと管理画面での追加・変更が最大TTL(1時間)反映されなかった。
     _syllabus_url_cache = {}
     _syllabus_url_cache_at = 0.0
+    _preload_cache = None
+    _preload_cache_at = 0.0
 
 
 def invalidate_review_cache():
@@ -358,6 +361,26 @@ def get_registration_complete_cached(user_id: str) -> bool:
 
 def set_registration_complete(user_id: str) -> None:
     _registration_complete_at[user_id] = time.monotonic()
+
+
+# ── /api/preload レスポンスキャッシュ ──
+# get_courses_cached/get_all_instructors_cachedからの構築自体は軽いが、
+# 全科目・全教員（数千件規模）をループするため、リクエストの都度組み立てず結果をキャッシュする
+_PRELOAD_TTL = 3600
+_preload_cache: dict | None = None
+_preload_cache_at: float = 0.0
+
+
+def get_preload_cache() -> dict | None:
+    if _preload_cache is not None and time.monotonic() - _preload_cache_at < _PRELOAD_TTL:
+        return _preload_cache
+    return None
+
+
+def set_preload_cache(data: dict) -> None:
+    global _preload_cache, _preload_cache_at
+    _preload_cache = data
+    _preload_cache_at = time.monotonic()
 
 
 async def warm_query_caches() -> None:
