@@ -57,21 +57,23 @@ from linebot.v3.messaging import (
 )
 
 # ── 画像サイズ（元画像の比率をそのまま使用）──────────────────────────────────
-W, H = 1738, 905
+W, H = 1736, 906
 
-# ── レイアウト座標（元画像 1738×905 基準、ピクセル実測値）──────────────────────
-SIDE_X  = 1514   # 右サイドバー左端（x=1514 で白帯開始）
-ROW2_Y  = 399    # Row1/2 境界（y=391-406 白帯の中心）
-ROW3_Y  = 645    # Row2/3 境界（y=638-651 白帯の中心）
-REV_W   = 424    # レビュー投稿 右端（x=418-431 白帯の中心）
-COL2_X  = 518    # My時間割/教養 境界（Row2 輝度谷 x=507-530 の中心）
-COL3_X  = 1000   # 教養/専門 境界（Row2 輝度谷 x=988-1011 の中心）
-COL3B_X = 757    # 食堂/バイト 境界（SIDE_X // 2）
+# ── レイアウト座標（元画像 1736×906 基準、リッチメニュー(7.14).png ピクセル実測値）──
+SIDE_X  = 1514   # 右サイドバー左端
+ROW2_Y  = 427    # Row1/2 境界
+ROW3_Y  = 665    # Row2/3 境界
+REV_W   = 472    # レビュー投稿 右端
+COL2_X  = 610    # My時間割/教養 境界
+COL3_X  = 1092   # 教養/専門 境界
+R3C1_X  = 426    # 生協メニュー/生協アプリ 境界（Row3）
+R3C2_X  = 736    # 生協アプリ/近隣飲食店 境界（Row3）
+R3C3_X  = 1091   # 近隣飲食店/バイト 境界（Row3）
 
-# サイドバー行区切り（x=1626 の色変化から実測）
-SY1 = 185   # 図書館 / 市バス 境界
-SY2 = 381   # 市バス / うりぼーポータル 境界
-SY3 = 578   # うりぼーポータル / ヘルプ 境界
+# サイドバー行区切り
+SY1 = 245   # 図書館 / 市バス 境界
+SY2 = 480   # 市バス / うりぼーポータル 境界
+SY3 = 730   # うりぼーポータル / ヘルプ 境界
 
 
 def _timetable_action():
@@ -116,13 +118,23 @@ AREAS = [
     },
     # ── Row 3 ────────────────────────────────────────────────────
     {
-        "label": "食堂",
-        "x": 0, "y": ROW3_Y, "w": COL3B_X, "h": H - ROW3_Y,
-        "action": URIAction(label="食堂メニュー", uri="https://west2-univ.jp/sp/kobe-univ.php"),
+        "label": "生協メニュー",
+        "x": 0, "y": ROW3_Y, "w": R3C1_X, "h": H - ROW3_Y,
+        "action": URIAction(label="生協メニュー", uri="https://west2-univ.jp/sp/kobe-univ.php"),
+    },
+    {
+        "label": "生協アプリ",
+        "x": R3C1_X, "y": ROW3_Y, "w": R3C2_X - R3C1_X, "h": H - ROW3_Y,
+        "action": URIAction(label="生協アプリ", uri=f"{REVIEW_FORM_URL}/coop"),
+    },
+    {
+        "label": "近隣飲食店",
+        "x": R3C2_X, "y": ROW3_Y, "w": R3C3_X - R3C2_X, "h": H - ROW3_Y,
+        "action": PostbackAction(label="近隣飲食店", data="近隣飲食店"),
     },
     {
         "label": "バイト",
-        "x": COL3B_X, "y": ROW3_Y, "w": SIDE_X - COL3B_X, "h": H - ROW3_Y,
+        "x": R3C3_X, "y": ROW3_Y, "w": SIDE_X - R3C3_X, "h": H - ROW3_Y,
         "action": PostbackAction(label="バイト", data="バイト"),
     },
     # ── 右サイドバー (4 段) ───────────────────────────────────────

@@ -473,6 +473,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if t in ["バイト", "アルバイト"]:
         return [TextMessage(text="🚧 バイト情報機能は現在準備中です。\nもうしばらくお待ちください！")]
 
+    if t in ["近隣飲食店", "近隣の飲食店"]:
+        return [TextMessage(text="🚧 近隣飲食店情報機能は現在準備中です。\nもうしばらくお待ちください！")]
+
     if t in ["ヘルプ", "help", "使い方", "？", "?"]:
         return [make_help_flex()]
 
