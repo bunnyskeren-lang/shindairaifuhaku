@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>授業レビュー投稿 | 神大ライフハック</title>
-  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link rel="preconnect" href="https://static.line-scdn.net">
+  <link rel="preconnect" href="{{ base_url }}">
   <style>
     body {
       margin: 0;
@@ -32,6 +33,7 @@
     <p id="msg">読み込み中...</p>
   </div>
 
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     const LIFF_ID = "{{ liff_id }}";
     const BASE_URL = "{{ base_url }}";
