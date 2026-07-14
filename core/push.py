@@ -22,8 +22,7 @@ async def send_push_notification(course_name: str, rating: int, ease_rating: str
         "title": f"📝 新着レビュー: {course_name}",
         "body": f"{_stars}  楽単: {ease_rating}\n{comment[:80]}",
     })
-    expired_ids = []
-    for sub in subs:
+    async def _send_one(sub) -> int | None:
         try:
             await asyncio.to_thread(
                 webpush,
@@ -34,11 +33,14 @@ async def send_push_notification(course_name: str, rating: int, ease_rating: str
             )
         except WebPushException as e:
             if e.response is not None and e.response.status_code == 410:
-                expired_ids.append(sub.id)
-            else:
-                await save_error_log(e, action="push_notification")
+                return sub.id
+            await save_error_log(e, action="push_notification")
         except Exception as e:
             await save_error_log(e, action="push_notification")
+        return None
+
+    results = await asyncio.gather(*(_send_one(sub) for sub in subs))
+    expired_ids = [r for r in results if r is not None]
     if expired_ids:
         async with AsyncSessionLocal() as session:
             await session.execute(_sa_delete(PushSubscription).where(PushSubscription.id.in_(expired_ids)))
