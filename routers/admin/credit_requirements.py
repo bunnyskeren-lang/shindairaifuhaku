@@ -359,6 +359,127 @@ async def admin_sysinfo_delete_requirement(cat_id: str, request: Request, _: str
     return RedirectResponse("/admin/sysinfo", status_code=303)
 
 
+# ── 文学部 管理ページ ──────────────────────────────────────────────────────────
+
+@router.get("/admin/bungaku", response_class=HTMLResponse)
+async def admin_bungaku(request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        reqs = (await session.execute(
+            select(CreditRequirement)
+            .where(CreditRequirement.faculty == "文学部")
+            .order_by(CreditRequirement.sort_order)
+        )).scalars().all()
+        group_order = await cache.get_credit_group_order()
+        reqs = sorted(
+            reqs,
+            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
+        )
+        courses = (await session.execute(
+            select(Subject)
+            .where(Subject.faculty == "文学部")
+            .order_by(Subject.name)
+        )).scalars().all()
+    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
+    return templates.TemplateResponse("admin/bungaku.html", {
+        "request": request,
+        "reqs": reqs,
+        "courses": courses,
+        "group_names": group_names,
+        "group_faculty": "文学部",
+    })
+
+
+@router.post("/admin/bungaku/credit_requirements/update")
+async def admin_bungaku_update_requirements(request: Request, _: str = Depends(check_admin)):
+    form = await request.form()
+    async with AsyncSessionLocal() as session:
+        existing_ids = {
+            r for (r,) in (await session.execute(
+                select(CreditRequirement.category_id)
+                .where(CreditRequirement.faculty == "文学部")
+            )).all()
+        }
+        for cat_id in existing_ids:
+            values: dict = {}
+            if f"req_{cat_id}" in form:
+                try:
+                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
+                except ValueError:
+                    pass
+            if f"max_{cat_id}" in form:
+                max_val = form[f"max_{cat_id}"].strip()
+                try:
+                    values["max_credits"] = max(0, int(max_val)) if max_val else None
+                except ValueError:
+                    pass
+            if f"note_{cat_id}" in form:
+                note_val = form[f"note_{cat_id}"].strip()
+                values["note"] = note_val or None
+            if f"label_{cat_id}" in form:
+                values["label"] = form[f"label_{cat_id}"].strip()
+            if f"group_{cat_id}" in form:
+                values["group_name"] = form[f"group_{cat_id}"].strip()
+            if f"sort_{cat_id}" in form:
+                try:
+                    values["sort_order"] = int(form[f"sort_{cat_id}"])
+                except ValueError:
+                    pass
+            if values:
+                await session.execute(
+                    sa_update(CreditRequirement)
+                    .where(CreditRequirement.category_id == cat_id)
+                    .values(**values)
+                )
+        await session.commit()
+    return RedirectResponse("/admin/bungaku", status_code=303)
+
+
+@router.post("/admin/bungaku/credit_requirements/add")
+async def admin_bungaku_add_requirement(request: Request, _: str = Depends(check_admin)):
+    form = await request.form()
+    label  = form.get("new_label", "").strip()
+    group  = form.get("new_group", "").strip()
+    note   = form.get("new_note", "").strip() or None
+    if not label:
+        return RedirectResponse("/admin/bungaku?error=invalid", status_code=303)
+    try:
+        req    = max(0, int(form.get("new_req", "0")))
+        sort_v = int(form.get("new_sort", "999"))
+    except ValueError:
+        req, sort_v = 0, 999
+    cat_id = f"bungaku_{int(time.time() * 1000)}"
+    async with AsyncSessionLocal() as session:
+        session.add(CreditRequirement(
+            category_id=cat_id,
+            label=label,
+            group_name=group,
+            sort_order=sort_v,
+            required_credits=req,
+            note=note,
+            faculty="文学部",
+            department="人文学科",
+        ))
+        await session.commit()
+    return RedirectResponse("/admin/bungaku", status_code=303)
+
+
+@router.post("/admin/bungaku/credit_requirements/{cat_id}/delete")
+async def admin_bungaku_delete_requirement(cat_id: str, request: Request, _: str = Depends(check_admin)):
+    async with AsyncSessionLocal() as session:
+        row = await session.get(CreditRequirement, cat_id)
+        if row:
+            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
+            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
+            in_use = (await session.execute(
+                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
+            )).scalar_one_or_none()
+            if in_use:
+                return RedirectResponse("/admin/bungaku?error=in_use", status_code=303)
+            await session.delete(row)
+            await session.commit()
+    return RedirectResponse("/admin/bungaku", status_code=303)
+
+
 # ── 工学部 各学科 管理ページ（学生便覧の別表第2に基づく卒業要件） ──────────────────
 # 学部内で学科ごとに卒業要件が異なるため、faculty="工学部" + department で絞り込む。
 # 5学科とも構造が同一（教養科目の内訳＋専門科目(選択科目含む)の合算1本）なため

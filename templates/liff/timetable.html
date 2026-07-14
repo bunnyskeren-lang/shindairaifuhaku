@@ -1530,7 +1530,7 @@ function updateCredits() {
   localStorage.setItem('credit_data', JSON.stringify(_creditData));
 }
 
-const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部']);
+const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部', '文学部']);
 // 工学部は学科ごとに卒業要件が異なるため、単位要件が登録済みの学科のみ
 // 学科名で個別に許可する
 const _CREDIT_CHECKER_DEPARTMENTS = new Set([

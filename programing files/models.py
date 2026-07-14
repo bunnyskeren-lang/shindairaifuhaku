@@ -86,6 +86,20 @@ class RegistrationCap(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class RequiredSubject(Base):
+    """学部・学科・学年ごとの必修科目マスタ。時間割登録時に自動でuser_syllabiへ登録する対象を管理する。"""
+    __tablename__ = "required_subjects"
+    __table_args__ = (UniqueConstraint("faculty", "department", "grade", "subject_id", name="uq_required_subjects"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    faculty: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    department: Mapped[str] = mapped_column(Text, nullable=False)
+    grade: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id_parity: Mapped[Optional[str]] = mapped_column(String(4), nullable=True, default=None)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class UserSeisekiRaw(Base):
     __tablename__ = "user_seiseki_raw"
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
