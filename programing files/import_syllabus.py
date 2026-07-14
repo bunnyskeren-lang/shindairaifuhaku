@@ -142,6 +142,11 @@ def normalize_alnum(name: str) -> str:
     """全角英数字（Ａ-Ｚ, a-z, ０-９）のみ半角化する。括弧等の全角記号はそのまま残す。"""
     return name.translate(_FULLWIDTH_ALNUM)
 
+_HALFWIDTH_TO_FULLWIDTH_ALNUM = str.maketrans({
+    chr(c - 0xFEE0): chr(c)
+    for c in list(range(0xFF10, 0xFF1A)) + list(range(0xFF21, 0xFF3B)) + list(range(0xFF41, 0xFF5B))
+})
+
 _PAREN_F2H = str.maketrans("（）", "()")
 _PAREN_H2F = str.maketrans("()", "（）")
 
@@ -469,10 +474,17 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             )).scalar_one_or_none()
 
             if subj is None:
-                # 括弧の全角/半角表記ゆれを吸収して再検索（表示名は変更しない）
+                # 括弧・英数字の全角/半角表記ゆれを吸収して再検索（表示名は変更しない）。
+                # parse_file()でc["name"]は英数字が半角化済みのため、既存レコードが
+                # 全角英数字のまま登録されているケース（旧import_kyoyo_courses.py由来等）
+                # を拾えないと同一科目が別レコードとして重複登録されてしまう
+                fullwidth_alnum_name = c["name"].translate(_HALFWIDTH_TO_FULLWIDTH_ALNUM)
                 for alt_name in {
                     c["name"].translate(_PAREN_F2H),
                     c["name"].translate(_PAREN_H2F),
+                    fullwidth_alnum_name,
+                    fullwidth_alnum_name.translate(_PAREN_F2H),
+                    fullwidth_alnum_name.translate(_PAREN_H2F),
                 } - {c["name"]}:
                     alt_filters = [Subject.name == alt_name]
                     if is_kyoyo:
