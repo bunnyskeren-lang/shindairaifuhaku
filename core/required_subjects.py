@@ -4,7 +4,7 @@ from sqlalchemy import or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config import DEFAULT_ACADEMIC_YEAR
-from models import CourseSection, RequiredSubject, Schedule, Syllabus, UserProfile, UserSyllabus
+from models import CourseSection, RequiredSubject, Schedule, Syllabus, UserCustomCourse, UserProfile, UserSyllabus
 
 _STUDENT_ID_DIGITS_RE = re.compile(r'^(\d{7})')
 
@@ -86,6 +86,21 @@ async def register_syllabus_for_user(session, user_id: str, syllabus_id: int) ->
                     UserSyllabus.syllabus_id.in_(conflicting_ids),
                 )
             )
+
+        # 手動追加科目（user_custom_courses）も「1コマ1科目」の対象として差し替える。
+        # 手動追加科目はクォーター等の学期情報を持たないため、api_timetable_custom_create側の
+        # 差し替えと同様に学期を問わず同一曜日・時限なら削除する
+        custom_conflicts = [
+            (UserCustomCourse.day_of_week == d) & (UserCustomCourse.period == p)
+            for d, p in new_slots
+        ]
+        await session.execute(
+            UserCustomCourse.__table__.delete().where(
+                UserCustomCourse.line_user_id == user_id,
+                UserCustomCourse.year == new_syl.year,
+                or_(*custom_conflicts),
+            )
+        )
 
     await session.execute(
         pg_insert(UserSyllabus)
