@@ -1124,7 +1124,7 @@ function renderCourseList(courses) {
   if (senmonOther.length > 0) {
     const groups = new Map();
     senmonOther.forEach(c => {
-      const key = c.department || "専門科目";
+      const key = c.department === "教養教育院" ? "共通専門基礎科目" : (c.department || "専門科目");
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(c);
     });
