@@ -11,6 +11,12 @@ _buckets: dict[str, list[float]] = defaultdict(list)
 
 
 def _client_ip(request: Request) -> str:
+    # RenderはエッジプロキシからX-Forwarded-Forでオリジナルのクライアントアドレスを渡すため、
+    # request.client.host（Renderの内部プロキシIPになり全リクエストで同一値になってしまう）
+    # より優先する。値はプロキシ経路順にカンマ区切りで並ぶため先頭が実クライアントIP
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
