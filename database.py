@@ -380,3 +380,8 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_syllabi ADD COLUMN IF NOT EXISTS classroom TEXT"
         ))
+        # マイ時間割のコマタップ（/api/timetable/slots/{day}/{period}）はseq scanになっていたため、
+        # syllabus_idを含まない(day_of_week, period)単体の複合インデックスを追加
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_schedules_day_period ON schedules (day_of_week, period)"
+        ))
