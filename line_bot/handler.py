@@ -90,9 +90,24 @@ def _vnum_match(name: str) -> tuple[str, str, int, str] | None:
 
 # ── Course list carousel ────────────────────────────────────────
 
+# 1回の返信で送れる科目数には上限（40バブル≒240科目、_split_to_bubbles/messages[:5]参照）がある。
+# 教養科目・専門科目のimportではclassificationが学部単位で1つにまとまりがちで、学部によっては
+# それだけで240件を超え、上限を超えた科目が黙って表示されなくなる問題があった（例:
+# 国際人間科学部1005件のうち240件しか表示されない）。この閾値を超える場合は先によみがな順の
+# 均等な範囲選択メニューを挟み、どの学部・分類で科目を追加してもこの安全装置が自動で働くように
+# する（50音の行（あ行/か行等）で単純に区切ると「科学」「社会」等の頻出語でか行・さ行だけ
+# 突出して偏るため、行ではなく件数で均等分割する）。
+_ALPHA_SPLIT_THRESHOLD = 48
+_ALPHA_CHUNK_SIZE = 50
 
-async def handle_course_list(category: str = "", classification: str = "", faculty: str = "") -> list:
-    _cl_key = f"{category}:{classification}:{faculty}"
+
+def _reading_key(subj) -> str:
+    return (subj.reading or "").strip() or (subj.name or "")
+
+
+async def handle_course_list(category: str = "", classification: str = "", faculty: str = "",
+                              reading_row: str = "") -> list:
+    _cl_key = f"{category}:{classification}:{faculty}:{reading_row}"
     _cached = cache.get_course_list_cache(_cl_key)
     if _cached is not None:
         return _cached
@@ -105,6 +120,42 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             (not category or c.category == category) and
             (not classification or c.classification == classification) and
             (not faculty or c.faculty == faculty)]
+
+    if not reading_row and len(rows) > _ALPHA_SPLIT_THRESHOLD:
+        if faculty and not classification:
+            _row_prefix = f"専門F:{faculty}"
+        elif classification and category:
+            _row_prefix = f"{category}:{classification}"
+        elif classification:
+            _row_prefix = classification
+        else:
+            _row_prefix = None
+        if _row_prefix:
+            by_reading = sorted(rows, key=_reading_key)
+            chunks = [by_reading[i:i + _ALPHA_CHUNK_SIZE] for i in range(0, len(by_reading), _ALPHA_CHUNK_SIZE)]
+            items = []
+            for i, chunk in enumerate(chunks):
+                first_ch = _reading_key(chunk[0])[:1] or "?"
+                last_ch = _reading_key(chunk[-1])[:1] or "?"
+                label = f"{first_ch}〜{last_ch}" if first_ch != last_ch else first_ch
+                items.append((f"{label}（{len(chunk)}件）", f"{_row_prefix}::R:{i}"))
+            result = [make_classification_select_flex(
+                items, set(),
+                title="📚 科目一覧",
+                subtitle=f"{len(rows)}件あります。よみがな順で絞り込んでください",
+                header_color="#6366f1",
+            )]
+            cache.set_course_list_cache(_cl_key, result)
+            return result
+
+    if reading_row:
+        try:
+            _idx = int(reading_row)
+        except ValueError:
+            _idx = -1
+        by_reading = sorted(rows, key=_reading_key)
+        rows = by_reading[_idx * _ALPHA_CHUNK_SIZE:(_idx + 1) * _ALPHA_CHUNK_SIZE] if _idx >= 0 else []
+
     rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
 
     if not rows:
@@ -406,6 +457,11 @@ async def prewarm_rankings() -> None:
 
 async def handle_message(text: str, user_id: str = "") -> list:
     t = text.strip()
+    # 科目数が多い分類・学部で挟まれる50音行選択（例:"専門:国際人間科学部専門科目::R:あ行"）の
+    # 行指定部分を切り離す。handle_course_list呼び出し以外の分岐判定には影響しない。
+    _reading_row = ""
+    if "::R:" in t:
+        t, _reading_row = t.split("::R:", 1)
 
     if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
         return [make_category_select_flex()]
@@ -433,19 +489,19 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
     if t.startswith("教養:"):
         cls = t[len("教養:"):]
-        return await handle_course_list(category="教養", classification=cls)
+        return await handle_course_list(category="教養", classification=cls, reading_row=_reading_row)
 
     if t.startswith("専門:"):
         cls = t[len("専門:"):]
-        return await handle_course_list(category="専門", classification=cls)
+        return await handle_course_list(category="専門", classification=cls, reading_row=_reading_row)
 
     if t.startswith("専門F:"):
         fac = t[len("専門F:"):]
-        return await handle_course_list(category="専門", faculty=fac)
+        return await handle_course_list(category="専門", faculty=fac, reading_row=_reading_row)
 
     # 分類名の直接タップ（例：「教養(社会)」）
     if t in await cache.get_cls_set():
-        return await handle_course_list(classification=t)
+        return await handle_course_list(classification=t, reading_row=_reading_row)
 
     if t == "専門comingsoon":
         return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
@@ -560,7 +616,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 back_data="専門",
             )]
         else:
-            # 学科・専攻も複数分類も無い学部 → 即座に科目一覧
+            # 学科・専攻も複数分類も無い学部 → 即座に科目一覧（件数が多ければ内部で50音行選択に切替）
             result = await handle_course_list(category="専門", classification=next(iter(cls_values)))
         cache.set_course_list_cache(_menu_key, result)
         return result

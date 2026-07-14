@@ -245,7 +245,10 @@ async def init_db():
             "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS hide_from_timetable BOOLEAN NOT NULL DEFAULT FALSE"
         ))
         # 既存科目のうち reading 未設定のものをバックフィル
-        result = await conn.execute(text("SELECT id, name FROM subjects WHERE reading IS NULL"))
+        # 修正理由: programing files/import_syllabus.pyがSubject新規作成時にreading=""を
+        # プレースホルダとして入れており、"IS NULL"だけだとこれらが永久にヒットせず
+        # よみがな検索・LINE bot科目一覧の50音行分割の両方が効かないままになっていた。
+        result = await conn.execute(text("SELECT id, name FROM subjects WHERE reading IS NULL OR reading = ''"))
         rows = result.fetchall()
         if rows:
             try:
@@ -258,11 +261,26 @@ async def init_db():
                     roma = ''.join(item.get('hepburn', '') for item in converted)
                     return f"{hira} {roma}".lower().strip()
 
-                for row in rows:
-                    await conn.execute(
-                        text("UPDATE subjects SET reading = :r WHERE id = :id"),
-                        {"r": _gen_reading(row.name), "id": row.id},
+                # 修正理由: 対象がIS NULLだけでなく空文字も含むよう広げたことで対象件数が
+                # 数千件規模に増えた。1件ずつUPDATEするとDB往復が積み重なり起動が
+                # 数分単位で遅延するため、VALUES一括UPDATEでラウンドトリップをまとめる。
+                _BATCH = 500
+                for i in range(0, len(rows), _BATCH):
+                    batch = rows[i:i + _BATCH]
+                    # 修正理由: ":id0::integer" のようにbind paramに直接"::"キャストを
+                    # 続けるとSQLAlchemyのtext()バインド解析と衝突して構文エラーになるため
+                    # CAST(...)を使う
+                    values_sql = ", ".join(
+                        f"(CAST(:id{j} AS INTEGER), CAST(:r{j} AS TEXT))" for j in range(len(batch))
                     )
+                    params = {}
+                    for j, row in enumerate(batch):
+                        params[f"id{j}"] = row.id
+                        params[f"r{j}"] = _gen_reading(row.name)
+                    await conn.execute(text(
+                        f"UPDATE subjects SET reading = v.r FROM (VALUES {values_sql}) AS v(id, r) "
+                        f"WHERE subjects.id = v.id"
+                    ), params)
             except Exception:
                 pass
         # 開講区分: 旧termカラムの値をterm_typeへバックフィルしてからtermを削除（term_typeに一本化）
