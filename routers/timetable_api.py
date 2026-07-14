@@ -288,7 +288,7 @@ async def _load_timetable_courses(session, user_id: str, year: int) -> list[dict
             "name": c.name,
             "instructor": c.instructor or "",
             "term": None,
-            "credits": 2,
+            "credits": c.credits,
             "timetable_code": "",
             "subject_category": "",
             "department": "",
@@ -313,7 +313,24 @@ async def api_timetable_my(year: int = DEFAULT_ACADEMIC_YEAR, x_liff_id_token: s
 @router.get("/api/timetable/share_token")
 async def api_timetable_share_token(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
     user_id = await _require_liff_user(x_liff_id_token)
-    return {"token": make_share_token(user_id)}
+    async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, user_id)
+        version = profile.share_token_version if profile else 0
+    return {"token": make_share_token(user_id, version)}
+
+
+@router.post("/api/timetable/share_revoke")
+async def api_timetable_share_revoke(request: Request):
+    """発行済みの共有リンクをすべて無効化する（share_token_versionをインクリメント）。"""
+    body = await request.json()
+    user_id = await _require_liff_user(body.get("id_token", ""))
+    async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, user_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="user profile not found")
+        profile.share_token_version = (profile.share_token_version or 0) + 1
+        await session.commit()
+    return {"ok": True}
 
 
 @router.get("/api/timetable/shared")
@@ -325,9 +342,10 @@ async def api_timetable_shared(
     if not viewer_id:
         raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
 
-    owner_id = verify_share_token(token)
-    if not owner_id:
+    decoded = verify_share_token(token)
+    if not decoded:
         raise HTTPException(status_code=404, detail="共有リンクが無効です")
+    owner_id, token_version = decoded
 
     async with AsyncSessionLocal() as session:
         viewer_profile = await session.get(UserProfile, viewer_id)
@@ -335,8 +353,8 @@ async def api_timetable_shared(
             raise HTTPException(status_code=403, detail="登録済みユーザーのみ閲覧できます")
 
         owner_profile = await session.get(UserProfile, owner_id)
-        if not owner_profile:
-            raise HTTPException(status_code=404, detail="共有元のユーザーが見つかりません")
+        if not owner_profile or (owner_profile.share_token_version or 0) != token_version:
+            raise HTTPException(status_code=404, detail="共有リンクが無効です（停止された可能性があります）")
 
         courses = await _load_timetable_courses(session, owner_id, year)
         return {"owner_name": owner_profile.name, "courses": courses}
@@ -434,7 +452,15 @@ async def api_timetable_custom_create(request: Request):
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
     instructor = (body.get("instructor") or "").strip()[:100] or None
+    # classificationはcredit_requirements.category_idと一致させ、単位チェッカーの取得単位数に
+    # 加算する（core/seiseki.pyのapi_seiseki_credits参照）。フロントエンドは自由入力ではなく
+    # ユーザーの学部・学科の区分一覧から選択させるため、ここでは形式チェックのみ行う。
     classification = (body.get("classification") or "").strip()[:100] or None
+    try:
+        credits = int(body.get("credits"))
+    except (TypeError, ValueError):
+        credits = 2
+    credits = max(1, min(credits, 10))
 
     day = body.get("day_of_week")
     if day not in _VALID_DAYS:
@@ -491,7 +517,8 @@ async def api_timetable_custom_create(request: Request):
 
         course = UserCustomCourse(
             line_user_id=user_id, name=name, instructor=instructor,
-            classification=classification, year=year, day_of_week=day, period=period,
+            classification=classification, credits=credits,
+            year=year, day_of_week=day, period=period,
         )
         session.add(course)
         await session.commit()
@@ -504,6 +531,7 @@ async def api_timetable_custom_create(request: Request):
             "name": course.name,
             "instructor": course.instructor or "",
             "classification": course.classification or "",
+            "credits": course.credits,
             "term": None,
             "timetable_code": "",
             "department": "",

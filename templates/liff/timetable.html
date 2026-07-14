@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>時間割登録</title>
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<link rel="preconnect" href="https://static.line-scdn.net">
+<link rel="preconnect" href="{{ base_url }}">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -340,6 +341,13 @@ tbody td:first-child {
   color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 20px;
 }
 
+/* ── 共有モーダル ── */
+.share-modal-desc { font-size: 12px; color: #64748b; line-height: 1.6; }
+.share-stop-btn {
+  background: #fff; border: 1.5px solid #fecaca; color: #dc2626;
+}
+.share-stop-note { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 8px; }
+
 /* ── 教室入力モーダル ── */
 .classroom-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);
@@ -504,7 +512,7 @@ body.view-only .edit-only { display: none !important; }
     <option value="3" selected>第3Q</option>
     <option value="4">第4Q</option>
   </select>
-  <button class="profile-chip share-btn edit-only" id="share-btn" onclick="shareTimetable()">🔗 共有</button>
+  <button class="profile-chip share-btn edit-only" id="share-btn" onclick="openShareModal()">🔗 共有</button>
   <button class="profile-chip edit-only" id="profile-chip" onclick="openProfileModal()">👤 未設定</button>
 </div>
 
@@ -568,6 +576,19 @@ body.view-only .edit-only { display: none !important; }
   </div>
 </div>
 
+<div class="profile-modal-overlay" id="share-modal-overlay" style="display:none" onclick="closeShareModalOnOverlay(event)">
+  <div class="profile-modal">
+    <div class="profile-modal-header">
+      <span class="profile-modal-title">時間割を共有</span>
+      <button class="profile-modal-close" onclick="closeShareModal()">×</button>
+    </div>
+    <div class="share-modal-desc">友達に自分の時間割を見せられるリンクを送ります。相手はLINEにログインした状態でリンクを開くと閲覧できます（登録・編集はできません）。</div>
+    <button class="profile-save-btn" onclick="shareTimetable()">📤 友達に送る</button>
+    <button class="profile-save-btn share-stop-btn" onclick="revokeShare()">🛑 共有を停止する</button>
+    <div class="share-stop-note">停止すると、これまでに送ったリンクはすべて無効になります</div>
+  </div>
+</div>
+
 <div class="profile-modal-overlay" id="profile-modal-overlay" style="display:none" onclick="closeProfileModalOnOverlay(event)">
   <div class="profile-modal">
     <div class="profile-modal-header">
@@ -627,8 +648,14 @@ body.view-only .edit-only { display: none !important; }
       <input type="text" class="classroom-input" id="custom-course-instructor" placeholder="例：神戸太郎" maxlength="100">
     </div>
     <div class="profile-field">
-      <div class="profile-label">分類（単位チェッカー対応のため）</div>
-      <input type="text" class="classroom-input" id="custom-course-classification" placeholder="例：専門科目" maxlength="100">
+      <div class="profile-label">単位数</div>
+      <input type="number" class="classroom-input" id="custom-course-credits" min="1" max="10" value="2">
+    </div>
+    <div class="profile-field">
+      <div class="profile-label">分類（単位チェッカーの取得単位数に反映されます）</div>
+      <select class="profile-select" id="custom-course-classification">
+        <option value="">反映しない</option>
+      </select>
     </div>
     <button class="profile-save-btn" onclick="saveCustomCourse()">追加</button>
   </div>
@@ -648,6 +675,7 @@ body.view-only .edit-only { display: none !important; }
   <div class="course-list" id="course-list"></div>
 </div>
 
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 const BASE_URL = "{{ base_url }}";
 const LIFF_ID  = "{{ liff_id }}";
@@ -661,6 +689,34 @@ async function getIdToken() {
     return await liff.getIDToken();
   } catch (e) {
     return null;
+  }
+}
+
+function openShareModal() {
+  document.getElementById('share-modal-overlay').style.display = 'flex';
+}
+function closeShareModal() {
+  document.getElementById('share-modal-overlay').style.display = 'none';
+}
+function closeShareModalOnOverlay(e) {
+  if (e.target === document.getElementById('share-modal-overlay')) closeShareModal();
+}
+
+async function revokeShare() {
+  if (!confirm('共有を停止しますか？これまでに送ったリンクはすべて無効になります。')) return;
+  const idToken = await getIdToken();
+  if (!idToken) return;
+  try {
+    const res = await fetch(`${BASE_URL}/api/timetable/share_revoke`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: idToken }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    closeShareModal();
+    alert('共有を停止しました。');
+  } catch (e) {
+    alert('共有の停止に失敗しました');
   }
 }
 
@@ -679,6 +735,7 @@ async function shareTimetable() {
     alert('共有リンクの取得に失敗しました');
     return;
   }
+  closeShareModal();
   const message = `私の時間割はこちら📅\n${url}`;
   if (liff.isApiAvailable('shareTargetPicker')) {
     try {
@@ -942,7 +999,18 @@ function openCustomCourseModal() {
   document.getElementById('custom-course-modal-sub').textContent = dayLabel;
   document.getElementById('custom-course-name').value = "";
   document.getElementById('custom-course-instructor').value = "";
-  document.getElementById('custom-course-classification').value = "";
+  document.getElementById('custom-course-credits').value = "2";
+  // 単位チェッカーの区分（CREDIT_CATS）から選ばせる。合算行(cat.combined)は実体を持たない
+  // 集計専用の行なので選択肢から除外する。ユーザーの学部に単位チェッカーが未対応の場合は
+  // 「反映しない」のみになる
+  const sel = document.getElementById('custom-course-classification');
+  sel.innerHTML = '<option value="">反映しない</option>';
+  CREDIT_CATS.filter(cat => !cat.combined).forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat.id;
+    opt.textContent = cat.group ? `${cat.group} - ${cat.name}` : cat.name;
+    sel.appendChild(opt);
+  });
   document.getElementById('custom-course-modal-overlay').style.display = 'flex';
   setTimeout(() => document.getElementById('custom-course-name').focus(), 50);
 }
@@ -963,7 +1031,10 @@ async function saveCustomCourse() {
     return;
   }
   const instructor = document.getElementById('custom-course-instructor').value.trim();
-  const classification = document.getElementById('custom-course-classification').value.trim();
+  const classification = document.getElementById('custom-course-classification').value;
+  let credits = parseInt(document.getElementById('custom-course-credits').value, 10);
+  if (!Number.isFinite(credits)) credits = 2;
+  credits = Math.min(10, Math.max(1, credits));
   const idToken = await getIdToken();
   if (!idToken) {
     alert("エラーが発生しました。再度お試しください。");
@@ -974,7 +1045,7 @@ async function saveCustomCourse() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id_token: idToken, name, instructor, classification,
+        id_token: idToken, name, instructor, classification, credits,
         day_of_week: currentSlot.day, period: currentSlot.period, year: currentYear,
       }),
     });
@@ -988,6 +1059,7 @@ async function saveCustomCourse() {
   _slotCache.clear();
   await Promise.all([loadMyCourses(), openDrawer(currentSlot.day, currentSlot.period)]);
   buildGrid();
+  if (classification) await loadCredits();
 }
 
 async function deleteCustomCourse(btn, course) {
@@ -1014,6 +1086,7 @@ async function deleteCustomCourse(btn, course) {
   await loadMyCourses();
   setFilter(currentQuarter);
   buildGrid();
+  if (course.classification) await loadCredits();
 }
 
 async function submitProfile() {
@@ -1354,7 +1427,10 @@ function makeReadOnlyCourseItem(c) {
   const info = document.createElement("div");
   info.className = "course-info";
   if (c.is_custom) {
-    const metaParts = [c.instructor, c.classification].filter(Boolean);
+    const classificationLabel = c.classification
+      ? (CREDIT_CATS.find(cat => cat.id === c.classification)?.name || c.classification)
+      : null;
+    const metaParts = [c.instructor, classificationLabel, c.credits ? `${c.credits}単位` : null].filter(Boolean);
     info.innerHTML = `
       <div class="course-name ${categoryClass}">${esc(c.name)}</div>
       <div class="course-meta">${esc(metaParts.join(' ／ ') || '手動追加科目')}</div>
@@ -1393,7 +1469,10 @@ function makeCourseItem(c) {
   info.className = "course-info";
 
   if (c.is_custom) {
-    const metaParts = [c.instructor, c.classification].filter(Boolean);
+    const classificationLabel = c.classification
+      ? (CREDIT_CATS.find(cat => cat.id === c.classification)?.name || c.classification)
+      : null;
+    const metaParts = [c.instructor, classificationLabel, c.credits ? `${c.credits}単位` : null].filter(Boolean);
     info.innerHTML = `
       <div class="course-name ${categoryClass}">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
       <div class="course-meta">${esc(metaParts.join(' ／ ') || '手動追加科目')}</div>

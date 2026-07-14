@@ -380,8 +380,16 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_syllabi ADD COLUMN IF NOT EXISTS classroom TEXT"
         ))
+        # 手動追加科目の単位数（単位チェッカーの取得単位数への加算に使う）
+        await conn.execute(text(
+            "ALTER TABLE user_custom_courses ADD COLUMN IF NOT EXISTS credits INTEGER NOT NULL DEFAULT 2"
+        ))
         # マイ時間割のコマタップ（/api/timetable/slots/{day}/{period}）はseq scanになっていたため、
         # syllabus_idを含まない(day_of_week, period)単体の複合インデックスを追加
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_schedules_day_period ON schedules (day_of_week, period)"
+        ))
+        # マイ時間割の共有リンク世代番号（「共有を停止する」で発行済みリンクを一括失効させる）
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS share_token_version INTEGER NOT NULL DEFAULT 0"
         ))

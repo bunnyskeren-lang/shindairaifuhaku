@@ -41,6 +41,9 @@ class UserProfile(Base):
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # マイ時間割の共有リンクに埋め込む世代番号。「共有を停止する」でインクリメントすると
+    # それ以前に発行済みのリンク（友達に送信済みのものを含む）が一括で無効になる
+    share_token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -232,7 +235,9 @@ class UserSyllabus(Base):
 
 class UserCustomCourse(Base):
     """ユーザーがマイ時間割で手動追加した個人用の科目（シラバスマスタに存在しない科目）。
-    line_user_idの本人にのみ表示され、他ユーザーの科目一覧には表示されない。"""
+    line_user_idの本人にのみ表示され、他ユーザーの科目一覧には表示されない。
+    classificationはcredit_requirements.category_idと一致させ、単位チェッカーの取得単位数に
+    creditsを加算する（routers/seiseki_api.pyのapi_seiseki_credits参照）。"""
     __tablename__ = "user_custom_courses"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -240,6 +245,7 @@ class UserCustomCourse(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
     period: Mapped[int] = mapped_column(Integer, nullable=False)

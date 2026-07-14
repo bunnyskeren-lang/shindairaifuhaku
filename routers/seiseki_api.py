@@ -8,7 +8,7 @@ from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.seiseki import PDFPLUMBER_OK, classify_seiseki_raw, parse_seiseki_pdf
 from database import AsyncSessionLocal
-from models import CreditRequirement, Subject, SubjectCreditCategory, UserSeisekiRaw
+from models import CreditRequirement, Subject, SubjectCreditCategory, UserCustomCourse, UserSeisekiRaw
 
 router = APIRouter()
 
@@ -72,13 +72,23 @@ async def api_seiseki_credits(x_liff_id_token: str = Header("", alias="X-Liff-Id
         return {}
     async with AsyncSessionLocal() as session:
         row = await session.get(UserSeisekiRaw, uid)
-    if not row:
+        # マイ時間割で手動追加した科目のうち、分類（credit_requirements.category_id）を
+        # 指定したものは取得単位数に加算する
+        custom_rows = (await session.execute(
+            select(UserCustomCourse.classification, UserCustomCourse.credits).where(
+                UserCustomCourse.line_user_id == uid,
+                UserCustomCourse.classification.is_not(None),
+            )
+        )).all()
+    if not row and not custom_rows:
         return {}
-    raw = row.raw_json
+    credits = classify_seiseki_raw(row.raw_json) if row else {}
+    for category_id, c in custom_rows:
+        credits[category_id] = credits.get(category_id, 0) + c
     return {
-        "credits": classify_seiseki_raw(raw),
-        "gpa": row.gpa,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "credits": credits,
+        "gpa": row.gpa if row else None,
+        "updated_at": row.updated_at.isoformat() if row and row.updated_at else None,
     }
 
 
