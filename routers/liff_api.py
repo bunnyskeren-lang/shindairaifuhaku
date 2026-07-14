@@ -551,7 +551,7 @@ async def api_course(course_id: int):
         # 最初の非NULL syllabus_url を CourseSection から取得
         syllabus_url = next((cs.syllabus_url for cs, _ in cs_instr_rows if cs.syllabus_url), None)
         if not syllabus_url:
-            syllabus_url = make_syllabus_url(sc_code or "")
+            syllabus_url = make_syllabus_url(sc_code or "", subject.faculty or "")
         instructor_str = "・".join(instr.name for _, instr in cs_instr_rows)
         avg_rating = float(agg[0]) if agg and agg[0] else None
         top_ease = None
