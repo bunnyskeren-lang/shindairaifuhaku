@@ -55,6 +55,12 @@
 
 科目名の正規化（ローマ数字表記統一）・LINE bot一覧のバリアント統合表示など、詳細は `docs/SUBJECT_NAME_RULES.md` を参照。`models.py` でこの領域を変更したら同ドキュメントも更新すること。
 
+### LINE bot科目一覧の表示件数について（新学部・大量科目追加時に意識すること）
+
+LINE botの1回の返信には上限（40バブル≒240科目、`line_bot/handler.py`の`_split_to_bubbles`/`messages[:5]`参照）がある。`classification`が学部単位で1つにまとまっている学部（`import_syllabus.py`で分類を細分化しなかった場合）は、科目数が閾値（`_ALPHA_SPLIT_THRESHOLD`=48件）を超えると`handle_course_list()`が自動でよみがな順の均等分割メニューを挟むため、**新しい学部・大量の科目を追加する際に明示的な分類分け作業は不要**（2026-07-15、国際人間科学部1005件のうち76%が上限超過で非表示になっていたバグの修正で導入）。
+
+分割ラベルはよみがな（`subjects.reading`）の先頭文字を使うため、新規科目追加時に`reading`が空文字のまま残らないよう注意すること（`import_syllabus.py`は新規作成時に`reading=""`をプレースホルダで入れ、`database.py`の`init_db()`起動時バックフィルが`WHERE reading IS NULL OR reading = ''`で毎回自動生成する設計。バックフィル条件を`IS NULL`だけに戻すと空文字のまま埋まらなくなるので変更しないこと）。
+
 ## データ保護ルール
 
 - **投稿されたレビュー（reviews テーブル）は、ユーザーから明示的な削除指示がない限り絶対に消去しないこと**
