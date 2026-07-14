@@ -460,22 +460,22 @@ async def submit(
 @router.get("/api/course/{course_id}")
 async def api_course(course_id: int):
     try:
+        # 修正理由: subject取得とcs_instr取得は元々別々のAsyncSessionLocal()を開いており、
+        # どちらもcourse_id確定後に順番に実行するだけの依存関係なので、DB接続の往復を
+        # 1回分減らすため同じセッションにまとめる。
         async with AsyncSessionLocal() as session:
             subject = await session.get(Subject, course_id)
             if not subject:
                 raise HTTPException(status_code=404, detail="course not found")
-
-        async def _cs_instr():
-            async with AsyncSessionLocal() as s:
-                # 修正理由: ORDER BY未指定だとPostgreSQLは行順を保証せず、これに依存する
-                # 閲覧数記録先(main_cs_id)・表示するシラバスURL・教員名の表示順がリクエスト
-                # ごとに変わりうる非決定的な挙動になっていた。id順で固定する。
-                return (await s.execute(
-                    select(CourseSection, Instructor)
-                    .join(Instructor, Instructor.id == CourseSection.instructor_id)
-                    .where(CourseSection.subject_id == course_id)
-                    .order_by(CourseSection.id)
-                )).all()
+            # 修正理由: ORDER BY未指定だとPostgreSQLは行順を保証せず、これに依存する
+            # 閲覧数記録先(main_cs_id)・表示するシラバスURL・教員名の表示順がリクエスト
+            # ごとに変わりうる非決定的な挙動になっていた。id順で固定する。
+            cs_instr_rows = (await session.execute(
+                select(CourseSection, Instructor)
+                .join(Instructor, Instructor.id == CourseSection.instructor_id)
+                .where(CourseSection.subject_id == course_id)
+                .order_by(CourseSection.id)
+            )).all()
 
         async def _agg(cs_ids: list):
             if not cs_ids:
@@ -516,7 +516,6 @@ async def api_course(course_id: int):
                     .limit(1)
                 )).scalar_one_or_none()
 
-        cs_instr_rows = await _cs_instr()
         cs_ids = [cs.id for cs, _ in cs_instr_rows]
 
         agg, ease_rows, reviews_raw, sc_code = await asyncio.gather(

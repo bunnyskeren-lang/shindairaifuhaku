@@ -411,6 +411,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [make_category_select_flex()]
 
     if t in ["教養", "教養科目", "教養一覧"]:
+        _menu_key = "menu:教養"
+        _cached = cache.get_course_list_cache(_menu_key)
+        if _cached is not None:
+            return _cached
         cls_map = await cache.get_cls_order_map()
         _cls_sort = make_cls_sort(cls_map)
         reviewed_names_edu, (_, _all_courses) = await asyncio.gather(
@@ -421,8 +425,11 @@ async def handle_message(text: str, user_id: str = "") -> list:
         clss = sorted({c.classification for c in edu_courses}, key=_cls_sort)
         reviewed_cls = {c.classification for c in edu_courses if c.name in reviewed_names_edu}
         if clss:
-            return [make_classification_select_flex(clss, reviewed_cls)]
-        return await handle_course_list(category="教養")
+            result = [make_classification_select_flex(clss, reviewed_cls)]
+        else:
+            result = await handle_course_list(category="教養")
+        cache.set_course_list_cache(_menu_key, result)
+        return result
 
     if t.startswith("教養:"):
         cls = t[len("教養:"):]
@@ -444,6 +451,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
 
     if t in ["専門科目", "専門", "専門一覧"]:
+        _menu_key = "menu:専門"
+        _cached = cache.get_course_list_cache(_menu_key)
+        if _cached is not None:
+            return _cached
         reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
             cache.get_reviewed_cached(),
             cache.get_courses_cached(),
@@ -475,16 +486,23 @@ async def handle_message(text: str, user_id: str = "") -> list:
         display_reviewed = reviewed_fac | reviewed_other
 
         if display_items:
-            return [make_classification_select_flex(
+            result = [make_classification_select_flex(
                 display_items, display_reviewed,
                 title="🎓 専門科目",
                 subtitle="学部を選んでください",
                 header_color="#0ea5e9",
             )]
-        return await handle_course_list(category="専門")
+        else:
+            result = await handle_course_list(category="専門")
+        cache.set_course_list_cache(_menu_key, result)
+        return result
 
     # 学部名タップ（例："経営学部"）
     if t in await cache.get_faculty_order():
+        _menu_key = f"menu:fac:{t}"
+        _cached = cache.get_course_list_cache(_menu_key)
+        if _cached is not None:
+            return _cached
         reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
             cache.get_reviewed_cached(),
             cache.get_courses_cached(),
@@ -492,7 +510,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
         fac_courses = [c for c in _all_courses if c.category == "専門" and c.classification
                         and (c.faculty or "").startswith(t)]
         if not fac_courses:
-            return [TextMessage(text=f"「{t}」の専門科目はまだ登録されていません。")]
+            result = [TextMessage(text=f"「{t}」の専門科目はまだ登録されていません。")]
+            cache.set_course_list_cache(_menu_key, result)
+            return result
 
         dept_values = {c.faculty for c in fac_courses}
         cls_values = {c.classification for c in fac_courses}
@@ -516,7 +536,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 if any(c.name in reviewed_names_sen for c in fac_courses if c.faculty == d)
             }
             items = [(_dept_label(d), d) for d in dept_sorted]
-            return [make_classification_select_flex(
+            result = [make_classification_select_flex(
                 items, reviewed_dept_labels,
                 title=f"🎓 {t} 専門科目",
                 subtitle="学科・専攻を選んでください",
@@ -525,13 +545,12 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 back_label="◀ 学部選択に戻る",
                 back_data="専門",
             )]
-
-        if len(cls_values) > 1:
+        elif len(cls_values) > 1:
             # 学科・専攻の区別はないが、分類（群科目等）が複数ある学部（経営学部等）→ 分類一覧
             cls_sorted = sorted(cls_values, key=_cls_sort)
             reviewed_cls = {cls for cls in cls_sorted
                              if any(c.name in reviewed_names_sen for c in fac_courses if c.classification == cls)}
-            return [make_classification_select_flex(
+            result = [make_classification_select_flex(
                 cls_sorted, reviewed_cls,
                 title=f"🎓 {t} 専門科目",
                 subtitle="分類を選んでください",
@@ -540,9 +559,11 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 back_label="◀ 学部選択に戻る",
                 back_data="専門",
             )]
-
-        # 学科・専攻も複数分類も無い学部 → 即座に科目一覧
-        return await handle_course_list(category="専門", classification=next(iter(cls_values)))
+        else:
+            # 学科・専攻も複数分類も無い学部 → 即座に科目一覧
+            result = await handle_course_list(category="専門", classification=next(iter(cls_values)))
+        cache.set_course_list_cache(_menu_key, result)
+        return result
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
@@ -730,13 +751,19 @@ async def handle_message(text: str, user_id: str = "") -> list:
 _SLOW_REPLY_MS = 2000
 
 
-def _log_reply_timing(kind: str, start: float) -> None:
+def _log_reply_timing(kind: str, start: float, compute_ms: float | None = None) -> None:
     """webhook受信からreply()完了までの実時間を記録する。
     routers/webhook.pyの/callbackは即座に202相当を返すためRenderのアクセスログには
-    実際のLINE bot応答速度が出ない。process_events側で計測する。"""
+    実際のLINE bot応答速度が出ない。process_events側で計測する。
+    compute_ms を渡すと handle_message() の計算時間とLINE API送信(reply())時間を
+    切り分けて記録できる（大きなFlexMessageの送信自体が遅いのか、こちら側の計算が
+    遅いのかを区別するため）。"""
     duration_ms = (time.perf_counter() - start) * 1000
     marker = " SLOW" if duration_ms >= _SLOW_REPLY_MS else ""
-    print(f"[linebot_reply] {kind} {duration_ms:.0f}ms{marker}", flush=True)
+    if compute_ms is not None:
+        print(f"[linebot_reply] {kind} {duration_ms:.0f}ms (compute={compute_ms:.0f}ms send={duration_ms - compute_ms:.0f}ms){marker}", flush=True)
+    else:
+        print(f"[linebot_reply] {kind} {duration_ms:.0f}ms{marker}", flush=True)
 
 
 async def process_events(events) -> None:
@@ -776,9 +803,10 @@ async def process_events(events) -> None:
                         handle_message(data, user_id),
                         timeout=25.0,
                     )
+                    _t_compute = time.perf_counter()
                     await line_client.reply(event.reply_token, messages[:5])
                     asyncio.create_task(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
-                    _log_reply_timing(f"postback:{data[:30]}", _t0)
+                    _log_reply_timing(f"postback:{data[:30]}", _t0, compute_ms=(_t_compute - _t0) * 1000)
                 except asyncio.TimeoutError:
                     await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=data)
                     try:
@@ -814,9 +842,10 @@ async def process_events(events) -> None:
                     handle_message(user_text, user_id),
                     timeout=25.0,
                 )
+                _t_compute = time.perf_counter()
                 await line_client.reply(event.reply_token, messages[:5])
                 asyncio.create_task(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
-                _log_reply_timing(f"message:{user_text[:30]}", _t0)
+                _log_reply_timing(f"message:{user_text[:30]}", _t0, compute_ms=(_t_compute - _t0) * 1000)
             except asyncio.TimeoutError:
                 await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
                 try:
