@@ -266,6 +266,8 @@ async def register_profile(
             await session.rollback()
             return _form_error("登録に失敗しました。もう一度お試しください")
 
+    cache.set_registration_complete(uid)
+
     try:
         await line_client.unlink_rich_menu(uid)
     except Exception as exc:

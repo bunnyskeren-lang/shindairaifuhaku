@@ -93,7 +93,7 @@ nav{margin-bottom:16px}
 </div>
 {% endif %}
 <h1>{% block heading %}{% endblock %}</h1>
-{% set path = request.url.path %}
+{% set path = request.url.path if request is defined else '' %}
 {% set credit_paths = ['/admin/keiei', '/admin/sysinfo', '/admin/bungaku'] %}
 {% set credit_active = path in credit_paths or path.startswith('/admin/koubu') or path.startswith('/admin/nogaku') %}
 <nav>

@@ -48,9 +48,14 @@ from models import CourseSection, Review, Subject, UserProfile
 
 
 async def _registration_incomplete(user_id: str) -> bool:
+    if cache.get_registration_complete_cached(user_id):
+        return False
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, user_id)
-        return not is_profile_complete(profile)
+        complete = is_profile_complete(profile)
+    if complete:
+        cache.set_registration_complete(user_id)
+    return not complete
 
 # ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
 # アルファベットや数字のみが異なる科目（ベースの漢字部分が完全一致するもの）は
