@@ -477,6 +477,9 @@ tbody td:first-child {
   z-index:9999; display:none;
 }
 .credits-note-popup.visible { display:block; }
+
+body.view-only .edit-only { display: none !important; }
+.share-btn { background: rgba(255,255,255,.18); }
 </style>
 </head>
 <body>
@@ -489,8 +492,8 @@ tbody td:first-child {
 </div>
 
 <div class="header">
-  <h1>📅 時間割登録</h1>
-  <p>セルをタップして科目を登録</p>
+  <h1 id="header-title">📅 時間割登録</h1>
+  <p id="header-sub">セルをタップして科目を登録</p>
 </div>
 
 <div class="quarter-bar">
@@ -501,7 +504,8 @@ tbody td:first-child {
     <option value="3" selected>第3Q</option>
     <option value="4">第4Q</option>
   </select>
-  <button class="profile-chip" id="profile-chip" onclick="openProfileModal()">👤 未設定</button>
+  <button class="profile-chip share-btn edit-only" id="share-btn" onclick="shareTimetable()">🔗 共有</button>
+  <button class="profile-chip edit-only" id="profile-chip" onclick="openProfileModal()">👤 未設定</button>
 </div>
 
 <div class="category-legend">
@@ -523,7 +527,7 @@ tbody td:first-child {
   </table>
 </div>
 
-<div class="cap-bar">
+<div class="cap-bar edit-only">
   <span class="cap-label">CAP</span>
   <span class="cap-count" id="cap-count">0</span><span class="cap-slash">/49</span>
 </div>
@@ -531,13 +535,13 @@ tbody td:first-child {
 <div class="intensive-wrap">
   <div class="intensive-header">
     集中講義
-    <button class="intensive-add-btn" onclick="openDrawer('集', 0)">＋ 追加</button>
+    <button class="intensive-add-btn edit-only" onclick="openDrawer('集', 0)">＋ 追加</button>
   </div>
   <div id="intensive-list"></div>
 </div>
 
 <div class="credits-note-popup" id="credits-note-popup"></div>
-<div class="credits-wrap" id="credits-wrap">
+<div class="credits-wrap edit-only" id="credits-wrap">
   <div class="credits-card">
     <div class="credits-title">📊 単位チェッカー</div>
     <div class="credits-legend">
@@ -638,7 +642,7 @@ tbody td:first-child {
     <div class="drawer-sub" id="drawer-sub"></div>
   </div>
   <div class="filter-row" id="filter-row" style="display:none"></div>
-  <div class="add-course-row">
+  <div class="add-course-row edit-only">
     <button class="add-course-btn" onclick="openCustomCourseModal()">＋ 科目追加</button>
   </div>
   <div class="course-list" id="course-list"></div>
@@ -657,6 +661,36 @@ async function getIdToken() {
     return await liff.getIDToken();
   } catch (e) {
     return null;
+  }
+}
+
+async function shareTimetable() {
+  const idToken = await getIdToken();
+  if (!idToken) return;
+  let url;
+  try {
+    const res = await fetch(`${BASE_URL}/api/timetable/share_token`, {
+      headers: { 'X-Liff-Id-Token': idToken },
+    });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    url = `${BASE_URL}/liff/timetable?share=${encodeURIComponent(data.token)}`;
+  } catch (e) {
+    alert('共有リンクの取得に失敗しました');
+    return;
+  }
+  const message = `私の時間割はこちら📅\n${url}`;
+  if (liff.isApiAvailable('shareTargetPicker')) {
+    try {
+      await liff.shareTargetPicker([{ type: 'text', text: message }]);
+    } catch (e) {}
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    alert('共有リンクをコピーしました。LINEのトークで友達に送ってください。');
+  } catch (e) {
+    prompt('このリンクをコピーして友達に送ってください', url);
   }
 }
 const KYOTSU_KEIEI_APPROVED = new Set([
@@ -717,6 +751,8 @@ const DEPARTMENT_PATH_OVERRIDE_JS = {
 let userId = "";
 let myCourseIds = new Set();
 let drawerCourses = [];
+window.viewOnly = false;
+window.shareToken = null;
 let currentFilter = "all";
 let currentSlot = null;
 const _slotCache = new Map();
@@ -1003,6 +1039,10 @@ async function submitProfile() {
 }
 
 async function init() {
+  window.shareToken = new URLSearchParams(location.search).get("share");
+  window.viewOnly = !!window.shareToken;
+  if (window.viewOnly) document.body.classList.add("view-only");
+
   // localStorage の Q 選択をセレクトに反映
   document.getElementById("quarter-select").value = currentQuarter;
   loadFacultyOptions();
@@ -1030,9 +1070,13 @@ async function init() {
       location.href = `${BASE_URL}/register?uid=${userId}`;
       return;
     }
-    await Promise.all([loadMyCourses(), loadProfile()]);
-    await loadCredits();
-    updateCreditsVisibility();
+    if (window.viewOnly) {
+      await loadMyCourses();
+    } else {
+      await Promise.all([loadMyCourses(), loadProfile()]);
+      await loadCredits();
+      updateCreditsVisibility();
+    }
     buildGrid();
     document.getElementById("loading-screen").style.display = "none";
   } catch (e) {
@@ -1048,10 +1092,21 @@ async function init() {
 
 async function loadMyCourses() {
   const idToken = await getIdToken();
-  const res = await fetch(`${BASE_URL}/api/timetable/my?year=${currentYear}`, {
+  const url = window.viewOnly
+    ? `${BASE_URL}/api/timetable/shared?token=${encodeURIComponent(window.shareToken)}&year=${currentYear}`
+    : `${BASE_URL}/api/timetable/my?year=${currentYear}`;
+  const res = await fetch(url, {
     headers: idToken ? { 'X-Liff-Id-Token': idToken } : {},
   });
+  if (!res.ok) {
+    if (window.viewOnly) throw new Error("共有された時間割の取得に失敗しました");
+    return;
+  }
   const data = await res.json();
+  if (window.viewOnly) {
+    document.getElementById("header-title").textContent = `📅 ${data.owner_name}さんの時間割`;
+    document.getElementById("header-sub").textContent = "閲覧専用（登録・編集はできません）";
+  }
   myCourseIds = new Set(data.courses.map(c => c.id));
   window._myCourses = {};
   window._myIntensiveCourses = [];
@@ -1197,15 +1252,17 @@ function updateCell(div, day, period) {
       cnt.textContent = `他${courses.length - 1}件`;
       div.appendChild(cnt);
     }
-    if (!courses[0].is_custom) {
+    if (!courses[0].is_custom && (!window.viewOnly || courses[0].classroom)) {
       const badge = document.createElement("div");
       badge.className = "cell-classroom-badge" + (courses[0].classroom ? " filled" : "");
       badge.textContent = courses[0].classroom || "教室+";
       badge.title = courses[0].classroom ? `教室: ${courses[0].classroom}` : "教室を入力";
-      badge.onclick = (e) => {
-        e.stopPropagation();
-        openClassroomModal(courses[0].id, courses[0].name, courses[0].classroom || "");
-      };
+      if (!window.viewOnly) {
+        badge.onclick = (e) => {
+          e.stopPropagation();
+          openClassroomModal(courses[0].id, courses[0].name, courses[0].classroom || "");
+        };
+      }
       div.appendChild(badge);
     }
   } else {
@@ -1222,6 +1279,14 @@ async function openDrawer(day, period) {
   document.getElementById("drawer-title").textContent = dayLabel;
   document.getElementById("overlay").classList.add("open");
   document.getElementById("drawer").classList.add("open");
+
+  if (window.viewOnly) {
+    const key = `${day}-${period}`;
+    const courses = day === "集" ? (window._myIntensiveCourses || []) : ((window._myCourses || {})[key] || []);
+    document.getElementById("drawer-sub").textContent = `${courses.length}科目`;
+    renderReadOnlyCourseList(courses);
+    return;
+  }
 
   const cacheKey = `${currentYear}_${day}_${period}`;
   if (_slotCache.has(cacheKey)) {
@@ -1279,6 +1344,42 @@ function _getPdfCourseNames() {
   (raw.gaigo_courses || []).forEach(c => names.add(c.name));
   (raw.senmon_courses || []).forEach(c => names.add(c.name));
   return names;
+}
+
+// 閲覧専用モード（友達の共有時間割）用。登録・削除ボタンは出さず、情報表示のみ
+function makeReadOnlyCourseItem(c) {
+  const categoryClass = _categoryClass(c);
+  const item = document.createElement("div");
+  item.className = `course-item ${categoryClass}`;
+  const info = document.createElement("div");
+  info.className = "course-info";
+  if (c.is_custom) {
+    const metaParts = [c.instructor, c.classification].filter(Boolean);
+    info.innerHTML = `
+      <div class="course-name ${categoryClass}">${esc(c.name)}</div>
+      <div class="course-meta">${esc(metaParts.join(' ／ ') || '手動追加科目')}</div>
+    `;
+  } else {
+    const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
+    const metaParts = [c.instructor, c.term].filter(Boolean);
+    info.innerHTML = `
+      <div class="course-name ${categoryClass}">${esc(c.name)}</div>
+      <div class="course-meta">${esc(metaParts.join(' ／ '))}${c.classroom ? ` ／ 教室:${esc(c.classroom)}` : ''}</div>
+      ${sylUrl ? `<a href="${esc(sylUrl)}" target="_blank" class="syllabus-link">シラバス →</a>` : ''}
+    `;
+  }
+  item.appendChild(info);
+  return item;
+}
+
+function renderReadOnlyCourseList(courses) {
+  const list = document.getElementById("course-list");
+  list.innerHTML = "";
+  if (courses.length === 0) {
+    list.innerHTML = '<div class="intensive-empty">登録されている科目はありません</div>';
+    return;
+  }
+  courses.forEach(c => list.appendChild(makeReadOnlyCourseItem(c)));
 }
 
 function makeCourseItem(c) {

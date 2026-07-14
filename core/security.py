@@ -41,3 +41,21 @@ def check_admin(request: Request):
 def verify_line_signature(body: bytes, signature: str) -> bool:
     digest = hmac.new(CHANNEL_SECRET.encode(), body, hashlib.sha256).digest()
     return hmac.compare_digest(base64.b64encode(digest).decode(), signature)
+
+
+_SHARE_HMAC_KEY = hashlib.sha256((CHANNEL_SECRET + "timetable_share").encode()).digest()
+
+
+def make_share_token(line_user_id: str) -> str:
+    """マイ時間割の友達共有リンク用トークンを発行する。有効期限なし（失効不可）。"""
+    sig = hmac.new(_SHARE_HMAC_KEY, line_user_id.encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{line_user_id}.{sig}"
+
+
+def verify_share_token(token: str) -> str | None:
+    try:
+        line_user_id, sig = token.rsplit(".", 1)
+        expected = hmac.new(_SHARE_HMAC_KEY, line_user_id.encode(), hashlib.sha256).hexdigest()[:32]
+        return line_user_id if hmac.compare_digest(sig, expected) else None
+    except Exception:
+        return None

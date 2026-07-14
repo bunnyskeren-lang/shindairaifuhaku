@@ -4,6 +4,7 @@ from sqlalchemy import and_, case, or_, select, text
 from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS
 from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
+from core.security import make_share_token, verify_share_token
 from database import AsyncSessionLocal
 from models import (
     CourseSection, CreditRequirement, Instructor, RegistrationCap, Schedule, Subject, SubjectCreditCategory, Syllabus,
@@ -222,6 +223,7 @@ async def api_timetable_slots(
                     "target_grades": "",
                     "subject_category": "",
                     "classification": c.classification or "",
+                    "credits": c.credits,
                     "registered": True,
                     "is_custom": True,
                 }
@@ -243,65 +245,101 @@ def _credits_from_term(term: str | None) -> int:
     return 2
 
 
+async def _load_timetable_courses(session, user_id: str, year: int) -> list[dict]:
+    rows = (await session.execute(
+        select(UserSyllabus, Syllabus, Schedule, Subject, Instructor)
+        .join(Syllabus, Syllabus.id == UserSyllabus.syllabus_id)
+        .join(Schedule, Schedule.syllabus_id == Syllabus.id)
+        .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+        .join(Subject, Subject.id == CourseSection.subject_id)
+        .join(Instructor, Instructor.id == CourseSection.instructor_id)
+        .where(UserSyllabus.line_user_id == user_id, Syllabus.year == year)
+    )).all()
+
+    result = {}
+    for us, syl, sch, subj, instr in rows:
+        if syl.id not in result:
+            result[syl.id] = {
+                "id": syl.id,
+                "name": subj.name,
+                "instructor": instr.name,
+                "term": syl.academic_term,
+                "credits": _credits_from_term(syl.academic_term),
+                "timetable_code": syl.timetable_code or "",
+                "subject_category": syl.subject_category or "",
+                "department": syl.department or "",
+                "classroom": us.classroom or "",
+                "is_custom": False,
+                "slots": [],
+            }
+        result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})
+
+    # ユーザーが手動追加した個人用の科目
+    custom_rows = (await session.execute(
+        select(UserCustomCourse).where(
+            UserCustomCourse.line_user_id == user_id,
+            UserCustomCourse.year == year,
+        )
+    )).scalars().all()
+    for c in custom_rows:
+        # syllabus_idとIDの数値空間が別のため、辞書キーが衝突しないよう文字列キーにする
+        result[f"custom_{c.id}"] = {
+            "id": c.id,
+            "name": c.name,
+            "instructor": c.instructor or "",
+            "term": None,
+            "credits": 2,
+            "timetable_code": "",
+            "subject_category": "",
+            "department": "",
+            "classroom": "",
+            "classification": c.classification or "",
+            "is_custom": True,
+            "slots": [{"day": c.day_of_week, "period": c.period}],
+        }
+
+    return list(result.values())
+
+
 @router.get("/api/timetable/my")
 async def api_timetable_my(year: int = DEFAULT_ACADEMIC_YEAR, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
     user_id = await verify_liff_id_token(x_liff_id_token)
     if not user_id:
         return {"courses": []}
     async with AsyncSessionLocal() as session:
-        rows = (await session.execute(
-            select(UserSyllabus, Syllabus, Schedule, Subject, Instructor)
-            .join(Syllabus, Syllabus.id == UserSyllabus.syllabus_id)
-            .join(Schedule, Schedule.syllabus_id == Syllabus.id)
-            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
-            .join(Subject, Subject.id == CourseSection.subject_id)
-            .join(Instructor, Instructor.id == CourseSection.instructor_id)
-            .where(UserSyllabus.line_user_id == user_id, Syllabus.year == year)
-        )).all()
+        return {"courses": await _load_timetable_courses(session, user_id, year)}
 
-        result = {}
-        for us, syl, sch, subj, instr in rows:
-            if syl.id not in result:
-                result[syl.id] = {
-                    "id": syl.id,
-                    "name": subj.name,
-                    "instructor": instr.name,
-                    "term": syl.academic_term,
-                    "credits": _credits_from_term(syl.academic_term),
-                    "timetable_code": syl.timetable_code or "",
-                    "subject_category": syl.subject_category or "",
-                    "department": syl.department or "",
-                    "classroom": us.classroom or "",
-                    "is_custom": False,
-                    "slots": [],
-                }
-            result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})
 
-        # ユーザーが手動追加した個人用の科目
-        custom_rows = (await session.execute(
-            select(UserCustomCourse).where(
-                UserCustomCourse.line_user_id == user_id,
-                UserCustomCourse.year == year,
-            )
-        )).scalars().all()
-        for c in custom_rows:
-            # syllabus_idとIDの数値空間が別のため、辞書キーが衝突しないよう文字列キーにする
-            result[f"custom_{c.id}"] = {
-                "id": c.id,
-                "name": c.name,
-                "instructor": c.instructor or "",
-                "term": None,
-                "credits": 2,
-                "timetable_code": "",
-                "subject_category": "",
-                "department": "",
-                "classroom": "",
-                "classification": c.classification or "",
-                "is_custom": True,
-                "slots": [{"day": c.day_of_week, "period": c.period}],
-            }
+@router.get("/api/timetable/share_token")
+async def api_timetable_share_token(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
+    user_id = await _require_liff_user(x_liff_id_token)
+    return {"token": make_share_token(user_id)}
 
-        return {"courses": list(result.values())}
+
+@router.get("/api/timetable/shared")
+async def api_timetable_shared(
+    token: str = Query(...), year: int = DEFAULT_ACADEMIC_YEAR,
+    x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
+    viewer_id = await verify_liff_id_token(x_liff_id_token)
+    if not viewer_id:
+        raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
+
+    owner_id = verify_share_token(token)
+    if not owner_id:
+        raise HTTPException(status_code=404, detail="共有リンクが無効です")
+
+    async with AsyncSessionLocal() as session:
+        viewer_profile = await session.get(UserProfile, viewer_id)
+        if not viewer_profile:
+            raise HTTPException(status_code=403, detail="登録済みユーザーのみ閲覧できます")
+
+        owner_profile = await session.get(UserProfile, owner_id)
+        if not owner_profile:
+            raise HTTPException(status_code=404, detail="共有元のユーザーが見つかりません")
+
+        courses = await _load_timetable_courses(session, owner_id, year)
+        return {"owner_name": owner_profile.name, "courses": courses}
 
 
 @router.post("/api/timetable/classroom/{syllabus_id}")
