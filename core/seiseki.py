@@ -123,6 +123,9 @@ def extract_seiseki_raw(text: str) -> dict:
         m = course_re.match(line.strip())
         if not m:
             continue
+        if m.group(3) == '不可':
+            # 不可は未修得のため単位数を集計に含めない
+            continue
         name = m.group(1).strip()
         cr = float(m.group(2))
         if '外国語' in current_sec:
@@ -134,8 +137,18 @@ def extract_seiseki_raw(text: str) -> dict:
         elif current_sec in ('専門科目', '共通専門基礎科目', '専門基礎科目'):
             senmon_courses.append({"name": name, "credits": cr, "section": current_sec})
 
-    def _summary(label: str) -> float:
-        mt = _re.search(_re.escape(label) + r'\s+([\d.]+)', text)
+    # 区分表の「その他の科目」は全学共通授業科目ブロックと専門科目ブロックの両方に
+    # 同名で存在するため、<<...>>の大区分見出しでテキストを分割して区別する
+    zengaku_m = _re.search(r'<<\s*全学共通授業科目', text)
+    senmon_blk_m = _re.search(r'<<\s*専門科目', text)
+    if zengaku_m and senmon_blk_m and zengaku_m.start() < senmon_blk_m.start():
+        zengaku_block = text[zengaku_m.start():senmon_blk_m.start()]
+        senmon_block = text[senmon_blk_m.start():]
+    else:
+        zengaku_block = senmon_block = text
+
+    def _summary(label: str, block: str) -> float:
+        mt = _re.search(_re.escape(label) + r'\s+([\d.]+)', block)
         return float(mt.group(1)) if mt else 0.0
 
     return {
@@ -143,20 +156,30 @@ def extract_seiseki_raw(text: str) -> dict:
         "senmon_courses": senmon_courses,
         "summaries": {
             # 旧カリキュラム（教養科目を人文/自然/社会/総合の内訳なしで一括集計していた表記）
-            "総合教養科目":   _summary('総合教養科目'),
-            "基礎教養科目":   _summary('基礎教養科目'),
-            "情報科目":       _summary('情報科目'),
-            "外国語科目":     _summary('外国語科目'),
+            "総合教養科目":   _summary('総合教養科目', zengaku_block),
+            "基礎教養科目":   _summary('基礎教養科目', zengaku_block),
+            "情報科目":       _summary('情報科目', zengaku_block),
+            "外国語科目":     _summary('外国語科目', zengaku_block),
             # 新カリキュラム（区分表に「教養科目（○○系）」として内訳が個別に印字される）
-            "人文系":         _summary('教養科目（人文系）'),
-            "自然系":         _summary('教養科目（自然系）'),
-            "社会系":         _summary('教養科目（社会系）'),
-            "総合系":         _summary('教養科目（総合系）'),
-            "基盤系":         _summary('教養科目（基盤系）'),
-            "健康・スポーツ科学系": _summary('教養科目（健康・スポーツ科学系）'),
-            "共通専門基礎科目": _summary('共通専門基礎科目'),
-            "専門基礎科目":   _summary('専門基礎科目'),
-            "専門科目":       _summary('専門科目'),
+            "人文系":         _summary('教養科目（人文系）', zengaku_block),
+            "自然系":         _summary('教養科目（自然系）', zengaku_block),
+            "社会系":         _summary('教養科目（社会系）', zengaku_block),
+            "総合系":         _summary('教養科目（総合系）', zengaku_block),
+            "基盤系":         _summary('教養科目（基盤系）', zengaku_block),
+            # ラベル表記に「教養科目」接頭辞や「系」が付かない成績表（例:「健康・スポーツ科学」）
+            # もあるため、新カリ表記で見つからない場合はそちらにフォールバックする
+            "健康・スポーツ科学系": (
+                _summary('教養科目（健康・スポーツ科学系）', zengaku_block)
+                or _summary('健康・スポーツ科学', zengaku_block)
+            ),
+            "共通専門基礎科目": _summary('共通専門基礎科目', senmon_block),
+            "専門基礎科目":   _summary('専門基礎科目', senmon_block),
+            "専門科目":       _summary('専門科目', senmon_block),
+            # 「関連科目」（本学部生の履修を許可された法学部・経済学部の専門科目）の集計に使用
+            "法学部科目":     _summary('法学部科目', senmon_block),
+            "経済学部科目":   _summary('経済学部科目', senmon_block),
+            # 「その他必要と認める科目」の一部（他学部専門科目の枠）に使用
+            "その他の科目_専門": _summary('その他の科目', senmon_block),
         },
     }
 
@@ -216,14 +239,31 @@ def classify_seiseki_raw(raw: dict) -> dict:
     # 成績表しか無い場合はそちらにフォールバックする
     kiban = s.get("基盤系", 0.0) or (s.get("基礎教養科目", 0.0) + s.get("情報科目", 0.0))
 
+    # 人文系・自然系・社会系・総合系は新カリキュラムの成績表が区分別に集計値を印字するため、
+    # そのまま読み取る。ただし人文/自然/社会/総合の内訳が無く「総合教養科目」で一括集計する
+    # 旧カリキュラムの成績表（内訳が判別できない）は、便宜上まとめて総合系に計上する
+    jinbun_val = s.get("人文系", 0.0)
+    shizen_val = s.get("自然系", 0.0)
+    shakai_val = s.get("社会系", 0.0)
+    sougou_val = s.get("総合系", 0.0)
+    if jinbun_val + shizen_val + shakai_val + sougou_val == 0 and s.get("総合教養科目", 0.0) > 0:
+        sougou_val = s.get("総合教養科目", 0.0)
+
+    # 関連科目（本学部生の履修を許可された法学部・経済学部の専門科目）
+    kanren = s.get("法学部科目", 0.0) + s.get("経済学部科目", 0.0)
+    # その他必要と認める科目（健康・スポーツ科学系＋他学部専門科目の枠）。
+    # 外国語第Ⅱ・第Ⅲの一部（C1/C2クラス等）や共通専門基礎科目の超過分（6単位超・上限2単位）は
+    # PDFの記載からは判別できないため未対応（超過分はフロントエンド側で別途加算する）
+    sonota = s.get("健康・スポーツ科学系", 0.0) + s.get("その他の科目_専門", 0.0)
+
     return {
-        # 人文系・自然系・社会系・総合系は新カリキュラムの成績表が区分別に集計値を印字するため、
-        # そのまま読み取る（旧カリキュラムの「総合教養科目」一括集計はもう使わない）
-        "jinbun":      round(s.get("人文系", 0.0), 1),
-        "shizen":      round(s.get("自然系", 0.0), 1),
-        "shakai":      round(s.get("社会系", 0.0), 1),
-        "sougou":      round(s.get("総合系", 0.0), 1),
+        "jinbun":      round(jinbun_val, 1),
+        "shizen":      round(shizen_val, 1),
+        "shakai":      round(shakai_val, 1),
+        "sougou":      round(sougou_val, 1),
         "kyoyo_kiban": round(kiban, 1),
+        "kanren":  round(kanren, 1),
+        "sonota":  round(sonota, 1),
         "gaigo1":  round(gaigo1, 1), "gaigo2":  round(gaigo2, 1),
         "kyotsu":  round(kyotsu_val, 1),
         "kenko":   round(s.get("健康・スポーツ科学系", 0.0), 1),
