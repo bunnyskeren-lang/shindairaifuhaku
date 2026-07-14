@@ -602,6 +602,7 @@ const DEPARTMENT_PATH_OVERRIDE_JS = {
   '理学部化学科': '0703',
   '理学部生物学科': '0704',
   '理学部惑星学科': '0707',
+  '工学部': '09',  // 工学部の全学科共通科目（所属列が学科名を含まず「工学部」のみ）
 };
 
 let userId = "";
@@ -1532,7 +1533,11 @@ function updateCredits() {
 const _CREDIT_CHECKER_FACULTIES = new Set(['経営学部', 'システム情報学部']);
 // 工学部は学科ごとに卒業要件が異なるため、単位要件が登録済みの学科のみ
 // 学科名で個別に許可する
-const _CREDIT_CHECKER_DEPARTMENTS = new Set(['建築学科', '市民工学科', '電気電子工学科', '機械工学科', '応用化学科']);
+const _CREDIT_CHECKER_DEPARTMENTS = new Set([
+  '建築学科', '市民工学科', '電気電子工学科', '機械工学科', '応用化学科',
+  '生産環境工学コース', '食料環境経済学コース', '応用動物学コース',
+  '応用植物学コース', '応用生命化学コース', '応用機能生物学コース',
+]);
 function updateCreditsVisibility() {
   const wrap = document.getElementById('credits-wrap');
   if (!wrap) return;

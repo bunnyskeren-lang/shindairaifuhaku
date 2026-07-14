@@ -6,8 +6,8 @@ from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
 from database import AsyncSessionLocal
 from models import (
-    CourseSection, CreditRequirement, Instructor, RegistrationCap, Schedule, Subject, Syllabus, UserProfile,
-    UserSyllabus,
+    CourseSection, CreditRequirement, Instructor, RegistrationCap, Schedule, Subject, SubjectCreditCategory, Syllabus,
+    UserProfile, UserSyllabus,
 )
 
 router = APIRouter()
@@ -46,22 +46,34 @@ async def _build_credit_countable_filter(session, faculty: str | None, departmen
     同じ管理画面の仕組みで追加された場合、コード変更なしでこの絞り込みが自動適用される。"""
     if not faculty:
         return None
-    group_names = set((await session.execute(
-        select(CreditRequirement.group_name).where(
+    reqs = (await session.execute(
+        select(CreditRequirement.group_name, CreditRequirement.category_id).where(
             CreditRequirement.faculty == faculty,
             or_(CreditRequirement.department == department, CreditRequirement.department.is_(None)),
         )
-    )).scalars().all())
-    if not group_names:
+    )).all()
+    if not reqs:
         return None
+    group_names = {g for g, _ in reqs}
+    category_ids = [c for _, c in reqs]
 
     # 学部専門科目は Subject.faculty が「経営学部」のように学部名のみの場合と、
     # 「工学部機械工学科」のように学部名+学科名で連結される場合があるため両方を候補にする
     own_faculties = {faculty, f"{faculty}{department or ''}"}
     conditions = []
     if "専門科目" in group_names:
-        conditions.append(and_(Subject.faculty.in_(own_faculties), Subject.category == "専門"))
-        conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"))
+        # subject_credit_categoriesでコース別に科目が紐付け済み（農学部等）ならそちらを優先し、
+        # 他コースの専門科目が混在しないよう絞り込む。未紐付けの学部・学科は従来通り学部全体で判定する。
+        tagged_ids = (await session.execute(
+            select(SubjectCreditCategory.subject_id)
+            .where(SubjectCreditCategory.category_id.in_(category_ids))
+            .distinct()
+        )).scalars().all()
+        if tagged_ids:
+            conditions.append(Subject.id.in_(tagged_ids))
+        else:
+            conditions.append(and_(Subject.faculty.in_(own_faculties), Subject.category == "専門"))
+            conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"))
     if "教養科目" in group_names:
         conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification.like("教養(%")))
     if not conditions:
