@@ -229,6 +229,7 @@ async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-To
                     "credits": _credits_from_term(syl.academic_term),
                     "timetable_code": syl.timetable_code or "",
                     "subject_category": syl.subject_category or "",
+                    "department": syl.department or "",
                     "slots": [],
                 }
             result[syl.id]["slots"].append({"day": sch.day_of_week, "period": sch.period})

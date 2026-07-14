@@ -9,9 +9,9 @@
 所属列が「教養教育院」の行は科目名から分類（教養(人文)等）を自動判定するため、
 --classification/--faculty を指定する必要はない。他学部を一括登録する場合は
 --classification/--faculty で明示するか、無指定なら所属列から学部名を推定する。
-時間割（syllabi/schedules、マイ時間割に表示するコマ情報）は第3・第4クォーター・後期・集中の
-科目のみインポートします。担当教員（instructors/course_sections）は前期科目も含めて全学期分を
-作成します（前期のみ開講の科目で担当教員が空欄になるのを防ぐため）。
+時間割（syllabi/schedules、マイ時間割に表示するコマ情報）・担当教員（instructors/
+course_sections）ともに全学期（前期・後期・クォーター・集中）を対象にインポートします
+（2026-07-14以前は前期を除外していたが、前期のシラバスデータも投入する運用に変更した）。
 """
 import asyncio
 import os
@@ -63,6 +63,14 @@ DEPARTMENT_PATH_OVERRIDE: dict[str, str] = {
     "医学部保健学科検査技術科学専攻": "080202",
     "医学部保健学科理学療法学専攻": "080203",
     "医学部保健学科作業療法学専攻": "080204",
+    # 理学部は学科ごとにpathが分かれるが、時間割コードの2文字目「S」は全学科共通で、
+    # 数字部分の範囲が学科間で重なる（例: 化学科と生物学科がともに415番台を使う）ため
+    # 番号帯では判別できない。所属名（=学科）で直接pathを決める
+    "理学部数学科": "0701",
+    "理学部物理学科": "0702",
+    "理学部化学科": "0703",
+    "理学部生物学科": "0704",
+    "理学部惑星学科": "0707",
 }
 
 # 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで
@@ -159,7 +167,9 @@ def parse_slots(slot_str: str) -> list[tuple[str, int]]:
     return slots
 
 def _is_timetable_term(term: str) -> bool:
-    return term.startswith("第3") or term.startswith("第4") or term in ("後期", "集中")
+    # 以前は第3・第4クォーター・後期・集中のみに限定していたが、前期(第1・第2クォーター)の
+    # シラバスデータも投入する運用に変わったため全学期を対象にする。
+    return True
 
 
 def normalize_term_type(term: str) -> str | None:
@@ -664,8 +674,7 @@ def main():
     courses = []
     for f in args.files:
         courses.extend(parse_file(f))
-    tt_courses = [c for c in courses if _is_timetable_term(c["term"])]
-    print(f"パース結果: {len(courses)}件全学期 / うち時間割対象（第3・第4Q・後期・集中）: {len(tt_courses)}件")
+    print(f"パース結果: {len(courses)}件（全学期を時間割対象としてインポートします）")
 
     if args.dry_run:
         for c in courses[:5]:

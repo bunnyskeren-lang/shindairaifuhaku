@@ -584,6 +584,19 @@ const MEDICINE_RANGES_JS = [
   [0, 399, '080201'],  // 医学部保健学科看護学専攻（暫定上限。他専攻データ確認後に調整）
   [900, 999, '0801'],  // 医学部医学科
 ];
+// 保健学科の専攻同士や理学部の学科同士は数字部分の範囲が重なりうるため所属名を優先する
+// （programing files/import_syllabus.pyのDEPARTMENT_PATH_OVERRIDEと同じ対応表）
+const DEPARTMENT_PATH_OVERRIDE_JS = {
+  '医学部保健学科看護学専攻': '080201',
+  '医学部保健学科検査技術科学専攻': '080202',
+  '医学部保健学科理学療法学専攻': '080203',
+  '医学部保健学科作業療法学専攻': '080204',
+  '理学部数学科': '0701',
+  '理学部物理学科': '0702',
+  '理学部化学科': '0703',
+  '理学部生物学科': '0704',
+  '理学部惑星学科': '0707',
+};
 
 let userId = "";
 let myCourseIds = new Set();
@@ -593,8 +606,11 @@ let currentSlot = null;
 const _slotCache = new Map();
 let currentQuarter = localStorage.getItem('currentQuarter') || "3";
 
-function makeSyllabusUrl(code) {
+function makeSyllabusUrl(code, department) {
   if (!code || code.length < 2) return null;
+  if (department && DEPARTMENT_PATH_OVERRIDE_JS[department]) {
+    return `https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/${DEPARTMENT_PATH_OVERRIDE_JS[department]}/data/2026_${code}.html`;
+  }
   const letter = code[1].toUpperCase();
   if (letter === 'T' || letter === 'N') {
     const digits = code.slice(2);
@@ -894,7 +910,7 @@ function updateIntensiveSection() {
     div.onclick = () => openDrawer("集", 0);
     const info = document.createElement("div");
     info.className = "intensive-item-info";
-    const sylUrl = makeSyllabusUrl(c.timetable_code);
+    const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
     info.innerHTML = `
       <div class="intensive-item-name">${esc(c.name)}</div>
       <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
@@ -1011,7 +1027,7 @@ function makeCourseItem(c) {
   const isEarned = _getPdfCourseNames().has(c.name);
   const info = document.createElement("div");
   info.className = "course-info";
-  const sylUrl = makeSyllabusUrl(c.timetable_code);
+  const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
   info.innerHTML = `
     <div class="course-name ${categoryClass}">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
     <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>

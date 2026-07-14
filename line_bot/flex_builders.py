@@ -455,35 +455,39 @@ def make_category_select_flex() -> FlexMessage:
 
 
 def make_classification_select_flex(
-    classifications: list[str],
+    classifications: list[str] | list[tuple[str, str]],
     reviewed_cls: set | None = None,
     title: str = "📚 教養科目",
     subtitle: str = "系統を選んでください",
     header_color: str = "#6366f1",
     data_prefix: str = "",
 ) -> FlexMessage:
+    """classifications は文字列のリスト、または (表示ラベル, postbackデータ) のタプルのリスト。
+    タプルの場合、表示ラベルと実際に送信されるpostbackデータを分離できる
+    （例：学科一覧で短い学科名を見せつつ、内部的には学部を含むfaculty値を送る）。"""
     if reviewed_cls is None:
         reviewed_cls = set()
+    items = [(c, c) if isinstance(c, str) else c for c in classifications]
     btns = [
         FlexBox(
             layout="vertical",
-            action=PostbackAction(label=cls[:20], data=f"{data_prefix}{cls}"),
+            action=PostbackAction(label=label[:20], data=f"{data_prefix}{value}"),
             contents=[
                 FlexText(
-                    text=cls,
+                    text=label,
                     size="lg",
-                    color="#0f172a" if cls in reviewed_cls else "#94a3b8",
+                    color="#0f172a" if label in reviewed_cls else "#94a3b8",
                     weight="bold",
                     align="center",
                 )
             ],
-            background_color="#eef2ff" if cls in reviewed_cls else "#f8fafc",
+            background_color="#eef2ff" if label in reviewed_cls else "#f8fafc",
             border_width="2px",
-            border_color="#0f172a" if cls in reviewed_cls else "#cbd5e1",
+            border_color="#0f172a" if label in reviewed_cls else "#cbd5e1",
             corner_radius="20px",
             padding_all="md",
         )
-        for cls in classifications
+        for label, value in items
     ]
     return FlexMessage(
         alt_text=f"{title} — {subtitle}",
