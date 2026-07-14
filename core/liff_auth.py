@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import httpx
 
@@ -8,10 +9,15 @@ LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify"
 
 _http_client: httpx.AsyncClient | None = None
 
+# 同一ページロード内で同じid_tokenが何度も検証リクエストに使われるため、
+# 短時間だけ検証結果をキャッシュしLINE側への往復を減らす。
+_VERIFY_CACHE_TTL = 120
+_verify_cache: dict[str, tuple[str, float]] = {}
+
 
 async def startup() -> None:
     global _http_client
-    _http_client = httpx.AsyncClient(timeout=6.0)
+    _http_client = httpx.AsyncClient(timeout=3.0)
 
 
 async def shutdown() -> None:
@@ -44,10 +50,18 @@ async def verify_liff_id_token(id_token: str) -> str | None:
     """
     if not id_token or not LIFF_CHANNEL_IDS:
         return None
+
+    cached = _verify_cache.get(id_token)
+    if cached is not None:
+        sub, cached_at = cached
+        if time.monotonic() - cached_at < _VERIFY_CACHE_TTL:
+            return sub
+        del _verify_cache[id_token]
+
     client = _http_client
     if client is None:
         # startup()未実行（テスト等）の場合のフォールバック
-        client = httpx.AsyncClient(timeout=6.0)
+        client = httpx.AsyncClient(timeout=3.0)
     for client_id in LIFF_CHANNEL_IDS:
         resp = None
         # タイムアウト・接続エラーなど一時的な障害のみ1回だけ再試行する。
@@ -63,9 +77,15 @@ async def verify_liff_id_token(id_token: str) -> str | None:
                 if attempt == 1:
                     resp = None
                     break
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.3)
         if resp is not None and resp.status_code == 200:
             sub = resp.json().get("sub")
             if sub:
+                if len(_verify_cache) > 1000:
+                    now = time.monotonic()
+                    for key, (_, at) in list(_verify_cache.items()):
+                        if now - at >= _VERIFY_CACHE_TTL:
+                            del _verify_cache[key]
+                _verify_cache[id_token] = (sub, time.monotonic())
                 return sub
     return None
