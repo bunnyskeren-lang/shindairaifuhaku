@@ -344,6 +344,22 @@ def set_ranking_cache(key: str, value) -> None:
     _ranking_cache[key] = (value, time.monotonic())
 
 
+# ── registration completeness cache（LINE bot応答パスの毎メッセージDB往復を回避） ──
+# 一度登録完了したユーザーが未完了に戻ることは無い（管理画面にリセット機能も無い）ため、
+# True確定分はTTL内であればDBを一切見ずに返す。False/未登録は毎回DBを見て最新状態を反映する。
+_REGISTRATION_COMPLETE_TTL = 3600
+_registration_complete_at: dict[str, float] = {}
+
+
+def get_registration_complete_cached(user_id: str) -> bool:
+    ts = _registration_complete_at.get(user_id)
+    return ts is not None and time.monotonic() - ts < _REGISTRATION_COMPLETE_TTL
+
+
+def set_registration_complete(user_id: str) -> None:
+    _registration_complete_at[user_id] = time.monotonic()
+
+
 async def warm_query_caches() -> None:
     import asyncio
     await asyncio.gather(

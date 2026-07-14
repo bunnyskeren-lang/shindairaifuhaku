@@ -78,15 +78,14 @@
 
 <div class="card" style="margin-top:16px">
   <h2 style="margin-top:0">分類一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可）</span></h2>
+  <div class="table-wrap">
   <table style="margin-top:0">
     <tr><th>順番</th><th>分類名</th><th>グループ</th><th>科目数</th><th></th></tr>
     {% for cl, cnt in class_counts.items() %}
     <tr>
       <td style="white-space:nowrap;width:64px">
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveCls('{{ cl }}','up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↑</button>
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveCls('{{ cl }}','down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↓</button>
+        <button type="button" class="btn btn-icon" onclick="moveCls('{{ cl }}','up')" {% if loop.first %}disabled{% endif %}>↑</button>
+        <button type="button" class="btn btn-icon" onclick="moveCls('{{ cl }}','down')" {% if loop.last %}disabled{% endif %}>↓</button>
       </td>
       <td>
         <form method="post" action="/admin/courses/classification/rename"
@@ -94,7 +93,7 @@
           <input type="hidden" name="old_name" value="{{ cl }}">
           <input type="text" name="new_name" value="{{ cl }}"
                  style="width:140px;padding:4px 8px;font-size:13px;margin-top:0">
-          <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:12px;white-space:nowrap">保存</button>
+          <button type="submit" class="btn btn-primary btn-xs">保存</button>
         </form>
       </td>
       <td>
@@ -103,7 +102,7 @@
           <input type="text" name="parent_group" value="{{ cls_parent_map.get(cl, '') }}"
                  placeholder="（なし）" maxlength="100"
                  style="width:110px;padding:3px 6px;font-size:12px;margin-top:0">
-          <button type="submit" class="btn" style="padding:2px 8px;font-size:11px;background:#f0fdf4;color:#15803d;white-space:nowrap">設定</button>
+          <button type="submit" class="btn btn-xs" style="background:#f0fdf4;color:#15803d">設定</button>
         </form>
       </td>
       <td style="color:#6b7280">{{ cnt }}科目</td>
@@ -119,45 +118,46 @@
     <tr><td colspan="5" class="empty">分類なし</td></tr>
     {% endfor %}
   </table>
+  </div>
 </div>
 
 {% if all_instructors %}
 <div class="card" style="margin-top:16px">
   <h2 style="margin-top:0">教員一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可。検索・カテゴリ絞り込み時は非表示）</span></h2>
+  <div class="table-wrap">
   <table style="margin-top:0">
     <tr><th>順番</th><th>教員名</th></tr>
     {% for inst in all_instructors %}
     <tr>
       <td style="white-space:nowrap;width:64px">
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveInstructor({{ inst.id }},'up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↑</button>
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveInstructor({{ inst.id }},'down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↓</button>
+        <button type="button" class="btn btn-icon" onclick="moveInstructor({{ inst.id }},'up')" {% if loop.first %}disabled{% endif %}>↑</button>
+        <button type="button" class="btn btn-icon" onclick="moveInstructor({{ inst.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
       </td>
       <td>{{ inst.name }}</td>
     </tr>
     {% endfor %}
   </table>
+  </div>
 </div>
 {% endif %}
 
 {% if all_faculties %}
 <div class="card" style="margin-top:16px">
   <h2 style="margin-top:0">学部一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可。会員登録フォーム・マイ時間割の学部選択の表示順に反映）</span></h2>
+  <div class="table-wrap">
   <table style="margin-top:0">
     <tr><th>順番</th><th>学部名</th></tr>
     {% for fac in all_faculties %}
     <tr>
       <td style="white-space:nowrap;width:64px">
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveFaculty({{ fac.id }},'up')" {% if loop.first %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↑</button>
-        <button type="button" class="btn" style="padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"
-                onclick="moveFaculty({{ fac.id }},'down')" {% if loop.last %}disabled style="opacity:.35;padding:2px 8px;background:#e0e7ff;color:#4338ca;font-size:14px"{% endif %}>↓</button>
+        <button type="button" class="btn btn-icon" onclick="moveFaculty({{ fac.id }},'up')" {% if loop.first %}disabled{% endif %}>↑</button>
+        <button type="button" class="btn btn-icon" onclick="moveFaculty({{ fac.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
       </td>
       <td>{{ fac.name }}</td>
     </tr>
     {% endfor %}
   </table>
+  </div>
 </div>
 {% endif %}
 
@@ -188,6 +188,7 @@
     {% endif %}
   </form>
 </div>
+<div class="table-wrap">
 <table>
   <tr><th>科目名</th><th>カテゴリ</th><th style="white-space:nowrap">順番</th><th></th></tr>
   {% if courses %}
@@ -217,28 +218,26 @@
   <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
     <td>
       {{ c.name }}
-      {% if c.term_type %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term_type }}</span>{% endif %}
-      {% if c.credits %}<span style="font-size:10px;color:#059669;background:#ecfdf5;padding:1px 5px;border-radius:4px;margin-left:2px">{{ c.credits }}単位</span>{% endif %}
+      {% if c.term_type %}<span class="badge-term" style="margin-left:4px">{{ c.term_type }}</span>{% endif %}
+      {% if c.credits %}<span class="badge-credit" style="margin-left:2px">{{ c.credits }}単位</span>{% endif %}
     </td>
-    <td><span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">{{ c.category }}</span></td>
+    <td><span class="badge {{ 'badge-cat-kyoyo' if c.category == '教養' else 'badge-cat-senmon' }}">{{ c.category }}</span></td>
     <td style="white-space:nowrap;width:64px">
-      <button type="button" class="btn" style="padding:2px 6px;background:#e0e7ff;color:#4338ca;font-size:13px"
-              onclick="event.stopPropagation();moveCourse({{ c.id }},'up')" {% if loop.first %}disabled{% endif %}>↑</button>
-      <button type="button" class="btn" style="padding:2px 6px;background:#e0e7ff;color:#4338ca;font-size:13px"
-              onclick="event.stopPropagation();moveCourse({{ c.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
+      <button type="button" class="btn btn-icon" onclick="event.stopPropagation();moveCourse({{ c.id }},'up')" {% if loop.first %}disabled{% endif %}>↑</button>
+      <button type="button" class="btn btn-icon" onclick="event.stopPropagation();moveCourse({{ c.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
     </td>
-    <td style="white-space:nowrap">
-      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#eef2ff;color:#4338ca"
+    <td class="actions">
+      <button type="button" class="btn" style="padding:4px 10px;background:#eef2ff;color:#4338ca"
               onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
         👨‍🏫 担当教員{% if instructors_by_course[c.id] %} {{ instructors_by_course[c.id] | length }}人{% endif %}
       </button>
-      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#f3f4f6;color:#374151"
+      <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
               onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
-        レビュー {{ reviews | length }}件{% if pending_count %} <span style="background:#f59e0b;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px">未承認{{ pending_count }}</span>{% endif %}
+        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">未承認{{ pending_count }}</span>{% endif %}
       </button>
-      <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
+      <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
-      <button type="button" id="hide-btn-{{ c.id }}" class="btn" style="padding:4px 10px;margin-right:4px;background:{{ '#fef3c7' if c.hide_from_timetable else '#f3f4f6' }};color:{{ '#92400e' if c.hide_from_timetable else '#374151' }}"
+      <button type="button" id="hide-btn-{{ c.id }}" class="btn" style="padding:4px 10px;background:{{ '#fef3c7' if c.hide_from_timetable else '#f3f4f6' }};color:{{ '#92400e' if c.hide_from_timetable else '#374151' }}"
               onclick="event.stopPropagation();toggleTimetableVisibility({{ c.id }},this)">
         {{ '🙈 時間割:非表示中' if c.hide_from_timetable else '👁 時間割:表示中' }}
       </button>
@@ -253,7 +252,7 @@
       <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
       <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         {% for inst in instructors_by_course[c.id] %}
-        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
+        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" class="chip">
           {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
           <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
                   style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
@@ -276,6 +275,7 @@
   <tr id="rv-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="review-row" style="display:none">
     <td colspan="4" style="padding:0;background:#f9fafb">
       {% if reviews %}
+      <div class="table-wrap">
       <table style="margin:0;border-radius:0;font-size:12px">
         <tr style="background:#e5e7eb">
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
@@ -303,6 +303,7 @@
         </tr>
         {% endfor %}
       </table>
+      </div>
       {% else %}
       <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
       {% endif %}
@@ -328,32 +329,28 @@
   <tr class="{{ gid }}" style="display:none">
     <td>
       {{ c.name }}
-      {% if c.term_type %}<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:1px 5px;border-radius:4px;margin-left:4px">{{ c.term_type }}</span>{% endif %}
-      {% if c.credits %}<span style="font-size:10px;color:#059669;background:#ecfdf5;padding:1px 5px;border-radius:4px;margin-left:2px">{{ c.credits }}単位</span>{% endif %}
+      {% if c.term_type %}<span class="badge-term" style="margin-left:4px">{{ c.term_type }}</span>{% endif %}
+      {% if c.credits %}<span class="badge-credit" style="margin-left:2px">{{ c.credits }}単位</span>{% endif %}
     </td>
     <td>
-      <span style="background:{{ '#6366f1' if c.category == '教養' else '#10b981' }};color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">
-        {{ c.category }}
-      </span>
+      <span class="badge {{ 'badge-cat-kyoyo' if c.category == '教養' else 'badge-cat-senmon' }}">{{ c.category }}</span>
     </td>
     <td style="white-space:nowrap;width:64px">
-      <button type="button" class="btn" style="padding:2px 6px;background:#e0e7ff;color:#4338ca;font-size:13px"
-              onclick="event.stopPropagation();moveCourse({{ c.id }},'up')" {% if loop.first %}disabled{% endif %}>↑</button>
-      <button type="button" class="btn" style="padding:2px 6px;background:#e0e7ff;color:#4338ca;font-size:13px"
-              onclick="event.stopPropagation();moveCourse({{ c.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
+      <button type="button" class="btn btn-icon" onclick="event.stopPropagation();moveCourse({{ c.id }},'up')" {% if loop.first %}disabled{% endif %}>↑</button>
+      <button type="button" class="btn btn-icon" onclick="event.stopPropagation();moveCourse({{ c.id }},'down')" {% if loop.last %}disabled{% endif %}>↓</button>
     </td>
-    <td style="white-space:nowrap">
-      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#eef2ff;color:#4338ca"
+    <td class="actions">
+      <button type="button" class="btn" style="padding:4px 10px;background:#eef2ff;color:#4338ca"
               onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
         👨‍🏫 担当教員{% if instructors_by_course[c.id] %} {{ instructors_by_course[c.id] | length }}人{% endif %}
       </button>
-      <button type="button" class="btn" style="padding:4px 10px;margin-right:4px;background:#f3f4f6;color:#374151"
+      <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
               onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
-        レビュー {{ reviews | length }}件{% if pending_count %} <span style="background:#f59e0b;color:#fff;border-radius:999px;padding:1px 6px;font-size:10px">未承認{{ pending_count }}</span>{% endif %}
+        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">未承認{{ pending_count }}</span>{% endif %}
       </button>
-      <button type="button" class="btn btn-primary" style="padding:4px 10px;margin-right:4px"
+      <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
-      <button type="button" id="hide-btn-{{ c.id }}" class="btn" style="padding:4px 10px;margin-right:4px;background:{{ '#fef3c7' if c.hide_from_timetable else '#f3f4f6' }};color:{{ '#92400e' if c.hide_from_timetable else '#374151' }}"
+      <button type="button" id="hide-btn-{{ c.id }}" class="btn" style="padding:4px 10px;background:{{ '#fef3c7' if c.hide_from_timetable else '#f3f4f6' }};color:{{ '#92400e' if c.hide_from_timetable else '#374151' }}"
               onclick="event.stopPropagation();toggleTimetableVisibility({{ c.id }},this)">
         {{ '🙈 時間割:非表示中' if c.hide_from_timetable else '👁 時間割:表示中' }}
       </button>
@@ -369,7 +366,7 @@
       <div style="font-size:12px;font-weight:bold;color:#4338ca;margin-bottom:8px">👨‍🏫 担当教員</div>
       <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         {% for inst in instructors_by_course[c.id] %}
-        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" style="background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
+        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" class="chip">
           {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:#4338ca;text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
           <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
                   style="background:none;border:none;cursor:pointer;color:#818cf8;font-size:12px;padding:0;line-height:1" title="削除">✕</button>
@@ -433,6 +430,7 @@
         </tr>
         {% endfor %}
       </table>
+      </div>
       {% else %}
       <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
       {% endif %}
@@ -444,6 +442,7 @@
   <tr><td colspan="4" class="empty">科目なし</td></tr>
   {% endif %}
 </table>
+</div>
 <!-- 編集モーダル -->
 <div id="editModal">
   <div id="editBox">
@@ -610,7 +609,7 @@ function addInstructor(courseId) {
       const chip = document.createElement('span');
       chip.id = 'inst-chip-' + data.id;
       chip.dataset.name = data.name;
-      chip.style.cssText = 'background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px';
+      chip.className = 'chip';
       if (data.url) {
         const nameLink = document.createElement('a');
         nameLink.href = data.url;

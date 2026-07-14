@@ -461,10 +461,14 @@ def make_classification_select_flex(
     subtitle: str = "系統を選んでください",
     header_color: str = "#6366f1",
     data_prefix: str = "",
+    back_label: str | None = None,
+    back_data: str | None = None,
 ) -> FlexMessage:
     """classifications は文字列のリスト、または (表示ラベル, postbackデータ) のタプルのリスト。
     タプルの場合、表示ラベルと実際に送信されるpostbackデータを分離できる
-    （例：学科一覧で短い学科名を見せつつ、内部的には学部を含むfaculty値を送る）。"""
+    （例：学科一覧で短い学科名を見せつつ、内部的には学部を含むfaculty値を送る）。
+    back_label/back_dataを両方指定すると、一つ前の階層に戻るボタンをフッターに表示する
+    （学部→学科→分類のような多階層ドリルダウンで迷子にならないようにするため）。"""
     if reviewed_cls is None:
         reviewed_cls = set()
     items = [(c, c) if isinstance(c, str) else c for c in classifications]
@@ -489,6 +493,19 @@ def make_classification_select_flex(
         )
         for label, value in items
     ]
+    footer = None
+    if back_label and back_data:
+        footer = FlexBox(
+            layout="vertical",
+            contents=[
+                FlexButton(
+                    action=PostbackAction(label=back_label[:20], data=back_data),
+                    style="secondary",
+                    height="sm",
+                )
+            ],
+            padding_all="md",
+        )
     return FlexMessage(
         alt_text=f"{title} — {subtitle}",
         contents=FlexBubble(
@@ -507,5 +524,6 @@ def make_classification_select_flex(
                 spacing="sm",
                 padding_all="md",
             ),
+            footer=footer,
         ),
     )

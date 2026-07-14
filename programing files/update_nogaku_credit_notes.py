@@ -52,8 +52,11 @@ async def run():
                     print(f"skip (no subjects): {cat_id}")
                     continue
                 subject_line = "対象科目：" + "、".join(names)
-                existing = (req.note or "").strip()
-                # 既存の注記（生産環境工学コースの特例注記等）があれば1行目として残す
+                # 既存noteから前回実行分の「対象科目：」行を除去してから付け直す（再実行での重複蓄積防止）
+                existing_lines = [
+                    ln for ln in (req.note or "").strip().split("\n") if not ln.startswith("対象科目：")
+                ]
+                existing = "\n".join(existing_lines).strip()
                 req.note = f"{existing}\n{subject_line}" if existing else subject_line
                 print(f"{cat_id}: {len(names)}件")
         await session.commit()

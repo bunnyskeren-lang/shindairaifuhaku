@@ -100,6 +100,10 @@ async def run():
                 existing = await session.get(CreditRequirement, row["category_id"])
                 if existing:
                     for k, v in row.items():
+                        # note未指定(None)の行を上書きすると、update_nogaku_credit_notes.pyが
+                        # 追記した対象科目一覧などの既存注記が再実行のたびに消えてしまうため保持する
+                        if k == "note" and v is None:
+                            continue
                         setattr(existing, k, v)
                     updated += 1
                 else:

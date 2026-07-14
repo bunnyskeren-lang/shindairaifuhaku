@@ -1,6 +1,6 @@
 import re
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config import DEFAULT_ACADEMIC_YEAR
@@ -43,6 +43,11 @@ async def register_syllabus_for_user(session, user_id: str, syllabus_id: int) ->
     """指定syllabusをuser_syllabiへ登録する。同一曜日・時限かつ学期が重なる既存登録があれば
     差し替える（例: 第3クォーターと第4クォーターの科目は同じ曜日・時限でも共存させる）。
     呼び出し元でcommitすること。"""
+    # 同一ユーザーの登録処理を直列化する（トランザクションコミット/ロールバックで自動解放）。
+    # これが無いと、同時押しなどでSELECT→DELETE→INSERTが並行実行された場合、
+    # 「1コマ1科目」の重複チェックをすり抜けて同じ曜日・時限に2科目残る競合状態がありえる
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:uid))"), {"uid": user_id})
+
     new_syl = await session.get(Syllabus, syllabus_id)
     if new_syl is None:
         return
@@ -66,6 +71,7 @@ async def register_syllabus_for_user(session, user_id: str, syllabus_id: int) ->
             .where(
                 UserSyllabus.line_user_id == user_id,
                 UserSyllabus.syllabus_id != syllabus_id,
+                Syllabus.year == new_syl.year,
                 or_(*conflict_conditions),
             )
         )).all()

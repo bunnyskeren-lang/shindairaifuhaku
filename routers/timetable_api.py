@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from sqlalchemy import and_, case, or_, select
 
-from core.config import DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS
+from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS
 from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
 from database import AsyncSessionLocal
@@ -46,6 +46,10 @@ async def _build_credit_countable_filter(session, faculty: str | None, departmen
     同じ管理画面の仕組みで追加された場合、コード変更なしでこの絞り込みが自動適用される。"""
     if not faculty:
         return None
+    # 農学部等、departmentが必須の学部でコース未選択（1年次等）の場合は代表コースにフォールバックする
+    # （templates/liff/timetable.htmlの_CREDIT_CHECKER_DEFAULT_DEPARTMENTと同じ扱い）
+    if not department:
+        department = CREDIT_CHECKER_DEFAULT_DEPARTMENT.get(faculty)
     reqs = (await session.execute(
         select(CreditRequirement.group_name, CreditRequirement.category_id).where(
             CreditRequirement.faculty == faculty,

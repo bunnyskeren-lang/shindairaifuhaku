@@ -74,6 +74,10 @@ FACULTY_DEPARTMENTS = {
     "海洋政策科学部": ["海洋基礎科学領域", "海洋応用科学領域", "海洋ガバナンス領域", "航海学領域", "機関学領域"],
 }
 
+# 農学部はコース未選択（1年次等）でも単位チェッカーを表示するため、代表コースにフォールバックする。
+# templates/liff/timetable.html の _CREDIT_CHECKER_DEFAULT_DEPARTMENT と同じ内容を保つこと
+CREDIT_CHECKER_DEFAULT_DEPARTMENT = {"農学部": "生産環境工学コース"}
+
 JST = timezone(timedelta(hours=9))
 
 ADMIN_COOKIE = "admin_tok"
@@ -93,11 +97,12 @@ RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
 VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
 VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
 
+# 以下、programing files/import_syllabus.pyのFACULTY_PATH/DEPARTMENT_PATH_OVERRIDE/
+# ENGINEERING_RANGES/MEDICINE_RANGES/MEDICINE_SUBLETTERSと同じ対応表。
+# シラバスURL生成ロジックを変更する際は、fetch_syllabus_info.py・
+# templates/liff/timetable.html（JS版FACULTY_PATH_JS）も含め4箇所すべてを同時に更新すること
 _SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20", "Z": "14", "H": "13", "E": "05", "A": "10", "L": "01", "J": "04"}
 
-# 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで「T」「N」を
-# 共有しており数字部分の範囲でしか判別できない（programing files/import_syllabus.pyの
-# ENGINEERING_RANGESと同じ対応表。学科を追加する際は両方を更新すること）
 _ENGINEERING_RANGES = [
     (0, 99, "0921"),      # 工学部建築学科
     (100, 149, "0922"),   # 工学部市民工学科
@@ -116,10 +121,28 @@ _MEDICINE_RANGES = [
     (900, 999, "0801"),  # 医学部医学科
 ]
 
+# 番号帯だけでは学科・専攻を判別できない所属（理学部各学科・医学部保健学科の非看護学専攻・
+# 工学部の全学科共通科目）は所属名（=Subject.faculty）で直接pathを決める
+_DEPARTMENT_PATH_OVERRIDE = {
+    "医学部保健学科看護学専攻": "080201",
+    "医学部保健学科検査技術科学専攻": "080202",
+    "医学部保健学科理学療法学専攻": "080203",
+    "医学部保健学科作業療法学専攻": "080204",
+    "理学部数学科": "0701",
+    "理学部物理学科": "0702",
+    "理学部化学科": "0703",
+    "理学部生物学科": "0704",
+    "理学部惑星学科": "0707",
+    "工学部": "09",
+}
 
-def make_syllabus_url(timetable_code: str) -> str:
+
+def make_syllabus_url(timetable_code: str, department: str = "") -> str:
     if not timetable_code or len(timetable_code) < 2:
         return ""
+    if department in _DEPARTMENT_PATH_OVERRIDE:
+        path = _DEPARTMENT_PATH_OVERRIDE[department]
+        return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
     letter = timetable_code[1].upper()
     if letter in ("T", "N"):
         digits = timetable_code[2:]

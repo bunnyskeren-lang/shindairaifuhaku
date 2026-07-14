@@ -5,22 +5,35 @@
   <title>{% block title %}管理画面{% endblock %}</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-body{font-family:sans-serif;padding:16px;background:{{ '#fff7ed' if IS_DEV else '#f3f4f6' }};max-width:700px;margin:auto}
+:root{--accent:{{ '#ea580c' if IS_DEV else '#6366f1' }};--accent-dark:{{ '#c2410c' if IS_DEV else '#4f46e5' }};--accent-soft:{{ '#ffedd5' if IS_DEV else '#eef2ff' }}}
+*{box-sizing:border-box}
+body{font-family:sans-serif;padding:16px;background:{{ '#fff7ed' if IS_DEV else '#f3f4f6' }};max-width:960px;margin:auto}
 h1{font-size:18px;font-weight:bold;margin-bottom:4px}
 h2{font-size:15px;font-weight:bold;margin:20px 0 8px}
-nav{margin-bottom:16px;font-size:13px}
-nav a{color:{{ '#ea580c' if IS_DEV else '#6366f1' }};text-decoration:none;margin-right:12px}
 table{width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;font-size:13px}
 th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #e5e7eb}
-th{background:{{ '#ea580c' if IS_DEV else '#6366f1' }};color:white}
+th{background:var(--accent);color:white}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:8px}
+.table-wrap table{border-radius:0}
 .card{background:white;border-radius:8px;padding:16px;margin-bottom:12px}
 input,select{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;margin-top:4px}
 label{font-size:13px;font-weight:600;color:#374151}
 .btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold}
-.btn-primary{background:#6366f1;color:white}
+.btn-primary{background:var(--accent);color:white}
 .btn-danger{background:#ef4444;color:white}
+.btn-xs{padding:3px 9px;font-size:11px}
+.btn-icon{padding:2px 7px;font-size:13px;background:#e0e7ff;color:#4338ca}
+.btn-icon:disabled{opacity:.35;cursor:default}
 .empty{color:#9ca3af;text-align:center;padding:16px}
 .section-title{font-size:12px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:20px 0 8px}
+.actions{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.badge-cat-kyoyo{background:var(--accent);color:#fff}
+.badge-cat-senmon{background:#10b981;color:#fff}
+.badge-term{background:#eef2ff;color:#6366f1;font-size:10px;padding:1px 5px;border-radius:4px}
+.badge-credit{background:#ecfdf5;color:#059669;font-size:10px;padding:1px 5px;border-radius:4px}
+.badge-pending{background:#f59e0b;color:#fff;font-size:10px;padding:1px 6px;border-radius:999px}
+.chip{background:#e0e7ff;color:#4338ca;padding:3px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px}
 /* 集計バー（統計・リッチメニュー画面で共通） */
 .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .bar-label{width:180px;font-size:12px;font-weight:600;color:#374151;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -29,7 +42,7 @@ label{font-size:13px;font-weight:600;color:#374151}
 .bar-count{width:48px;text-align:right;font-size:12px;font-weight:bold;color:#4338ca;flex-shrink:0}
 /* ユーザー別利用履歴ブロック（統計・利用履歴画面で共通） */
 .user-block{background:#fff;border-radius:8px;margin-bottom:12px;overflow:hidden;border:1px solid #e5e7eb}
-.user-header{background:{{ '#ea580c' if IS_DEV else '#6366f1' }};color:#fff;padding:8px 14px;font-size:13px;font-weight:bold;display:flex;justify-content:space-between;align-items:center}
+.user-header{background:var(--accent);color:#fff;padding:8px 14px;font-size:13px;font-weight:bold;display:flex;justify-content:space-between;align-items:center}
 .user-header span{font-weight:normal;font-size:11px;opacity:.8;margin-left:8px}
 .action-table{width:100%;border-collapse:collapse;font-size:13px}
 .action-table td{padding:6px 14px;border-bottom:1px solid #e5e7eb}
@@ -43,9 +56,33 @@ label{font-size:13px;font-weight:600;color:#374151}
 .label-input{font-size:13px}
 .group-input{font-size:12px}
 .note-input{width:100%;padding:5px 7px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;resize:vertical;min-height:44px;font-family:inherit;color:#374151;margin:0}
-.note-input:focus,.label-input:focus,.group-input:focus,.req-input:focus,.sort-input:focus{outline:none;border-color:#6366f1}
+.note-input:focus,.label-input:focus,.group-input:focus,.req-input:focus,.sort-input:focus{outline:none;border-color:var(--accent)}
 .btn-del{background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:.6}
 .btn-del:hover{opacity:1}
+/* ナビゲーション */
+nav{margin-bottom:16px}
+.nav-groups{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;font-size:13px}
+.nav-group{display:flex;flex-wrap:wrap;gap:4px;padding:5px;background:rgba(255,255,255,.6);border-radius:9px}
+.nav-link{color:#374151;text-decoration:none;padding:5px 10px;border-radius:6px;white-space:nowrap}
+.nav-link:hover{background:#e5e7eb}
+.nav-link.active{background:var(--accent);color:#fff;font-weight:bold}
+.nav-more{position:relative}
+.nav-more summary{list-style:none;cursor:pointer;color:#374151;padding:5px 10px;border-radius:6px;font-weight:600;white-space:nowrap}
+.nav-more summary::-webkit-details-marker{display:none}
+.nav-more[open] summary,.nav-more summary:hover{background:#e5e7eb}
+.nav-more.has-active summary{background:var(--accent);color:#fff}
+.nav-sub{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;padding:8px;background:#f9fafb;border-radius:8px;position:absolute;z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px}
+.nav-logout{margin-left:auto;align-self:center}
+.nav-logout button{background:none;border:none;color:#9ca3af;font-size:13px;cursor:pointer;padding:5px 8px}
+@media (max-width:640px){
+  body{padding:10px}
+  .nav-groups{gap:4px}
+  .nav-link,.nav-more summary{padding:4px 8px;font-size:12px}
+  .nav-sub{position:static;box-shadow:none;min-width:0}
+  table{font-size:12px}
+  th,td{padding:6px 8px}
+  .card{padding:12px}
+}
 {% block extra_style %}{% endblock %}
   </style>
 </head>
@@ -56,38 +93,56 @@ label{font-size:13px;font-weight:600;color:#374151}
 </div>
 {% endif %}
 <h1>{% block heading %}{% endblock %}</h1>
+{% set path = request.url.path %}
+{% set credit_paths = ['/admin/keiei', '/admin/sysinfo', '/admin/bungaku'] %}
+{% set credit_active = path in credit_paths or path.startswith('/admin/koubu') or path.startswith('/admin/nogaku') %}
 <nav>
-  <a href="/admin">📊 ログ</a>
-  <a href="/admin/courses">📚 科目管理</a>
-  <a href="/admin/keiei">🎓 経営学部</a>
-  <a href="/admin/sysinfo">💻 システム情報</a>
-  <a href="/admin/bungaku">📖 文学部</a>
-  <a href="/admin/koubu/kenchiku">🏛 建築学科</a>
-  <a href="/admin/koubu/shimin">🌉 市民工学科</a>
-  <a href="/admin/koubu/denki">⚡ 電気電子工学科</a>
-  <a href="/admin/koubu/kikai">⚙ 機械工学科</a>
-  <a href="/admin/koubu/ouka">🧪 応用化学科</a>
-  <a href="/admin/nogaku/seisan">🌾 生産環境工学コース</a>
-  <a href="/admin/nogaku/keizai">🌾 食料環境経済学コース</a>
-  <a href="/admin/nogaku/doubutsu">🌾 応用動物学コース</a>
-  <a href="/admin/nogaku/shokubutsu">🌾 応用植物学コース</a>
-  <a href="/admin/nogaku/seimeika">🌾 応用生命化学コース</a>
-  <a href="/admin/nogaku/kinou">🌾 応用機能生物学コース</a>
-  <a href="/admin/timetable/check">🔍 時間割照合</a>
-  <a href="/admin/registration_caps">📐 CAP管理</a>
-  <a href="/admin/reviews">✅ レビュー承認</a>
-  <a href="/admin/users">👤 ユーザー設定</a>
-  <a href="/admin/usage-stats">📊 統計</a>
-  <a href="/admin/errors">🚨 エラー</a>
-  <form method="post" action="/admin/logout" style="display:inline;margin-left:8px">
-    <button type="submit" style="background:none;border:none;color:#9ca3af;font-size:13px;cursor:pointer;padding:0">ログアウト</button>
-  </form>
+  <div class="nav-groups">
+    <div class="nav-group">
+      <a href="/admin" class="nav-link{{ ' active' if path == '/admin' }}">📊 ログ</a>
+      <a href="/admin/courses" class="nav-link{{ ' active' if path == '/admin/courses' }}">📚 科目管理</a>
+      <a href="/admin/reviews" class="nav-link{{ ' active' if path == '/admin/reviews' }}">✅ レビュー承認</a>
+    </div>
+    <div class="nav-group">
+      <details class="nav-more{{ ' has-active' if credit_active }}">
+        <summary>🎓 単位チェッカー ▾</summary>
+        <div class="nav-sub">
+          <a href="/admin/keiei" class="nav-link{{ ' active' if path == '/admin/keiei' }}">経営学部</a>
+          <a href="/admin/sysinfo" class="nav-link{{ ' active' if path == '/admin/sysinfo' }}">システム情報学部</a>
+          <a href="/admin/bungaku" class="nav-link{{ ' active' if path == '/admin/bungaku' }}">文学部</a>
+          <a href="/admin/koubu/kenchiku" class="nav-link{{ ' active' if path == '/admin/koubu/kenchiku' }}">🏛 建築学科</a>
+          <a href="/admin/koubu/shimin" class="nav-link{{ ' active' if path == '/admin/koubu/shimin' }}">🌉 市民工学科</a>
+          <a href="/admin/koubu/denki" class="nav-link{{ ' active' if path == '/admin/koubu/denki' }}">⚡ 電気電子工学科</a>
+          <a href="/admin/koubu/kikai" class="nav-link{{ ' active' if path == '/admin/koubu/kikai' }}">⚙ 機械工学科</a>
+          <a href="/admin/koubu/ouka" class="nav-link{{ ' active' if path == '/admin/koubu/ouka' }}">🧪 応用化学科</a>
+          <a href="/admin/nogaku/seisan" class="nav-link{{ ' active' if path == '/admin/nogaku/seisan' }}">🌾 生産環境工学コース</a>
+          <a href="/admin/nogaku/keizai" class="nav-link{{ ' active' if path == '/admin/nogaku/keizai' }}">🌾 食料環境経済学コース</a>
+          <a href="/admin/nogaku/doubutsu" class="nav-link{{ ' active' if path == '/admin/nogaku/doubutsu' }}">🌾 応用動物学コース</a>
+          <a href="/admin/nogaku/shokubutsu" class="nav-link{{ ' active' if path == '/admin/nogaku/shokubutsu' }}">🌾 応用植物学コース</a>
+          <a href="/admin/nogaku/seimeika" class="nav-link{{ ' active' if path == '/admin/nogaku/seimeika' }}">🌾 応用生命化学コース</a>
+          <a href="/admin/nogaku/kinou" class="nav-link{{ ' active' if path == '/admin/nogaku/kinou' }}">🌾 応用機能生物学コース</a>
+        </div>
+      </details>
+      <a href="/admin/timetable/check" class="nav-link{{ ' active' if path == '/admin/timetable/check' }}">🔍 時間割照合</a>
+      <a href="/admin/registration_caps" class="nav-link{{ ' active' if path == '/admin/registration_caps' }}">📐 CAP管理</a>
+    </div>
+    <div class="nav-group">
+      <a href="/admin/users" class="nav-link{{ ' active' if path == '/admin/users' }}">👤 ユーザー設定</a>
+      <a href="/admin/usage-stats" class="nav-link{{ ' active' if path == '/admin/usage-stats' }}">📊 統計</a>
+      <a href="/admin/errors" class="nav-link{{ ' active' if path == '/admin/errors' }}">🚨 エラー</a>
+    </div>
+    <div class="nav-logout">
+      <form method="post" action="/admin/logout" style="display:inline">
+        <button type="submit">ログアウト</button>
+      </form>
+    </div>
+  </div>
 </nav>
 {% block content %}{% endblock %}
 {% block scripts %}{% endblock %}
 <div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(255,255,255,.6);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:10px">
-  <div style="width:36px;height:36px;border:4px solid #e0e7ff;border-top-color:#6366f1;border-radius:50%;animation:spin .7s linear infinite"></div>
-  <span style="font-size:13px;color:#6366f1;font-weight:bold">処理中...</span>
+  <div style="width:36px;height:36px;border:4px solid var(--accent-soft);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite"></div>
+  <span style="font-size:13px;color:var(--accent);font-weight:bold">処理中...</span>
 </div>
 <div id="confirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:12px;padding:28px 24px 20px;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
@@ -178,11 +233,11 @@ document.addEventListener('submit', function(e) {
 {% if total_pages > 1 %}
 <div style="display:flex;gap:8px;align-items:center;margin-top:14px;font-size:13px;flex-wrap:wrap">
   {% if page > 1 %}
-  <a href="{{ url_prefix }}{{ page - 1 }}" style="color:#6366f1;text-decoration:none;padding:5px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff">← 前へ</a>
+  <a href="{{ url_prefix }}{{ page - 1 }}" style="color:var(--accent);text-decoration:none;padding:5px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff">← 前へ</a>
   {% endif %}
   <span style="color:#6b7280">{{ page }} / {{ total_pages }}ページ（全{{ total }}件）</span>
   {% if page < total_pages %}
-  <a href="{{ url_prefix }}{{ page + 1 }}" style="color:#6366f1;text-decoration:none;padding:5px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff">次へ →</a>
+  <a href="{{ url_prefix }}{{ page + 1 }}" style="color:var(--accent);text-decoration:none;padding:5px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff">次へ →</a>
   {% endif %}
 </div>
 {% endif %}

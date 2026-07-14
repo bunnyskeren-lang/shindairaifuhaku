@@ -117,15 +117,18 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
     # Pre-compute numeric variant groups: ベースの漢字部分が同じで、末尾のアルファベット・
     # 数字だけが違う科目（例: 生物学各論A1/A2/C1/C2、微分積分1/2/3/4）を1行にまとめる。
-    _num_bases: dict[str, list[tuple[str, str, int, str]]] = defaultdict(list)
+    # classificationが異なれば別学部・別学科の同名ベース科目（例: 工学部「制御工学Ⅰ/Ⅱ」と
+    # システム情報学部「制御工学1/2」）である可能性が高いため、base名だけでなく
+    # classification単位でグループを分ける
+    _num_bases: dict[tuple[str, str], list[tuple[str, str, int, str]]] = defaultdict(list)
     for _c in rows:
         _match = _vnum_match(_c.name)
         if _match:
             _b, _letter, _sk, _disp = _match
-            _num_bases[_b].append((_c.name, _letter, _sk, _disp))
+            _num_bases[(_b, _c.classification or "その他")].append((_c.name, _letter, _sk, _disp))
     _num_variant_names = {n for _items in _num_bases.values() if len(_items) >= 2 for n, _, _, _ in _items}
-    _num_base_for = {n: _b for _b, _items in _num_bases.items() if len(_items) >= 2 for n, _, _, _ in _items}
-    seen_num_base: set[str] = set()
+    _num_base_for = {n: _key for _key, _items in _num_bases.items() if len(_items) >= 2 for n, _, _, _ in _items}
+    seen_num_base: set[tuple[str, str]] = set()
 
     # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
     _VSEM = _re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
@@ -170,12 +173,12 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                     groups[cls].append((base, f"variant:{suffix}"))
                 continue
         if name in _num_variant_names:
-            base = _num_base_for[name]
-            if base not in seen_num_base:
-                seen_num_base.add(base)
-                items_sorted = sorted(_num_bases[base], key=lambda x: (x[1], x[2]))
+            key = _num_base_for[name]
+            if key not in seen_num_base:
+                seen_num_base.add(key)
+                items_sorted = sorted(_num_bases[key], key=lambda x: (x[1], x[2]))
                 suffix = "/".join(f"{letter}{disp}" for _, letter, _sk, disp in items_sorted)
-                groups[cls].append((base, f"numvariant:{suffix}"))
+                groups[cls].append((key[0], f"numvariant:{suffix}"))
             continue
         groups[cls].append((name, "single"))
 
@@ -183,7 +186,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
         return 0 if cls_category.get(cls, "") == "教養" else 1
     all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), _cls_sort(x[0])))
 
-    def _entry_has_review(name: str, kind: str) -> bool:
+    def _entry_has_review(name: str, kind: str, cls: str = "") -> bool:
         if kind == "single":
             return name in reviewed_names
         if kind.startswith("variant:"):
@@ -194,12 +197,13 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 return any(n in reviewed_names for n, _ in _sem_bases[name])
             return False
         if kind.startswith("numvariant:"):
-            if name in _num_bases:
-                return any(n in reviewed_names for n, _, _, _ in _num_bases[name])
+            key = (name, cls)
+            if key in _num_bases:
+                return any(n in reviewed_names for n, _, _, _ in _num_bases[key])
             return False
         return False
 
-    def _group_syllabus_url(name: str, kind: str) -> str:
+    def _group_syllabus_url(name: str, kind: str, cls: str = "") -> str:
         # 統合表示（variant/numvariant）はbase名がそのままSubject.nameと一致しないため、
         # グループ内のいずれか1件からシラバスURLが見つかればそれを採用する。
         if kind == "single":
@@ -216,8 +220,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 if url:
                     return url
             return ""
-        if kind.startswith("numvariant:") and name in _num_bases:
-            for n, _, _, _ in _num_bases[name]:
+        if kind.startswith("numvariant:") and (name, cls) in _num_bases:
+            for n, _, _, _ in _num_bases[(name, cls)]:
                 url = course_syllabus_urls.get(n, "")
                 if url:
                     return url
@@ -231,8 +235,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 display = f"{name} ({suffix})"
             else:
                 display = name
-            has_review = _entry_has_review(name, kind)
-            syl_url = _group_syllabus_url(name, kind)
+            has_review = _entry_has_review(name, kind, classification)
+            syl_url = _group_syllabus_url(name, kind, classification)
             has_content = has_review or bool(syl_url)
             text_color = "#0f172a" if has_content else "#94a3b8"
             display_text = f"✓{display}" if has_review else display
@@ -241,8 +245,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             elif kind.startswith("variant:"):
                 first_suffix = kind.split(":", 1)[1].split("/")[0]
                 liff_url = course_liff_urls.get(name + first_suffix, "")
-            elif kind.startswith("numvariant:") and name in _num_bases:
-                first_name = min(_num_bases[name], key=lambda x: (x[1], x[2]))[0]
+            elif kind.startswith("numvariant:") and (name, classification) in _num_bases:
+                first_name = min(_num_bases[(name, classification)], key=lambda x: (x[1], x[2]))[0]
                 liff_url = course_liff_urls.get(first_name, "")
             else:
                 liff_url = ""
@@ -431,21 +435,29 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
         if len(dept_values) > 1:
             # 学科・専攻ごとに科目が分かれている学部（工学部・医学部・理学部等）→ 学科・専攻一覧
+            # faculty列が学部名そのまま（学科名なし）の科目は全学科共通科目のため、
+            # 学科名と紛らわしい「工学部」等ではなく専用ラベルで表示する
+            def _dept_label(d: str) -> str:
+                if d == t:
+                    return "全学科共通科目"
+                return d[len(t):] or d
             def _dept_sort_key(d: str) -> int:
                 cls_for_d = {c.classification for c in fac_courses if c.faculty == d}
                 return min((_cls_sort(cls) for cls in cls_for_d), default=0)
             dept_sorted = sorted(dept_values, key=_dept_sort_key)
             reviewed_dept_labels = {
-                (d[len(t):] or d) for d in dept_values
+                _dept_label(d) for d in dept_values
                 if any(c.name in reviewed_names_sen for c in fac_courses if c.faculty == d)
             }
-            items = [((d[len(t):] or d), d) for d in dept_sorted]
+            items = [(_dept_label(d), d) for d in dept_sorted]
             return [make_classification_select_flex(
                 items, reviewed_dept_labels,
                 title=f"🎓 {t} 専門科目",
                 subtitle="学科・専攻を選んでください",
                 header_color="#0ea5e9",
                 data_prefix="専門F:",
+                back_label="◀ 学部選択に戻る",
+                back_data="専門",
             )]
 
         if len(cls_values) > 1:
@@ -459,6 +471,8 @@ async def handle_message(text: str, user_id: str = "") -> list:
                 subtitle="分類を選んでください",
                 header_color="#0ea5e9",
                 data_prefix="専門:",
+                back_label="◀ 学部選択に戻る",
+                back_data="専門",
             )]
 
         # 学科・専攻も複数分類も無い学部 → 即座に科目一覧
@@ -590,10 +604,23 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
 
     # Numeric variant group（ベースが同じでアルファベット・数字だけ違う科目をまとめる。例: 生物学各論A1/A2/C1/C2）
+    # 学部が異なれば別科目（例: 工学部「制御工学Ⅰ/Ⅱ」とシステム情報学部「制御工学1/2」）なので、
+    # ベース名だけでなく学部単位でグループを分ける
     _num_candidates = [c for c in call if (_m := _vnum_match(c.name)) and _m[0] == t]
     if len(_num_candidates) >= 2:
-        _num_variants = sorted(_num_candidates, key=lambda c: c.name)
-        return [make_variant_selection_bubble(t, [c.name for c in _num_variants], _reviewed_names)]
+        _num_by_faculty: dict[str, list] = defaultdict(list)
+        for _c in _num_candidates:
+            _num_by_faculty[_c.faculty or ""].append(_c)
+        _num_results = []
+        for _fac, _cs in _num_by_faculty.items():
+            _cs_sorted = sorted(_cs, key=lambda c: c.name)
+            _label = f"{t}（{_fac}）" if len(_num_by_faculty) > 1 and _fac else t
+            if len(_cs_sorted) >= 2:
+                _num_results.append(make_variant_selection_bubble(_label, [c.name for c in _cs_sorted], _reviewed_names))
+            else:
+                _num_results.append(await get_course_flex(_cs_sorted[0], user_id))
+        if _num_results:
+            return _num_results
 
     # インメモリキーワード検索（DBアクセスなし）
     _PUNCT = '・･、。「」『』【】（）()／/〜~'
@@ -631,14 +658,19 @@ async def handle_message(text: str, user_id: str = "") -> list:
                     base_variants[_b].append(_b + _s)
 
         # Numeric variants（文字違いが2種類以上あるベースだけを選択肢としてまとめる）
-        _kw_num_bases: dict[str, list[str]] = defaultdict(list)
+        # 学部が異なれば別科目（例: 工学部「制御工学Ⅰ/Ⅱ」とシステム情報学部「制御工学1/2」）なので、
+        # ベース名だけでなく学部単位でグループを分ける
+        _kw_num_bases: dict[tuple[str, str], list[str]] = defaultdict(list)
+        _kw_num_facs: dict[str, set[str]] = defaultdict(set)
         for c in courses:
             _match = _vnum_match(c.name)
             if _match:
-                _kw_num_bases[_match[0]].append(c.name)
+                _fac = c.faculty or ""
+                _kw_num_bases[(_match[0], _fac)].append(c.name)
+                _kw_num_facs[_match[0]].add(_fac)
 
         seen_base: set[str] = set()
-        seen_num_base: set[str] = set()
+        seen_num_base: set[tuple[str, str]] = set()
         result = []
         for c in courses:
             name = c.name
@@ -654,12 +686,15 @@ async def handle_message(text: str, user_id: str = "") -> list:
             _m2 = _vnum_match(name)
             if _m2:
                 base = _m2[0]
-                if base in seen_num_base:
+                fac = c.faculty or ""
+                key = (base, fac)
+                if key in seen_num_base:
                     continue
-                num_vs = _kw_num_bases.get(base, [])
+                num_vs = _kw_num_bases.get(key, [])
                 if len(num_vs) >= 2:
-                    seen_num_base.add(base)
-                    result.append(make_variant_selection_bubble(base, sorted(num_vs), _reviewed_names))
+                    seen_num_base.add(key)
+                    label = f"{base}（{fac}）" if len(_kw_num_facs.get(base, set())) > 1 and fac else base
+                    result.append(make_variant_selection_bubble(label, sorted(num_vs), _reviewed_names))
                     continue
             result.append(await get_course_flex(c, user_id))
         return result[:5]
