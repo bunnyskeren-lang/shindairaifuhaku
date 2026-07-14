@@ -127,10 +127,17 @@ async def api_credit_requirements(faculty: str = Query("経営学部"), departme
             rows,
             key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
         )
-        cc_rows = (await session.execute(
-            select(SubjectCreditCategory.category_id, Subject.name)
-            .join(Subject, Subject.id == SubjectCreditCategory.subject_id)
-        )).all()
+        # 修正理由: 以前はfaculty絞り込み無しでsubject_credit_categories全件（他学部分も含む）を
+        # 毎回JOIN取得しており、農学部だけで500件超あるテーブルを無駄に全走査していた。
+        # このリクエストで使うのはrows（=対象faculty/departmentのcategory_id）分だけのため絞り込む。
+        category_ids = [r.category_id for r in rows]
+        cc_rows = []
+        if category_ids:
+            cc_rows = (await session.execute(
+                select(SubjectCreditCategory.category_id, Subject.name)
+                .join(Subject, Subject.id == SubjectCreditCategory.subject_id)
+                .where(SubjectCreditCategory.category_id.in_(category_ids))
+            )).all()
     courses_by_cat: dict[str, list[str]] = {}
     for cat_id, course_name in cc_rows:
         courses_by_cat.setdefault(cat_id, []).append(course_name)

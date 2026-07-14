@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import and_, case, or_, select, text
 
 from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS
@@ -96,7 +97,12 @@ async def api_timetable_years():
         next_year = (years[-1] if years else DEFAULT_ACADEMIC_YEAR) + 1
         if next_year not in years:
             years.append(next_year)
-        return {"years": years}
+    res = JSONResponse({"years": years})
+    # 修正理由: 開講年度は実質不変なのに毎回DB問い合わせしており、マイ時間割を開くたびの
+    # 待ち時間に寄与していた（実測314ms）。他の変化しにくい一覧系API(/api/preload等)と同様、
+    # ブラウザ側キャッシュに任せる。
+    res.headers["Cache-Control"] = "public, max-age=300"
+    return res
 
 
 @router.get("/api/timetable/profile")
