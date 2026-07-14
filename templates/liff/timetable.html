@@ -1082,6 +1082,19 @@ function renderCourseList(courses) {
     return 'senmon_other';
   }
 
+  // 所属(department)から見出し表示名を作る。「〇〇学部△△学科」→「△△学科専門科目」のように
+  // 学部名を取り除き学科・専攻名だけにする。学科名が無い場合（例:「文学部」単体）や
+  // 「昼間主コース」等の課程名しか続かない場合は学部名のまま「専門科目」を付ける
+  function _deptGroupLabel(dept) {
+    if (!dept) return "専門科目";
+    if (dept === "教養教育院") return "共通専門基礎科目";
+    const m = dept.match(/^(.+?学部)(.*)$/);
+    if (!m) return `${dept}専門科目`;
+    const rest = m[2].trim();
+    if (!rest || rest.includes("コース")) return `${m[1]}専門科目`;
+    return `${rest}専門科目`;
+  }
+
   const kyoyo = filtered.filter(c => _courseType(c) === 'kyoyo');
   let senmonKeiei   = filtered.filter(c => _courseType(c) === 'keiei');
   let senmonSysInfo = filtered.filter(c => _courseType(c) === 'sysinfo');
@@ -1124,7 +1137,7 @@ function renderCourseList(courses) {
   if (senmonOther.length > 0) {
     const groups = new Map();
     senmonOther.forEach(c => {
-      const key = c.department === "教養教育院" ? "共通専門基礎科目" : (c.department || "専門科目");
+      const key = _deptGroupLabel(c.department);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(c);
     });
