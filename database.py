@@ -41,7 +41,7 @@ async def init_db():
         CreditRequirement, UserSeisekiRaw,
         Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
         CourseSectionView, UserSyllabus, SubjectCreditCategory, RequiredSubject,
-        RegistrationCap,
+        RegistrationCap, UserCustomCourse,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:

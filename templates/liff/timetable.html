@@ -53,9 +53,10 @@ tbody td:first-child {
 .cell.has-course.senmon { background: #f0fdfa; }
 .cell.has-course.kyoyo { background: #ecfdf5; }
 .cell.has-course.kyotsu { background: #f5f5f4; }
+.cell.has-course.custom { background: #fffbeb; }
 
 .cell-classroom-badge {
-  position: absolute; right: 2px; bottom: 2px; max-width: 46px;
+  max-width: 100%; margin-top: 1px;
   font-size: 8px; font-weight: 600; line-height: 1.4;
   padding: 1px 4px; border-radius: 6px; cursor: pointer;
   background: rgba(255,255,255,.9); color: #94a3b8;
@@ -75,6 +76,7 @@ tbody td:first-child {
 .cell-name.senmon { color: #0d9488; }
 .cell-name.kyoyo { color: #047857; }
 .cell-name.kyotsu { color: #57534e; }
+.cell-name.custom { color: #b45309; }
 
 .category-legend {
   display: flex; gap: 14px; align-items: center;
@@ -87,6 +89,7 @@ tbody td:first-child {
 .category-legend .dot.senmon { background: #0d9488; }
 .category-legend .dot.kyoyo { background: #047857; }
 .category-legend .dot.kyotsu { background: #57534e; }
+.category-legend .dot.custom { background: #b45309; }
 .cell-plus {
   font-size: 20px; color: #cbd5e1;
 }
@@ -146,11 +149,13 @@ tbody td:first-child {
 .course-item.kyoyo  { border-left-color: #047857; background: #ecfdf5; }
 .course-item.senmon { border-left-color: #0d9488; background: #f0fdfa; }
 .course-item.kyotsu { border-left-color: #57534e; background: #f5f5f4; }
+.course-item.custom { border-left-color: #b45309; background: #fffbeb; }
 .course-info { flex: 1; min-width: 0; }
 .course-name { font-size: 13px; font-weight: 600; color: #1e293b; }
 .course-name.kyoyo  { color: #047857; }
 .course-name.senmon { color: #0d9488; }
 .course-name.kyotsu { color: #57534e; }
+.course-name.custom { color: #b45309; }
 .course-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 .earned-badge {
   display: inline-block; font-size: 10px; font-weight: 700;
@@ -172,6 +177,13 @@ tbody td:first-child {
   background: #f1f5f9; color: #64748b;
 }
 .reg-btn:disabled { opacity: .5; cursor: default; }
+.reg-btn.delete-custom { background: #fee2e2; color: #b91c1c; }
+
+.add-course-row { padding: 8px 16px; border-bottom: 1px solid #f1f5f9; }
+.add-course-btn {
+  width: 100%; padding: 8px; border-radius: 8px; border: 1.5px dashed #c7d2fe;
+  background: #eef2ff; color: #4f46e5; font-size: 12px; font-weight: 700; cursor: pointer;
+}
 
 .empty-msg {
   text-align: center; padding: 32px 16px;
@@ -496,6 +508,7 @@ tbody td:first-child {
   <span><span class="dot senmon"></span>専門科目</span>
   <span><span class="dot kyoyo"></span>教養科目</span>
   <span><span class="dot kyotsu"></span>共通専門基礎科目</span>
+  <span><span class="dot custom"></span>手動追加</span>
 </div>
 
 <div class="grid-wrap">
@@ -594,6 +607,29 @@ tbody td:first-child {
   </div>
 </div>
 
+<div class="classroom-modal-overlay" id="custom-course-modal-overlay" style="display:none" onclick="closeCustomCourseModalOnOverlay(event)">
+  <div class="classroom-modal">
+    <div class="profile-modal-header">
+      <span class="profile-modal-title">科目を追加</span>
+      <button class="profile-modal-close" onclick="closeCustomCourseModal()">×</button>
+    </div>
+    <div class="classroom-modal-sub" id="custom-course-modal-sub"></div>
+    <div class="profile-field">
+      <div class="profile-label">科目名</div>
+      <input type="text" class="classroom-input" id="custom-course-name" placeholder="例：情報科学" maxlength="100">
+    </div>
+    <div class="profile-field">
+      <div class="profile-label">担当教員</div>
+      <input type="text" class="classroom-input" id="custom-course-instructor" placeholder="例：神戸太郎" maxlength="100">
+    </div>
+    <div class="profile-field">
+      <div class="profile-label">分類（単位チェッカー対応のため）</div>
+      <input type="text" class="classroom-input" id="custom-course-classification" placeholder="例：専門科目" maxlength="100">
+    </div>
+    <button class="profile-save-btn" onclick="saveCustomCourse()">追加</button>
+  </div>
+</div>
+
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-handle"></div>
@@ -602,6 +638,9 @@ tbody td:first-child {
     <div class="drawer-sub" id="drawer-sub"></div>
   </div>
   <div class="filter-row" id="filter-row" style="display:none"></div>
+  <div class="add-course-row">
+    <button class="add-course-btn" onclick="openCustomCourseModal()">＋ 科目追加</button>
+  </div>
   <div class="course-list" id="course-list"></div>
 </div>
 
@@ -861,6 +900,86 @@ async function saveClassroom() {
   buildGrid();
 }
 
+function openCustomCourseModal() {
+  if (!currentSlot) return;
+  const dayLabel = currentSlot.day === "集" ? "集中講義" : `${currentSlot.day}曜${currentSlot.period}限`;
+  document.getElementById('custom-course-modal-sub').textContent = dayLabel;
+  document.getElementById('custom-course-name').value = "";
+  document.getElementById('custom-course-instructor').value = "";
+  document.getElementById('custom-course-classification').value = "";
+  document.getElementById('custom-course-modal-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('custom-course-name').focus(), 50);
+}
+
+function closeCustomCourseModal() {
+  document.getElementById('custom-course-modal-overlay').style.display = 'none';
+}
+
+function closeCustomCourseModalOnOverlay(e) {
+  if (e.target === document.getElementById('custom-course-modal-overlay')) closeCustomCourseModal();
+}
+
+async function saveCustomCourse() {
+  if (!currentSlot) return;
+  const name = document.getElementById('custom-course-name').value.trim();
+  if (!name) {
+    alert("科目名を入力してください");
+    return;
+  }
+  const instructor = document.getElementById('custom-course-instructor').value.trim();
+  const classification = document.getElementById('custom-course-classification').value.trim();
+  const idToken = await getIdToken();
+  if (!idToken) {
+    alert("エラーが発生しました。再度お試しください。");
+    return;
+  }
+  try {
+    const res = await fetch(`${BASE_URL}/api/timetable/custom`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_token: idToken, name, instructor, classification,
+        day_of_week: currentSlot.day, period: currentSlot.period, year: currentYear,
+      }),
+    });
+    if (!res.ok) throw new Error(res.status);
+  } catch (e) {
+    alert("エラーが発生しました。再度お試しください。");
+    return;
+  }
+  closeCustomCourseModal();
+  // 差し替えにより他のコマの登録状況も変わりうるため、キャッシュを破棄して再取得する
+  _slotCache.clear();
+  await Promise.all([loadMyCourses(), openDrawer(currentSlot.day, currentSlot.period)]);
+  buildGrid();
+}
+
+async function deleteCustomCourse(btn, course) {
+  btn.disabled = true;
+  const idToken = await getIdToken();
+  if (!idToken) {
+    alert("エラーが発生しました。再度お試しください。");
+    btn.disabled = false;
+    return;
+  }
+  try {
+    const res = await fetch(`${BASE_URL}/api/timetable/custom/${course.id}`, {
+      method: 'DELETE',
+      headers: { 'X-Liff-Id-Token': idToken },
+    });
+    if (!res.ok) throw new Error(res.status);
+  } catch (e) {
+    alert("エラーが発生しました。再度お試しください。");
+    btn.disabled = false;
+    return;
+  }
+  drawerCourses = drawerCourses.filter(c => !(c.is_custom && c.id === course.id));
+  _slotCache.clear();
+  await loadMyCourses();
+  setFilter(currentQuarter);
+  buildGrid();
+}
+
 async function submitProfile() {
   const faculty = document.getElementById('profile-faculty-sel').value || null;
   const department = document.getElementById('profile-department-sel').value || null;
@@ -1017,6 +1136,7 @@ function updateIntensiveSection() {
   const list = document.getElementById("intensive-list");
   list.innerHTML = "";
   const courses = (window._myIntensiveCourses || []).filter(c => {
+    if (c.is_custom) return true;
     if (!c.term) return false;
     if (c.term.startsWith("第" + currentQuarter)) return true;
     if ((c.term === "後期" || c.term === "集中") && (currentQuarter === "3" || currentQuarter === "4")) return true;
@@ -1035,7 +1155,7 @@ function updateIntensiveSection() {
     const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
     info.innerHTML = `
       <div class="intensive-item-name">${esc(c.name)}</div>
-      <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
+      <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.is_custom ? '手動追加' : c.term)}</div>
       ${sylUrl ? `<a href="${esc(sylUrl)}" target="_blank" class="syllabus-link" onclick="event.stopPropagation()">シラバス →</a>` : ''}
     `;
     div.appendChild(info);
@@ -1043,8 +1163,10 @@ function updateIntensiveSection() {
   }
 }
 
-// 教養科目=kyoyo(緑)、学部別専門科目=senmon(青)、共通専門基礎科目=kyotsu(グレー)の3色に分類
+// 教養科目=kyoyo(緑)、学部別専門科目=senmon(青)、共通専門基礎科目=kyotsu(グレー)、
+// ユーザーが手動追加した科目=custom(黄)の4色に分類
 function _categoryClass(c) {
+  if (c.is_custom) return "custom";
   if (c.subject_category === "教養科目") return "kyoyo";
   if (c.department === "教養教育院") return "kyotsu";
   return "senmon";
@@ -1053,13 +1175,14 @@ function _categoryClass(c) {
 function updateCell(div, day, period) {
   const key = `${day}-${period}`;
   const courses = ((window._myCourses || {})[key] || []).filter(c => {
+    if (c.is_custom) return true;
     if (!c.term) return false;
     if (c.term.startsWith("第" + currentQuarter)) return true;
     if (c.term === "後期" && (currentQuarter === "3" || currentQuarter === "4")) return true;
     return false;
   });
   div.innerHTML = "";
-  div.classList.remove("has-course", "kyoyo", "senmon", "kyotsu");
+  div.classList.remove("has-course", "kyoyo", "senmon", "kyotsu", "custom");
   if (courses.length > 0) {
     const categoryClass = _categoryClass(courses[0]);
     div.classList.add("has-course", categoryClass);
@@ -1074,15 +1197,17 @@ function updateCell(div, day, period) {
       cnt.textContent = `他${courses.length - 1}件`;
       div.appendChild(cnt);
     }
-    const badge = document.createElement("div");
-    badge.className = "cell-classroom-badge" + (courses[0].classroom ? " filled" : "");
-    badge.textContent = courses[0].classroom || "教室+";
-    badge.title = courses[0].classroom ? `教室: ${courses[0].classroom}` : "教室を入力";
-    badge.onclick = (e) => {
-      e.stopPropagation();
-      openClassroomModal(courses[0].id, courses[0].name, courses[0].classroom || "");
-    };
-    div.appendChild(badge);
+    if (!courses[0].is_custom) {
+      const badge = document.createElement("div");
+      badge.className = "cell-classroom-badge" + (courses[0].classroom ? " filled" : "");
+      badge.textContent = courses[0].classroom || "教室+";
+      badge.title = courses[0].classroom ? `教室: ${courses[0].classroom}` : "教室を入力";
+      badge.onclick = (e) => {
+        e.stopPropagation();
+        openClassroomModal(courses[0].id, courses[0].name, courses[0].classroom || "");
+      };
+      div.appendChild(badge);
+    }
   } else {
     const plus = document.createElement("div");
     plus.className = "cell-plus";
@@ -1136,6 +1261,7 @@ function closeDrawer() {
 function setFilter(q) {
   currentFilter = q;
   const filtered = drawerCourses.filter(c => {
+    if (c.is_custom) return true;
     if (q === "all") return true;
     if (!c.term) return false;
     if (c.term.startsWith("第" + q)) return true;
@@ -1164,6 +1290,22 @@ function makeCourseItem(c) {
   const isEarned = _getPdfCourseNames().has(c.name);
   const info = document.createElement("div");
   info.className = "course-info";
+
+  if (c.is_custom) {
+    const metaParts = [c.instructor, c.classification].filter(Boolean);
+    info.innerHTML = `
+      <div class="course-name ${categoryClass}">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
+      <div class="course-meta">${esc(metaParts.join(' ／ ') || '手動追加科目')}</div>
+    `;
+    const delBtn = document.createElement("button");
+    delBtn.className = "reg-btn delete-custom";
+    delBtn.textContent = "削除";
+    delBtn.onclick = () => deleteCustomCourse(delBtn, c);
+    item.appendChild(info);
+    item.appendChild(delBtn);
+    return item;
+  }
+
   const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
   info.innerHTML = `
     <div class="course-name ${categoryClass}">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
@@ -1190,6 +1332,17 @@ function renderCourseList(courses) {
   const profile = window._userProfile || {};
   const userGrade = profile.grade ? parseInt(profile.grade) : null;
   const userFaculty = profile.faculty || null;
+
+  // 手動追加科目（個人用）はシラバスマスタの分類を持たないため、一覧の先頭に別枠で表示する
+  const customCourses = courses.filter(c => c.is_custom);
+  courses = courses.filter(c => !c.is_custom);
+  if (customCourses.length > 0) {
+    const h = document.createElement("div");
+    h.className = "course-section-header";
+    h.textContent = "手動追加した科目";
+    list.appendChild(h);
+    customCourses.forEach(c => list.appendChild(makeCourseItem(c)));
+  }
 
   // 学年フィルタ（target_grades が null の科目は表示する）
   let filtered = courses;
@@ -1242,7 +1395,14 @@ function renderCourseList(courses) {
   if (userFaculty !== "システム情報学部") senmonSysInfo = [];
 
   if (kyoyo.length === 0 && senmonKeiei.length === 0 && senmonSysInfo.length === 0 && senmonOther.length === 0) {
-    list.innerHTML = '<div class="empty-msg">この時間に科目がありません</div>';
+    if (customCourses.length === 0) {
+      list.innerHTML = '<div class="empty-msg">この時間に科目がありません</div>';
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "empty-msg";
+      empty.textContent = "この時間の登録可能な科目はありません";
+      list.appendChild(empty);
+    }
     return;
   }
 

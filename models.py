@@ -230,6 +230,22 @@ class UserSyllabus(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class UserCustomCourse(Base):
+    """ユーザーがマイ時間割で手動追加した個人用の科目（シラバスマスタに存在しない科目）。
+    line_user_idの本人にのみ表示され、他ユーザーの科目一覧には表示されない。"""
+    __tablename__ = "user_custom_courses"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
+    period: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class RequiredSubject(Base):
     """学部・学科・学年ごとの必修科目マスタ。時間割登録時に自動でuser_syllabiへ登録する対象を管理する。
     student_id_parity は学籍番号末尾1桁の偶奇でクラスが分かれる科目（機械工学科の実習/製図等）向けの絞り込み。
