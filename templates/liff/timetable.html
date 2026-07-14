@@ -582,7 +582,7 @@ tbody td:first-child {
       <button class="profile-modal-close" onclick="closeClassroomModal()">×</button>
     </div>
     <div class="classroom-modal-sub" id="classroom-modal-sub"></div>
-    <input type="text" class="classroom-input" id="classroom-input" placeholder="例：C201" maxlength="50">
+    <input type="text" class="classroom-input" id="classroom-input" placeholder="例：C201" maxlength="20">
     <button class="profile-save-btn" onclick="saveClassroom()">保存</button>
   </div>
 </div>
@@ -922,7 +922,7 @@ async function init() {
 
 async function loadMyCourses() {
   const idToken = await getIdToken();
-  const res = await fetch(`${BASE_URL}/api/timetable/my`, {
+  const res = await fetch(`${BASE_URL}/api/timetable/my?year=${currentYear}`, {
     headers: idToken ? { 'X-Liff-Id-Token': idToken } : {},
   });
   const data = await res.json();
@@ -967,11 +967,12 @@ async function loadYears() {
   });
 }
 
-function selectYear(y) {
+async function selectYear(y) {
   if (y === currentYear) return;
   currentYear = y;
   localStorage.setItem('currentYear', y);
   _slotCache.clear();
+  await loadMyCourses();
   buildGrid();
 }
 

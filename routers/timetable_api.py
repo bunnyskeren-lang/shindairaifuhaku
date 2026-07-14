@@ -215,7 +215,7 @@ def _credits_from_term(term: str | None) -> int:
 
 
 @router.get("/api/timetable/my")
-async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
+async def api_timetable_my(year: int = DEFAULT_ACADEMIC_YEAR, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
     user_id = await verify_liff_id_token(x_liff_id_token)
     if not user_id:
         return {"courses": []}
@@ -227,7 +227,7 @@ async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-To
             .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
-            .where(UserSyllabus.line_user_id == user_id)
+            .where(UserSyllabus.line_user_id == user_id, Syllabus.year == year)
         )).all()
 
         result = {}
@@ -254,7 +254,7 @@ async def api_timetable_my(x_liff_id_token: str = Header("", alias="X-Liff-Id-To
 async def api_timetable_classroom_set(syllabus_id: int, request: Request):
     body = await request.json()
     user_id = await _require_liff_user(body.get("id_token", ""))
-    classroom = (body.get("classroom") or "").strip()[:50]
+    classroom = (body.get("classroom") or "").strip()[:20]
     async with AsyncSessionLocal() as session:
         us = (await session.execute(
             select(UserSyllabus).where(
