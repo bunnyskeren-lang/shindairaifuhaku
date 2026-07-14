@@ -78,6 +78,12 @@ FACULTY_DEPARTMENTS = {
 # templates/liff/timetable.html の _CREDIT_CHECKER_DEFAULT_DEPARTMENT と同じ内容を保つこと
 CREDIT_CHECKER_DEFAULT_DEPARTMENT = {"農学部": "生産環境工学コース"}
 
+# 2年次からコース分岐する学部は、初回登録時点で所属コースが存在しない学生（1年次等）がいるため、
+# 会員登録フォームで「コース未定」を選べるようにする。この値が送信されたらdepartmentはNULLで保存する。
+# templates/form_register.html の DEPARTMENT_UNDECIDED_FACULTIES と同期を保つこと
+DEPARTMENT_UNDECIDED_VALUE = "未定"
+DEPARTMENT_UNDECIDED_FACULTIES = {"農学部"}
+
 JST = timezone(timedelta(hours=9))
 
 ADMIN_COOKIE = "admin_tok"

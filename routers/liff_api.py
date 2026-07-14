@@ -10,7 +10,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache, line_client
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS, REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
+    APP_URL, DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS,
+    REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
     is_profile_complete, make_syllabus_url,
 )
 from core.liff_auth import verify_liff_id_token
@@ -226,7 +227,11 @@ async def register_profile(
         return _form_error("学部を選択してください")
     if not (1 <= grade <= 6):
         return _form_error("学年を選択してください")
-    if department not in FACULTY_DEPARTMENTS.get(faculty, []):
+    # 2年次からコース分岐する学部（農学部等）は1年次に所属コースが無いため「コース未定」を許容し、
+    # departmentはNULLで保存する（単位チェッカーは代表コースへフォールバックする）
+    if faculty in DEPARTMENT_UNDECIDED_FACULTIES and department == DEPARTMENT_UNDECIDED_VALUE:
+        department = None
+    elif department not in FACULTY_DEPARTMENTS.get(faculty, []):
         return _form_error("学科を選択してください")
 
     async with AsyncSessionLocal() as session:

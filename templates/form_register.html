@@ -113,6 +113,11 @@
       return _liffInitPromise;
     }
 
+    // 2年次からコース分岐する学部。1年次等コース未所属の学生向けに「コース未定」を選べるようにする
+    // （core/config.py の DEPARTMENT_UNDECIDED_FACULTIES / DEPARTMENT_UNDECIDED_VALUE と同期を保つこと）
+    const DEPARTMENT_UNDECIDED_FACULTIES = ['農学部'];
+    const DEPARTMENT_UNDECIDED_VALUE = '未定';
+
     function populateDepartments(faculty, selected) {
       const sel = document.getElementById('department');
       sel.innerHTML = '';
@@ -122,6 +127,13 @@
         return;
       }
       sel.insertAdjacentHTML('beforeend', '<option value="">選択してください</option>');
+      if (DEPARTMENT_UNDECIDED_FACULTIES.includes(faculty)) {
+        const opt = document.createElement('option');
+        opt.value = DEPARTMENT_UNDECIDED_VALUE;
+        opt.textContent = 'コース未定（1年次など）';
+        if (!selected) opt.selected = true;
+        sel.appendChild(opt);
+      }
       for (const d of depts) {
         const opt = document.createElement('option');
         opt.value = d;
