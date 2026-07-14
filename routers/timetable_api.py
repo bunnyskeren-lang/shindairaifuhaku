@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import and_, case, or_, select, text
+from sqlalchemy import and_, case, func, or_, select, text
 
 from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS
 from core.liff_auth import verify_liff_id_token
@@ -311,9 +311,15 @@ async def _load_timetable_courses(session, user_id: str, year: int) -> list[dict
 async def api_timetable_my(year: int = DEFAULT_ACADEMIC_YEAR, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
     user_id = await verify_liff_id_token(x_liff_id_token)
     if not user_id:
-        return {"courses": []}
+        return {"courses": [], "cap": None}
     async with AsyncSessionLocal() as session:
-        return {"courses": await _load_timetable_courses(session, user_id, year)}
+        courses = await _load_timetable_courses(session, user_id, year)
+        # CAPバーの分母用。学部・学科・年度のCAP行が無い場合はNone（フロント側でバー自体を隠す）
+        profile = await session.get(UserProfile, user_id)
+        cap = None
+        if profile and profile.faculty:
+            cap = await _get_registration_cap(session, profile.faculty, profile.department, year)
+        return {"courses": courses, "cap": cap}
 
 
 @router.get("/api/timetable/share_token")
@@ -421,7 +427,14 @@ async def api_timetable_register(syllabus_id: int, request: Request):
                     .join(UserSyllabus, UserSyllabus.syllabus_id == Syllabus.id)
                     .where(UserSyllabus.line_user_id == user_id, Syllabus.year == syl.year)
                 )).scalars().all()
-                total_credits = sum(_credits_from_term(t) for t in terms)
+                # 手動追加科目（user_custom_courses）も履修単位としてCAPに算入する
+                custom_credits = (await session.execute(
+                    select(func.coalesce(func.sum(UserCustomCourse.credits), 0)).where(
+                        UserCustomCourse.line_user_id == user_id,
+                        UserCustomCourse.year == syl.year,
+                    )
+                )).scalar_one()
+                total_credits = sum(_credits_from_term(t) for t in terms) + custom_credits
                 if total_credits > cap:
                     warning = (
                         f"{syl.year}年度の登録単位数が上限（{cap}単位）を超えています"

@@ -542,7 +542,7 @@ body.view-only .edit-only { display: none !important; }
 
 <div class="cap-bar edit-only">
   <span class="cap-label">CAP</span>
-  <span class="cap-count" id="cap-count">0</span><span class="cap-slash">/49</span>
+  <span class="cap-count" id="cap-count">0</span><span class="cap-slash" id="cap-max">/--</span>
 </div>
 
 <div class="intensive-wrap">
@@ -1222,6 +1222,17 @@ async function loadMyCourses() {
   }
   const capEl = document.getElementById("cap-count");
   if (capEl) capEl.textContent = capTotal;
+  // 分母はサーバが返す学部・学科・年度別のCAP値。CAP行が無い学部では誤解を招くバー自体を隠す
+  const capBar = document.querySelector(".cap-bar");
+  const capMaxEl = document.getElementById("cap-max");
+  if (capBar && capMaxEl) {
+    if (data.cap != null) {
+      capMaxEl.textContent = `/${data.cap}`;
+      capBar.style.display = "";
+    } else {
+      capBar.style.display = "none";
+    }
+  }
 }
 
 async function loadYears() {
