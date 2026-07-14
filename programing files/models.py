@@ -56,6 +56,8 @@ class UserProfile(Base):
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # マイ時間割の共有リンクに埋め込む世代番号（ルートmodels.py参照）
+    share_token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -176,7 +178,8 @@ class Schedule(Base):
 class Review(Base):
     __tablename__ = "reviews"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
+    # ルートmodels.pyと同じくRESTRICT。レビューは科目削除の巻き添えで消してはならない（データ保護ルール）
+    course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="RESTRICT"), nullable=False, index=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     ease_rating: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
