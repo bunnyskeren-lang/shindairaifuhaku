@@ -344,7 +344,6 @@ _KYOYO_PATTERN_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r'^複言語共修セミナー'), "教養(総合)"),
     (re.compile(r'^海外留学のすすめ[AB]$'), "教養(総合)"),
     (re.compile(r'^カタチの(文化学|自然学)'), "教養(総合)"),
-    (re.compile(r'^データサイエンス'), "教養(基盤)"),
     (re.compile(r'^食と健康[AB]$'), "教養(健康・スポーツ)"),
     (re.compile(r'^大学教育論$'), "教養(人文)"),
     (re.compile(r'^心と行動$'), "教養(人文)"),
