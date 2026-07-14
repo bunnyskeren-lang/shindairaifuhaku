@@ -743,12 +743,12 @@ async function shareTimetable() {
   }
   closeShareModal();
   const message = `私の時間割はこちら📅\n${url}`;
-  if (liff.isApiAvailable('shareTargetPicker')) {
-    try {
-      await liff.shareTargetPicker([{ type: 'text', text: message }]);
-    } catch (e) {}
+  // isApiAvailable('shareTargetPicker')による事前チェックが環境によって不正確な場合があるため、
+  // 直接呼び出して失敗した場合のみクリップボードへフォールバックする
+  try {
+    await liff.shareTargetPicker([{ type: 'text', text: message }]);
     return;
-  }
+  } catch (e) {}
   try {
     await navigator.clipboard.writeText(url);
     alert('共有リンクをコピーしました。LINEのトークで友達に送ってください。');
