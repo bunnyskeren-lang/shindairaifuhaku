@@ -17,7 +17,10 @@ engine = create_async_engine(
     _url,
     echo=False,
     connect_args={"ssl": ssl_ctx, "command_timeout": 30, "statement_cache_size": 0},
-    pool_pre_ping=True,
+    # 修正理由: pool_pre_pingはチェックアウト毎にSELECT 1を1往復追加するため、
+    # Render(Singapore)⇄Supabase(東京/大阪)間のようにDB往復のコストが高い構成では
+    # クエリのレイテンシを実質2倍にしていた。pool_recycle=270で定期的に接続を
+    # 更新しているため、古い接続を掴むリスクは残るがpre_pingほど高頻度ではない
     pool_recycle=270,
     # Supabase pooler側の上限に合わせて調整できるよう環境変数で上書き可能にする
     # （既定値はSupabase無料/Starterプランのpooler接続上限を踏まえた控えめな値）

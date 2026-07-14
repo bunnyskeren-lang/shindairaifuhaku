@@ -14,4 +14,9 @@ async def prewarm_caches() -> None:
         await prewarm_flex_cache()
     except Exception as e:
         print(f"Prewarm flex cache failed: {e}", flush=True)
+    try:
+        from line_bot.handler import prewarm_rankings
+        await prewarm_rankings()
+    except Exception as e:
+        print(f"Prewarm rankings failed: {e}", flush=True)
     print("Cache pre-warm complete", flush=True)

@@ -341,6 +341,66 @@ async def handle_course_list(category: str = "", classification: str = "", facul
     return result
 
 
+# ── Ranking（起動時prewarm対象。1時間TTLキャッシュのミスを起動直後に埋めておく） ──
+
+async def _get_popular_ranking() -> list:
+    _cached = cache.get_ranking_cache("popular")
+    if _cached is not None:
+        return _cached
+    async with AsyncSessionLocal() as _s:
+        rows = (await _s.execute(
+            select(Subject.name, func.avg(Review.rating).label("avg"))
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.is_approved.is_(True))
+            .group_by(Subject.name)
+            .order_by(func.avg(Review.rating).desc())
+            .limit(5)
+        )).all()
+    if not rows:
+        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+    items = [
+        {"rank": i, "name": name, "stars": stars(math.floor(float(avg) + 0.5))}
+        for i, (name, avg) in enumerate(rows, 1)
+    ]
+    _res = [FlexMessage(alt_text="🏆 人気の授業 TOP5", contents=make_ranking_bubble("🏆 人気の授業 TOP5", items))]
+    cache.set_ranking_cache("popular", _res)
+    return _res
+
+
+async def _get_rakutan_ranking() -> list:
+    _cached = cache.get_ranking_cache("rakutan")
+    if _cached is not None:
+        return _cached
+    async with AsyncSessionLocal() as _s:
+        rows = (await _s.execute(
+            select(Subject.name, Review.ease_rating, func.count(Review.id))
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.is_approved.is_(True))
+            .group_by(Subject.name, Review.ease_rating)
+        )).all()
+    if not rows:
+        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+    course_ease: dict[str, str] = {}
+    for name, ease, _ in rows:
+        if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
+            course_ease[name] = ease
+    top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
+    items = [
+        {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
+        for i, (name, ease) in enumerate(top5, 1)
+    ]
+    _res = [FlexMessage(alt_text="😴 楽単ランキング TOP5", contents=make_ranking_bubble("😴 楽単ランキング TOP5", items))]
+    cache.set_ranking_cache("rakutan", _res)
+    return _res
+
+
+async def prewarm_rankings() -> None:
+    await _get_popular_ranking()
+    await _get_rakutan_ranking()
+
+
 # ── Message handler ─────────────────────────────────────────────
 
 async def handle_message(text: str, user_id: str = "") -> list:
@@ -526,55 +586,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [make_help_flex()]
 
     if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
-        _cached = cache.get_ranking_cache("popular")
-        if _cached is not None:
-            return _cached
-        async with AsyncSessionLocal() as _s:
-            rows = (await _s.execute(
-                select(Subject.name, func.avg(Review.rating).label("avg"))
-                .join(CourseSection, CourseSection.subject_id == Subject.id)
-                .join(Review, Review.course_section_id == CourseSection.id)
-                .where(Review.is_approved.is_(True))
-                .group_by(Subject.name)
-                .order_by(func.avg(Review.rating).desc())
-                .limit(5)
-            )).all()
-        if not rows:
-            return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-        items = [
-            {"rank": i, "name": name, "stars": stars(math.floor(float(avg) + 0.5))}
-            for i, (name, avg) in enumerate(rows, 1)
-        ]
-        _res = [FlexMessage(alt_text="🏆 人気の授業 TOP5", contents=make_ranking_bubble("🏆 人気の授業 TOP5", items))]
-        cache.set_ranking_cache("popular", _res)
-        return _res
+        return await _get_popular_ranking()
 
     if t in ["楽単ランキング", "楽単", "楽"]:
-        _cached = cache.get_ranking_cache("rakutan")
-        if _cached is not None:
-            return _cached
-        async with AsyncSessionLocal() as _s:
-            rows = (await _s.execute(
-                select(Subject.name, Review.ease_rating, func.count(Review.id))
-                .join(CourseSection, CourseSection.subject_id == Subject.id)
-                .join(Review, Review.course_section_id == CourseSection.id)
-                .where(Review.is_approved.is_(True))
-                .group_by(Subject.name, Review.ease_rating)
-            )).all()
-        if not rows:
-            return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-        course_ease: dict[str, str] = {}
-        for name, ease, _ in rows:
-            if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
-                course_ease[name] = ease
-        top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
-        items = [
-            {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
-            for i, (name, ease) in enumerate(top5, 1)
-        ]
-        _res = [FlexMessage(alt_text="😴 楽単ランキング TOP5", contents=make_ranking_bubble("😴 楽単ランキング TOP5", items))]
-        cache.set_ranking_cache("rakutan", _res)
-        return _res
+        return await _get_rakutan_ranking()
 
     # 全操作をキャッシュから（DBアクセスなし）
     _reviewed_names, (cbn, call) = await asyncio.gather(
