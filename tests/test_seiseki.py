@@ -1,4 +1,4 @@
-from core.seiseki import classify_seiseki_raw, classify_senmon, extract_seiseki_raw, is_senmon2
+from core.seiseki import classify_seiseki_raw, classify_senmon, extract_seiseki_raw, is_kikai_hisshu, is_senmon2
 
 
 def test_classify_senmon_groups():
@@ -14,6 +14,21 @@ def test_is_senmon2_prefix_and_exact():
     assert is_senmon2("経営管理")
     assert is_senmon2("簿記Ⅰ")
     assert not is_senmon2("会計学特殊講義")
+
+
+def test_is_kikai_hisshu_kyotsu_and_senmon():
+    assert is_kikai_hisshu("線形代数1", kyotsu=True)
+    assert not is_kikai_hisshu("その他共通科目", kyotsu=True)
+    assert is_kikai_hisshu("機械工学実習Ⅰ(1Q)", kyotsu=False)
+    assert is_kikai_hisshu("卒業研究", kyotsu=False)
+    assert not is_kikai_hisshu("その他専門科目", kyotsu=False)
+
+
+def test_classify_senmon_and_kikai_hisshu_do_not_collide_on_same_name():
+    # 「卒業研究」は機械工学科では必修科目リストに含まれるが、経営学部の群分類には
+    # 一切影響しない（別学部キーで判定するため、DB未設定時は第3群にフォールバックする）
+    assert classify_senmon("卒業研究") == "第3群"
+    assert is_kikai_hisshu("卒業研究", kyotsu=False)
 
 
 def test_classify_seiseki_raw_aggregates_by_group():

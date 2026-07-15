@@ -142,8 +142,10 @@ _all_instructors_cache_at: float = 0.0
 _all_review_stats_cache: dict[str, tuple] = {}
 _all_review_stats_cache_at: float = 0.0
 
-# senmon_group キャッシュ（PDFパーサーが同期的に参照する）
-_senmon_name_to_group: dict[str, str] = {}
+# senmon_group キャッシュ（PDFパーサーが同期的に参照する）。経営学部の「群」（第1群等）と
+# 工学部機械工学科の「必修」フラグの両方をこの1列で共有するため、(科目名, 学部) の複合キーにする
+# （科目名だけをキーにすると、学部をまたいだ同名科目（例:「卒業研究」）で値が衝突するため）
+_senmon_name_to_group: dict[tuple[str, str], str] = {}
 
 # 経営学部専門科目の classification ラベル→群名。senmon_group（管理画面での手動上書き）が
 # 未設定の科目は、シラバスの科目ナンバリングコード由来で既に正しく入っている classification から
@@ -256,19 +258,19 @@ async def reload_senmon_cache():
     global _senmon_name_to_group
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
-            select(Subject.name, Subject.senmon_group, Subject.classification)
+            select(Subject.name, Subject.faculty, Subject.senmon_group, Subject.classification)
         )).all()
-    mapping: dict[str, str] = {}
-    for name, senmon_group, classification in rows:
+    mapping: dict[tuple[str, str], str] = {}
+    for name, faculty, senmon_group, classification in rows:
         if senmon_group:
-            mapping[name] = senmon_group
+            mapping[(name, faculty)] = senmon_group
         elif classification in _KEIEI_CLASSIFICATION_TO_GROUP:
-            mapping[name] = _KEIEI_CLASSIFICATION_TO_GROUP[classification]
+            mapping[(name, faculty)] = _KEIEI_CLASSIFICATION_TO_GROUP[classification]
     _senmon_name_to_group = mapping
 
 
-def get_senmon_group(name: str) -> str | None:
-    return _senmon_name_to_group.get(name)
+def get_senmon_group(name: str, faculty: str) -> str | None:
+    return _senmon_name_to_group.get((name, faculty))
 
 
 def invalidate_senmon_cache():

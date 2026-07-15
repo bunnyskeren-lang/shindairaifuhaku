@@ -106,15 +106,25 @@
     <span style="font-size:11px;font-weight:normal;color:#6b7280">（import_syllabus.py で登録済み）</span>
   </h2>
   <table>
-    <tr><th>科目名</th><th>分類</th><th>学期</th></tr>
+    <tr><th>科目名</th><th>分類</th><th>学期</th>{% if auto_hisshu is not none %}<th style="width:90px">必修</th>{% endif %}</tr>
     {% for c in courses %}
+    {% set auto_val = '必修' if (auto_hisshu is not none and auto_hisshu.get(c.id)) else '選択' %}
     <tr>
       <td style="font-size:13px">{{ c.name }}</td>
       <td style="font-size:12px;color:#6b7280">{{ c.classification or '—' }}</td>
       <td style="font-size:12px;color:#6b7280">{{ c.term_type or '—' }}</td>
+      {% if auto_hisshu is not none %}
+      <td>
+        <select data-id="{{ c.id }}" onchange="setHisshu(this)" style="font-size:12px">
+          <option value="" {% if not c.senmon_group %}selected{% endif %}>自動（{{ auto_val }}）</option>
+          <option value="必修" {% if c.senmon_group == '必修' %}selected{% endif %}>必修</option>
+          <option value="選択" {% if c.senmon_group == '選択' %}selected{% endif %}>選択</option>
+        </select>
+      </td>
+      {% endif %}
     </tr>
     {% else %}
-    <tr><td colspan="3" class="empty">{{ dept_name }}の科目がありません<br><small>import_syllabus.py --also-courses --faculty {{ faculty_label }}{{ dept_name }} で登録してください</small></td></tr>
+    <tr><td colspan="4" class="empty">{{ dept_name }}の科目がありません<br><small>import_syllabus.py --also-courses --faculty {{ faculty_label }}{{ dept_name }} で登録してください</small></td></tr>
     {% endfor %}
   </table>
 </div>
@@ -173,6 +183,27 @@ function moveCreditGroup(groupName, dir) {
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
   }).catch(function() {});
+}
+
+async function setHisshu(sel) {
+  const id = sel.dataset.id;
+  const prev = sel.dataset.prevValue !== undefined ? sel.dataset.prevValue : sel.value;
+  const group = sel.value || null;
+  sel.disabled = true;
+  try {
+    const res = await fetch('/admin/koubu/kikai/courses/' + id + '/senmon_group', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group: group }),
+    });
+    if (!res.ok) throw new Error(res.status);
+    sel.dataset.prevValue = sel.value;
+  } catch(e) {
+    sel.value = prev;
+    alert('保存に失敗しました');
+  } finally {
+    sel.disabled = false;
+  }
 }
 
 async function deleteReq(btn) {

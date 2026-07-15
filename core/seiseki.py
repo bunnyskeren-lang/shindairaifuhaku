@@ -84,9 +84,9 @@ def is_senmon2(name: str) -> bool:
     return name in _SENMON2_EXACT or any(name.startswith(p) for p in _SENMON2_PREFIX)
 
 
-def classify_senmon(name: str) -> str:
+def classify_senmon(name: str, faculty: str = "経営学部") -> str:
     """専門科目を群に分類する。DBに登録があればそちらを優先。"""
-    db = cache.get_senmon_group(name)
+    db = cache.get_senmon_group(name, faculty)
     if db:
         return db
     if '初年次セミナー' in name:
@@ -98,6 +98,18 @@ def classify_senmon(name: str) -> str:
     if any(name.startswith(p) for p in _GLOBAL_PREFIXES):
         return 'グローバル'
     return '第3群'
+
+
+_KIKAI_FACULTY = "工学部機械工学科"
+
+
+def is_kikai_hisshu(name: str, kyotsu: bool) -> bool:
+    """機械工学科の科目が必修かどうかを判定する。DBに登録があればそちらを優先。"""
+    db = cache.get_senmon_group(name, _KIKAI_FACULTY)
+    if db:
+        return db == '必修'
+    prefixes = _KIKAI_KYOTSU_HISSHU if kyotsu else _KIKAI_SENMON_HISSHU
+    return any(name.startswith(p) for p in prefixes)
 
 
 def extract_seiseki_raw(text: str) -> dict:
@@ -223,14 +235,14 @@ def classify_seiseki_raw(raw: dict) -> dict:
         section = c.get("section", "専門科目")
         cr = c["credits"]
         if section == '共通専門基礎科目':
-            if any(c["name"].startswith(p) for p in _KIKAI_KYOTSU_HISSHU):
+            if is_kikai_hisshu(c["name"], kyotsu=True):
                 kikai_kyotsu_hisshu += cr
             else:
                 kikai_kyotsu_sentaku += cr
         elif section == '専門基礎科目':
             kikai_senmonkiso_sentaku += cr
         elif section == '専門科目':
-            if any(c["name"].startswith(p) for p in _KIKAI_SENMON_HISSHU):
+            if is_kikai_hisshu(c["name"], kyotsu=False):
                 kikai_senmon_hisshu += cr
             else:
                 kikai_senmon_sentaku += cr

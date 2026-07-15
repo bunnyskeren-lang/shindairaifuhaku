@@ -8,7 +8,7 @@ from sqlalchemy import update as sa_update
 
 from core import cache
 from core.security import check_admin
-from core.seiseki import SENMON_GROUPS, classify_senmon
+from core.seiseki import SENMON_GROUPS, classify_senmon, is_kikai_hisshu
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CreditRequirement, DisplayOrder, Subject, SubjectCreditCategory
@@ -520,6 +520,10 @@ async def admin_koubu_dept(dept_key: str, request: Request, _: str = Depends(che
             .order_by(Subject.name)
         )).scalars().all()
     group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
+    # 必修/選択の仕分けは現状 機械工学科（専門科目）のみ core.seiseki.is_kikai_hisshu() が対応。
+    # 本一覧はfaculty LIKE '%学科名%'のみを表示するため、教養教育院扱いの共通専門基礎科目
+    # （線形代数等）はここには含まれず、必修判定もkyotsu=False（専門科目扱い）のみで行う。
+    auto_hisshu = {c.id: is_kikai_hisshu(c.name, kyotsu=False) for c in courses} if dept_key == "kikai" else None
     return templates.TemplateResponse("admin/koubu_dept.html", {
         "request": request,
         "dept_key": dept_key,
@@ -529,6 +533,7 @@ async def admin_koubu_dept(dept_key: str, request: Request, _: str = Depends(che
         "group_names": group_names,
         "group_faculty": "工学部",
         "faculty_label": "工学部",
+        "auto_hisshu": auto_hisshu,
     })
 
 
@@ -624,6 +629,26 @@ async def admin_koubu_delete_requirement(dept_key: str, cat_id: str, request: Re
             await session.delete(row)
             await session.commit()
     return RedirectResponse(f"/admin/koubu/{dept_key}", status_code=303)
+
+
+# 機械工学科の必修/選択フラグ（現状 core.seiseki.is_kikai_hisshu() が参照するのは
+# 機械工学科のみ。他学科で使う場合は seiseki.py 側に同様の判定関数を追加すること）
+@router.post("/admin/koubu/kikai/courses/{course_id}/senmon_group")
+async def admin_koubu_kikai_set_hisshu(course_id: int, request: Request, _: str = Depends(check_admin)):
+    body = await request.json()
+    group = body.get("group") or None
+    if group and group not in ("必修", "選択"):
+        raise HTTPException(status_code=400, detail="invalid group")
+    async with AsyncSessionLocal() as session:
+        course = await session.get(Subject, course_id)
+        if not course or "機械工学科" not in (course.faculty or ""):
+            raise HTTPException(status_code=404)
+        course.senmon_group = group
+        await session.commit()
+    cache.invalidate_senmon_cache()
+    asyncio.create_task(cache.reload_senmon_cache())
+    cache.invalidate_courses_cache()
+    return JSONResponse({"ok": True})
 
 
 # ── 農学部 各コース 管理ページ（2年次以降に分岐するコースごとに卒業要件が異なる） ──────────
