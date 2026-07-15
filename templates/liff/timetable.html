@@ -1211,6 +1211,9 @@ async function submitProfile() {
   localStorage.setItem('timetable_profile', JSON.stringify(window._userProfile));
   updateProfileChip();
   updateCreditsVisibility();
+  // 学部・学科変更後は単位チェッカーの区分定義(CREDIT_CATS)が旧学部のまま残ってしまうため、
+  // プロフィール変更のたびに新しい学部・学科の区分を取り直して再描画する
+  await loadCredits();
   if (currentSlot) setFilter(currentQuarter);
   if (userId) {
     getIdToken().then(idToken => {
