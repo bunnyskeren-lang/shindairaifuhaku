@@ -976,8 +976,12 @@ function openProfileModal() {
 }
 
 document.getElementById('profile-faculty-sel').addEventListener('change', (e) => {
+  const depts = (window._facultyDepartments || {})[e.target.value] || [];
   populateDepartmentOptions(e.target.value, '');
-  submitProfile();
+  // 学科がある学部は、学科未選択のまま department=null で即保存してしまうと
+  // 単位チェッカーが学科依存の区分を見失う（学部を元に戻しても学科が空のまま直らない）。
+  // 学科選択のonchange（下のprofile-department-sel）で保存されるまで待つ。
+  if (depts.length === 0) submitProfile();
 });
 
 function closeProfileModal() {
