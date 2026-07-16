@@ -27,7 +27,9 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
             .order_by(Subject.classification, Subject.sort_order, Subject.name)
         )).scalars().all()
         reqs = (await session.execute(
-            select(CreditRequirement).order_by(CreditRequirement.sort_order)
+            select(CreditRequirement)
+            .where(CreditRequirement.faculty == "経営学部")
+            .order_by(CreditRequirement.sort_order)
         )).scalars().all()
         group_order = await cache.get_credit_group_order()
         reqs = sorted(
@@ -108,7 +110,10 @@ async def admin_keiei_update_requirements(request: Request, _: str = Depends(che
     form = await request.form()
     async with AsyncSessionLocal() as session:
         existing_ids = {
-            r for (r,) in (await session.execute(select(CreditRequirement.category_id))).all()
+            r for (r,) in (await session.execute(
+                select(CreditRequirement.category_id)
+                .where(CreditRequirement.faculty == "経営学部")
+            )).all()
         }
         for cat_id in existing_ids:
             values: dict = {}
