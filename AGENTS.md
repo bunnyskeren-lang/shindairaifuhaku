@@ -85,12 +85,15 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 
 **本番デプロイ時は、コードのプッシュに加えて必ず dev → prod のDB同期も行うこと。**
 
-同期対象（この5テーブルのみ）：
+同期対象（この6テーブルのみ）：
+- `credit_requirements`
 - `display_orders`
 - `subjects`
 - `instructors`
 - `course_sections`
 - `subject_credit_categories`
+
+`credit_requirements`は2026-07-16に同期対象へ追加した。新学部の単位要件をdevへ追加しただけでは本番に反映されず、`subject_credit_categories`の同期がFK違反で失敗する事故があったため（`sync_db_to_prod.py`ではUPSERTを`subject_credit_categories`より先に実行し、本番のみに存在するカテゴリの削除は`subject_credit_categories`洗い替え後に行う）。
 
 絶対に同期しないテーブル（ユーザーデータ・ログ・レビュー・利用履歴）：
 - `reviews`
@@ -107,6 +110,8 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 cd "programing files"
 python -X utf8 sync_db_to_prod.py
 ```
+
+`sync_db_to_prod.py`はUPSERTだけでなく、本番のみに存在する行（devで削除・変更済みの行）も削除する（2026-07-16追加）。ただし`display_orders`/`credit_requirements`以外（`subjects`/`instructors`/`course_sections`）は、`course_sections`経由で`syllabi`（時間割登録データ）や`reviews`が紐づく場合は削除せず、`KEEP(要確認)`としてログ表示するのみに留める。このログが出た場合は、同名科目のfaculty違いによる重複などが原因のことが多いので、手動でreviewsのcourse_section_id付け替え→旧行削除の対応が必要になる。
 
 ### LIFF ID の固定ルール
 
