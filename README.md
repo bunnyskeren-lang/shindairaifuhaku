@@ -52,7 +52,7 @@
 - **管理画面認証**：`core.security.make_admin_token()` が `HMAC-SHA256(CHANNEL_SECRET + ADMIN_PASSWORD)` で署名した Cookie トークンを発行（TTL 4時間）。`core.security.check_admin` を全 `/admin/*` ルートに `Depends()` で付与。
 - **ミドルウェア（`main.py`、外側から順に適用）**：`GZipMiddleware`（JSON応答等を圧縮）→ `CORSMiddleware`（LIFF/LINEドメインのみ許可）→ `BodySizeLimitMiddleware`（リクエストボディ2MB上限、`/api/parse_seiseki`除く）→ `RequestTimingMiddleware`（アクセスログ・3秒以上はSLOWマーカー付き標準出力）。後者2つは Starlette の `BaseHTTPMiddleware` だと全リクエストにタスク生成・anyio中継のオーバーヘッドが乗るため、素の ASGI（scope/receive/send）実装。加えて `/admin/login`・`/submit`・`/api/parse_seiseki` 等には `core.rate_limit.rate_limiter()` を個別に `Depends()` 付与しIPアドレス単位でスライディングウィンドウ制限。
 - **起動処理（lifespan）**：`init_db()` → `cache.reload_senmon_cache()` / `prewarm.prewarm_caches()` を非同期起動 → `line_client.startup()` / `liff_auth.startup()` → 自己 ping（`SELF_URL` 設定時）・`backup.backup_loop()`（`BACKUP_ENABLED=true` 時のみ）・`activity_log.log_cleanup_loop()` をバックグラウンドタスクとして起動。
-- **dev → 本番マスタデータ同期**：`routers/admin/sync.py`（`/admin/sync/master_data`）が本番アプリ自身から `DEV_DATABASE_URL` に接続し、`display_orders`/`subjects`/`instructors`/`course_sections`/`subject_credit_categories` の5テーブルを自然キー（id直コピーではなく name 等）でUPSERTする。本番DBはネットワーク制限で開発者PCから直接書き込めないための設計（同等の処理をローカルから行う `programing files/sync_db_to_prod.py` も別途存在）。
+- **dev → 本番マスタデータ同期**：`programing files/sync_db_to_prod.py` をローカルから実行し、`credit_requirements`/`display_orders`/`subjects`/`instructors`/`course_sections`/`subject_credit_categories` の6テーブルを自然キー（id直コピーではなく name 等）でUPSERTする。本番のみに存在する行（devで削除・変更済みの行）も削除するが、`syllabi`/`reviews`が紐づく行は保護し「KEEP(要確認)」としてログ表示のみ行う。
 
 詳細なルート一覧・非同期クエリのルールなどは `CLAUDE.md` を参照。
 
@@ -183,7 +183,6 @@ pip install -r requirements.txt
 | `KYOYO_REQUIRED_CREDITS` | - | 教養科目の必要単位数（デフォルト: 1） |
 | `DB_POOL_SIZE` / `DB_POOL_MAX_OVERFLOW` | - | DB接続プールのサイズ調整（デフォルト: 10 / 20） |
 | `DISABLE_SSL_VERIFY` | - | DB 接続の SSL 証明書検証を無効化（`core/db_ssl.py`、緊急時の切り戻し用） |
-| `DEV_DATABASE_URL` | - | 本番サービスから dev DB へ読み取り接続するための URL（`/admin/sync/master_data` 用。本番側にのみ設定） |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | - | DB自動バックアップのアップロード先 Supabase Storage API |
 | `BACKUP_ENABLED` / `BACKUP_BUCKET` / `BACKUP_RETENTION_DAYS` / `BACKUP_INTERVAL_HOURS` | - | DB自動バックアップの有効化・保存先バケット・保持日数・実行間隔（既定: false / `db-backups` / 15日 / 1時間） |
 | `ENV` | - | `dev` を指定すると開発モード扱い |

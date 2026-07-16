@@ -16,12 +16,6 @@
 </div>
 {% endif %}
 <div class="card">
-  <h2 style="margin-top:0">dev DBから反映</h2>
-  <p style="font-size:13px;color:#6b7280;margin:0 0 10px">devのマスタデータ（表示順・科目・教員・科目セクション・単位カテゴリ紐付け）をこの環境に反映します。reviews・ユーザーデータ・ログは対象外です。</p>
-  <button type="button" class="btn btn-primary" id="syncSubjectsInstructorsBtn" onclick="syncSubjectsInstructors()">🔄 マスタデータをdevから反映</button>
-</div>
-
-<div class="card">
   <h2 style="margin-top:0">科目を追加</h2>
   <form method="post" action="/admin/courses/add">
     <div style="margin-bottom:10px">
@@ -695,32 +689,6 @@ function moveInstructor(id, dir) {
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
   }).catch(function() {});
-}
-
-function syncSubjectsInstructors() {
-  if (!confirm('devのマスタデータ（表示順・科目・教員・科目セクション・単位カテゴリ紐付け）でこの環境を上書きします。よろしいですか？')) return;
-  var btn = document.getElementById('syncSubjectsInstructorsBtn');
-  btn.disabled = true;
-  btn.textContent = '反映中...';
-  fetch('/admin/sync/master_data', { method: 'POST' })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.ok) {
-        alert('反映しました（display_orders: ' + data.display_orders + '件, subjects: ' + data.subjects +
-          '件, instructors: ' + data.instructors + '件, course_sections: ' + data.course_sections +
-          '件, subject_credit_categories: ' + data.subject_credit_categories + '件）');
-        location.reload();
-      } else {
-        alert('失敗しました: ' + (data.error || '不明なエラー'));
-        btn.disabled = false;
-        btn.textContent = '🔄 マスタデータをdevから反映';
-      }
-    })
-    .catch(function() {
-      alert('通信エラーが発生しました');
-      btn.disabled = false;
-      btn.textContent = '🔄 マスタデータをdevから反映';
-    });
 }
 
 function moveFaculty(id, dir) {
