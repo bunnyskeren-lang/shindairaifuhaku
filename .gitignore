@@ -5,7 +5,12 @@ __pycache__/
 *.pyo
 .venv/
 venv/
-docs/
+docs/*
+!docs/学生便覧2026/
+docs/学生便覧2026/*
+!docs/学生便覧2026/ver2/
+docs/学生便覧2026/ver2/*
+!docs/学生便覧2026/ver2/IMPLEMENTATION_CANDIDATES.md
 .vscode/
 backups/
 secure_certification/

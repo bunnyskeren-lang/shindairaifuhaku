@@ -1,0 +1,69 @@
+{% extends "admin/base.html" %}
+{% block title %}便覧×DB齟齬一覧{% endblock %}
+{% block heading %}📖 学生便覧ver2 × DB 齟齬一覧{% endblock %}
+
+{% block extra_style %}
+.disc-filter{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.disc-filter label{display:block;margin-bottom:4px}
+.disc-filter .field{min-width:200px}
+.disc-filter input,.disc-filter select{margin-top:0}
+.disc-card{border-left:4px solid #9ca3af}
+.disc-card.status-ok{border-left-color:#10b981}
+.disc-card.status-warn{border-left-color:#f59e0b}
+.disc-card.status-open{border-left-color:#ef4444}
+.disc-title{font-size:14px;font-weight:bold;margin:0 0 6px}
+.disc-faculty{color:#6b7280;font-size:12px;margin:0 0 8px}
+.disc-status{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;margin-left:6px}
+.disc-status.status-ok{background:#d1fae5;color:#047857}
+.disc-status.status-warn{background:#fef3c7;color:#92400e}
+.disc-status.status-open{background:#fee2e2;color:#b91c1c}
+.disc-body{white-space:pre-wrap;font-size:12.5px;color:#374151;line-height:1.6;margin:0}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <p style="margin:0 0 10px;font-size:13px;color:#374151">
+    <code>docs/学生便覧2026/ver2/IMPLEMENTATION_CANDIDATES.md</code>（学生便覧ver2プロジェクトで発見した「便覧の記載とDBの現在値が食い違う項目」「DB未投入の項目」の記録）を一覧表示します。<br>
+    DBへの書き込みは行っていません。実装するかどうかはこの一覧を見ながら個別に判断してください。
+  </p>
+  <form class="disc-filter" method="get" action="/admin/binran_discrepancies">
+    <div class="field">
+      <label>学部で絞り込み</label>
+      <select name="faculty" onchange="this.form.submit()">
+        <option value="">すべて（{{ total }}件）</option>
+        {% for f in faculties %}
+        <option value="{{ f }}" {{ 'selected' if f == selected_faculty }}>{{ f }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field" style="flex:1">
+      <label>科目名・教員名などフリーワード検索</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="例: 卒業研究、〇〇先生、初年次セミナー">
+    </div>
+    <div class="field" style="min-width:auto">
+      <button type="submit" class="btn btn-primary">絞り込む</button>
+    </div>
+    {% if selected_faculty or q %}
+    <div class="field" style="min-width:auto">
+      <a href="/admin/binran_discrepancies" class="btn" style="background:#f3f4f6;color:#374151;display:inline-block;text-decoration:none">クリア</a>
+    </div>
+    {% endif %}
+  </form>
+</div>
+
+{% if not candidates %}
+<div class="card empty">該当する項目がありません</div>
+{% else %}
+<p style="font-size:12px;color:#6b7280;margin:0 0 10px">{{ candidates | length }}件表示中</p>
+{% for c in candidates %}
+{% set is_ok = '対応不要' in c.status %}
+{% set is_warn = (not is_ok) and (('要' in c.status) or ('保留' in c.status) or ('未着手' in c.status) or ('未解決' in c.status)) %}
+{% set status_class = 'status-ok' if is_ok else ('status-warn' if is_warn else 'status-open') %}
+<div class="card disc-card {{ status_class }}">
+  <p class="disc-faculty">{{ c.faculty }}</p>
+  <p class="disc-title">{{ c.title.split('→')[0].strip() if '→' in c.title else c.title }}<span class="disc-status {{ status_class }}">{{ c.status }}</span></p>
+  <p class="disc-body">{{ c.body }}</p>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

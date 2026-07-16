@@ -259,7 +259,8 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
 │   ├── templates.py               ← Jinja2Templates・jstフィルタ
 │   ├── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
-│   └── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
+│   ├── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
+│   └── binran_discrepancies.py       ← `docs/学生便覧2026/ver2/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータスで一覧化（DB非経由、ファイル読み込みのみ）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
@@ -280,10 +281,11 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │       ├── stats.py                         ← /admin/richmenu-stats, /admin/usage-stats
 │       ├── timetable_check.py                ← /admin/timetable/check
 │       ├── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*, /admin/credit_requirements/group/move（グループ並び替え）
-│       └── registration_caps.py                ← /admin/registration_caps*（学部・学科・年度別CAP＝履修登録上限単位数のCRUD）
+│       ├── registration_caps.py                ← /admin/registration_caps*（学部・学科・年度別CAP＝履修登録上限単位数のCRUD）
+│       └── binran_discrepancies.py               ← /admin/binran_discrepancies（学生便覧ver2×DBの齟齬一覧、`core/binran_discrepancies.py`のパーサー参照）
 ├── templates/
 │   ├── admin/              ← courses / reviews / keiei / sysinfo / logs / users / errors /
-│   │                          activity / usage_stats / richmenu / timetable_check / registration_caps / login / base 等
+│   │                          activity / usage_stats / richmenu / timetable_check / registration_caps / binran_discrepancies / login / base 等
 │   ├── liff/
 │   │   ├── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
 │   │   └── timetable.html ← マイ時間割（LIFFページ）
@@ -293,7 +295,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   └── privacy.html
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
-├── docs/                  ← ドキュメント類（.gitignore対象）
+├── docs/                  ← ドキュメント類（.gitignore対象。ただし`学生便覧2026/ver2/IMPLEMENTATION_CANDIDATES.md`のみ`docs/*`→個別ディレクトリ・ファイル単位の`!`否定で例外的にgit管理下・デプロイ対象。管理画面`/admin/binran_discrepancies`が本番/dev環境で読む唯一のdocs配下ファイルのため。同ファイルを移動・改名する際は`.gitignore`の否定パターンも忘れず追従させること）
 ├── backups/               ← download_prod_backup.pyのダウンロード先（.gitignore対象、env別サブフォルダ）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← 時間割データをDB投入

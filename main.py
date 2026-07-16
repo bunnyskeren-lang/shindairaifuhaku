@@ -16,6 +16,7 @@ from database import engine, init_db
 from routers import health, liff_api, pages, richmenu, seiseki_api, timetable_api, webhook
 from routers.admin import (
     auth as admin_auth,
+    binran_discrepancies as admin_binran_discrepancies,
     courses as admin_courses,
     credit_requirements as admin_credit_requirements,
     dashboard as admin_dashboard,
@@ -177,3 +178,4 @@ app.include_router(admin_timetable_check.router)
 app.include_router(admin_credit_requirements.router)
 app.include_router(admin_registration_caps.router)
 app.include_router(admin_sync.router)
+app.include_router(admin_binran_discrepancies.router)
