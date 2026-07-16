@@ -2,8 +2,11 @@ import asyncio
 import time
 
 import httpx
+from fastapi import Request
 
+from core.activity_log import save_error_log
 from core.config import LIFF_ID, REGISTER_LIFF_ID, REVIEW_LIFF_ID, TIMETABLE_LIFF_ID
+from core.rate_limit import client_ip
 
 LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify"
 
@@ -41,12 +44,16 @@ LIFF_CHANNEL_IDS = {
 }
 
 
-async def verify_liff_id_token(id_token: str) -> str | None:
+async def verify_liff_id_token(id_token: str, request: Request | None = None) -> str | None:
     """LINEのID tokenをLINE側のverifyエンドポイントで検証し、
     真正なLINEユーザーID(sub)を返す。検証失敗時はNoneを返す。
 
     クライアントが送ってくる line_user_id / uid は偽装可能なため、
     書き込み系・個人情報を返すエンドポイントでは必ずこちらを使うこと。
+
+    request を渡すと、トークンが指定されているのに検証に失敗したケース（改ざん・
+    期限切れ・なりすまし試行等）をIPアドレス付きでerror_logsに記録する。
+    未ログイン状態でid_tokenが空のケースは正常系のため記録しない。
     """
     if not id_token or not LIFF_CHANNEL_IDS:
         return None
@@ -88,4 +95,9 @@ async def verify_liff_id_token(id_token: str) -> str | None:
                             del _verify_cache[key]
                 _verify_cache[id_token] = (sub, time.monotonic())
                 return sub
+    if request is not None:
+        await save_error_log(
+            RuntimeError("LIFF ID token verification failed"),
+            action=f"liff_auth_failed:{client_ip(request)}:{request.url.path}",
+        )
     return None

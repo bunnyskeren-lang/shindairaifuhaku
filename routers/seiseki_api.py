@@ -19,6 +19,7 @@ _parse_seiseki_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
 
 @router.post("/api/parse_seiseki")
 async def api_parse_seiseki(
+    request: Request,
     file: UploadFile = File(...),
     x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
     _rl: None = Depends(_parse_seiseki_rate_limit),
@@ -38,7 +39,7 @@ async def api_parse_seiseki(
     raw_data = result["raw"]
     if not raw_data.get("gaigo_courses") and not raw_data.get("senmon_courses") and not any(raw_data.get("summaries", {}).values()):
         raise HTTPException(status_code=422, detail="成績表の内容を読み取れませんでした。神戸大学の成績表PDFかご確認ください。")
-    uid = await verify_liff_id_token(x_liff_id_token)
+    uid = await verify_liff_id_token(x_liff_id_token, request)
     if uid:
         async with AsyncSessionLocal() as session:
             existing = await session.get(UserSeisekiRaw, uid)
@@ -66,8 +67,10 @@ async def api_reclassify_seiseki(request: Request):
 
 
 @router.get("/api/seiseki/credits")
-async def api_seiseki_credits(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
-    uid = await verify_liff_id_token(x_liff_id_token)
+async def api_seiseki_credits(
+    request: Request, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
+    uid = await verify_liff_id_token(x_liff_id_token, request)
     if not uid:
         return {}
     async with AsyncSessionLocal() as session:
@@ -95,7 +98,7 @@ async def api_seiseki_credits(x_liff_id_token: str = Header("", alias="X-Liff-Id
 @router.post("/api/seiseki/save_raw")
 async def api_seiseki_save_raw(request: Request):
     body = await request.json()
-    uid = await verify_liff_id_token((body.get("id_token") or "").strip())
+    uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     raw = body.get("raw")
     gpa = body.get("gpa")
     if not uid or not raw:

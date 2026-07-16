@@ -15,8 +15,8 @@ from models import (
 router = APIRouter()
 
 
-async def _require_liff_user(id_token: str) -> str:
-    uid = await verify_liff_id_token(id_token or "")
+async def _require_liff_user(id_token: str, request: Request | None = None) -> str:
+    uid = await verify_liff_id_token(id_token or "", request)
     if not uid:
         raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
     return uid
@@ -106,8 +106,10 @@ async def api_timetable_years():
 
 
 @router.get("/api/timetable/profile")
-async def api_timetable_profile_get(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
-    user_id = await verify_liff_id_token(x_liff_id_token)
+async def api_timetable_profile_get(
+    request: Request, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
+    user_id = await verify_liff_id_token(x_liff_id_token, request)
     if not user_id:
         return {"faculty": None, "grade": None, "department": None}
     async with AsyncSessionLocal() as session:
@@ -120,7 +122,7 @@ async def api_timetable_profile_get(x_liff_id_token: str = Header("", alias="X-L
 @router.post("/api/timetable/profile")
 async def api_timetable_profile_set(request: Request):
     data = await request.json()
-    user_id = await _require_liff_user(data.get("id_token", ""))
+    user_id = await _require_liff_user(data.get("id_token", ""), request)
     faculty = data.get("faculty") or None
     grade = data.get("grade")
     if grade is not None:
@@ -149,12 +151,12 @@ async def api_timetable_profile_set(request: Request):
 
 @router.get("/api/timetable/slots/{day}/{period}")
 async def api_timetable_slots(
-    day: str, period: int, year: int | None = Query(None),
+    request: Request, day: str, period: int, year: int | None = Query(None),
     x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
 ):
     if day not in _VALID_DAYS:
         raise HTTPException(status_code=400, detail="invalid day")
-    user_id = await verify_liff_id_token(x_liff_id_token)
+    user_id = await verify_liff_id_token(x_liff_id_token, request)
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, user_id) if user_id else None
         credit_filter = await _build_credit_countable_filter(
@@ -308,8 +310,11 @@ async def _load_timetable_courses(session, user_id: str, year: int) -> list[dict
 
 
 @router.get("/api/timetable/my")
-async def api_timetable_my(year: int = DEFAULT_ACADEMIC_YEAR, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
-    user_id = await verify_liff_id_token(x_liff_id_token)
+async def api_timetable_my(
+    request: Request, year: int = DEFAULT_ACADEMIC_YEAR,
+    x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
+    user_id = await verify_liff_id_token(x_liff_id_token, request)
     if not user_id:
         return {"courses": [], "cap": None}
     async with AsyncSessionLocal() as session:
@@ -323,8 +328,10 @@ async def api_timetable_my(year: int = DEFAULT_ACADEMIC_YEAR, x_liff_id_token: s
 
 
 @router.get("/api/timetable/share_token")
-async def api_timetable_share_token(x_liff_id_token: str = Header("", alias="X-Liff-Id-Token")):
-    user_id = await _require_liff_user(x_liff_id_token)
+async def api_timetable_share_token(
+    request: Request, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+):
+    user_id = await _require_liff_user(x_liff_id_token, request)
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, user_id)
         version = profile.share_token_version if profile else 0
@@ -335,7 +342,7 @@ async def api_timetable_share_token(x_liff_id_token: str = Header("", alias="X-L
 async def api_timetable_share_revoke(request: Request):
     """発行済みの共有リンクをすべて無効化する（share_token_versionをインクリメント）。"""
     body = await request.json()
-    user_id = await _require_liff_user(body.get("id_token", ""))
+    user_id = await _require_liff_user(body.get("id_token", ""), request)
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, user_id)
         if not profile:
@@ -347,10 +354,10 @@ async def api_timetable_share_revoke(request: Request):
 
 @router.get("/api/timetable/shared")
 async def api_timetable_shared(
-    token: str = Query(...), year: int = DEFAULT_ACADEMIC_YEAR,
+    request: Request, token: str = Query(...), year: int = DEFAULT_ACADEMIC_YEAR,
     x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
 ):
-    viewer_id = await verify_liff_id_token(x_liff_id_token)
+    viewer_id = await verify_liff_id_token(x_liff_id_token, request)
     if not viewer_id:
         raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
 
@@ -375,7 +382,7 @@ async def api_timetable_shared(
 @router.post("/api/timetable/classroom/{syllabus_id}")
 async def api_timetable_classroom_set(syllabus_id: int, request: Request):
     body = await request.json()
-    user_id = await _require_liff_user(body.get("id_token", ""))
+    user_id = await _require_liff_user(body.get("id_token", ""), request)
     classroom = (body.get("classroom") or "").strip()[:20]
     async with AsyncSessionLocal() as session:
         us = (await session.execute(
@@ -409,7 +416,7 @@ async def _get_registration_cap(session, faculty: str | None, department: str | 
 @router.post("/api/timetable/register/{syllabus_id}")
 async def api_timetable_register(syllabus_id: int, request: Request):
     body = await request.json()
-    user_id = await _require_liff_user(body.get("id_token", ""))
+    user_id = await _require_liff_user(body.get("id_token", ""), request)
     async with AsyncSessionLocal() as session:
         syl = await session.get(Syllabus, syllabus_id)
         if not syl:
@@ -445,9 +452,9 @@ async def api_timetable_register(syllabus_id: int, request: Request):
 
 @router.delete("/api/timetable/register/{syllabus_id}")
 async def api_timetable_unregister(
-    syllabus_id: int, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+    request: Request, syllabus_id: int, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
 ):
-    user_id = await _require_liff_user(x_liff_id_token)
+    user_id = await _require_liff_user(x_liff_id_token, request)
     async with AsyncSessionLocal() as session:
         us = (await session.execute(
             select(UserSyllabus).where(
@@ -465,7 +472,7 @@ async def api_timetable_unregister(
 async def api_timetable_custom_create(request: Request):
     """マイ時間割にシラバスDBに無い科目を手動追加する。他ユーザーには表示されない個人用の科目。"""
     body = await request.json()
-    user_id = await _require_liff_user(body.get("id_token", ""))
+    user_id = await _require_liff_user(body.get("id_token", ""), request)
 
     name = (body.get("name") or "").strip()[:100]
     if not name:
@@ -564,9 +571,9 @@ async def api_timetable_custom_create(request: Request):
 
 @router.delete("/api/timetable/custom/{custom_id}")
 async def api_timetable_custom_delete(
-    custom_id: int, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
+    request: Request, custom_id: int, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
 ):
-    user_id = await _require_liff_user(x_liff_id_token)
+    user_id = await _require_liff_user(x_liff_id_token, request)
     async with AsyncSessionLocal() as session:
         course = await session.get(UserCustomCourse, custom_id)
         if course and course.line_user_id == user_id:

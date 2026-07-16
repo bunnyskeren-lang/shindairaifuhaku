@@ -166,7 +166,7 @@ async def search_instructors(q: str = ""):
 @router.post("/api/profile/status")
 async def profile_status(request: Request):
     body = await request.json()
-    uid = await verify_liff_id_token((body.get("id_token") or "").strip())
+    uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     if not uid:
         return {"complete": False}
     async with AsyncSessionLocal() as session:
@@ -182,7 +182,7 @@ async def profile_prefill(request: Request):
     任意のuidを指定するだけで他人の氏名・学籍番号等が閲覧できるIDOR/PII漏洩になっていた。
     """
     body = await request.json()
-    uid = await verify_liff_id_token((body.get("id_token") or "").strip())
+    uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     if not uid:
         return {"found": False}
     async with AsyncSessionLocal() as session:
@@ -214,7 +214,7 @@ async def register_profile(
             "form_error.html", {"request": request, "message": msg}, status_code=400
         )
 
-    uid = await verify_liff_id_token(id_token)
+    uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
         return _form_error("LINEログインの確認に失敗しました。LINEアプリから開き直してください")
     name = _re.sub(r'[\s　]+', '', name)
@@ -282,7 +282,7 @@ async def autofill_profile(request: Request, _rl: None = Depends(_autofill_rate_
     body = await request.json()
     id_token = (body.get("id_token") or "").strip()
     student_id = (body.get("student_id") or "")
-    uid = await verify_liff_id_token(id_token)
+    uid = await verify_liff_id_token(id_token, request)
     sid = student_id.strip().upper()
     if not uid or not sid or not STUDENT_ID_RE.match(sid):
         return {"found": False}
@@ -348,7 +348,7 @@ async def submit(
     if not STUDENT_ID_RE.match(sid):
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 
-    uid = await verify_liff_id_token(id_token)
+    uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
         return _form_error("LINEログインの確認に失敗しました。LINEアプリの「レビュー投稿」から開き直してください")
 

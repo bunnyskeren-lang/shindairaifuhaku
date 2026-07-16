@@ -10,7 +10,7 @@ from fastapi import HTTPException, Request
 _buckets: dict[str, list[float]] = defaultdict(list)
 
 
-def _client_ip(request: Request) -> str:
+def client_ip(request: Request) -> str:
     # RenderはエッジプロキシからX-Forwarded-Forでオリジナルのクライアントアドレスを渡すため、
     # request.client.host（Renderの内部プロキシIPになり全リクエストで同一値になってしまう）
     # より優先する。ただし先頭の値はクライアント自身が偽装ヘッダーで自由に注入できる
@@ -24,7 +24,7 @@ def _client_ip(request: Request) -> str:
 
 def rate_limiter(max_requests: int, window_seconds: float):
     async def _dep(request: Request):
-        key = f"{request.url.path}:{_client_ip(request)}"
+        key = f"{request.url.path}:{client_ip(request)}"
         now = time.monotonic()
         cutoff = now - window_seconds
         bucket = _buckets[key]
