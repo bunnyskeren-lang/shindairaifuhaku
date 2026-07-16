@@ -4,6 +4,7 @@ from linebot.v3 import WebhookParser
 from linebot.v3.messaging import AsyncApiClient, AsyncMessagingApi, Configuration, ReplyMessageRequest
 from linebot.v3.messaging.exceptions import ApiException
 
+from core.activity_log import save_error_log
 from core.config import CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET, SELF_URL
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
@@ -66,6 +67,6 @@ async def self_ping() -> None:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 await client.get(f"{SELF_URL}/health")
-        except Exception:
-            pass
+        except Exception as e:
+            await save_error_log(e, action="self_ping")
         await asyncio.sleep(60)

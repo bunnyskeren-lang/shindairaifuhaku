@@ -867,15 +867,15 @@ async def process_events(events) -> None:
                     await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=data)
                     try:
                         await line_client.reply(event.reply_token, [TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")])
-                    except Exception:
-                        pass
+                    except Exception as reply_exc:
+                        await save_error_log(reply_exc, user_id=user_id, action=f"postback_reply_failed:{data}")
                     _log_reply_timing(f"postback:{data[:30]}:timeout", _t0)
                 except Exception as exc:
                     await save_error_log(exc, user_id=user_id, action=f"postback:{data}")
                     try:
                         await line_client.reply(event.reply_token, [TextMessage(text="エラーが発生しました。もう一度お試しください。")])
-                    except Exception:
-                        pass
+                    except Exception as reply_exc:
+                        await save_error_log(reply_exc, user_id=user_id, action=f"postback_reply_failed:{data}")
                     _log_reply_timing(f"postback:{data[:30]}:error", _t0)
                 continue
 
@@ -906,15 +906,15 @@ async def process_events(events) -> None:
                 await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
                 try:
                     await line_client.reply(event.reply_token, [TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")])
-                except Exception:
-                    pass
+                except Exception as reply_exc:
+                    await save_error_log(reply_exc, user_id=user_id, action=f"message_reply_failed:{user_text}")
                 _log_reply_timing(f"message:{user_text[:30]}:timeout", _t0)
             except Exception as exc:
                 await save_error_log(exc, user_id=user_id, action=user_text)
                 try:
                     await line_client.reply(event.reply_token, [TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")])
-                except Exception:
-                    pass
+                except Exception as reply_exc:
+                    await save_error_log(reply_exc, user_id=user_id, action=f"message_reply_failed:{user_text}")
                 _log_reply_timing(f"message:{user_text[:30]}:error", _t0)
     except Exception as exc:
         await save_error_log(exc, action="process_events")

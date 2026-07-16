@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import httpx
 
+from core.activity_log import save_error_log
 from core.config import (
     BACKUP_BUCKET,
     BACKUP_ENABLED,
@@ -135,4 +136,5 @@ async def backup_loop() -> None:
             print(f"Backup uploaded: {len(data)} bytes", flush=True)
         except Exception as e:
             print(f"Backup failed: {e}", flush=True)
+            await save_error_log(e, action="backup_loop")
         await asyncio.sleep(BACKUP_INTERVAL_HOURS * 3600)

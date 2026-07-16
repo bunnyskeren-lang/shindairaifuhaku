@@ -261,8 +261,9 @@ async def register_profile(
         try:
             await auto_register_required_subjects(session, uid, profile)
             await session.commit()
-        except Exception:
+        except Exception as exc:
             await session.rollback()
+            await save_error_log(exc, user_id=uid, action="register_profile")
             return _form_error("登録に失敗しました。もう一度お試しください")
 
     cache.set_registration_complete(uid)
@@ -309,8 +310,9 @@ async def autofill_profile(request: Request, _rl: None = Depends(_autofill_rate_
             try:
                 session.add(UserProfile(line_user_id=uid, name=row, student_id=sid))
                 await session.commit()
-            except Exception:
+            except Exception as exc:
                 await session.rollback()
+                await save_error_log(exc, user_id=uid, action="autofill_profile_create")
         return {"found": True, "name": row}
 
 
@@ -380,8 +382,9 @@ async def submit(
                     student_id=sid,
                 ))
                 await session.flush()
-            except Exception:
+            except Exception as exc:
                 await session.rollback()
+                await save_error_log(exc, user_id=uid, action="submit_profile_create")
                 return _form_error("プロフィールの保存に失敗しました")
         else:
             if existing.student_id != sid:

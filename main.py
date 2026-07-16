@@ -23,7 +23,6 @@ from routers.admin import (
     registration_caps as admin_registration_caps,
     reviews as admin_reviews,
     stats as admin_stats,
-    sync as admin_sync,
     timetable_check as admin_timetable_check,
     users_errors as admin_users_errors,
 )
@@ -39,6 +38,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         _traceback.print_exc()
         print(f"DB ERROR: {e}", flush=True)
+        await save_error_log(e, action="init_db")
         await engine.dispose()
         print("Engine disposed and reset after startup error", flush=True)
     await line_client.startup()
@@ -177,5 +177,4 @@ app.include_router(admin_stats.router)
 app.include_router(admin_timetable_check.router)
 app.include_router(admin_credit_requirements.router)
 app.include_router(admin_registration_caps.router)
-app.include_router(admin_sync.router)
 app.include_router(admin_binran_discrepancies.router)
