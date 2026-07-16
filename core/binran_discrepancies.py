@@ -3,7 +3,7 @@ from pathlib import Path
 
 CANDIDATES_FILE = (
     Path(__file__).resolve().parent.parent
-    / "docs" / "学生便覧2026" / "ver2" / "IMPLEMENTATION_CANDIDATES.md"
+    / "docs" / "学生便覧2026" / "IMPLEMENTATION_CANDIDATES.md"
 )
 
 _STATUS_RE = re.compile(r"→\s*(.+)$")

@@ -20,7 +20,7 @@
 | `required_subjects.py` | 時間割の「1コマ1科目」自動差し替えロジック（`register_syllabus_for_user`）と、プロフィール（学部・学科・学年）に応じた必修科目の自動登録（`auto_register_required_subjects`） |
 | `seiseki.py` | 成績表PDFの単位分類ロジック（経営学部専門科目群判定など） |
 | `backup.py` | DB自動バックアップ。`BACKUP_ENABLED=true`の環境で`BACKUP_INTERVAL_HOURS`間隔（既定1時間）に全テーブルをダンプしSupabase Storageへアップロード |
-| `binran_discrepancies.py` | `docs/学生便覧2026/ver2/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータス別に一覧化（DB非経由、ファイル読み込みのみ） |
+| `binran_discrepancies.py` | `docs/学生便覧2026/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータス別に一覧化（DB非経由、ファイル読み込みのみ） |
 
 ## 設計ルール
 

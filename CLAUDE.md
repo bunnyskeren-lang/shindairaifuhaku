@@ -265,7 +265,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── templates.py               ← Jinja2Templates・jstフィルタ
 │   ├── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
 │   ├── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
-│   └── binran_discrepancies.py       ← `docs/学生便覧2026/ver2/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータスで一覧化（DB非経由、ファイル読み込みのみ）
+│   └── binran_discrepancies.py       ← `docs/学生便覧2026/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータスで一覧化（DB非経由、ファイル読み込みのみ）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
@@ -300,7 +300,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   └── privacy.html
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
-├── docs/                  ← ドキュメント類（.gitignore対象。ただし`学生便覧2026/ver2/IMPLEMENTATION_CANDIDATES.md`のみ`docs/*`→個別ディレクトリ・ファイル単位の`!`否定で例外的にgit管理下・デプロイ対象。管理画面`/admin/binran_discrepancies`が本番/dev環境で読む唯一のdocs配下ファイルのため。同ファイルを移動・改名する際は`.gitignore`の否定パターンも忘れず追従させること）
+├── docs/                  ← ドキュメント類（.gitignore対象。ただし`学生便覧2026/IMPLEMENTATION_CANDIDATES.md`のみ`docs/*`→個別ディレクトリ・ファイル単位の`!`否定で例外的にgit管理下・デプロイ対象。管理画面`/admin/binran_discrepancies`が本番/dev環境で読む唯一のdocs配下ファイルのため。同ファイルを移動・改名する際は`.gitignore`の否定パターンも忘れず追従させること。`学生便覧2026/`は学部ごとのサブフォルダ構成（`bungaku/`/`hougaku/`/`igaku/`/`kaiyo/`/`keiei/`/`kokusai_ningen/`/`kougaku/`/`nogaku/`/`rigaku/`/`sysinfo/`、2026-07-16に旧ver2/フォルダ・フラット構成から再編）で、各学部フォルダにPDF/txt/png原本と学部別まとめ.md、スクリプトがある場合は`pdf_extraction/`（PDF抽出系）・`db_check/`（DB確認クエリ系、いずれもDB書き込みは行わない）を内包する。学部を横断する`BINRAN_READING_GUIDE.md`・`IMPLEMENTATION_CANDIDATES.md`・`mid_dump.txt`（全学共通の学則抜粋）はルート直下に残す。新学部を調査する際は同じ命名規則（学部フォルダ名は既存ファイル名接頭辞のローマ字を踏襲）でサブフォルダを追加すること）
 ├── backups/               ← download_prod_backup.pyのダウンロード先（.gitignore対象、env別サブフォルダ）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← 時間割データをDB投入
