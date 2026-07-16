@@ -213,7 +213,7 @@ async def _delete_kodo_kyoyo_subject(session, course_section_id: int) -> bool:
 
 
 async def run(dry_run: bool = False, force: bool = False):
-    from sqlalchemy import select
+    from sqlalchemy import select, or_
     from database import AsyncSessionLocal, init_db
     from models import Syllabus
 
@@ -222,7 +222,10 @@ async def run(dry_run: bool = False, force: bool = False):
     async with AsyncSessionLocal() as session:
         q = select(Syllabus).where(Syllabus.timetable_code.isnot(None))
         if not force:
-            q = q.where(Syllabus.target_grades.is_(None))
+            # target_gradesだけが先に埋まりsubject_category(高度教養科目判定)が
+            # 一度もチェックされないまま残るケースがあるため、どちらか一方でも
+            # 未取得なら対象に含める（2026-07-16、経済学部等で発覚した取りこぼし対応）
+            q = q.where(or_(Syllabus.target_grades.is_(None), Syllabus.subject_category.is_(None)))
         courses = (await session.execute(q)).scalars().all()
 
     print(f"対象コース: {len(courses)}件")
