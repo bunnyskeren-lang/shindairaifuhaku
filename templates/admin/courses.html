@@ -123,8 +123,11 @@
 
 {% if all_instructors %}
 <div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">教員一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可。検索・カテゴリ絞り込み時は非表示）</span></h2>
-  <div class="table-wrap">
+  <h2 style="margin-top:0;cursor:pointer;user-select:none" onclick="toggleCard('instructorList', this)">
+    <span class="card-arrow" id="instructorListArrow">▶</span>
+    教員一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（{{ all_instructors | length }}人。↑↓で並び替え可。検索・カテゴリ絞り込み時は非表示）</span>
+  </h2>
+  <div class="table-wrap" id="instructorList" style="display:none">
   <table style="margin-top:0">
     <tr><th>順番</th><th>教員名</th></tr>
     {% for inst in all_instructors %}
@@ -548,6 +551,13 @@ function toggleReviews(id) {
 function toggleRow(id) {
   const tr = document.getElementById(id);
   tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+}
+function toggleCard(id, headerEl) {
+  const el = document.getElementById(id);
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  const arrow = headerEl.querySelector('.card-arrow');
+  if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
 }
 function openEdit(id) {
   const c = COURSES[id];
