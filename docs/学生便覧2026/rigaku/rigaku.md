@@ -9,6 +9,7 @@
   - `extract_pages.py` / `rigaku_cap_pages.txt` / `rigaku_check.txt`（CAP条文・指導教員等のテキスト抽出）
   - `render_png.py` / `rigaku_p{86-101}.png`（別表第1・別表第2のPNG画像、pdfplumberのテキスト抽出が列を誤結合したため画像で目視検証）
   - `query_db_rigaku.py`〜`query_db_rigaku5.py` / `rigaku_db_*.txt`（DB突き合わせ用クエリ）
+  - 上記スクリプト（`rigaku/pdf_extraction/`4本・`rigaku/db_check/`5本）と生成された中間txt/pngは、内容が全て本ファイルに反映済みであることを確認した上で2026-07-17に削除した（過去バージョンはgit履歴を参照）。
 - 抽出日: 2026-07-15
 - 抽出方法: ブラインド抽出（経路A）完了 / 経路B（クロスチェック）完了・DB突き合わせ完了
 - 参照した凡例・注記:
