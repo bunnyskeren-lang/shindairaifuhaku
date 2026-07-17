@@ -10,67 +10,7 @@
 
 {% from "admin/base.html" import pager %}
 {% block content %}
-{% if error == "duplicate" %}
-<div style="background:#fef2f2;border:1px solid #fca5a5;color:#b91c1c;padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px">
-  同じ科目名・教員名の科目がすでに登録されています。
-</div>
-{% endif %}
 <div class="card">
-  <h2 style="margin-top:0">科目を追加</h2>
-  <form method="post" action="/admin/courses/add">
-    <div style="margin-bottom:10px">
-      <label>科目名 *<input type="text" name="name" required maxlength="200" placeholder="例：データサイエンス基礎学"></label>
-    </div>
-    <div style="margin-bottom:10px">
-      <label>カテゴリ *
-        <select name="category" style="margin-top:4px">
-          <option value="専門">専門科目</option>
-          <option value="教養">教養科目</option>
-        </select>
-      </label>
-    </div>
-    <div style="margin-bottom:14px">
-      <label>分類
-        <select id="classSelect" style="margin-top:4px" onchange="onClassChange(this)">
-          <option value="">（未分類）</option>
-          {% for c in classifications %}
-          <option value="{{ c }}">{{ c }}</option>
-          {% endfor %}
-          <option value="__new__">＋ 新しい分類を入力...</option>
-        </select>
-        <input type="text" name="classification" id="classInput" maxlength="50"
-               placeholder="新しい分類名を入力" style="margin-top:6px;display:none">
-      </label>
-    </div>
-    <div style="margin-bottom:10px">
-      <label>学部・学科（任意）<input type="text" name="faculty" maxlength="100" placeholder="例：経営学部"></label>
-    </div>
-    <div style="display:flex;gap:10px;margin-bottom:10px">
-      <label style="flex:1">開講区分
-        <select name="term_type" style="margin-top:4px">
-          <option value="">未設定</option>
-          <option value="クオーター">クオーター</option>
-          <option value="セメスター">セメスター</option>
-          <option value="通年">通年</option>
-          <option value="集中">集中</option>
-        </select>
-      </label>
-      <label style="flex:1">単位
-        <select name="credits" style="margin-top:4px">
-          <option value="0">未設定</option>
-          <option value="0.5">0.5単位</option>
-          <option value="1">1単位</option>
-          <option value="2">2単位</option>
-          <option value="3">3単位</option>
-          <option value="4">4単位</option>
-        </select>
-      </label>
-    </div>
-    <button type="submit" class="btn btn-primary">➕ 追加する</button>
-  </form>
-</div>
-
-<div class="card" style="margin-top:16px">
   <h2 style="margin-top:0">分類一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可）</span></h2>
   <div class="table-wrap">
   <table style="margin-top:0">
@@ -569,25 +509,6 @@ function closeModal() {
 }
 document.getElementById('editModal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
-});
-function onClassChange(sel) {
-  const inp = document.getElementById('classInput');
-  if (sel.value === '__new__') {
-    inp.style.display = 'block';
-    inp.required = true;
-    inp.value = '';
-    inp.focus();
-  } else {
-    inp.style.display = 'none';
-    inp.required = false;
-    inp.value = sel.value;
-  }
-}
-document.getElementById('classSelect').dispatchEvent(new Event('change'));
-document.querySelector('form').addEventListener('submit', function() {
-  const sel = document.getElementById('classSelect');
-  const inp = document.getElementById('classInput');
-  if (sel.value !== '__new__') inp.value = sel.value;
 });
 {% endraw %}
 

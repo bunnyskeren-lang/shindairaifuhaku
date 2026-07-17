@@ -1,6 +1,5 @@
 import json
 import re as _re
-import secrets as py_secrets
 from collections import defaultdict
 from types import SimpleNamespace
 
@@ -44,9 +43,6 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         _cls_sort = make_cls_sort(cls_map)
         courses = sorted(courses, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
         total = len(courses)
-        classifications = (await session.execute(
-            select(Subject.classification).distinct().order_by(Subject.classification)
-        )).scalars().all()
         class_counts_raw = dict((await session.execute(
             select(Subject.classification, func.count(Subject.id))
             .where(Subject.classification.isnot(None), Subject.classification != "")
@@ -83,7 +79,6 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             select(DisplayOrder).where(DisplayOrder.kind == "faculty").order_by(DisplayOrder.sort_order)
         )).scalars().all()
 
-    existing = sorted([c for c in classifications if c], key=_cls_sort)
     courses_data = (
         json.dumps({
             c.id: {
@@ -163,7 +158,6 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
         "parent_subgroups": parent_subgroups_sorted,
         "cls_parent_map": cls_parent_map,
         "active_category": category,
-        "classifications": existing,
         "class_counts": class_counts,
         "courses_data": courses_data,
         "reviews_by_course": reviews_by_course,
@@ -398,44 +392,6 @@ async def strip_trailing_numbers(
     if has_skipped:
         return RedirectResponse("/admin/courses?msg=has_reviews", status_code=303)
     return RedirectResponse("/admin/courses", status_code=303)
-
-
-@router.post("/admin/courses/add")
-async def admin_courses_add(
-    _: str = Depends(check_admin),
-    name: str = Form(...),
-    classification: str = Form(""),
-    category: str = Form("専門"),
-    term_type: str = Form(""),
-    credits: float = Form(0),
-    syllabus_url: str = Form(""),
-    faculty: str = Form(""),
-):
-    name_s = name.strip()
-    faculty_s = faculty.strip() or None
-    async with AsyncSessionLocal() as session:
-        # 学部をまたいで同名科目が実在しうるため、重複判定はname単独ではなく(name, faculty)で行う
-        existing = (await session.execute(
-            select(Subject).where(Subject.name == name_s, Subject.faculty == faculty_s)
-        )).scalar_one_or_none()
-        if existing:
-            return RedirectResponse(
-                url=f"/admin/courses?error={py_secrets.token_urlsafe(4)}&msg=duplicate",
-                status_code=303,
-            )
-        session.add(Subject(
-            name=name_s,
-            classification=classification.strip() or None,
-            category=category,
-            reading=reading(name_s),
-            term_type=term_type.strip() or None,
-            credits=credits if credits else None,
-            faculty=faculty_s,
-        ))
-        await session.commit()
-    cache.invalidate_courses_cache()
-    cache.invalidate_cls_caches()
-    return RedirectResponse(url="/admin/courses", status_code=303)
 
 
 @router.post("/admin/courses/classification/rename")
