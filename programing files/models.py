@@ -112,11 +112,12 @@ class UserSeisekiRaw(Base):
 
 class Subject(Base):
     __tablename__ = "subjects"
-    __table_args__ = (UniqueConstraint("name", "faculty", name="uq_subjects_name_faculty"),)
+    __table_args__ = (UniqueConstraint("name", "faculty", "department", name="uq_subjects_name_faculty_department"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    department: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     senmon_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -150,7 +151,7 @@ class CourseSection(Base):
 
 
 class Syllabus(Base):
-    # シラバスURLはtimetable_code+departmentから毎回make_syllabus_url()で動的生成する（列としては持たない）
+    # シラバスURLはtimetable_code+department（Subject.faculty/department経由）から毎回make_syllabus_url()で動的生成する（列としては持たない）
     __tablename__ = "syllabi"
     __table_args__ = (UniqueConstraint("course_section_id", "year", "academic_term", name="uq_syllabi_section_year_term"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -160,7 +161,6 @@ class Syllabus(Base):
     timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     target_grades: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     subject_category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

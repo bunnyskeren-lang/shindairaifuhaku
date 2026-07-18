@@ -215,7 +215,7 @@ async def _delete_kodo_kyoyo_subject(session, course_section_id: int) -> bool:
 async def run(dry_run: bool = False, force: bool = False):
     from sqlalchemy import select, or_
     from database import AsyncSessionLocal, init_db
-    from models import Syllabus
+    from models import CourseSection, Subject, Syllabus
 
     await init_db()
 
@@ -227,13 +227,24 @@ async def run(dry_run: bool = False, force: bool = False):
             # 未取得なら対象に含める（2026-07-16、経済学部等で発覚した取りこぼし対応）
             q = q.where(or_(Syllabus.target_grades.is_(None), Syllabus.subject_category.is_(None)))
         courses = (await session.execute(q)).scalars().all()
+        # departmentはSyllabusではなくSubject.faculty/department側にあるため、
+        # course_section_id単位でまとめて引いておく
+        cs_ids = {c.course_section_id for c in courses}
+        dept_by_cs: dict[int, str] = {}
+        if cs_ids:
+            for cs_id, faculty, department in (await session.execute(
+                select(CourseSection.id, Subject.faculty, Subject.department)
+                .join(Subject, Subject.id == CourseSection.subject_id)
+                .where(CourseSection.id.in_(cs_ids))
+            )).all():
+                dept_by_cs[cs_id] = f"{faculty or ''}{department or ''}"
 
     print(f"対象コース: {len(courses)}件")
     updated = skipped = not_found = removed_kodo_kyoyo = 0
 
     async with AsyncSessionLocal() as session:
         for i, c in enumerate(courses):
-            url = make_syllabus_url(c.timetable_code, c.department or "")
+            url = make_syllabus_url(c.timetable_code, dept_by_cs.get(c.course_section_id, ""))
             if not url:
                 skipped += 1
                 continue
@@ -308,7 +319,7 @@ async def run_credits(dry_run: bool = False, force: bool = False):
                 Syllabus.timetable_code.isnot(None),
             ).limit(1)
         )).scalar_one_or_none()
-        url = make_syllabus_url(syl.timetable_code, syl.department or "") if syl else None
+        url = make_syllabus_url(syl.timetable_code, f"{subj.faculty or ''}{subj.department or ''}") if syl else None
         if not url:
             counts["skipped"] += 1
             return
@@ -387,7 +398,7 @@ async def run_senmon_classification(dry_run: bool = False, force: bool = False):
                 Syllabus.timetable_code.isnot(None),
             ).limit(1)
         )).scalar_one_or_none()
-        url = make_syllabus_url(syl.timetable_code, syl.department or "") if syl else None
+        url = make_syllabus_url(syl.timetable_code, f"{subj.faculty or ''}{subj.department or ''}") if syl else None
         if not url:
             counts["skipped"] += 1
             return

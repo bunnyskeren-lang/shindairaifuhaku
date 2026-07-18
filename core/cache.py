@@ -246,17 +246,18 @@ async def get_syllabus_urls_cached() -> dict[int, str]:
         return _syllabus_url_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
-            select(CourseSection.subject_id, Syllabus.timetable_code, Syllabus.department, Syllabus.year)
+            select(CourseSection.subject_id, Syllabus.timetable_code, Syllabus.year, Subject.faculty, Subject.department)
             .join(Syllabus, Syllabus.course_section_id == CourseSection.id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
             .where(Syllabus.timetable_code.isnot(None))
         )).all()
     # 科目につき複数年度のsyllabiがありうるため、最新年度のURLを採用する
     _latest_year: dict[int, int] = {}
     result: dict[int, str] = {}
-    for subject_id, code, dept, year in rows:
+    for subject_id, code, year, faculty, department in rows:
         if subject_id in _latest_year and year <= _latest_year[subject_id]:
             continue
-        url = make_syllabus_url(code, dept or "")
+        url = make_syllabus_url(code, f"{faculty or ''}{department or ''}")
         if not url:
             continue
         _latest_year[subject_id] = year
@@ -270,19 +271,20 @@ async def reload_senmon_cache():
     global _senmon_name_to_group
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
-            select(Subject.name, Subject.faculty, Subject.senmon_group, Subject.classification)
+            select(Subject.name, Subject.faculty, Subject.department, Subject.senmon_group, Subject.classification)
         )).all()
-    mapping: dict[tuple[str, str], str] = {}
-    for name, faculty, senmon_group, classification in rows:
+    mapping: dict[tuple[str, str, str], str] = {}
+    for name, faculty, department, senmon_group, classification in rows:
+        key = (name, faculty, department or "")
         if senmon_group:
-            mapping[(name, faculty)] = senmon_group
+            mapping[key] = senmon_group
         elif classification in _KEIEI_CLASSIFICATION_TO_GROUP:
-            mapping[(name, faculty)] = _KEIEI_CLASSIFICATION_TO_GROUP[classification]
+            mapping[key] = _KEIEI_CLASSIFICATION_TO_GROUP[classification]
     _senmon_name_to_group = mapping
 
 
-def get_senmon_group(name: str, faculty: str) -> str | None:
-    return _senmon_name_to_group.get((name, faculty))
+def get_senmon_group(name: str, faculty: str, department: str = "") -> str | None:
+    return _senmon_name_to_group.get((name, faculty, department))
 
 
 def invalidate_senmon_cache():

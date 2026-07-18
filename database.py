@@ -327,6 +327,59 @@ async def init_db():
             EXCEPTION WHEN duplicate_object OR duplicate_table OR unique_violation THEN NULL;
             END $$
         """))
+        # subjects.department: 学部内で学科・専攻ごとに卒業要件が異なる場合の学科名を持つ列。
+        # credit_requirements/registration_caps/required_subjects/user_profilesと同じ
+        # 「faculty列+department列」のペア形式に揃える。従来はfacultyに学部名+学科名を
+        # 連結した複合文字列（例:「工学部建築学科」）を入れる場当たり的な運用だった。
+        # syllabi.departmentは実データの94%がsubjects.facultyと完全一致する重複列で、
+        # 差分197件（法学部/経営学部/経済学部の「　昼間主コース」接尾辞）も全科目に一律
+        # 付いていて情報として無意味なノイズだったため、本カラム新設と引き換えに廃止する
+        # （syllabi.department自体のDROPはfile末尾を参照。全読み取り箇所の切り替え後に実施）。
+        await conn.execute(text(
+            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT ''"
+        ))
+        # 旧(name, faculty)制約を先に外しておく。分割後は複数の複合faculty由来の行が
+        # 同じ(name, faculty=学部名のみ)になり得るため、新しい3列制約を張るまでの間
+        # 一時的に旧制約が残っているとバックフィル中のUPDATEが重複エラーで失敗する
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE subjects DROP CONSTRAINT uq_subjects_name_faculty;
+            EXCEPTION WHEN undefined_object THEN NULL;
+            END $$
+        """))
+        # 既存の複合faculty値を分割するワンショットのバックフィル（dev/本番の実データで確認済みの
+        # 16パターン限定）。新規インポートはprograming files/import_syllabus.pyが最初から
+        # faculty/departmentを分離して書き込むため、このUPDATEは既存データの移行のみが目的
+        _faculty_department_split = [
+            ("医学部保健学科作業療法学専攻", "医学部", "保健学科作業療法学専攻"),
+            ("医学部保健学科検査技術科学専攻", "医学部", "保健学科検査技術科学専攻"),
+            ("医学部保健学科理学療法学専攻", "医学部", "保健学科理学療法学専攻"),
+            ("医学部保健学科看護学専攻", "医学部", "保健学科看護学専攻"),
+            ("医学部医学科", "医学部", "医学科"),
+            ("医学部医療創成工学科", "医学部", "医療創成工学科"),
+            ("工学部市民工学科", "工学部", "市民工学科"),
+            ("工学部建築学科", "工学部", "建築学科"),
+            ("工学部応用化学科", "工学部", "応用化学科"),
+            ("工学部機械工学科", "工学部", "機械工学科"),
+            ("工学部電気電子工学科", "工学部", "電気電子工学科"),
+            ("理学部化学科", "理学部", "化学科"),
+            ("理学部惑星学科", "理学部", "惑星学科"),
+            ("理学部数学科", "理学部", "数学科"),
+            ("理学部物理学科", "理学部", "物理学科"),
+            ("理学部生物学科", "理学部", "生物学科"),
+        ]
+        for composite, pure_faculty, dept in _faculty_department_split:
+            await conn.execute(text(
+                "UPDATE subjects SET faculty = :fac, department = :dept "
+                "WHERE faculty = :composite AND department = ''"
+            ), {"fac": pure_faculty, "dept": dept, "composite": composite})
+        # 新しい3列UNIQUE制約を追加
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE subjects ADD CONSTRAINT uq_subjects_name_faculty_department UNIQUE (name, faculty, department);
+            EXCEPTION WHEN duplicate_object OR duplicate_table OR unique_violation THEN NULL;
+            END $$
+        """))
         # GPAをlocalStorageだけでなくDBにも永続化する
         await conn.execute(text(
             "ALTER TABLE user_seiseki_raw ADD COLUMN IF NOT EXISTS gpa DOUBLE PRECISION"
@@ -412,7 +465,8 @@ async def init_db():
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS share_token_version INTEGER NOT NULL DEFAULT 0"
         ))
         # course_sections.syllabus_url は年度をまたぐURL変更を表現できず陳腐化する問題があったため廃止。
-        # syllabi.timetable_code + syllabi.department から毎回動的生成する方式に統一する
+        # syllabi.timetable_code + Subject.faculty/department（course_sections経由、
+        # core.config.syllabus_department_key()で再構成）から毎回動的生成する方式に統一する
         # （値はいずれも既存カラムから100%導出可能なため、バックフィル不要でそのままDROPしてよい）
         await conn.execute(text(
             "ALTER TABLE course_sections DROP COLUMN IF EXISTS syllabus_url"
@@ -422,4 +476,11 @@ async def init_db():
         # この列を経由しないためDROPしてよい
         await conn.execute(text(
             "ALTER TABLE syllabi DROP COLUMN IF EXISTS numbering_code"
+        ))
+        # syllabi.department は実データの94%がsubjects.faculty（新設のsubjects.department分離後は
+        # faculty+department）と完全一致する重複列だったため廃止。全読み取り箇所は
+        # core.config.syllabus_department_key()経由でSubject.faculty/departmentから
+        # 再構成する方式に切り替え済み
+        await conn.execute(text(
+            "ALTER TABLE syllabi DROP COLUMN IF EXISTS department"
         ))

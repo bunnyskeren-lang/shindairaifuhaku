@@ -161,9 +161,11 @@ python -X utf8 sync_db_to_prod.py
 そのため、シラバスURLは「科目名」だけに紐づけるのではなく、**「科目名 × 担当教員」の組み合わせ**に紐づけることが望ましい。
 
 `course_sections` テーブルが `subjects`（科目）と `instructors`（教員）を結び「科目×担当教員」単位のセクションを管理する。
-シラバスURLは列としては持たず、`syllabi.timetable_code` と `syllabi.department` から `core.config.make_syllabus_url()`（および同ロジックの4箇所の複製）で**毎回動的生成**する
+シラバスURLは列としては持たず、`syllabi.timetable_code` と `subjects.faculty`/`subjects.department`（`course_sections`経由、`core.config.syllabus_department_key()`で連結）から `core.config.make_syllabus_url()`（および同ロジックの4箇所の複製）で**毎回動的生成**する
 （2026-07に `course_sections.syllabus_url` 列から移行済み。年度が変わり時間割コードが変わっても自動で追従し、値が陳腐化しない）。
 `syllabi` レコードを持たない科目（時間割インポート前・レビュー投稿のみ由来のセクション等）はURLを導出できないため、単位数等の自動取得はスキップされ手入力での補完が必要になる。
+
+**`syllabi.department`は2026-07-18に廃止した。** 従来はシラバス生データの所属列（学科まで含む生の文字列、例:「工学部建築学科」）をそのまま`syllabi.department`に保存していたが、dev DB実データで確認したところ94%が`subjects.faculty`と完全一致する重複列だった。学科粒度の情報を持っていたのは工学部(5学科)・理学部(5学科)・医学部(医学科/医療創成工学科/保健学科×4専攻)の16パターンのみで、これは`subjects.faculty`側にも学部名+学科名を連結した複合文字列としてすでに入っていた（学科名にスペース区切りが無いため`faculty`に丸ごと収まっていた）。この機に`subjects`に`department`列を新設し、`credit_requirements`/`registration_caps`/`required_subjects`/`user_profiles`と同じ「faculty列（学部名のみ）+department列（学科名、無ければ空文字）」のペア形式に統一した（`UNIQUE(name, faculty, department)`）。`subjects.faculty`が複合文字列だったことに暗黙で依存していた3箇所（`routers/admin/credit_requirements.py`のkoubu学科別ページのLIKE検索、`routers/timetable_api.py`の`_build_credit_countable_filter()`、LINE botの専門科目メニューの学部→学科ドリルダウン`line_bot/handler.py`）は`Subject.department`列を直接参照する形に修正済み。
 
 神戸大学シラバスサイトのURLは **時間割コード** から一意に決まる。
 
@@ -182,6 +184,12 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 新しい学部のデータを追加する際は、実際のシラバスURLを確認してpathの数字を特定し、
 `programing files/import_syllabus.py` と `programing files/fetch_syllabus_info.py` と
 `templates/liff/timetable.html` の `FACULTY_PATH` / `FACULTY_PATH_JS` に追記すること。
+
+新しい学部で学科・専攻ごとにURLのpathが分かれる場合（工学部・理学部・医学部保健学科のような
+ケース）は、上記に加えて `programing files/import_syllabus.py` の `_FACULTY_DEPARTMENT_SPLIT`
+（`subjects.faculty`/`department`分離用マッピング）と `database.py` `init_db()` の
+`_faculty_department_split`（既存データの一回限りバックフィル）にも学部名+学科名の複合文字列→
+(学部名, 学科名)のペアを追記すること。
 
 ### シラバスページのHTMLパース
 
@@ -323,10 +331,10 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 
 | テーブル | 用途 |
 |----------|------|
-| `subjects` | 科目マスタ（name, faculty, classification, term, credits 等） |
+| `subjects` | 科目マスタ（name, faculty, department, classification, term, credits 等。facultyは学部名のみ・departmentは学科名（無ければ空文字）のペア形式。UNIQUE(name, faculty, department)） |
 | `instructors` | 教員マスタ |
 | `course_sections` | 科目×教員のセクション |
-| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類。シラバスURLはtimetable_code/departmentから動的生成） |
+| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み） |
 | `schedules` | 曜日・時限・教室 |
 | `reviews` | 投稿レビュー（`is_approved` で承認管理） |
 | `course_section_views` | 科目セクションの閲覧数 |

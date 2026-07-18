@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 
 from core import cache
-from core.config import make_cls_sort, make_syllabus_url, normalize_instructor_name, reading
+from core.config import make_cls_sort, make_syllabus_url, normalize_instructor_name, reading, syllabus_department_key
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -62,18 +62,24 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
             )).all()
 
         # course_sectionごとに最新年度のsyllabus_urlをtimetable_code/departmentから動的生成
+        # （departmentはSyllabusではなくSubject.faculty/departmentから再構成。coursesは既に
+        # ロード済みなので追加JOIN不要）
+        subj_by_id = {c.id: c for c in courses}
+        cs_subject_map = {cs.id: cs.subject_id for cs, _ in cs_instr_rows}
         cs_url_map: dict[int, str] = {}
         cs_ids_all = [cs.id for cs, _ in cs_instr_rows]
         if cs_ids_all:
             syl_rows = (await session.execute(
-                select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.department, Syllabus.year)
+                select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.year)
                 .where(Syllabus.course_section_id.in_(cs_ids_all), Syllabus.timetable_code.isnot(None))
             )).all()
             _latest_year: dict[int, int] = {}
-            for cs_id, code, dept, year in syl_rows:
+            for cs_id, code, year in syl_rows:
                 if cs_id in _latest_year and year <= _latest_year[cs_id]:
                     continue
-                url = make_syllabus_url(code, dept or "")
+                subj = subj_by_id.get(cs_subject_map.get(cs_id))
+                dept = syllabus_department_key(subj) if subj else ""
+                url = make_syllabus_url(code, dept)
                 if not url:
                     continue
                 _latest_year[cs_id] = year

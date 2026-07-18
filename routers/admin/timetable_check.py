@@ -16,7 +16,7 @@ async def admin_timetable_check(request: Request, _: str = Depends(check_admin))
     async with AsyncSessionLocal() as session:
         course_rows = (await session.execute(select(Subject.id, Subject.name, Subject.faculty))).all()
         syllabus_rows = (await session.execute(
-            select(Subject.name, Syllabus.department).distinct()
+            select(Subject.name, Subject.department).distinct()
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Syllabus, Syllabus.course_section_id == CourseSection.id)
         )).all()

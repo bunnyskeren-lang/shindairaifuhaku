@@ -100,12 +100,13 @@ def classify_senmon(name: str, faculty: str = "経営学部") -> str:
     return '第3群'
 
 
-_KIKAI_FACULTY = "工学部機械工学科"
+_KIKAI_FACULTY = "工学部"
+_KIKAI_DEPARTMENT = "機械工学科"
 
 
 def is_kikai_hisshu(name: str, kyotsu: bool) -> bool:
     """機械工学科の科目が必修かどうかを判定する。DBに登録があればそちらを優先。"""
-    db = cache.get_senmon_group(name, _KIKAI_FACULTY)
+    db = cache.get_senmon_group(name, _KIKAI_FACULTY, _KIKAI_DEPARTMENT)
     if db:
         return db == '必修'
     prefixes = _KIKAI_KYOTSU_HISSHU if kyotsu else _KIKAI_SENMON_HISSHU

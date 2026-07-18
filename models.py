@@ -128,12 +128,18 @@ class UserSeisekiRaw(Base):
 
 class Subject(Base):
     __tablename__ = "subjects"
-    __table_args__ = (UniqueConstraint("name", "faculty", name="uq_subjects_name_faculty"),)
+    __table_args__ = (UniqueConstraint("name", "faculty", "department", name="uq_subjects_name_faculty_department"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    # 学部内で学科・専攻ごとに卒業要件が異なる場合の学科名（工学部5学科・理学部5学科・
+    # 医学部保健学科4専攻等）。credit_requirements/registration_caps/required_subjects/
+    # user_profilesと同じ「faculty列+department列」のペア形式。学科の区別が無い学部では
+    # 空文字（subjects.readingと同じプレースホルダ方式、UNIQUE制約でNULL同士を区別しないPostgresの
+    # 挙動を避けるためNOT NULL）。
+    department: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     senmon_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -169,7 +175,8 @@ class CourseSection(Base):
 
 
 class Syllabus(Base):
-    """シラバスURLはtimetable_code+departmentから毎回core.config.make_syllabus_url()で
+    """シラバスURLはtimetable_code+department（course_sections経由でSubject.faculty/departmentを
+    参照、core.config.syllabus_department_key()で再構成）から毎回core.config.make_syllabus_url()で
     動的生成する（列としては持たない）。年度が変わりtimetable_codeが変われば自動で
     追従するため、course_sections.syllabus_urlのような値の陳腐化が起きない。"""
     __tablename__ = "syllabi"
@@ -182,7 +189,6 @@ class Syllabus(Base):
     timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     target_grades: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     subject_category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

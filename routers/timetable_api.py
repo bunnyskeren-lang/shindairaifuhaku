@@ -2,7 +2,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import and_, case, func, or_, select, text
 
-from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS
+from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS, syllabus_department_key
 from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
 from core.security import make_share_token, verify_share_token
@@ -63,9 +63,10 @@ async def _build_credit_countable_filter(session, faculty: str | None, departmen
     group_names = {g for g, _ in reqs}
     category_ids = [c for _, c in reqs]
 
-    # 学部専門科目は Subject.faculty が「経営学部」のように学部名のみの場合と、
-    # 「工学部機械工学科」のように学部名+学科名で連結される場合があるため両方を候補にする
-    own_faculties = {faculty, f"{faculty}{department or ''}"}
+    # 学部専門科目は Subject.faculty が学部名のみ、Subject.department が学科名
+    # （未設定なら空文字＝学部内共通科目）というペア形式で持つため、学科未選択時は
+    # 「学科指定なし」と「学部共通科目(department='')」の両方を候補にする
+    own_departments = {department or "", ""}
     conditions = []
     if "専門科目" in group_names:
         # subject_credit_categoriesでコース別に科目が紐付け済み（農学部等）ならそちらを優先し、
@@ -78,7 +79,9 @@ async def _build_credit_countable_filter(session, faculty: str | None, departmen
         if tagged_ids:
             conditions.append(Subject.id.in_(tagged_ids))
         else:
-            conditions.append(and_(Subject.faculty.in_(own_faculties), Subject.category == "専門"))
+            conditions.append(and_(
+                Subject.faculty == faculty, Subject.department.in_(own_departments), Subject.category == "専門",
+            ))
             conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"))
     if "教養科目" in group_names:
         conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification.like("教養(%")))
@@ -201,7 +204,7 @@ async def api_timetable_slots(
                 "instructor": instr.name,
                 "term": syl.academic_term,
                 "timetable_code": syl.timetable_code or "",
-                "department": syl.department or "",
+                "department": syllabus_department_key(subj),
                 "target_grades": syl.target_grades or "",
                 "subject_category": syl.subject_category or "",
                 "registered": syl.id in registered_ids,
@@ -275,7 +278,7 @@ async def _load_timetable_courses(session, user_id: str, year: int) -> list[dict
                 "credits": _credits_from_term(syl.academic_term),
                 "timetable_code": syl.timetable_code or "",
                 "subject_category": syl.subject_category or "",
-                "department": syl.department or "",
+                "department": syllabus_department_key(subj),
                 "classroom": us.classroom or "",
                 "is_custom": False,
                 "slots": [],

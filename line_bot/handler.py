@@ -106,8 +106,8 @@ def _reading_key(subj) -> str:
 
 
 async def handle_course_list(category: str = "", classification: str = "", faculty: str = "",
-                              reading_row: str = "") -> list:
-    _cl_key = f"{category}:{classification}:{faculty}:{reading_row}"
+                              department: str = "", reading_row: str = "") -> list:
+    _cl_key = f"{category}:{classification}:{faculty}:{department}:{reading_row}"
     _cached = cache.get_course_list_cache(_cl_key)
     if _cached is not None:
         return _cached
@@ -119,11 +119,12 @@ async def handle_course_list(category: str = "", classification: str = "", facul
     rows = [c for c in _all_c if
             (not category or c.category == category) and
             (not classification or c.classification == classification) and
-            (not faculty or c.faculty == faculty)]
+            (not faculty or c.faculty == faculty) and
+            (not department or (c.department or "") == department)]
 
     if not reading_row and len(rows) > _ALPHA_SPLIT_THRESHOLD:
         if faculty and not classification:
-            _row_prefix = f"専門F:{faculty}"
+            _row_prefix = f"専門F:{faculty}|{department}"
         elif classification and category:
             _row_prefix = f"{category}:{classification}"
         elif classification:
@@ -496,8 +497,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await handle_course_list(category="専門", classification=cls, reading_row=_reading_row)
 
     if t.startswith("専門F:"):
-        fac = t[len("専門F:"):]
-        return await handle_course_list(category="専門", faculty=fac, reading_row=_reading_row)
+        fac_dept = t[len("専門F:"):]
+        fac, _, dept = fac_dept.partition("|")
+        return await handle_course_list(category="専門", faculty=fac, department=dept, reading_row=_reading_row)
 
     # 分類名の直接タップ（例：「教養(社会)」）
     if t in await cache.get_cls_set():
@@ -518,9 +520,8 @@ async def handle_message(text: str, user_id: str = "") -> list:
         sen_courses = [c for c in _all_courses if c.category == "専門" and c.classification]
         faculty_order = await cache.get_faculty_order()
 
-        # subjects.faculty の前方一致で学部ごとにグルーピングする。学科・専攻別に
-        # 科目が分かれている学部は faculty が「{学部名}{学科名}」になっているため、
-        # 学部名をprefixとして持つ科目が1件でもあればその学部を表示する。
+        # subjects.faculty で学部ごとにグルーピングする（学科・専攻の区別はsubjects.departmentが
+        # 別途持つため、ここではfacultyの一致のみで学部の有無を判定すればよい）。
         faculties_present = [fac for fac in faculty_order
                               if any((c.faculty or "").startswith(fac) for c in sen_courses)]
         grouped_cls = {c.classification for c in sen_courses
@@ -570,28 +571,25 @@ async def handle_message(text: str, user_id: str = "") -> list:
             cache.set_course_list_cache(_menu_key, result)
             return result
 
-        dept_values = {c.faculty for c in fac_courses}
+        dept_values = {c.department or "" for c in fac_courses}
         cls_values = {c.classification for c in fac_courses}
         cls_map = await cache.get_cls_order_map()
         _cls_sort = make_cls_sort(cls_map)
 
         if len(dept_values) > 1:
             # 学科・専攻ごとに科目が分かれている学部（工学部・医学部・理学部等）→ 学科・専攻一覧
-            # faculty列が学部名そのまま（学科名なし）の科目は全学科共通科目のため、
-            # 学科名と紛らわしい「工学部」等ではなく専用ラベルで表示する
+            # department未設定（空文字）の科目は全学科共通科目のため、専用ラベルで表示する
             def _dept_label(d: str) -> str:
-                if d == t:
-                    return "全学科共通科目"
-                return d[len(t):] or d
+                return "全学科共通科目" if d == "" else d
             def _dept_sort_key(d: str) -> int:
-                cls_for_d = {c.classification for c in fac_courses if c.faculty == d}
+                cls_for_d = {c.classification for c in fac_courses if (c.department or "") == d}
                 return min((_cls_sort(cls) for cls in cls_for_d), default=0)
             dept_sorted = sorted(dept_values, key=_dept_sort_key)
             reviewed_dept_labels = {
                 _dept_label(d) for d in dept_values
-                if any(c.name in reviewed_names_sen for c in fac_courses if c.faculty == d)
+                if any(c.name in reviewed_names_sen for c in fac_courses if (c.department or "") == d)
             }
-            items = [(_dept_label(d), d) for d in dept_sorted]
+            items = [(_dept_label(d), f"{t}|{d}") for d in dept_sorted]
             result = [make_classification_select_flex(
                 items, reviewed_dept_labels,
                 title=f"🎓 {t} 専門科目",
@@ -706,13 +704,14 @@ async def handle_message(text: str, user_id: str = "") -> list:
     # ベース名だけでなく学部単位でグループを分ける
     _num_candidates = [c for c in call if (_m := _vnum_match(c.name)) and _m[0] == t]
     if len(_num_candidates) >= 2:
-        _num_by_faculty: dict[str, list] = defaultdict(list)
+        _num_by_faculty: dict[tuple[str, str], list] = defaultdict(list)
         for _c in _num_candidates:
-            _num_by_faculty[_c.faculty or ""].append(_c)
+            _num_by_faculty[(_c.faculty or "", _c.department or "")].append(_c)
         _num_results = []
-        for _fac, _cs in _num_by_faculty.items():
+        for (_fac, _dept), _cs in _num_by_faculty.items():
             _cs_sorted = sorted(_cs, key=lambda c: c.name)
-            _label = f"{t}（{_fac}）" if len(_num_by_faculty) > 1 and _fac else t
+            _fac_label = f"{_fac}{_dept}"
+            _label = f"{t}（{_fac_label}）" if len(_num_by_faculty) > 1 and _fac_label else t
             if len(_cs_sorted) >= 2:
                 _num_results.append(make_variant_selection_bubble(_label, [c.name for c in _cs_sorted], _reviewed_names))
             else:
@@ -763,7 +762,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         for c in courses:
             _match = _vnum_match(c.name)
             if _match:
-                _fac = c.faculty or ""
+                _fac = f"{c.faculty or ''}{c.department or ''}"
                 _kw_num_bases[(_match[0], _fac)].append(c.name)
                 _kw_num_facs[_match[0]].add(_fac)
 
@@ -784,7 +783,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
             _m2 = _vnum_match(name)
             if _m2:
                 base = _m2[0]
-                fac = c.faculty or ""
+                fac = f"{c.faculty or ''}{c.department or ''}"
                 key = (base, fac)
                 if key in seen_num_base:
                     continue

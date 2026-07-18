@@ -521,13 +521,13 @@ async def admin_koubu_dept(dept_key: str, request: Request, _: str = Depends(che
         )
         courses = (await session.execute(
             select(Subject)
-            .where(Subject.faculty.like(f"%{dept_name}%"))
+            .where(Subject.faculty == "工学部", Subject.department == dept_name)
             .order_by(Subject.name)
         )).scalars().all()
     group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     # 必修/選択の仕分けは現状 機械工学科（専門科目）のみ core.seiseki.is_kikai_hisshu() が対応。
-    # 本一覧はfaculty LIKE '%学科名%'のみを表示するため、教養教育院扱いの共通専門基礎科目
-    # （線形代数等）はここには含まれず、必修判定もkyotsu=False（専門科目扱い）のみで行う。
+    # 本一覧はfaculty="工学部"かつdepartment=学科名のみを表示するため、教養教育院扱いの
+    # 共通専門基礎科目（線形代数等）はここには含まれず、必修判定もkyotsu=False（専門科目扱い）のみで行う。
     auto_hisshu = {c.id: is_kikai_hisshu(c.name, kyotsu=False) for c in courses} if dept_key == "kikai" else None
     return templates.TemplateResponse("admin/koubu_dept.html", {
         "request": request,

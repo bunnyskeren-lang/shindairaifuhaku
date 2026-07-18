@@ -92,6 +92,37 @@ ENGINEERING_RANGES: list[tuple[int, int, str]] = [
 ]
 ENGINEERING_LETTERS = {"T", "N"}
 
+# subjects.faculty/departmentは「学部名のみ」「学科名（未設定なら空文字）」のペア形式で持つ
+# （credit_requirements等の既存テーブルと同じ形。database.py init_db()の一回限りバックフィルと
+# 同じ16パターン）。dept_faculty（所属列から作った学部+学科の複合文字列、分類名生成や
+# display_orders用には従来通り使う）とは別に、Subject.faculty/department書き込み専用の
+# 分割結果が必要なときはこの関数を使うこと。
+_FACULTY_DEPARTMENT_SPLIT: dict[str, tuple[str, str]] = {
+    "医学部保健学科作業療法学専攻": ("医学部", "保健学科作業療法学専攻"),
+    "医学部保健学科検査技術科学専攻": ("医学部", "保健学科検査技術科学専攻"),
+    "医学部保健学科理学療法学専攻": ("医学部", "保健学科理学療法学専攻"),
+    "医学部保健学科看護学専攻": ("医学部", "保健学科看護学専攻"),
+    "医学部医学科": ("医学部", "医学科"),
+    "医学部医療創成工学科": ("医学部", "医療創成工学科"),
+    "工学部市民工学科": ("工学部", "市民工学科"),
+    "工学部建築学科": ("工学部", "建築学科"),
+    "工学部応用化学科": ("工学部", "応用化学科"),
+    "工学部機械工学科": ("工学部", "機械工学科"),
+    "工学部電気電子工学科": ("工学部", "電気電子工学科"),
+    "理学部化学科": ("理学部", "化学科"),
+    "理学部惑星学科": ("理学部", "惑星学科"),
+    "理学部数学科": ("理学部", "数学科"),
+    "理学部物理学科": ("理学部", "物理学科"),
+    "理学部生物学科": ("理学部", "生物学科"),
+}
+
+
+def split_faculty_department(dept_faculty: str) -> tuple[str, str]:
+    """dept_faculty（所属列から作った学部+学科の複合文字列、または単なる学部名）を
+    Subject.faculty/department書き込み用の(学部名, 学科名)ペアに分割する。"""
+    return _FACULTY_DEPARTMENT_SPLIT.get(dept_faculty, (dept_faculty, ""))
+
+
 def make_syllabus_url(code: str, department: str = "") -> str | None:
     if len(code) < 2:
         return None
@@ -463,16 +494,21 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             is_tt = _is_timetable_term(c["term"])
             is_kyoyo = is_kyoyo_department(c["department"])
             dept_faculty = faculty or c["department"].split("　")[0].split(" ")[0]
+            # dept_facultyは分類名生成(default_classification)・display_orders登録
+            # (ensure_classification_bucket)には従来通りの複合文字列のまま使うが、
+            # Subject.faculty/departmentへの書き込み・検索は分離した値を使う
+            pure_faculty, dept_suffix = split_faculty_department(dept_faculty)
 
             # ── subjects テーブル（LINE bot 用）──
-            # 教養教育院由来の行はcategory="教養"で、専門科目由来の行はfaculty（学部・学科）で
+            # 教養教育院由来の行はcategory="教養"で、専門科目由来の行はfaculty/department（学部・学科）で
             # 絞り込む。これが無いと「卒業研究」「国際関係論」等の汎用的な科目名が
             # 別学部の同名科目に誤って相乗りしてしまう
             subj_filters = [Subject.name == c["name"]]
             if is_kyoyo:
                 subj_filters.append(Subject.category == "教養")
             else:
-                subj_filters.append(Subject.faculty == dept_faculty)
+                subj_filters.append(Subject.faculty == pure_faculty)
+                subj_filters.append(Subject.department == dept_suffix)
             subj = (await session.execute(
                 select(Subject).where(*subj_filters)
             )).scalar_one_or_none()
@@ -494,7 +530,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                     if is_kyoyo:
                         alt_filters.append(Subject.category == "教養")
                     else:
-                        alt_filters.append(Subject.faculty == dept_faculty)
+                        alt_filters.append(Subject.faculty == pure_faculty)
+                        alt_filters.append(Subject.department == dept_suffix)
                     subj = (await session.execute(
                         select(Subject).where(*alt_filters)
                     )).scalar_one_or_none()
@@ -527,7 +564,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                             name=c["name"],
                             classification=cls,
                             category="専門",
-                            faculty=dept_faculty or None,
+                            faculty=pure_faculty or None,
+                            department=dept_suffix,
                             reading="",
                             term_type=normalize_term_type(c["term"]),
                             credits=None,
@@ -549,7 +587,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         name=c["name"],
                         classification=cls,
                         category="専門",
-                        faculty=dept_faculty or None,
+                        faculty=pure_faculty or None,
+                        department=dept_suffix,
                         reading="",
                     )
                     session.add(subj)
@@ -619,7 +658,6 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 year=c["year"],
                 academic_term=c["term"],
                 timetable_code=c["timetable_code"],
-                department=c["department"],
             )
             session.add(syl)
             await session.flush()

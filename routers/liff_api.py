@@ -12,7 +12,7 @@ from core.activity_log import save_error_log
 from core.config import (
     APP_URL, DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
-    is_profile_complete, make_syllabus_url,
+    is_profile_complete, make_syllabus_url, syllabus_department_key,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -42,15 +42,17 @@ async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
     if not cs_ids:
         return {}
     rows = (await session.execute(
-        select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.department, Syllabus.year)
+        select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.year, Subject.faculty, Subject.department)
+        .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+        .join(Subject, Subject.id == CourseSection.subject_id)
         .where(Syllabus.course_section_id.in_(cs_ids), Syllabus.timetable_code.isnot(None))
     )).all()
     latest_year: dict[int, int] = {}
     result: dict[int, str] = {}
-    for cs_id, code, dept, year in rows:
+    for cs_id, code, year, faculty, department in rows:
         if cs_id in latest_year and year <= latest_year[cs_id]:
             continue
-        url = make_syllabus_url(code, dept or "")
+        url = make_syllabus_url(code, f"{faculty or ''}{department or ''}")
         if not url:
             continue
         latest_year[cs_id] = year
@@ -540,7 +542,7 @@ async def api_course(course_id: int):
         async def _syllabus_code():
             async with AsyncSessionLocal() as s:
                 return (await s.execute(
-                    select(Syllabus.timetable_code, Syllabus.department)
+                    select(Syllabus.timetable_code)
                     .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
                     .where(CourseSection.subject_id == course_id, Syllabus.timetable_code.isnot(None))
                     .order_by(Syllabus.year.desc())
@@ -574,8 +576,8 @@ async def api_course(course_id: int):
                 )
                 await s.commit()
 
-        # 最新年度のsyllabiからtimetable_code/departmentを取得しシラバスURLを動的生成
-        syllabus_url = make_syllabus_url(sc_row[0], sc_row[1] or "") if sc_row else ""
+        # 最新年度のsyllabiからtimetable_codeを取得しシラバスURLを動的生成
+        syllabus_url = make_syllabus_url(sc_row[0], syllabus_department_key(subject)) if sc_row else ""
         instructor_str = "・".join(instr.name for _, instr in cs_instr_rows)
         avg_rating = float(agg[0]) if agg and agg[0] else None
         top_ease = None

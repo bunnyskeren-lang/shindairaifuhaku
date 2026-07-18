@@ -142,6 +142,14 @@ _DEPARTMENT_PATH_OVERRIDE = {
 }
 
 
+def syllabus_department_key(subject) -> str:
+    """make_syllabus_url()の department 引数用に、Subject.faculty/departmentを連結して
+    旧syllabi.department（シラバス生データの所属列）と同じ形の文字列を再現する。
+    _DEPARTMENT_PATH_OVERRIDEのキーは学部名+学科名を連結した複合文字列のままのため、
+    呼び出し側はこのヘルパーを通してから渡すこと。"""
+    return f"{subject.faculty or ''}{subject.department or ''}"
+
+
 def make_syllabus_url(timetable_code: str, department: str = "") -> str:
     if not timetable_code or len(timetable_code) < 2:
         return ""
