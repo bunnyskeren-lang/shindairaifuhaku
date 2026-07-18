@@ -201,8 +201,6 @@
       <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
                style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px">
-        <input type="url" id="inst-url-{{ c.id }}" placeholder="シラバスURL（任意）" maxlength="500"
-               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:200px">
         <button type="button" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap"
                 onclick="addInstructor({{ c.id }})">追加</button>
       </div>
@@ -315,8 +313,6 @@
       <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
                style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px">
-        <input type="url" id="inst-url-{{ c.id }}" placeholder="シラバスURL（任意）" maxlength="500"
-               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:200px">
         <button type="button" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap"
                 onclick="addInstructor({{ c.id }})">追加</button>
         <span id="inst-err-{{ c.id }}" style="display:none;color:#ef4444;font-size:12px;font-weight:bold">同じ教員がすでに追加されています</span>
@@ -514,7 +510,6 @@ document.getElementById('editModal').addEventListener('click', function(e) {
 
 function addInstructor(courseId) {
   const input = document.getElementById('inst-input-' + courseId);
-  const urlInput = document.getElementById('inst-url-' + courseId);
   const errEl = document.getElementById('inst-err-' + courseId);
   const name = input.value.trim();
   if (!name) return;
@@ -525,7 +520,7 @@ function addInstructor(courseId) {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-Requested-With': 'XMLHttpRequest'
     },
-    body: 'name=' + encodeURIComponent(name) + '&url=' + encodeURIComponent(urlInput.value.trim())
+    body: 'name=' + encodeURIComponent(name)
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) {
       const list = document.getElementById('inst-list-' + courseId);
@@ -565,7 +560,6 @@ function addInstructor(courseId) {
       }
       if (!inserted) list.appendChild(chip);
       input.value = '';
-      urlInput.value = '';
     } else if (data.error === 'duplicate') {
       errEl.style.display = 'inline';
     }

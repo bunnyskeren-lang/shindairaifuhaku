@@ -249,9 +249,10 @@ async def main():
 
         # ── 4. course_sections: UPSERT by (subject_id, instructor_id) ─────────
         # subject_id・instructor_id ともに prod での ID に変換する必要あり
+        # syllabus_urlは2026-07にtimetable_code/departmentからの動的生成へ移行し
+        # course_sectionsから削除済みのため、以降は(subject_id, instructor_id)の存在同期のみ行う
         cs_rows = await dev.fetch(
-            "SELECT id, subject_id, instructor_id, syllabus_url "
-            "FROM course_sections ORDER BY id"
+            "SELECT id, subject_id, instructor_id FROM course_sections ORDER BY id"
         )
         cs_params = []
         skipped = 0
@@ -267,15 +268,14 @@ async def main():
                 print(f"  WARNING: instructor '{instr_name}' が prod に見つかりません（course_section {r['id']} をスキップ）")
                 skipped += 1
                 continue
-            cs_params.append((prod_subj_id, prod_instr_id, r["syllabus_url"]))
+            cs_params.append((prod_subj_id, prod_instr_id))
 
         async with prod.transaction():
             await prod.executemany(
                 """
-                INSERT INTO course_sections (subject_id, instructor_id, syllabus_url)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (subject_id, instructor_id) DO UPDATE SET
-                  syllabus_url=EXCLUDED.syllabus_url
+                INSERT INTO course_sections (subject_id, instructor_id)
+                VALUES ($1, $2)
+                ON CONFLICT (subject_id, instructor_id) DO NOTHING
                 """,
                 cs_params
             )

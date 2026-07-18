@@ -411,3 +411,9 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS share_token_version INTEGER NOT NULL DEFAULT 0"
         ))
+        # course_sections.syllabus_url は年度をまたぐURL変更を表現できず陳腐化する問題があったため廃止。
+        # syllabi.timetable_code + syllabi.department から毎回動的生成する方式に統一する
+        # （値はいずれも既存カラムから100%導出可能なため、バックフィル不要でそのままDROPしてよい）
+        await conn.execute(text(
+            "ALTER TABLE course_sections DROP COLUMN IF EXISTS syllabus_url"
+        ))

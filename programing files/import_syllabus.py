@@ -573,9 +573,8 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 session.add(instr)
                 await session.flush()
 
-            # CourseSection を find-or-create（既存の場合、syllabus_url が未設定なら補完する）
-            # ※ syllabus 重複チェックより先に行う。既にSyllabusが登録済みでも
-            #   URLだけ未設定というケース（レビュー投稿由来のセクション等）を補完するため。
+            # CourseSection を find-or-create
+            # ※ syllabus 重複チェックより先に行う（レビュー投稿由来で既に存在する場合がある）。
             cs = (await session.execute(
                 select(CourseSection).where(
                     CourseSection.subject_id == subj.id,
@@ -583,16 +582,10 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 )
             )).scalar_one_or_none()
             if cs is None:
-                cs = CourseSection(
-                    subject_id=subj.id,
-                    instructor_id=instr.id,
-                    syllabus_url=make_syllabus_url(c["timetable_code"], c["department"]),
-                )
+                cs = CourseSection(subject_id=subj.id, instructor_id=instr.id)
                 session.add(cs)
                 await session.flush()
                 counts["cs_added"] += 1
-            elif not cs.syllabus_url:
-                cs.syllabus_url = make_syllabus_url(c["timetable_code"], c["department"])
 
             if not is_tt:
                 return

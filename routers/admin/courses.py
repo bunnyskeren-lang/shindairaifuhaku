@@ -8,11 +8,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 
 from core import cache
-from core.config import make_cls_sort, normalize_instructor_name, reading
+from core.config import make_cls_sort, make_syllabus_url, normalize_instructor_name, reading
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, DisplayOrder, Instructor, Review, Subject
+from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus
 
 router = APIRouter()
 
@@ -61,6 +61,24 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
                 .where(CourseSection.subject_id.in_(course_ids))
             )).all()
 
+        # course_sectionごとに最新年度のsyllabus_urlをtimetable_code/departmentから動的生成
+        cs_url_map: dict[int, str] = {}
+        cs_ids_all = [cs.id for cs, _ in cs_instr_rows]
+        if cs_ids_all:
+            syl_rows = (await session.execute(
+                select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.department, Syllabus.year)
+                .where(Syllabus.course_section_id.in_(cs_ids_all), Syllabus.timetable_code.isnot(None))
+            )).all()
+            _latest_year: dict[int, int] = {}
+            for cs_id, code, dept, year in syl_rows:
+                if cs_id in _latest_year and year <= _latest_year[cs_id]:
+                    continue
+                url = make_syllabus_url(code, dept or "")
+                if not url:
+                    continue
+                _latest_year[cs_id] = year
+                cs_url_map[cs_id] = url
+
         reviews_data = []
         if course_ids:
             reviews_data = (await session.execute(
@@ -102,7 +120,7 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
     instructors_by_course: dict = defaultdict(list)
     for cs, inst in sorted(cs_instr_rows, key=lambda x: (x[1].sort_order, x[1].name)):
         instructors_by_course[cs.subject_id].append(
-            SimpleNamespace(id=inst.id, name=inst.name, url=cs.syllabus_url or "")
+            SimpleNamespace(id=inst.id, name=inst.name, url=cs_url_map.get(cs.id, ""))
         )
 
     # 修正理由: Subject.nameにはUNIQUE制約が無く同名科目が複数存在しうるため、
@@ -171,9 +189,8 @@ async def admin_courses(request: Request, _: str = Depends(check_admin), msg: st
 
 
 @router.post("/admin/courses/{course_id}/instructors/add")
-async def add_instructor(course_id: int, request: Request, name: str = Form(...), url: str = Form(""), _: str = Depends(check_admin)):
+async def add_instructor(course_id: int, request: Request, name: str = Form(...), _: str = Depends(check_admin)):
     name_s = normalize_instructor_name(name)
-    url_s = url.strip() or None
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if name_s:
         async with AsyncSessionLocal() as session:
@@ -198,12 +215,14 @@ async def add_instructor(course_id: int, request: Request, name: str = Form(...)
                 referer = request.headers.get("Referer", "/admin/courses")
                 sep = "&" if "?" in referer else "?"
                 return RedirectResponse(f"{referer}{sep}inst_err={course_id}", status_code=303)
-            cs = CourseSection(subject_id=course_id, instructor_id=instr.id, syllabus_url=url_s)
+            cs = CourseSection(subject_id=course_id, instructor_id=instr.id)
             session.add(cs)
             await session.commit()
             cache.invalidate_courses_cache()
+            # シラバスURLはtimetable_code/departmentから動的生成するため、時間割インポート前の
+            # このタイミングでは持たない（時間割インポート後は管理画面表示時に自動で付与される）
             if is_ajax:
-                return JSONResponse({"ok": True, "id": instr.id, "name": instr.name, "url": url_s or ""})
+                return JSONResponse({"ok": True, "id": instr.id, "name": instr.name, "url": ""})
     if is_ajax:
         return JSONResponse({"ok": False, "error": "empty"})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
@@ -575,7 +594,6 @@ async def admin_courses_update(
     category: str = Form("専門"),
     term_type: str = Form(""),
     credits: float = Form(0),
-    syllabus_url: str = Form(""),
     faculty: str = Form(""),
 ):
     async with AsyncSessionLocal() as session:

@@ -66,8 +66,8 @@
 |---|---|
 | `subjects` | 科目マスタ（name, faculty, classification, term, credits 等） |
 | `instructors` | 教員マスタ |
-| `course_sections` | 科目×教員のセクション（syllabus_url 等） |
-| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類） |
+| `course_sections` | 科目×教員のセクション |
+| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類。シラバスURLはtimetable_code/departmentから動的生成） |
 | `schedules` | 曜日・時限・教室 |
 | `reviews` | 投稿レビュー（`is_approved` で承認管理） |
 | `course_section_views` | 科目セクションの閲覧数 |

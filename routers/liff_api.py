@@ -37,6 +37,27 @@ def _normalize_form_q(s: str) -> str:
     return s
 
 
+async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
+    """course_section_idごとに最新年度のsyllabus_urlをtimetable_code/departmentから動的生成する。"""
+    if not cs_ids:
+        return {}
+    rows = (await session.execute(
+        select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.department, Syllabus.year)
+        .where(Syllabus.course_section_id.in_(cs_ids), Syllabus.timetable_code.isnot(None))
+    )).all()
+    latest_year: dict[int, int] = {}
+    result: dict[int, str] = {}
+    for cs_id, code, dept, year in rows:
+        if cs_id in latest_year and year <= latest_year[cs_id]:
+            continue
+        url = make_syllabus_url(code, dept or "")
+        if not url:
+            continue
+        latest_year[cs_id] = year
+        result[cs_id] = url
+    return result
+
+
 @router.get("/api/courses")
 async def search_courses(q: str = ""):
     async with AsyncSessionLocal() as session:
@@ -75,9 +96,10 @@ async def search_courses(q: str = ""):
                 .where(CourseSection.subject_id.in_(course_ids))
                 .order_by(Instructor.sort_order, Instructor.name)
             )).all()
+        cs_url_map = await _latest_syllabus_urls(session, [cs.id for cs, _ in cs_rows])
         insts_by_course: dict = {}
         for cs, inst in cs_rows:
-            insts_by_course.setdefault(cs.subject_id, []).append({"name": inst.name, "url": cs.syllabus_url or ""})
+            insts_by_course.setdefault(cs.subject_id, []).append({"name": inst.name, "url": cs_url_map.get(cs.id, "")})
     return {"courses": [
         {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
         for c in courses
@@ -518,15 +540,16 @@ async def api_course(course_id: int):
         async def _syllabus_code():
             async with AsyncSessionLocal() as s:
                 return (await s.execute(
-                    select(Syllabus.timetable_code)
+                    select(Syllabus.timetable_code, Syllabus.department)
                     .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
-                    .where(CourseSection.subject_id == course_id)
+                    .where(CourseSection.subject_id == course_id, Syllabus.timetable_code.isnot(None))
+                    .order_by(Syllabus.year.desc())
                     .limit(1)
-                )).scalar_one_or_none()
+                )).first()
 
         cs_ids = [cs.id for cs, _ in cs_instr_rows]
 
-        agg, ease_rows, reviews_raw, sc_code = await asyncio.gather(
+        agg, ease_rows, reviews_raw, sc_row = await asyncio.gather(
             _agg(cs_ids), _ease(cs_ids), _reviews(cs_ids), _syllabus_code()
         )
 
@@ -551,10 +574,8 @@ async def api_course(course_id: int):
                 )
                 await s.commit()
 
-        # 最初の非NULL syllabus_url を CourseSection から取得
-        syllabus_url = next((cs.syllabus_url for cs, _ in cs_instr_rows if cs.syllabus_url), None)
-        if not syllabus_url:
-            syllabus_url = make_syllabus_url(sc_code or "", subject.faculty or "")
+        # 最新年度のsyllabiからtimetable_code/departmentを取得しシラバスURLを動的生成
+        syllabus_url = make_syllabus_url(sc_row[0], sc_row[1] or "") if sc_row else ""
         instructor_str = "・".join(instr.name for _, instr in cs_instr_rows)
         avg_rating = float(agg[0]) if agg and agg[0] else None
         top_ease = None

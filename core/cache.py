@@ -2,9 +2,9 @@ import time
 
 from sqlalchemy import func, select
 
-from core.config import EASE_ORDER
+from core.config import EASE_ORDER, make_syllabus_url
 from database import AsyncSessionLocal
-from models import CourseSection, DisplayOrder, Instructor, Review, Subject
+from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus
 
 _CLS_CACHE_TTL = 3600
 _COURSE_CACHE_TTL = 3600
@@ -246,10 +246,22 @@ async def get_syllabus_urls_cached() -> dict[int, str]:
         return _syllabus_url_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
-            select(CourseSection.subject_id, CourseSection.syllabus_url)
-            .where(CourseSection.syllabus_url.isnot(None))
+            select(CourseSection.subject_id, Syllabus.timetable_code, Syllabus.department, Syllabus.year)
+            .join(Syllabus, Syllabus.course_section_id == CourseSection.id)
+            .where(Syllabus.timetable_code.isnot(None))
         )).all()
-    _syllabus_url_cache = {sid: url for sid, url in rows}
+    # 科目につき複数年度のsyllabiがありうるため、最新年度のURLを採用する
+    _latest_year: dict[int, int] = {}
+    result: dict[int, str] = {}
+    for subject_id, code, dept, year in rows:
+        if subject_id in _latest_year and year <= _latest_year[subject_id]:
+            continue
+        url = make_syllabus_url(code, dept or "")
+        if not url:
+            continue
+        _latest_year[subject_id] = year
+        result[subject_id] = url
+    _syllabus_url_cache = result
     _syllabus_url_cache_at = time.monotonic()
     return _syllabus_url_cache
 

@@ -1,11 +1,259 @@
 # スキーマレビュー（調査のみ・変更なし）
 
-調査日: 2026-07-15（2026-06-27版の全面書き直し）
+調査日: 2026-07-15（2026-06-27版の全面書き直し）／テーブル一覧セクションは2026-07-18追記
 対象: 現行スキーマ（`models.py`、`database.py` の `init_db()`、各 `routers/`・`core/`・`line_bot/` のクエリパターン）
 
-> **注意**: このドキュメントは調査・記録のみ。ALTER TABLE 等の実施は行っていない。
+> **注意**: このドキュメントは基本的に調査・記録のみ。ALTER TABLE 等の実施は行っていない。
 > 2026-06-27時点の旧スキーマ（`courses`/`course_instructors`/`pending_reviews`/`syllabus_courses`等）は
 > 2026-07-06のスキーマ移行で完全に廃止済み。旧内容は git 履歴（このファイルの過去版）を参照。
+> **例外**: `course_sections.syllabus_url` は2026-07-18に本ドキュメントの指摘（P2「年度またぎURL変更を表現できない」）を
+> 踏まえて実際に廃止し、`syllabi.timetable_code`/`department`からの動的生成に変更済み（詳細は該当セクション参照）。
+
+---
+
+## テーブル一覧（カラム説明・親子関係）
+
+出典: `models.py`（2026-07-18時点、全21テーブル）。以下、コアドメイン→単位/CAP系→ユーザー系→ログ/運用系の順に記載する。
+
+### コアドメイン（科目・シラバス・レビュー）
+
+#### subjects（科目マスタ）— 親: なし（ルート）
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| name | Text, index | 科目名。`normalize_subject_name()`でローマ数字表記(Ⅰ/Ⅱ等)を自動統一 |
+| reading | Text, nullable | よみがな（pykakasi自動生成、LINE bot一覧の五十音分割に使用） |
+| faculty | Text, nullable, index | 学部名。教養科目は`教養教育院`、共通専門基礎科目は`NULL`のケースあり |
+| classification | Text, nullable | 分類名（`display_orders`のkind='classification'の`name`と対応、LINE bot一覧の分類分け用） |
+| category | Text, nullable | 「教養」/「専門」の大分類 |
+| senmon_group | Text, nullable | 経営学部等の専門科目群（第1群〜等）判定結果 |
+| sort_order | Integer, default 0 | 表示順 |
+| term_type | Text, nullable | 開講期区分 |
+| credits | Numeric(3,1), nullable | 単位数 |
+| hide_from_timetable | Boolean, default false | 時間割の科目選択一覧から非表示にするフラグ |
+
+UNIQUE(name, faculty)。子テーブル: `course_sections`（CASCADE）、`subject_credit_categories`（CASCADE）、`required_subjects`（CASCADE）。
+
+#### instructors（教員マスタ）— 親: なし（ルート）
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| name | Text, UNIQUE, index | 教員名。`normalize_instructor_name()`で空白除去等を自動正規化 |
+| sort_order | Integer, default 0 | 表示順 |
+
+子テーブル: `course_sections`（CASCADE）。
+
+#### course_sections（科目×教員のセクション）— 親: subjects, instructors
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| subject_id | BigInteger FK→subjects.id (CASCADE), index | |
+| instructor_id | BigInteger FK→instructors.id (CASCADE), index | |
+
+UNIQUE(subject_id, instructor_id)。子テーブル: `syllabi`（CASCADE）、`reviews`（**RESTRICT**）、`course_section_views`（CASCADE）。
+シラバスURLは2026-07-18に本テーブルの列（`syllabus_url`）から`syllabi`側の動的生成に移行済み（後述）。
+
+#### syllabi（時間割マスタ・年度別シラバス）— 親: course_sections
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| course_section_id | BigInteger FK→course_sections.id (CASCADE), index | |
+| year | Integer | 年度 |
+| academic_term | Text | 開講期（旧`quarter`から2026-07頃リネーム） |
+| timetable_code | Text, nullable, index | 時間割コード。シラバスURLは列を持たず、`core.config.make_syllabus_url(timetable_code, department)`で毎回動的生成する |
+| target_grades | Text, nullable | 開講年次（対象学年） |
+| subject_category | Text, nullable | 科目分類（シラバスページ由来） |
+| numbering_code | Text, nullable | ナンバリングコード |
+| department | Text, nullable | 所属学科（シラバスページの所属列）。シラバスURL生成の第2引数にも使う |
+| created_at | DateTime(tz) | |
+
+UNIQUE(course_section_id, year, academic_term)。子テーブル: `schedules`（CASCADE）、`user_syllabi`（CASCADE）。
+
+#### schedules（曜日・時限）— 親: syllabi
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| syllabus_id | BigInteger FK→syllabi.id (CASCADE), index | |
+| day_of_week | Text | 月/火/水/木/金/土/日/集（集中講義） |
+| period | Integer, nullable | 時限（1〜6想定、集中講義はNULL） |
+| created_at | DateTime(tz) | |
+
+UNIQUE(syllabus_id, day_of_week, period)。子テーブル: なし。
+
+#### reviews（投稿レビュー）— 親: course_sections
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| course_section_id | BigInteger FK→course_sections.id (**RESTRICT**), index | 科目削除時もレビューがあれば削除自体をDBが拒否 |
+| content | Text, nullable | 感想本文 |
+| rating | Integer, nullable | 評価（1〜5想定） |
+| ease_rating | Text, nullable | 楽単度（SS/S/A/B/C想定） |
+| grading_method | Text, nullable | 評価方法 |
+| submitter_name | Text, nullable | 投稿者氏名（管理画面のみ表示） |
+| nickname | Text, nullable | 表示用ニックネーム |
+| student_id | Text, nullable | 学籍番号 |
+| academic_year | Integer, nullable | 受講年度 |
+| selected_instructor | Text, nullable | 投稿時に選択した教員名（表記ゆれ吸収用） |
+| is_approved | Boolean, default false | 管理画面での承認フラグ。承認済みのみLIFF等で公開 |
+| created_at | DateTime(tz) | |
+
+**絶対にユーザーから消去しないテーブル**（CLAUDE.md参照）。子テーブル: なし。
+
+#### course_section_views（科目セクション閲覧数）— 親: course_sections
+| カラム | 型 | 説明 |
+|---|---|---|
+| course_section_id | BigInteger PK, FK→course_sections.id (CASCADE) | |
+| view_count | Integer, default 0 | 閲覧数 |
+| last_viewed_at | DateTime(tz) | |
+
+子テーブル: なし。
+
+### 単位チェッカー・CAP系
+
+#### credit_requirements（単位要件定義）— 親: なし（ルート）
+| カラム | 型 | 説明 |
+|---|---|---|
+| category_id | String(50) PK | 単位区分ID |
+| label | String(100) | 表示名 |
+| group_name | String(50) | グループ名 |
+| sort_order | Integer | 表示順 |
+| required_credits | Integer | 必要単位数 |
+| note | Text, nullable | 注記（対象科目の内訳等） |
+| faculty | String(100), default '経営学部' | 学部名 |
+| department | Text, nullable | 学科名 |
+| combined_of | JSONB, nullable | 合算対象の`category_id`配列（他行の`category_id`をFKなしで参照） |
+| max_credits | Integer, nullable | 算入上限単位数 |
+
+子テーブル: `subject_credit_categories`（`category_id`へのFK、ondelete未指定＝RESTRICT相当）。
+
+#### subject_credit_categories（科目↔単位カテゴリ紐付け）— 親: subjects, credit_requirements
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| subject_id | BigInteger FK→subjects.id (CASCADE), index | |
+| category_id | String(50) FK→credit_requirements.category_id, index | ondelete未指定（RESTRICT相当） |
+| credits | Numeric(3,1), default 2.0 | この区分としてカウントする単位数 |
+
+UNIQUE(subject_id, category_id)。子テーブル: なし。
+
+#### registration_caps（履修登録上限単位数・CAP制）— 親: なし（ルート）
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| faculty | Text, index | |
+| department | Text, nullable | NULLならその学部の学科共通値 |
+| year | Integer | 学年 |
+| max_credits | Integer | 上限単位数 |
+| created_at | DateTime(tz) | |
+
+UNIQUE(faculty, department, year)。子テーブル: なし。
+
+#### required_subjects（学部・学科・学年別 必修科目マスタ）— 親: subjects
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| faculty | Text, index | |
+| department | Text | |
+| grade | Integer | 対象学年 |
+| subject_id | BigInteger FK→subjects.id (CASCADE), index | |
+| student_id_parity | String(4), nullable | 学籍番号末尾の偶奇クラス分け（NULLなら全員対象） |
+| note | Text, nullable | |
+| created_at | DateTime(tz) | |
+
+UNIQUE(faculty, department, grade, subject_id)。時間割登録時に`user_syllabi`へ自動登録する対象を管理。子テーブル: なし。
+
+### ユーザー系
+
+#### user_profiles（LINEユーザープロフィール）— 親: なし（ルート、line_user_idが実質的な軸）
+| カラム | 型 | 説明 |
+|---|---|---|
+| line_user_id | String(64) PK | |
+| name | String(100) | 氏名 |
+| student_id | String(20), UNIQUE | 学籍番号 |
+| faculty | Text, nullable | |
+| grade | Integer, nullable | |
+| department | Text, nullable | |
+| share_token_version | Integer, default 0 | マイ時間割共有リンクの世代番号。「共有を停止する」でインクリメントし旧リンクを無効化 |
+| created_at | DateTime(tz) | |
+| updated_at | DateTime(tz), nullable | トリガーで自動更新 |
+
+子テーブル: なし（`line_user_id`はFKで参照されていない。`user_syllabi`等との紐付けはアプリ層のみ、詳細は「横断的な問題点」参照）。
+
+#### user_syllabi（ユーザーの時間割登録）— 親: syllabi
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| line_user_id | String(64), index | `user_profiles`へのFKなし |
+| syllabus_id | BigInteger FK→syllabi.id (CASCADE), index | |
+| classroom | Text, nullable | 教室（ユーザー入力） |
+| created_at | DateTime(tz) | |
+
+UNIQUE(line_user_id, syllabus_id)。子テーブル: なし。
+
+#### user_custom_courses（手動追加科目）— 親: なし（シラバスマスタ外の個人科目）
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | BigInteger PK | |
+| line_user_id | String(64), index | `user_profiles`へのFKなし |
+| name | Text | 科目名 |
+| instructor | Text, nullable | |
+| classification | Text, nullable | `credit_requirements.category_id`と一致させる想定（FKなし） |
+| credits | Integer, default 2 | |
+| year | Integer | |
+| day_of_week | Text | |
+| period | Integer | |
+| created_at | DateTime(tz) | |
+
+子テーブル: なし。
+
+#### user_seiseki_raw（成績表PDF解析結果）— 親: なし（line_user_idが軸）
+| カラム | 型 | 説明 |
+|---|---|---|
+| line_user_id | String(64) PK | `user_profiles`へのFKなし |
+| raw_json | JSONB | 解析済み成績データ |
+| gpa | Float, nullable | |
+| updated_at | DateTime(tz) | トリガーで自動更新 |
+
+子テーブル: なし。
+
+### 共通・運用系
+
+#### display_orders（表示順マスタ・汎用）— 親: なし
+| カラム | 型 | 説明 |
+|---|---|---|
+| id | Integer PK | |
+| kind | String(50) | `classification`/`faculty`/`credit_requirement_group`のいずれか（CHECK制約なし・アプリ側規約） |
+| name | String(100) | 対象名 |
+| sort_order | Integer, default 0 | |
+| parent_group | String(100), nullable | 同テーブルの`name`を自己参照する想定（FKなし） |
+| faculty | String(100), default '' | kind='credit_requirement_group'の場合の学部区別に使用 |
+
+UNIQUE(kind, name, faculty)。子テーブル: なし。
+
+#### message_logs / error_logs / user_activity / richmenu_taps / push_subscriptions（ログ・運用系）— いずれも親なし
+| テーブル | 主なカラム | 説明 |
+|---|---|---|
+| message_logs | id PK, user_id(index), direction(CHECK: in/out), message, created_at(index) | LINEメッセージ送受信ログ |
+| error_logs | id PK, user_id, action, error_type, error_message, traceback, created_at(index) | サーバーエラーログ |
+| user_activity | id PK, user_id(index), action, count, last_at | UNIQUE(user_id, action)。LINEアクション統計 |
+| richmenu_taps | id PK, button(index), tapped_at | リッチメニュークリックログ |
+| push_subscriptions | id PK, endpoint(UNIQUE), p256dh, auth, created_at | Web Push購読情報。`line_user_id`列は一度追加後DROP済み（全員一斉配信のみのため紐付け無し） |
+
+いずれも子テーブルなし。
+
+### 親子関係サマリ（FK/ON DELETE一覧）
+
+```
+subjects ──CASCADE──> course_sections ──CASCADE──> syllabi ──CASCADE──> schedules
+subjects ──CASCADE──> course_sections ──CASCADE──> syllabi ──CASCADE──> user_syllabi
+subjects ──CASCADE──> course_sections ──RESTRICT──> reviews
+subjects ──CASCADE──> course_sections ──CASCADE──> course_section_views
+instructors ──CASCADE──> course_sections
+subjects ──CASCADE──> subject_credit_categories <──RESTRICT(未指定)── credit_requirements
+subjects ──CASCADE──> required_subjects
+```
+
+上記以外（`user_profiles`↔`user_syllabi`/`user_custom_courses`/`user_seiseki_raw`/`message_logs`等、`display_orders.parent_group`の自己参照、`credit_requirements.combined_of`の他行参照、`user_custom_courses.classification`↔`credit_requirements.category_id`）はいずれもFK制約を持たない“論理的な”親子関係であり、アプリ側の規約でのみ整合性が保たれている。詳細は下記「横断的な問題点」参照。
 
 ---
 
@@ -39,12 +287,12 @@
 
 ## course_sections
 
-- **現状**: id, subject_id (FK→subjects CASCADE), instructor_id (FK→instructors CASCADE), syllabus_url; UNIQUE(subject_id, instructor_id)
+- **現状**: id, subject_id (FK→subjects CASCADE), instructor_id (FK→instructors CASCADE); UNIQUE(subject_id, instructor_id)
+- **2026-07-18対応済み**: 従来ここにあった `syllabus_url`（科目×教員につき1本だけ持つ非正規化カラム）は、実際には同じ `course_section` が複数年度の `syllabi` にまたがる設計（`syllabi.course_section_id` は多対1）のため、年度をまたぐURL変更を表現できず値が陳腐化する問題があった（旧・下記「改善案」参照）。`timetable_code`/`department` はいずれも既に `syllabi` 側に存在し100%導出可能な値だったため、列を廃止して `syllabi.timetable_code`+`department` から `core.config.make_syllabus_url()` で毎回動的生成する方式に変更した。バックフィル不要でそのままDROPできたため、データ移行リスクはゼロだった。副作用として、`syllabi` レコードを持たない `course_section`（時間割インポート前・レビュー投稿のみ由来のセクション）はURLを導出できなくなり、`fetch_syllabus_info.py` の単位数・群判定の自動取得はスキップされ手入力での補完が必要になった（既存データで単位数取得済みの科目には影響なし、影響するのは今後syllabiを持たないまま追加される科目のみ）。
 - **問題点**:
-  1. `syllabus_url` は科目×教員の1レコードにつき1本だけ持つ非正規化カラムだが、実際には同じ `course_section` が複数年度の `syllabi` にまたがる設計（`syllabi.course_section_id` は多対1）。年度によってシラバスURLの時間割コードが変わるケースがあると、`course_sections.syllabus_url` は最新のもので上書きされ続け、過去年度のURLを表現できない。
-  2. `subject_id`/`instructor_id` ともに `ON DELETE CASCADE` のため、科目や教員を削除すると `course_sections` 経由で `syllabi`→`schedules` まで芋づる式にCASCADE削除される。一方 `reviews.course_section_id` は `ON DELETE RESTRICT`（後述）なので、レビューが1件でも紐づいていれば科目削除自体がDBレベルでブロックされる。削除経路が増えるたびにアプリ側で同じ「レビュー存在チェック」を個別実装する必要がある。
-- **改善案**: 現状は実害が顕在化していないため経過観察。年度またぎURL変更が実際に発生した場合は `syllabus_url` を `syllabi` 側に移す設計変更を検討。
-- **リスク**: 低〜中。
+  1. `subject_id`/`instructor_id` ともに `ON DELETE CASCADE` のため、科目や教員を削除すると `course_sections` 経由で `syllabi`→`schedules` まで芋づる式にCASCADE削除される。一方 `reviews.course_section_id` は `ON DELETE RESTRICT`（後述）なので、レビューが1件でも紐づいていれば科目削除自体がDBレベルでブロックされる。削除経路が増えるたびにアプリ側で同じ「レビュー存在チェック」を個別実装する必要がある。
+- **改善案**: 特になし（上記の主要な問題点は解消済み）。
+- **リスク**: 低い。
 
 ---
 

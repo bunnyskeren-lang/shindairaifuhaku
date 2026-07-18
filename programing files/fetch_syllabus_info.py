@@ -282,11 +282,11 @@ async def run(dry_run: bool = False, force: bool = False):
 
 async def run_credits(dry_run: bool = False, force: bool = False):
     """単位数(subjects.credits)を補完する。
-    前期のみ開講の科目はsyllabiレコードを持たない（import_syllabus.pyの仕様）ため、
-    Syllabus経由ではなくcourse_sections.syllabus_url経由で辿る。"""
+    シラバスURLはsyllabi.timetable_code/departmentから毎回動的生成する（syllabiレコードを
+    持たない科目はスキップし、subjects.creditsはNULLのまま残る。手入力での補完対象）。"""
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
-    from models import Subject, CourseSection
+    from models import Subject, CourseSection, Syllabus
 
     await init_db()
 
@@ -300,17 +300,20 @@ async def run_credits(dry_run: bool = False, force: bool = False):
     counts = {"updated": 0, "skipped": 0, "not_found": 0}
 
     async def process_subject(session, subj):
-        cs = (await session.execute(
-            select(CourseSection).where(
+        syl = (await session.execute(
+            select(Syllabus)
+            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+            .where(
                 CourseSection.subject_id == subj.id,
-                CourseSection.syllabus_url.isnot(None),
+                Syllabus.timetable_code.isnot(None),
             ).limit(1)
         )).scalar_one_or_none()
-        if cs is None:
+        url = make_syllabus_url(syl.timetable_code, syl.department or "") if syl else None
+        if not url:
             counts["skipped"] += 1
             return
 
-        html_text = fetch_html(cs.syllabus_url)
+        html_text = fetch_html(url)
         if not html_text:
             counts["not_found"] += 1
             return
@@ -353,14 +356,14 @@ async def run_credits(dry_run: bool = False, force: bool = False):
 
 async def run_senmon_classification(dry_run: bool = False, force: bool = False):
     """経営学部専門科目の群(第1群/第2群/第3群/グローバル)をシラバスのナンバリングコードから
-    自動判定し、classification に反映する。前期のみ開講等でsyllabiレコードを持たない科目も
-    run_credits()と同様にcourse_sections.syllabus_url経由で辿る。
+    自動判定し、classification に反映する。シラバスURLはrun_credits()と同様に
+    syllabi.timetable_code/departmentから毎回動的生成する（syllabiを持たない科目はスキップ）。
     「初年次セミナー」は科目名判定で解決済み(core/seiseki.py)のため対象外。
     203/303/204等ナンバリングだけでは群を確定できない科目、ページ取得に失敗した科目は
     自動更新せず「要レビュー」として一覧表示するのみに留める(/admin/keieiで手動判定できる)。"""
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
-    from models import Subject, CourseSection
+    from models import Subject, CourseSection, Syllabus
 
     await init_db()
 
@@ -376,17 +379,20 @@ async def run_senmon_classification(dry_run: bool = False, force: bool = False):
     review_list: list[str] = []
 
     async def process_subject(session, subj):
-        cs = (await session.execute(
-            select(CourseSection).where(
+        syl = (await session.execute(
+            select(Syllabus)
+            .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+            .where(
                 CourseSection.subject_id == subj.id,
-                CourseSection.syllabus_url.isnot(None),
+                Syllabus.timetable_code.isnot(None),
             ).limit(1)
         )).scalar_one_or_none()
-        if cs is None:
+        url = make_syllabus_url(syl.timetable_code, syl.department or "") if syl else None
+        if not url:
             counts["skipped"] += 1
             return
 
-        html_text = fetch_html(cs.syllabus_url)
+        html_text = fetch_html(url)
         if not html_text:
             counts["not_found"] += 1
             review_list.append(f"{subj.name}（404）")

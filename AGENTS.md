@@ -65,7 +65,7 @@ LINE botの1回の返信には上限（40バブル≒240科目、`line_bot/handl
 
 ## データ保護ルール
 
-- **投稿されたレビュー（reviews テーブル）は、ユーザーから明示的な削除指示がない限り絶対に消去しないこと**
+- **投稿されたレビュー（reviews テーブル）は、ユーザーから絶対に消去しないこと**
 - 科目の削除・変更・マージなど、いかなる操作においても、その科目に紐づくレビューを巻き添えで削除しないこと
 - レビューに影響しうるDB操作を行う前は、必ずユーザーに確認を取ること
 
@@ -160,7 +160,10 @@ python -X utf8 sync_db_to_prod.py
 **シラバスは科目名だけでなく担当教員に強く依存する。** 同じ科目名でも担当教員が異なればシラバスの内容（到達目標・授業計画・評価方法）は別物になる。
 そのため、シラバスURLは「科目名」だけに紐づけるのではなく、**「科目名 × 担当教員」の組み合わせ**に紐づけることが望ましい。
 
-現状の `course_sections.syllabus_url` は「科目×担当教員」単位で1本のURLを持つ設計になっており、`course_sections` テーブルが `subjects`（科目）と `instructors`（教員）を結ぶ形で管理している。
+`course_sections` テーブルが `subjects`（科目）と `instructors`（教員）を結び「科目×担当教員」単位のセクションを管理する。
+シラバスURLは列としては持たず、`syllabi.timetable_code` と `syllabi.department` から `core.config.make_syllabus_url()`（および同ロジックの4箇所の複製）で**毎回動的生成**する
+（2026-07に `course_sections.syllabus_url` 列から移行済み。年度が変わり時間割コードが変わっても自動で追従し、値が陳腐化しない）。
+`syllabi` レコードを持たない科目（時間割インポート前・レビュー投稿のみ由来のセクション等）はURLを導出できないため、単位数等の自動取得はスキップされ手入力での補完が必要になる。
 
 神戸大学シラバスサイトのURLは **時間割コード** から一意に決まる。
 
@@ -201,8 +204,8 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 - スクレイピングスクリプト: `programing files/fetch_syllabus_info.py`
   - `--env dev` で dev DB に書き込み、`--force` で既取得分も上書き
   - 0.3秒スリープ/件、バッチ単位（`Syllabus`は20件、`Subject`は40件）でセッションを切り替えてコミット・失敗時リトライ
-  - 単位数（`subjects.credits`）は `run_credits()` が担当。`syllabi`レコードを持たない科目（前期のみ開講等）も
-    `course_sections.syllabus_url` 経由で辿るため、`run()`（target_grades/subject_category）とは独立して全件処理する
+  - 単位数（`subjects.credits`）は `run_credits()` が担当。`run()`（target_grades/subject_category）とは独立して全件処理する。
+    `syllabi`レコードを持たない科目（時間割インポート前等）はシラバスURLを導出できずスキップされ、`credits`はNULLのまま残る（手入力で補完）
   - `import_syllabus.py`の実行時に自動で呼ばれるため、単位数・開講年次の取得だけを目的に
     単体で実行する必要は通常ない（既存分の再取得や`--force`上書きをしたい場合のみ単体実行する）
 
@@ -322,8 +325,8 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 |----------|------|
 | `subjects` | 科目マスタ（name, faculty, classification, term, credits 等） |
 | `instructors` | 教員マスタ |
-| `course_sections` | 科目×教員のセクション（syllabus_url 等） |
-| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類） |
+| `course_sections` | 科目×教員のセクション |
+| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類。シラバスURLはtimetable_code/departmentから動的生成） |
 | `schedules` | 曜日・時限・教室 |
 | `reviews` | 投稿レビュー（`is_approved` で承認管理） |
 | `course_section_views` | 科目セクションの閲覧数 |

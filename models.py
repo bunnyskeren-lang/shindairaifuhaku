@@ -166,10 +166,12 @@ class CourseSection(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
     instructor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False, index=True)
-    syllabus_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class Syllabus(Base):
+    """シラバスURLはtimetable_code+departmentから毎回core.config.make_syllabus_url()で
+    動的生成する（列としては持たない）。年度が変わりtimetable_codeが変われば自動で
+    追従するため、course_sections.syllabus_urlのような値の陳腐化が起きない。"""
     __tablename__ = "syllabi"
     __table_args__ = (UniqueConstraint("course_section_id", "year", "academic_term", name="uq_syllabi_section_year_term"),)
 
