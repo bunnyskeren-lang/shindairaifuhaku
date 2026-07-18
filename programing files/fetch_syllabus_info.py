@@ -304,7 +304,11 @@ async def run_credits(dry_run: bool = False, force: bool = False):
     async with AsyncSessionLocal() as session:
         q = select(Subject)
         if not force:
-            q = q.where(Subject.credits.is_(None))
+            # credits=0.0は旧スキーマ移行時の誤データ（実シラバスでは1.0/2.0）が入り込む
+            # ことがあり、NULLだけを対象にすると永遠に再取得されないため0も対象に含める
+            # （2026-07-18、経営学部53件+教養1件で発覚・修正済み）
+            from sqlalchemy import or_
+            q = q.where(or_(Subject.credits.is_(None), Subject.credits == 0))
         subjects = (await session.execute(q)).scalars().all()
 
     print(f"単位数取得対象: {len(subjects)}件")
