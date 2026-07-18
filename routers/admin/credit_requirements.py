@@ -705,6 +705,7 @@ async def admin_nogaku_dept(dept_key: str, request: Request, _: str = Depends(ch
         "group_names": group_names,
         "group_faculty": "農学部",
         "faculty_label": "農学部",
+        "auto_hisshu": None,
     })
 
 
