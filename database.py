@@ -417,3 +417,9 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE course_sections DROP COLUMN IF EXISTS syllabus_url"
         ))
+        # syllabi.numbering_code は定義のみでどこからも書き込まれておらず、常にNULLの死んだカラムだった。
+        # 経営学部専門科目の群判定（fetch_syllabus_info.py）はシラバスHTMLからその場でパースするだけで、
+        # この列を経由しないためDROPしてよい
+        await conn.execute(text(
+            "ALTER TABLE syllabi DROP COLUMN IF EXISTS numbering_code"
+        ))

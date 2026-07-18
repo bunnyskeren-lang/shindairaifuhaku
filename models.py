@@ -182,7 +182,6 @@ class Syllabus(Base):
     timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     target_grades: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     subject_category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    numbering_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

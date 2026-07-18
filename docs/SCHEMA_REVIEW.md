@@ -63,7 +63,6 @@ UNIQUE(subject_id, instructor_id)。子テーブル: `syllabi`（CASCADE）、`r
 | timetable_code | Text, nullable, index | 時間割コード。シラバスURLは列を持たず、`core.config.make_syllabus_url(timetable_code, department)`で毎回動的生成する |
 | target_grades | Text, nullable | 開講年次（対象学年） |
 | subject_category | Text, nullable | 科目分類（シラバスページ由来） |
-| numbering_code | Text, nullable | ナンバリングコード |
 | department | Text, nullable | 所属学科（シラバスページの所属列）。シラバスURL生成の第2引数にも使う |
 | created_at | DateTime(tz) | |
 
@@ -298,7 +297,7 @@ subjects ──CASCADE──> required_subjects
 
 ## syllabi
 
-- **現状**: id, course_section_id (FK→course_sections CASCADE), year, academic_term, timetable_code (index), target_grades, subject_category, numbering_code, department; UNIQUE(course_section_id, year, academic_term)
+- **現状**: id, course_section_id (FK→course_sections CASCADE), year, academic_term, timetable_code (index), target_grades, subject_category, department; UNIQUE(course_section_id, year, academic_term)
 - **問題点**:
   1. `academic_term` は自由 `Text` でCHECK制約なし。有効値の定義が `routers/timetable_api.py` の `_TERM_ORDER`（CASE式によるソート順定義）と `core/required_subjects.py` の `_TERM_TO_QUARTERS` 辞書の**2箇所**に重複してハードコードされている。新しい開講区分表記を追加する際に片方だけ更新すると、時間割の並び順表示と必修科目自動登録の学期重複判定がズレる。
   2. `academic_term` は2026-07頃に `quarter` からリネームされた経緯があり（`database.py:227-236` の `RENAME COLUMN` 処理）、旧名の名残がコード内コメント等に残っていないか注意が必要。
