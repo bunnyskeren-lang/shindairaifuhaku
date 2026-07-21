@@ -66,6 +66,7 @@ async def _credit_requirements_update(request: Request, faculty: str, department
                     .values(**values)
                 )
         await session.commit()
+    cache.invalidate_credit_countable_filter_cache()
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -96,6 +97,7 @@ async def _credit_requirements_add(
             department=department_value,
         ))
         await session.commit()
+    cache.invalidate_credit_countable_filter_cache()
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -112,6 +114,7 @@ async def _credit_requirements_delete(cat_id: str, redirect_url: str):
                 return RedirectResponse(f"{redirect_url}?error=in_use", status_code=303)
             await session.delete(row)
             await session.commit()
+    cache.invalidate_credit_countable_filter_cache()
     return RedirectResponse(redirect_url, status_code=303)
 
 
@@ -184,6 +187,7 @@ async def admin_save_category_courses(cat_id: str, request: Request, _: str = De
                     credits=float(subj.credits) if subj.credits else 2.0,
                 ))
         await session.commit()
+    cache.invalidate_credit_countable_filter_cache()
     return JSONResponse({"ok": True})
 
 

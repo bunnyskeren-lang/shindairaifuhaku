@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import and_, case, func, or_, select, text
+from sqlalchemy import case, func, or_, select, text
 
-from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS, syllabus_department_key
+from core import cache
+from core.config import DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS, syllabus_department_key
 from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
 from core.security import make_share_token, verify_share_token
 from database import AsyncSessionLocal
 from models import (
-    CourseSection, CreditRequirement, Instructor, RegistrationCap, Schedule, Subject, SubjectCreditCategory, Syllabus,
+    CourseSection, Instructor, RegistrationCap, Schedule, Subject, Syllabus,
     UserCustomCourse, UserProfile, UserSyllabus,
 )
 
@@ -33,61 +34,6 @@ _TERM_ORDER = case(
     (Syllabus.academic_term == "集中", 6),
     else_=99,
 )
-
-
-async def _build_credit_countable_filter(session, faculty: str | None, department: str | None):
-    """ユーザーの学部・学科に単位チェッカーの区分が定義されている場合のみ、
-    その区分に対応する科目だけを許可する絞り込み条件を返す。
-    単位チェッカー未対応の学部・学科（credit_requirementsに行が無い）ではNoneを返し、絞り込みを行わない。
-
-    credit_requirements.category_id / label は学部ごとに書式がバラバラ（例: 経営学部は
-    「外国語第1」、工学部各学科は「外国語第Ⅰ」、管理画面の「＋カテゴリを追加」で作成した
-    category_idはcat_<timestamp>等）で個別に対応させるのは非現実的なため、
-    admin/keiei.html・admin/sysinfo.html・admin/koubu系で一貫している group_name
-    （"教養科目"/"専門科目"）の有無だけを見る。新しい学部・学科の単位チェッカーが
-    同じ管理画面の仕組みで追加された場合、コード変更なしでこの絞り込みが自動適用される。"""
-    if not faculty:
-        return None
-    # 農学部等、departmentが必須の学部でコース未選択（1年次等）の場合は代表コースにフォールバックする
-    # （templates/liff/timetable.htmlの_CREDIT_CHECKER_DEFAULT_DEPARTMENTと同じ扱い）
-    if not department:
-        department = CREDIT_CHECKER_DEFAULT_DEPARTMENT.get(faculty)
-    reqs = (await session.execute(
-        select(CreditRequirement.group_name, CreditRequirement.category_id).where(
-            CreditRequirement.faculty == faculty,
-            or_(CreditRequirement.department == department, CreditRequirement.department.is_(None)),
-        )
-    )).all()
-    if not reqs:
-        return None
-    group_names = {g for g, _ in reqs}
-    category_ids = [c for _, c in reqs]
-
-    # 学部専門科目は Subject.faculty が学部名のみ、Subject.department が学科名
-    # （未設定なら空文字＝学部内共通科目）というペア形式で持つため、学科未選択時は
-    # 「学科指定なし」と「学部共通科目(department='')」の両方を候補にする
-    own_departments = {department or "", ""}
-    conditions = []
-    if "専門科目" in group_names:
-        # subject_credit_categoriesでコース別に科目が紐付け済み（農学部等）ならそちらを優先し、
-        # 他コースの専門科目が混在しないよう絞り込む。未紐付けの学部・学科は従来通り学部全体で判定する。
-        tagged_ids = (await session.execute(
-            select(SubjectCreditCategory.subject_id)
-            .where(SubjectCreditCategory.category_id.in_(category_ids))
-            .distinct()
-        )).scalars().all()
-        if tagged_ids:
-            conditions.append(Subject.id.in_(tagged_ids))
-        else:
-            conditions.append(and_(
-                Subject.faculty == faculty, Subject.department.in_(own_departments), Subject.category == "専門",
-            ))
-            conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"))
-    if "教養科目" in group_names:
-        conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification.like("教養(%")))
-    if not conditions:
-        return None
-    return or_(*conditions)
 
 
 @router.get("/api/timetable/years")
@@ -162,7 +108,7 @@ async def api_timetable_slots(
     user_id = await verify_liff_id_token(x_liff_id_token, request)
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, user_id) if user_id else None
-        credit_filter = await _build_credit_countable_filter(
+        credit_filter = await cache.get_credit_countable_filter(
             session, profile.faculty if profile else None, profile.department if profile else None,
         )
 

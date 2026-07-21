@@ -1,10 +1,12 @@
 import time
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
-from core.config import EASE_ORDER, make_syllabus_url
+from core.config import CREDIT_CHECKER_DEFAULT_DEPARTMENT, EASE_ORDER, make_syllabus_url
 from database import AsyncSessionLocal
-from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus
+from models import (
+    CourseSection, CreditRequirement, DisplayOrder, Instructor, Review, Subject, SubjectCreditCategory, Syllabus,
+)
 
 _CLS_CACHE_TTL = 3600
 _COURSE_CACHE_TTL = 3600
@@ -97,6 +99,90 @@ def invalidate_credit_group_order_cache():
     global _credit_group_order_cache, _credit_group_order_at
     _credit_group_order_cache = {}
     _credit_group_order_at = 0.0
+
+
+# ── credit countable filter (単位チェッカー対応学部・学科の絞り込み条件) ──────────
+# 修正理由: マイ時間割の科目選択(/api/timetable/slots、コマタップのたびに呼ばれる)が
+# CreditRequirement・SubjectCreditCategoryへのクエリ2本を毎回発行しており、
+# 両テーブルとも管理画面からしか更新されず更新頻度が低いにも関わらずキャッシュされて
+# いなかった。他のクエリキャッシュと同じTTL方式にする。
+_CREDIT_COUNTABLE_FILTER_TTL = 3600
+_credit_countable_filter_cache: dict[tuple, object] = {}
+_credit_countable_filter_cache_at: float = 0.0
+
+
+async def _build_credit_countable_filter(session, faculty: str | None, department: str | None):
+    """ユーザーの学部・学科に単位チェッカーの区分が定義されている場合のみ、
+    その区分に対応する科目だけを許可する絞り込み条件を返す。
+    単位チェッカー未対応の学部・学科（credit_requirementsに行が無い）ではNoneを返し、絞り込みを行わない。
+
+    credit_requirements.category_id / label は学部ごとに書式がバラバラ（例: 経営学部は
+    「外国語第1」、工学部各学科は「外国語第Ⅰ」、管理画面の「＋カテゴリを追加」で作成した
+    category_idはcat_<timestamp>等）で個別に対応させるのは非現実的なため、
+    admin/keiei.html・admin/sysinfo.html・admin/koubu系で一貫している group_name
+    （"教養科目"/"専門科目"）の有無だけを見る。新しい学部・学科の単位チェッカーが
+    同じ管理画面の仕組みで追加された場合、コード変更なしでこの絞り込みが自動適用される。"""
+    if not faculty:
+        return None
+    # 農学部等、departmentが必須の学部でコース未選択（1年次等）の場合は代表コースにフォールバックする
+    # （templates/liff/timetable.htmlの_CREDIT_CHECKER_DEFAULT_DEPARTMENTと同じ扱い）
+    if not department:
+        department = CREDIT_CHECKER_DEFAULT_DEPARTMENT.get(faculty)
+    reqs = (await session.execute(
+        select(CreditRequirement.group_name, CreditRequirement.category_id).where(
+            CreditRequirement.faculty == faculty,
+            or_(CreditRequirement.department == department, CreditRequirement.department.is_(None)),
+        )
+    )).all()
+    if not reqs:
+        return None
+    group_names = {g for g, _ in reqs}
+    category_ids = [c for _, c in reqs]
+
+    # 学部専門科目は Subject.faculty が学部名のみ、Subject.department が学科名
+    # （未設定なら空文字＝学部内共通科目）というペア形式で持つため、学科未選択時は
+    # 「学科指定なし」と「学部共通科目(department='')」の両方を候補にする
+    own_departments = {department or "", ""}
+    conditions = []
+    if "専門科目" in group_names:
+        # subject_credit_categoriesでコース別に科目が紐付け済み（農学部等）ならそちらを優先し、
+        # 他コースの専門科目が混在しないよう絞り込む。未紐付けの学部・学科は従来通り学部全体で判定する。
+        tagged_ids = (await session.execute(
+            select(SubjectCreditCategory.subject_id)
+            .where(SubjectCreditCategory.category_id.in_(category_ids))
+            .distinct()
+        )).scalars().all()
+        if tagged_ids:
+            conditions.append(Subject.id.in_(tagged_ids))
+        else:
+            conditions.append(and_(
+                Subject.faculty == faculty, Subject.department.in_(own_departments), Subject.category == "専門",
+            ))
+            conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification == "共通専門基礎科目"))
+    if "教養科目" in group_names:
+        conditions.append(and_(Subject.faculty == "教養教育院", Subject.classification.like("教養(%")))
+    if not conditions:
+        return None
+    return or_(*conditions)
+
+
+async def get_credit_countable_filter(session, faculty: str | None, department: str | None):
+    global _credit_countable_filter_cache, _credit_countable_filter_cache_at
+    if time.monotonic() - _credit_countable_filter_cache_at >= _CREDIT_COUNTABLE_FILTER_TTL:
+        _credit_countable_filter_cache = {}
+        _credit_countable_filter_cache_at = time.monotonic()
+    key = (faculty, department)
+    if key in _credit_countable_filter_cache:
+        return _credit_countable_filter_cache[key]
+    result = await _build_credit_countable_filter(session, faculty, department)
+    _credit_countable_filter_cache[key] = result
+    return result
+
+
+def invalidate_credit_countable_filter_cache():
+    global _credit_countable_filter_cache, _credit_countable_filter_cache_at
+    _credit_countable_filter_cache = {}
+    _credit_countable_filter_cache_at = 0.0
 
 
 async def get_cls_set() -> set[str]:
