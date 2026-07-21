@@ -484,3 +484,19 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE syllabi DROP COLUMN IF EXISTS department"
         ))
+        # マイ時間割の科目選択（/api/timetable/slots）はSubject.faculty==X, department.in_(...),
+        # category==専門 のAND条件でフィルタするが、subjectsは4000件超でfaculty単体indexしか
+        # 無くseq scanになっていたため複合インデックスを追加
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_subjects_faculty_department_category "
+            "ON subjects (faculty, department, category)"
+        ))
+        # 同じくfaculty=='教養教育院' AND classification=='...' / LIKE '教養(%' の絞り込み向け
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_subjects_faculty_classification "
+            "ON subjects (faculty, classification)"
+        ))
+        # 管理画面（/admin/courses）のclassification単体GROUP BY・完全一致検索向け
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_subjects_classification ON subjects (classification)"
+        ))

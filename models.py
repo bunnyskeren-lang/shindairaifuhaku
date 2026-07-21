@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
+from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
@@ -128,7 +128,15 @@ class UserSeisekiRaw(Base):
 
 class Subject(Base):
     __tablename__ = "subjects"
-    __table_args__ = (UniqueConstraint("name", "faculty", "department", name="uq_subjects_name_faculty_department"),)
+    __table_args__ = (
+        UniqueConstraint("name", "faculty", "department", name="uq_subjects_name_faculty_department"),
+        # マイ時間割の科目選択(/api/timetable/slots)向け: faculty==X, department.in_(...), category==専門
+        Index("ix_subjects_faculty_department_category", "faculty", "department", "category"),
+        # 教養教育院の分類絞り込み(classification==/LIKE)向け
+        Index("ix_subjects_faculty_classification", "faculty", "classification"),
+        # 管理画面(/admin/courses)のclassification単体GROUP BY・完全一致検索向け
+        Index("ix_subjects_classification", "classification"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
