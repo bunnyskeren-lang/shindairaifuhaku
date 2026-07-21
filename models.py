@@ -7,16 +7,18 @@ from database import Base
 from core.config import normalize_instructor_name, normalize_subject_name
 
 
-class MessageLog(Base):
+class TimestampMixin:
+    """created_at列(タイムゾーン付き、DB側でNOW()を既定値にする)を持つモデル共通のmixin。"""
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class MessageLog(TimestampMixin, Base):
     __tablename__ = "message_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     direction: Mapped[str] = mapped_column(String(8), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
 
 
 class DisplayOrder(Base):
@@ -32,7 +34,7 @@ class DisplayOrder(Base):
     faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="", default="")
 
 
-class UserProfile(Base):
+class UserProfile(TimestampMixin, Base):
     __tablename__ = "user_profiles"
 
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -44,13 +46,10 @@ class UserProfile(Base):
     # マイ時間割の共有リンクに埋め込む世代番号。「共有を停止する」でインクリメントすると
     # それ以前に発行済みのリンク（友達に送信済みのものを含む）が一括で無効になる
     share_token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class ErrorLog(Base):
+class ErrorLog(TimestampMixin, Base):
     __tablename__ = "error_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -59,9 +58,6 @@ class ErrorLog(Base):
     error_type: Mapped[str] = mapped_column(String(100), nullable=False)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
     traceback: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
 
 
 class UserActivity(Base):
@@ -85,14 +81,13 @@ class RichMenuTap(Base):
     )
 
 
-class PushSubscription(Base):
+class PushSubscription(TimestampMixin, Base):
     __tablename__ = "push_subscriptions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     endpoint: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
     auth: Mapped[str] = mapped_column(String(100), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class CreditRequirement(Base):
@@ -182,7 +177,7 @@ class CourseSection(Base):
     instructor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
-class Syllabus(Base):
+class Syllabus(TimestampMixin, Base):
     """シラバスURLはtimetable_code+department（course_sections経由でSubject.faculty/departmentを
     参照、core.config.syllabus_department_key()で再構成）から毎回core.config.make_syllabus_url()で
     動的生成する（列としては持たない）。年度が変わりtimetable_codeが変われば自動で
@@ -197,10 +192,9 @@ class Syllabus(Base):
     timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
     target_grades: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     subject_category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
-class Schedule(Base):
+class Schedule(TimestampMixin, Base):
     __tablename__ = "schedules"
     __table_args__ = (UniqueConstraint("syllabus_id", "day_of_week", "period", name="uq_schedules_syllabus_day_period"),)
 
@@ -208,10 +202,9 @@ class Schedule(Base):
     syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
     day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
     period: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
-class Review(Base):
+class Review(TimestampMixin, Base):
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -226,7 +219,6 @@ class Review(Base):
     academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     selected_instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class CourseSectionView(Base):
@@ -237,7 +229,7 @@ class CourseSectionView(Base):
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-class UserSyllabus(Base):
+class UserSyllabus(TimestampMixin, Base):
     __tablename__ = "user_syllabi"
     __table_args__ = (UniqueConstraint("line_user_id", "syllabus_id", name="uq_user_syllabi"),)
 
@@ -245,10 +237,9 @@ class UserSyllabus(Base):
     line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
     classroom: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
-class UserCustomCourse(Base):
+class UserCustomCourse(TimestampMixin, Base):
     """ユーザーがマイ時間割で手動追加した個人用の科目（シラバスマスタに存在しない科目）。
     line_user_idの本人にのみ表示され、他ユーザーの科目一覧には表示されない。
     classificationはcredit_requirements.category_idと一致させ、単位チェッカーの取得単位数に
@@ -264,10 +255,9 @@ class UserCustomCourse(Base):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
     period: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
-class RequiredSubject(Base):
+class RequiredSubject(TimestampMixin, Base):
     """学部・学科・学年ごとの必修科目マスタ。時間割登録時に自動でuser_syllabiへ登録する対象を管理する。
     student_id_parity は学籍番号末尾1桁の偶奇でクラスが分かれる科目（機械工学科の実習/製図等）向けの絞り込み。
     NULLなら全員が対象。"""
@@ -281,10 +271,9 @@ class RequiredSubject(Base):
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id_parity: Mapped[Optional[str]] = mapped_column(String(4), nullable=True, default=None)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
-class RegistrationCap(Base):
+class RegistrationCap(TimestampMixin, Base):
     """学部・学科・年度ごとの履修登録上限単位数（CAP制）。departmentがNULLの行はその学部の学科共通値として扱う。"""
     __tablename__ = "registration_caps"
     __table_args__ = (UniqueConstraint("faculty", "department", "year", name="uq_registration_caps"),)
@@ -294,7 +283,6 @@ class RegistrationCap(Base):
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     max_credits: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class SubjectCreditCategory(Base):
