@@ -7,12 +7,13 @@
 <link rel="preconnect" href="https://static.line-scdn.net">
 <link rel="preconnect" href="{{ base_url }}">
 <style>
+  :root { --accent: {{ '#ea580c' if IS_DEV else '#6366f1' }}; --accent-light: {{ '#fb923c' if IS_DEV else '#818cf8' }}; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
          background: #f3f4f6; color: #1f2937; min-height: 100vh; }
 
   .header {
-    background: linear-gradient(135deg, #6366f1, #818cf8);
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
     color: #fff;
     padding: 20px 16px 24px;
   }
@@ -31,7 +32,7 @@
     box-shadow: 0 1px 4px rgba(0,0,0,.08);
   }
   .section-title {
-    font-size: 11px; font-weight: 700; color: #6366f1;
+    font-size: 11px; font-weight: 700; color: var(--accent);
     text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px;
   }
 
@@ -53,7 +54,7 @@
     padding: 13px; font-size: 15px; font-weight: 600;
     text-decoration: none; border: none; cursor: pointer; width: 100%;
   }
-  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary { background: var(--accent); color: #fff; }
   .btn-secondary { background: #f1f5f9; color: #4338ca; }
   .btn:active { opacity: .85; }
 
@@ -252,7 +253,7 @@ async function main() {
       const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
       const yearLabel = r.academic_year ? `受講年度 ${r.academic_year}年` : "";
       let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:700;color:#6366f1">👨‍🏫 ${instrLabel}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--accent)">👨‍🏫 ${instrLabel}</span>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
           ${yearLabel ? `<span style="font-size:10px;color:#94a3b8">📅 ${yearLabel}</span>` : ""}
           <span style="font-size:11px;color:#94a3b8">🏷️ ${byLabel}</span>
@@ -281,7 +282,7 @@ async function main() {
             const key = esc(part.slice(0, idx));
             const val = esc(part.slice(idx + 1));
             gmHtml += `<div style="display:flex;align-items:baseline;gap:6px">
-              <span style="font-size:10px;font-weight:700;color:#6366f1;background:#ede9fe;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0">${key}</span>
+              <span style="font-size:10px;font-weight:700;color:var(--accent);background:#ede9fe;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0">${key}</span>
               <span style="font-size:12px;color:#374151;line-height:1.5">${val}</span>
             </div>`;
           }
