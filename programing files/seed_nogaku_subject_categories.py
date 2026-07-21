@@ -17,9 +17,7 @@ category_idはseed_nogaku_credit_requirements.pyで作成済みの
 
 --dry-run: DBに書き込まず、マッチ結果・未マッチ科目名だけレポートする。
 """
-import os
-import sys
-from pathlib import Path
+from _env import load_env
 
 # 全学部のsubjectsを対象に、全角英数字→半角、空白除去で緩やかに正規化してから突合する
 _FULLWIDTH_ALNUM = str.maketrans({
@@ -203,18 +201,6 @@ COURSES = {
         ],
     },
 }
-
-
-def load_env(env: str):
-    env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
-    if not env_file.exists():
-        print(f"ERROR: {env_file} が見つかりません", file=sys.stderr)
-        sys.exit(1)
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
 
 
 async def run(dry_run: bool):

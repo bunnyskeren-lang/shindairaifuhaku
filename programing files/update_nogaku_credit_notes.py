@@ -9,24 +9,10 @@
 subject_credit_categoriesから対象科目名を集計し、note列に追記する
 （既存の注記があれば1行目に残し、対象科目一覧は追加の行として付与する）。
 """
-import os
-import sys
-from pathlib import Path
+from _env import load_env
 
 COURSE_PREFIXES = ["seisan", "keizai", "doubutsu", "shokubutsu", "seimeika", "kinou"]
 CATEGORY_SUFFIXES = ["kyotsu", "senmon_only"]
-
-
-def load_env(env: str):
-    env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
-    if not env_file.exists():
-        print(f"ERROR: {env_file} が見つかりません", file=sys.stderr)
-        sys.exit(1)
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
 
 
 async def run():

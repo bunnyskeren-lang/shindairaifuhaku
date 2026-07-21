@@ -20,9 +20,9 @@
 一意制約で既存行を検索し、無ければ追加する。
 """
 import asyncio
-import os
 import sys
-from pathlib import Path
+
+from _env import load_env
 
 FACULTY = "文学部"
 DEPARTMENT = "人文学科"
@@ -89,17 +89,6 @@ REQUIRED_SUBJECTS = [
     dict(grade=1, subject_id=2, note="データサイエンス基礎学（基盤系）"),
 ]
 
-
-def load_env(env: str):
-    env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
-    if not env_file.exists():
-        print(f"ERROR: {env_file} が見つかりません", file=sys.stderr)
-        sys.exit(1)
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
 
 
 async def run():
