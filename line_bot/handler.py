@@ -456,217 +456,141 @@ async def prewarm_rankings() -> None:
 
 # ── Message handler ─────────────────────────────────────────────
 
-async def handle_message(text: str, user_id: str = "") -> list:
-    t = text.strip()
-    # 科目数が多い分類・学部で挟まれる50音行選択（例:"専門:国際人間科学部専門科目::R:あ行"）の
-    # 行指定部分を切り離す。handle_course_list呼び出し以外の分岐判定には影響しない。
-    _reading_row = ""
-    if "::R:" in t:
-        t, _reading_row = t.split("::R:", 1)
+async def _handle_kyoyo_menu() -> list:
+    _menu_key = "menu:教養"
+    _cached = cache.get_course_list_cache(_menu_key)
+    if _cached is not None:
+        return _cached
+    cls_map = await cache.get_cls_order_map()
+    _cls_sort = make_cls_sort(cls_map)
+    reviewed_names_edu, (_, _all_courses) = await asyncio.gather(
+        cache.get_reviewed_cached(),
+        cache.get_courses_cached(),
+    )
+    edu_courses = [c for c in _all_courses if c.category == "教養" and c.classification]
+    clss = sorted({c.classification for c in edu_courses}, key=_cls_sort)
+    reviewed_cls = {c.classification for c in edu_courses if c.name in reviewed_names_edu}
+    if clss:
+        result = [make_classification_select_flex(clss, reviewed_cls)]
+    else:
+        result = await handle_course_list(category="教養")
+    cache.set_course_list_cache(_menu_key, result)
+    return result
 
-    if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
-        return [make_category_select_flex()]
 
-    if t in ["教養", "教養科目", "教養一覧"]:
-        _menu_key = "menu:教養"
-        _cached = cache.get_course_list_cache(_menu_key)
-        if _cached is not None:
-            return _cached
-        cls_map = await cache.get_cls_order_map()
-        _cls_sort = make_cls_sort(cls_map)
-        reviewed_names_edu, (_, _all_courses) = await asyncio.gather(
-            cache.get_reviewed_cached(),
-            cache.get_courses_cached(),
-        )
-        edu_courses = [c for c in _all_courses if c.category == "教養" and c.classification]
-        clss = sorted({c.classification for c in edu_courses}, key=_cls_sort)
-        reviewed_cls = {c.classification for c in edu_courses if c.name in reviewed_names_edu}
-        if clss:
-            result = [make_classification_select_flex(clss, reviewed_cls)]
-        else:
-            result = await handle_course_list(category="教養")
+async def _handle_senmon_menu() -> list:
+    _menu_key = "menu:専門"
+    _cached = cache.get_course_list_cache(_menu_key)
+    if _cached is not None:
+        return _cached
+    reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
+        cache.get_reviewed_cached(),
+        cache.get_courses_cached(),
+    )
+    sen_courses = [c for c in _all_courses if c.category == "専門" and c.classification]
+    faculty_order = await cache.get_faculty_order()
+
+    # subjects.faculty で学部ごとにグルーピングする（学科・専攻の区別はsubjects.departmentが
+    # 別途持つため、ここではfacultyの一致のみで学部の有無を判定すればよい）。
+    faculties_present = [fac for fac in faculty_order
+                          if any((c.faculty or "").startswith(fac) for c in sen_courses)]
+    grouped_cls = {c.classification for c in sen_courses
+                   if any((c.faculty or "").startswith(fac) for fac in faculties_present)}
+
+    cls_map = await cache.get_cls_order_map()
+    _cls_sort = make_cls_sort(cls_map)
+    # どの学部にも属さない分類（共通専門基礎科目など）はそのまま個別表示
+    other_clss = sorted({c.classification for c in sen_courses} - grouped_cls, key=_cls_sort)
+
+    reviewed_fac = {fac for fac in faculties_present
+                     if any(c.name in reviewed_names_sen and (c.faculty or "").startswith(fac)
+                            for c in sen_courses)}
+    reviewed_other = {cls for cls in other_clss
+                       if any(c.name in reviewed_names_sen and c.classification == cls
+                              for c in sen_courses)}
+
+    display_items = faculties_present + other_clss
+    display_reviewed = reviewed_fac | reviewed_other
+
+    if display_items:
+        result = [make_classification_select_flex(
+            display_items, display_reviewed,
+            title="🎓 専門科目",
+            subtitle="学部を選んでください",
+            header_color="#0ea5e9",
+        )]
+    else:
+        result = await handle_course_list(category="専門")
+    cache.set_course_list_cache(_menu_key, result)
+    return result
+
+
+async def _handle_faculty_menu(t: str) -> list:
+    _menu_key = f"menu:fac:{t}"
+    _cached = cache.get_course_list_cache(_menu_key)
+    if _cached is not None:
+        return _cached
+    reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
+        cache.get_reviewed_cached(),
+        cache.get_courses_cached(),
+    )
+    fac_courses = [c for c in _all_courses if c.category == "専門" and c.classification
+                    and (c.faculty or "").startswith(t)]
+    if not fac_courses:
+        result = [TextMessage(text=f"「{t}」の専門科目はまだ登録されていません。")]
         cache.set_course_list_cache(_menu_key, result)
         return result
 
-    if t.startswith("教養:"):
-        cls = t[len("教養:"):]
-        return await handle_course_list(category="教養", classification=cls, reading_row=_reading_row)
+    dept_values = {c.department or "" for c in fac_courses}
+    cls_values = {c.classification for c in fac_courses}
+    cls_map = await cache.get_cls_order_map()
+    _cls_sort = make_cls_sort(cls_map)
 
-    if t.startswith("専門:"):
-        cls = t[len("専門:"):]
-        return await handle_course_list(category="専門", classification=cls, reading_row=_reading_row)
+    if len(dept_values) > 1:
+        # 学科・専攻ごとに科目が分かれている学部（工学部・医学部・理学部等）→ 学科・専攻一覧
+        # department未設定（空文字）の科目は全学科共通科目のため、専用ラベルで表示する
+        def _dept_label(d: str) -> str:
+            return "全学科共通科目" if d == "" else d
+        def _dept_sort_key(d: str) -> int:
+            cls_for_d = {c.classification for c in fac_courses if (c.department or "") == d}
+            return min((_cls_sort(cls) for cls in cls_for_d), default=0)
+        dept_sorted = sorted(dept_values, key=_dept_sort_key)
+        reviewed_dept_labels = {
+            _dept_label(d) for d in dept_values
+            if any(c.name in reviewed_names_sen for c in fac_courses if (c.department or "") == d)
+        }
+        items = [(_dept_label(d), f"{t}|{d}") for d in dept_sorted]
+        result = [make_classification_select_flex(
+            items, reviewed_dept_labels,
+            title=f"🎓 {t} 専門科目",
+            subtitle="学科・専攻を選んでください",
+            header_color="#0ea5e9",
+            data_prefix="専門F:",
+            back_label="◀ 学部選択に戻る",
+            back_data="専門",
+        )]
+    elif len(cls_values) > 1:
+        # 学科・専攻の区別はないが、分類（群科目等）が複数ある学部（経営学部等）→ 分類一覧
+        cls_sorted = sorted(cls_values, key=_cls_sort)
+        reviewed_cls = {cls for cls in cls_sorted
+                         if any(c.name in reviewed_names_sen for c in fac_courses if c.classification == cls)}
+        result = [make_classification_select_flex(
+            cls_sorted, reviewed_cls,
+            title=f"🎓 {t} 専門科目",
+            subtitle="分類を選んでください",
+            header_color="#0ea5e9",
+            data_prefix="専門:",
+            back_label="◀ 学部選択に戻る",
+            back_data="専門",
+        )]
+    else:
+        # 学科・専攻も複数分類も無い学部 → 即座に科目一覧（件数が多ければ内部で50音行選択に切替）
+        result = await handle_course_list(category="専門", classification=next(iter(cls_values)))
+    cache.set_course_list_cache(_menu_key, result)
+    return result
 
-    if t.startswith("専門F:"):
-        fac_dept = t[len("専門F:"):]
-        fac, _, dept = fac_dept.partition("|")
-        return await handle_course_list(category="専門", faculty=fac, department=dept, reading_row=_reading_row)
 
-    # 分類名の直接タップ（例：「教養(社会)」）
-    if t in await cache.get_cls_set():
-        return await handle_course_list(classification=t, reading_row=_reading_row)
-
-    if t == "専門comingsoon":
-        return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
-
-    if t in ["専門科目", "専門", "専門一覧"]:
-        _menu_key = "menu:専門"
-        _cached = cache.get_course_list_cache(_menu_key)
-        if _cached is not None:
-            return _cached
-        reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
-            cache.get_reviewed_cached(),
-            cache.get_courses_cached(),
-        )
-        sen_courses = [c for c in _all_courses if c.category == "専門" and c.classification]
-        faculty_order = await cache.get_faculty_order()
-
-        # subjects.faculty で学部ごとにグルーピングする（学科・専攻の区別はsubjects.departmentが
-        # 別途持つため、ここではfacultyの一致のみで学部の有無を判定すればよい）。
-        faculties_present = [fac for fac in faculty_order
-                              if any((c.faculty or "").startswith(fac) for c in sen_courses)]
-        grouped_cls = {c.classification for c in sen_courses
-                       if any((c.faculty or "").startswith(fac) for fac in faculties_present)}
-
-        cls_map = await cache.get_cls_order_map()
-        _cls_sort = make_cls_sort(cls_map)
-        # どの学部にも属さない分類（共通専門基礎科目など）はそのまま個別表示
-        other_clss = sorted({c.classification for c in sen_courses} - grouped_cls, key=_cls_sort)
-
-        reviewed_fac = {fac for fac in faculties_present
-                         if any(c.name in reviewed_names_sen and (c.faculty or "").startswith(fac)
-                                for c in sen_courses)}
-        reviewed_other = {cls for cls in other_clss
-                           if any(c.name in reviewed_names_sen and c.classification == cls
-                                  for c in sen_courses)}
-
-        display_items = faculties_present + other_clss
-        display_reviewed = reviewed_fac | reviewed_other
-
-        if display_items:
-            result = [make_classification_select_flex(
-                display_items, display_reviewed,
-                title="🎓 専門科目",
-                subtitle="学部を選んでください",
-                header_color="#0ea5e9",
-            )]
-        else:
-            result = await handle_course_list(category="専門")
-        cache.set_course_list_cache(_menu_key, result)
-        return result
-
-    # 学部名タップ（例："経営学部"）
-    if t in await cache.get_faculty_order():
-        _menu_key = f"menu:fac:{t}"
-        _cached = cache.get_course_list_cache(_menu_key)
-        if _cached is not None:
-            return _cached
-        reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
-            cache.get_reviewed_cached(),
-            cache.get_courses_cached(),
-        )
-        fac_courses = [c for c in _all_courses if c.category == "専門" and c.classification
-                        and (c.faculty or "").startswith(t)]
-        if not fac_courses:
-            result = [TextMessage(text=f"「{t}」の専門科目はまだ登録されていません。")]
-            cache.set_course_list_cache(_menu_key, result)
-            return result
-
-        dept_values = {c.department or "" for c in fac_courses}
-        cls_values = {c.classification for c in fac_courses}
-        cls_map = await cache.get_cls_order_map()
-        _cls_sort = make_cls_sort(cls_map)
-
-        if len(dept_values) > 1:
-            # 学科・専攻ごとに科目が分かれている学部（工学部・医学部・理学部等）→ 学科・専攻一覧
-            # department未設定（空文字）の科目は全学科共通科目のため、専用ラベルで表示する
-            def _dept_label(d: str) -> str:
-                return "全学科共通科目" if d == "" else d
-            def _dept_sort_key(d: str) -> int:
-                cls_for_d = {c.classification for c in fac_courses if (c.department or "") == d}
-                return min((_cls_sort(cls) for cls in cls_for_d), default=0)
-            dept_sorted = sorted(dept_values, key=_dept_sort_key)
-            reviewed_dept_labels = {
-                _dept_label(d) for d in dept_values
-                if any(c.name in reviewed_names_sen for c in fac_courses if (c.department or "") == d)
-            }
-            items = [(_dept_label(d), f"{t}|{d}") for d in dept_sorted]
-            result = [make_classification_select_flex(
-                items, reviewed_dept_labels,
-                title=f"🎓 {t} 専門科目",
-                subtitle="学科・専攻を選んでください",
-                header_color="#0ea5e9",
-                data_prefix="専門F:",
-                back_label="◀ 学部選択に戻る",
-                back_data="専門",
-            )]
-        elif len(cls_values) > 1:
-            # 学科・専攻の区別はないが、分類（群科目等）が複数ある学部（経営学部等）→ 分類一覧
-            cls_sorted = sorted(cls_values, key=_cls_sort)
-            reviewed_cls = {cls for cls in cls_sorted
-                             if any(c.name in reviewed_names_sen for c in fac_courses if c.classification == cls)}
-            result = [make_classification_select_flex(
-                cls_sorted, reviewed_cls,
-                title=f"🎓 {t} 専門科目",
-                subtitle="分類を選んでください",
-                header_color="#0ea5e9",
-                data_prefix="専門:",
-                back_label="◀ 学部選択に戻る",
-                back_data="専門",
-            )]
-        else:
-            # 学科・専攻も複数分類も無い学部 → 即座に科目一覧（件数が多ければ内部で50音行選択に切替）
-            result = await handle_course_list(category="専門", classification=next(iter(cls_values)))
-        cache.set_course_list_cache(_menu_key, result)
-        return result
-
-    if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
-        url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
-        return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
-
-    if t in ["時間割", "my時間割", "マイ時間割", "時間割テスト"]:
-        if IS_DEV:
-            url = f"{APP_URL}/liff/timetable?dev_uid={user_id}" if user_id else f"{APP_URL}/liff/timetable"
-        elif TIMETABLE_LIFF_ID:
-            url = f"https://liff.line.me/{TIMETABLE_LIFF_ID}"
-        else:
-            return [TextMessage(text="時間割機能は現在ご利用いただけません。")]
-        return [FlexMessage(alt_text="📅 My時間割", contents=FlexBubble(
-            body=FlexBox(layout="vertical", spacing="md", contents=[
-                FlexText(text="📅 My時間割", weight="bold", size="lg"),
-                FlexText(text="タップして時間割を開く", size="sm", color="#64748b"),
-                FlexButton(action=URIAction(label="時間割を開く", uri=url),
-                           style="primary", color="#6366f1", margin="md"),
-            ])
-        ))]
-
-    if t in ["生協", "生協アプリ", "coop"]:
-        return [FlexMessage(alt_text="🛒 生協アプリ", contents=FlexBubble(
-            body=FlexBox(layout="vertical", spacing="md", contents=[
-                FlexText(text="🛒 生協アプリ", weight="bold", size="lg"),
-                FlexText(text="タップしてApp Store/Google Playの生協アプリページを開く", size="sm", color="#64748b", wrap=True),
-                FlexButton(action=URIAction(label="生協アプリのストアページを開く", uri=f"{APP_URL}/coop"),
-                           style="primary", color="#6366f1", margin="md"),
-            ])
-        ))]
-
-    if t in ["バイト", "アルバイト"]:
-        return [TextMessage(text="🚧 バイト情報機能は現在準備中です。\nもうしばらくお待ちください！")]
-
-    if t in ["近隣飲食店", "近隣の飲食店"]:
-        return [TextMessage(text="🚧 近隣飲食店情報機能は現在準備中です。\nもうしばらくお待ちください！")]
-
-    if t in ["ヘルプ", "help", "使い方", "？", "?"]:
-        return [make_help_flex()]
-
-    if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
-        return [make_help_flex()]
-
-    if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
-        return await _get_popular_ranking()
-
-    if t in ["楽単ランキング", "楽単", "楽"]:
-        return await _get_rakutan_ranking()
-
+async def _handle_course_search(t: str, user_id: str) -> list:
     # 全操作をキャッシュから（DBアクセスなし）
     _reviewed_names, (cbn, call) = await asyncio.gather(
         cache.get_reviewed_cached(),
@@ -799,6 +723,98 @@ async def handle_message(text: str, user_id: str = "") -> list:
     return [TextMessage(
         text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
     )]
+
+
+async def handle_message(text: str, user_id: str = "") -> list:
+    t = text.strip()
+    # 科目数が多い分類・学部で挟まれる50音行選択（例:"専門:国際人間科学部専門科目::R:あ行"）の
+    # 行指定部分を切り離す。handle_course_list呼び出し以外の分岐判定には影響しない。
+    _reading_row = ""
+    if "::R:" in t:
+        t, _reading_row = t.split("::R:", 1)
+
+    if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
+        return [make_category_select_flex()]
+
+    if t in ["教養", "教養科目", "教養一覧"]:
+        return await _handle_kyoyo_menu()
+
+    if t.startswith("教養:"):
+        cls = t[len("教養:"):]
+        return await handle_course_list(category="教養", classification=cls, reading_row=_reading_row)
+
+    if t.startswith("専門:"):
+        cls = t[len("専門:"):]
+        return await handle_course_list(category="専門", classification=cls, reading_row=_reading_row)
+
+    if t.startswith("専門F:"):
+        fac_dept = t[len("専門F:"):]
+        fac, _, dept = fac_dept.partition("|")
+        return await handle_course_list(category="専門", faculty=fac, department=dept, reading_row=_reading_row)
+
+    # 分類名の直接タップ（例：「教養(社会)」）
+    if t in await cache.get_cls_set():
+        return await handle_course_list(classification=t, reading_row=_reading_row)
+
+    if t == "専門comingsoon":
+        return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
+
+    if t in ["専門科目", "専門", "専門一覧"]:
+        return await _handle_senmon_menu()
+
+    # 学部名タップ（例："経営学部"）
+    if t in await cache.get_faculty_order():
+        return await _handle_faculty_menu(t)
+
+    if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
+        url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
+        return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
+
+    if t in ["時間割", "my時間割", "マイ時間割", "時間割テスト"]:
+        if IS_DEV:
+            url = f"{APP_URL}/liff/timetable?dev_uid={user_id}" if user_id else f"{APP_URL}/liff/timetable"
+        elif TIMETABLE_LIFF_ID:
+            url = f"https://liff.line.me/{TIMETABLE_LIFF_ID}"
+        else:
+            return [TextMessage(text="時間割機能は現在ご利用いただけません。")]
+        return [FlexMessage(alt_text="📅 My時間割", contents=FlexBubble(
+            body=FlexBox(layout="vertical", spacing="md", contents=[
+                FlexText(text="📅 My時間割", weight="bold", size="lg"),
+                FlexText(text="タップして時間割を開く", size="sm", color="#64748b"),
+                FlexButton(action=URIAction(label="時間割を開く", uri=url),
+                           style="primary", color="#6366f1", margin="md"),
+            ])
+        ))]
+
+    if t in ["生協", "生協アプリ", "coop"]:
+        return [FlexMessage(alt_text="🛒 生協アプリ", contents=FlexBubble(
+            body=FlexBox(layout="vertical", spacing="md", contents=[
+                FlexText(text="🛒 生協アプリ", weight="bold", size="lg"),
+                FlexText(text="タップしてApp Store/Google Playの生協アプリページを開く", size="sm", color="#64748b", wrap=True),
+                FlexButton(action=URIAction(label="生協アプリのストアページを開く", uri=f"{APP_URL}/coop"),
+                           style="primary", color="#6366f1", margin="md"),
+            ])
+        ))]
+
+    if t in ["バイト", "アルバイト"]:
+        return [TextMessage(text="🚧 バイト情報機能は現在準備中です。\nもうしばらくお待ちください！")]
+
+    if t in ["近隣飲食店", "近隣の飲食店"]:
+        return [TextMessage(text="🚧 近隣飲食店情報機能は現在準備中です。\nもうしばらくお待ちください！")]
+
+    if t in ["ヘルプ", "help", "使い方", "？", "?"]:
+        return [make_help_flex()]
+
+    if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
+        return [make_help_flex()]
+
+    if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
+        return await _get_popular_ranking()
+
+    if t in ["楽単ランキング", "楽単", "楽"]:
+        return await _get_rakutan_ranking()
+
+    return await _handle_course_search(t, user_id)
 
 
 # ── Webhook event processing ────────────────────────────────────
