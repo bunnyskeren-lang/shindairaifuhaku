@@ -72,3 +72,29 @@ def patch_async_session_local(monkeypatch, module, sessionmaker_):
     そのモジュール内の参照は古いエンジンを掴んだままになる。使用側モジュールの
     属性を個別に差し替えることでテスト用DBへ向ける。"""
     monkeypatch.setattr(module, "AsyncSessionLocal", sessionmaker_)
+
+
+@pytest_asyncio.fixture
+async def http_client_factory(test_sessionmaker):
+    """指定したrouterモジュールだけをマウントした軽量FastAPIアプリに対して
+    httpx.AsyncClient(ASGITransport)でリクエストできるファクトリを提供する。
+    main.appはlifespanで実DBへのinit_db()・自己ping等を行うため使わず、
+    対象routerのみを含む最小アプリを都度構築する。DBはtest_sessionmakerに
+    差し替え済みなので、呼び出し側はさらに認証関数等を個別にmonkeypatchすること。"""
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    created_clients = []
+
+    def _factory(router_module, monkeypatch):
+        patch_async_session_local(monkeypatch, router_module, test_sessionmaker)
+        app = FastAPI()
+        app.include_router(router_module.router)
+        transport = ASGITransport(app=app)
+        client = AsyncClient(transport=transport, base_url="http://test")
+        created_clients.append(client)
+        return client
+
+    yield _factory
+    for c in created_clients:
+        await c.aclose()
