@@ -1,5 +1,4 @@
 import json
-import re as _re
 from collections import defaultdict
 from types import SimpleNamespace
 
@@ -344,101 +343,6 @@ async def admin_faculty_move(request: Request, _=Depends(check_admin)):
         await session.commit()
     cache.invalidate_faculty_order_cache()
     return JSONResponse({"ok": True})
-
-
-@router.post("/admin/courses/migrate-third-language")
-async def migrate_third_language(_: str = Depends(check_admin)):
-    LANGS = ["ドイツ語", "フランス語"]
-    NUMS = [1, 2, 3, 4]
-    has_skipped = False
-    async with AsyncSessionLocal() as session:
-        to_delete = (await session.execute(
-            select(Subject).where(Subject.name.contains("第三外国語"))
-        )).scalars().all()
-        for c in to_delete:
-            # 修正理由: レビューが紐づくcourse_sectionはRESTRICT制約で削除できず、
-            # チェックなしだと例外発生時にこの一括処理全体がロールバックされていた。
-            # レビューが付いている科目は削除せずスキップする（他ルートのhas_reviewsチェックと同じ方針）。
-            has_reviews = (await session.execute(
-                select(func.count(Review.id))
-                .join(CourseSection, CourseSection.id == Review.course_section_id)
-                .where(CourseSection.subject_id == c.id)
-            )).scalar()
-            if has_reviews:
-                has_skipped = True
-                continue
-            await session.delete(c)
-        for lang in LANGS:
-            for n in NUMS:
-                name = f"第三外国語({lang})T{n}"
-                existing = (await session.execute(
-                    select(Subject).where(Subject.name == name)
-                )).scalar_one_or_none()
-                if not existing:
-                    session.add(Subject(
-                        name=name,
-                        classification="外国語", category="教養",
-                        reading=reading(name),
-                    ))
-        await session.commit()
-    cache.invalidate_courses_cache()
-    if has_skipped:
-        return RedirectResponse("/admin/courses?msg=has_reviews", status_code=303)
-    return RedirectResponse("/admin/courses", status_code=303)
-
-
-@router.post("/admin/courses/strip-trailing-numbers")
-async def strip_trailing_numbers(
-    request: Request,
-    _: str = Depends(check_admin),
-    prefix: str = Form(default=""),
-):
-    async with AsyncSessionLocal() as session:
-        stmt = select(Subject)
-        if prefix.strip():
-            stmt = stmt.where(Subject.name.contains(prefix.strip()))
-        courses = (await session.execute(stmt)).scalars().all()
-
-        groups: dict[str, list] = defaultdict(list)
-        for course in courses:
-            base = _re.sub(r'[\s　]*\d+$', '', course.name).strip()
-            if base != course.name:
-                groups[base].append(course)
-
-        has_skipped = False
-        for base_name, dups in groups.items():
-            existing = (await session.execute(
-                select(Subject).where(Subject.name == base_name)
-            )).scalar_one_or_none()
-
-            if existing:
-                to_remove = dups
-            else:
-                survivor = dups[0]
-                survivor.name = base_name
-                survivor.reading = reading(base_name)
-                to_remove = dups[1:]
-
-            # 修正理由: レビューが紐づくcourse_sectionはRESTRICT制約で削除できない。
-            # チェックなしだと1グループの例外でリクエスト全体（他の無関係なグループの
-            # マージも含む）がロールバックされていた。レビュー付き科目はスキップして
-            # 他のグループのマージは継続させる。
-            for dup in to_remove:
-                has_reviews = (await session.execute(
-                    select(func.count(Review.id))
-                    .join(CourseSection, CourseSection.id == Review.course_section_id)
-                    .where(CourseSection.subject_id == dup.id)
-                )).scalar()
-                if has_reviews:
-                    has_skipped = True
-                    continue
-                await session.delete(dup)
-
-        await session.commit()
-    cache.invalidate_courses_cache()
-    if has_skipped:
-        return RedirectResponse("/admin/courses?msg=has_reviews", status_code=303)
-    return RedirectResponse("/admin/courses", status_code=303)
 
 
 @router.post("/admin/courses/classification/rename")
