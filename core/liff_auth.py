@@ -20,7 +20,14 @@ _verify_cache: dict[str, tuple[str, float]] = {}
 
 async def startup() -> None:
     global _http_client
-    _http_client = httpx.AsyncClient(timeout=3.0)
+    # 修正理由: デフォルトのhttpx接続プール上限(max_connections=100)のままだと、
+    # 履修登録開始時等の一斉アクセスでLINE検証APIへの同時リクエストが100を超えた分は
+    # 空き接続待ちでキューイングされ、レスポンス全体の遅延に直結する。
+    # 単一dyno・単一ワーカーでも数千同時接続を捌けるよう上限を引き上げる。
+    _http_client = httpx.AsyncClient(
+        timeout=3.0,
+        limits=httpx.Limits(max_connections=500, max_keepalive_connections=100),
+    )
 
 
 async def shutdown() -> None:

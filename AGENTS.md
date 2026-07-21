@@ -358,6 +358,15 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 
 ### アーキテクチャ概要
 
+**プロセス構成（uvicornワーカー数、2026-07-21スケーラビリティ改善で追加）**
+
+- `Procfile`: `uvicorn main:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-1}`。`WEB_CONCURRENCY`未設定時は既定1ワーカー（従来と同じ挙動）
+- 履修登録開始時等の一斉アクセスに備えてワーカー数を増やす場合は、Renderのインスタンスプランを複数CPU対応にした上で`WEB_CONCURRENCY`環境変数を設定する（1CPU未満のFree/Starterのままではワーカーを増やしても並列に処理できるCPUが無く効果が薄い）
+- **複数ワーカーにする際の注意点**（未対応、実装時に検討すること）:
+  - `core/cache.py`のインメモリキャッシュ・`core/rate_limit.py`のレート制限バケットはワーカーごとに独立する（プロセス間で共有されない）。キャッシュは各ワーカーが個別にTTL管理するだけで不整合は起きないが、レート制限は実質の上限がワーカー数倍に緩む
+  - `main.py`の`lifespan`（`init_db()`・`self_ping()`・`backup_loop()`・`log_cleanup_loop()`・`prewarm_caches()`）は各ワーカープロセスで個別に起動される。`init_db()`は冪等（`IF NOT EXISTS`等）なので同時実行自体は安全だが、`backup_loop()`はワーカー数分バックアップが重複生成されうる
+  - ワーカー数を増やす場合、`DB_POOL_SIZE`/`DB_POOL_MAX_OVERFLOW`は「ワーカー数 × pool_size」がSupabase側のpooler接続上限を超えないよう再計算すること
+
 **main.py の構成（薄いエントリポイント）**
 
 ```
