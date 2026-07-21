@@ -20,15 +20,11 @@ from models import Subject
 # ── FlexMessage builder ─────────────────────────────────────────
 
 
-async def get_course_flex(course: Subject, user_id: str) -> FlexMessage:
+def _build_course_flex(course: Subject, all_instrs: dict, all_stats: dict) -> FlexMessage:
     cached = cache.get_flex_cache(course.id)
     if cached is not None:
         return cached
 
-    all_instrs, all_stats = await asyncio.gather(
-        cache.get_all_instructors_cached(),
-        cache.get_all_review_stats_cached(),
-    )
     instructors = all_instrs.get(course.id, [])
     review_count, top_ease_flex = all_stats.get(course.name, (0, None))
 
@@ -87,10 +83,27 @@ async def get_course_flex(course: Subject, user_id: str) -> FlexMessage:
     return msg
 
 
+async def get_course_flex(course: Subject, user_id: str) -> FlexMessage:
+    cached = cache.get_flex_cache(course.id)
+    if cached is not None:
+        return cached
+    all_instrs, all_stats = await asyncio.gather(
+        cache.get_all_instructors_cached(),
+        cache.get_all_review_stats_cached(),
+    )
+    return _build_course_flex(course, all_instrs, all_stats)
+
+
 async def prewarm_flex_cache() -> None:
+    # 修正理由: 科目数分だけget_course_flexを直列awaitすると、直前に温めたキャッシュを
+    # 科目ごとに毎回asyncio.gatherで引き直すだけの無駄が起きていたため、gatherはループの外で1回だけ行う
     _, all_courses = await cache.get_courses_cached()
+    all_instrs, all_stats = await asyncio.gather(
+        cache.get_all_instructors_cached(),
+        cache.get_all_review_stats_cached(),
+    )
     for course in all_courses:
-        await get_course_flex(course, "")
+        _build_course_flex(course, all_instrs, all_stats)
 
 
 def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:

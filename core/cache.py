@@ -8,11 +8,14 @@ from models import (
     CourseSection, CreditRequirement, DisplayOrder, Instructor, Review, Subject, SubjectCreditCategory, Syllabus,
 )
 
-_CLS_CACHE_TTL = 3600
-_COURSE_CACHE_TTL = 3600
-_COURSE_FLEX_TTL = 3600
-_COURSE_LIST_TTL = 3600
-_RANKING_TTL = 3600
+# 全キャッシュ共通のTTLポリシー(1時間)。用途別に名前を分けているが値は全て同じであるべきなので、
+# ここ1箇所を直せば全キャッシュに反映される(個別に変えたい場合のみ該当行だけ上書きする)
+_DEFAULT_CACHE_TTL = 3600
+_CLS_CACHE_TTL = _DEFAULT_CACHE_TTL
+_COURSE_CACHE_TTL = _DEFAULT_CACHE_TTL
+_COURSE_FLEX_TTL = _DEFAULT_CACHE_TTL
+_COURSE_LIST_TTL = _DEFAULT_CACHE_TTL
+_RANKING_TTL = _DEFAULT_CACHE_TTL
 
 # ── classification caches ───────────────────────────────────────
 _cls_order_map_cache: dict = {}
