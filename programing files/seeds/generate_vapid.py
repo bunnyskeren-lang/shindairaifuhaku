@@ -2,7 +2,7 @@
 VAPIDキーを生成するスクリプト。初回だけ実行してください。
 出力された値を両方のRenderサービスの環境変数に設定してください。
 
-実行: python generate_vapid.py
+実行: python seeds/generate_vapid.py
 """
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend

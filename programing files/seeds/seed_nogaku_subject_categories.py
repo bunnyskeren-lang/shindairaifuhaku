@@ -1,7 +1,7 @@
 """
 農学部 単位チェッカー: 科目→コース別カテゴリの紐付け投入スクリプト
 使い方:
-  python -X utf8 seed_nogaku_subject_categories.py [--env dev|prod] [--dry-run]
+  python -X utf8 seeds/seed_nogaku_subject_categories.py [--env dev|prod] [--dry-run]
 
 学生便覧2026 別表第1（docs/学生便覧2026/binran_2026_nogaku_kisoku.pdf 14-29ページ、
 各コースごとの開設科目一覧）から手動で抽出した科目名リストを、DBのsubjectsテーブルと
@@ -17,6 +17,10 @@ category_idはseed_nogaku_credit_requirements.pyで作成済みの
 
 --dry-run: DBに書き込まず、マッチ結果・未マッチ科目名だけレポートする。
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _env import load_env
 
 # 全学部のsubjectsを対象に、全角英数字→半角、空白除去で緩やかに正規化してから突合する

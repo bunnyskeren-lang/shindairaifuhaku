@@ -137,11 +137,14 @@ shindairaifuhaku/          ← Render がデプロイするルート
     ├── sync_db_to_prod.py            ← dev → 本番 DB の一部テーブル同期（5テーブルのみ、
     │                                     ローカル実行版。同等の処理は管理画面からも実行可能）
     ├── download_prod_backup.py       ← Supabase Storage 上の DB バックアップをローカルへ差分DL
-    ├── generate_vapid.py             ← Web Push 用 VAPID 鍵ペア生成
-    ├── seed_bungaku_credit_requirements.py / seed_nogaku_credit_requirements.py /
-    │   seed_nogaku_subject_categories.py / update_nogaku_credit_notes.py
+    ├── seeds/                        ← 一回限りの投入スクリプト置き場（_env.py 経由で親ディレクトリの
+    │   │                                database.py/models.py を参照。本番デプロイ時に必要なため削除禁止）
+    │   ├── generate_vapid.py             ← Web Push 用 VAPID 鍵ペア生成
+    │   └── seed_bungaku_credit_requirements.py / seed_nogaku_credit_requirements.py /
+    │       seed_nogaku_subject_categories.py / update_nogaku_credit_notes.py
     │                                 ← 学部別の単位要件・科目カテゴリ紐付けの投入スクリプト
     │                                    （一回限りの実行を想定、学部追加時のテンプレートとしても参照）
+    ├── _env.py                       ← 各スクリプト共通の .env ローダー
     ├── models.py / database.py       ← スクリプト群専用の DB アクセス層（ルートの models.py とは別定義）
     └── .env / .env.dev               ← 環境変数（本番・dev、.gitignore 対象）
 ```

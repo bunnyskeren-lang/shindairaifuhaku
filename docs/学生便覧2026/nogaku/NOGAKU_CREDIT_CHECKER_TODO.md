@@ -2,7 +2,7 @@
 
 2026-07-14実装分。学生便覧2026（`docs/学生便覧2026/binran_2026_nogaku_kisoku.pdf`）別表第2・第6条に基づき
 `credit_requirements`（72件、6コース×12区分）と`registration_caps`（54単位）をdev DBに投入済み。
-関連: `programing files/seed_nogaku_credit_requirements.py`、[[project_nogaku_bungaku_import]]
+関連: `programing files/seeds/seed_nogaku_credit_requirements.py`、[[project_nogaku_bungaku_import]]
 
 ## 未解決・要フォローアップ
 
@@ -21,7 +21,7 @@
    適用される。ただし農学部生自身の実成績表での再検証はまだ行っていない。
 
 3. **専門科目の学生ごとの実際の履修コースを科目DB側でタグ付けしていない** → 2026-07-14中に対応完了
-   `programing files/seed_nogaku_subject_categories.py`で`subject_credit_categories`へ518件投入済み
+   `programing files/seeds/seed_nogaku_subject_categories.py`で`subject_credit_categories`へ518件投入済み
    （6コース×kyotsu/senmon_onlyの12カテゴリ、dev DBのみ）。`routers/timetable_api.py`の
    `_build_credit_countable_filter`はタグ付け済み科目があればそちらを優先して絞り込む方式に変更済み。
    ただし以下31件は便覧記載の科目名がDBの`subjects`と突合できず未紐付けのまま（前期科目で
@@ -84,7 +84,7 @@
 - `programing files/models.py`: `RegistrationCap`モデル追加（従来未定義だった）
 - dev DBへ`credit_requirements`72件・`registration_caps`1件を投入済み
 - 農学部の共通専門基礎科目・専門科目区分（6コース×2区分=12行）に、機械工学科と同様の
-  「対象科目：〜」note一覧を追加済み（`programing files/update_nogaku_credit_notes.py`、
+  「対象科目：〜」note一覧を追加済み（`programing files/seeds/update_nogaku_credit_notes.py`、
   `subject_credit_categories`518件から自動生成。生産環境工学コースは既存の特例注記を1行目に残し追記）
 - コース未選択（1年次等でdepartment未設定）でも単位チェッカーUI自体は非表示にせず、
   代表コース（生産環境工学コース）の区分を暫定表示するよう修正済み

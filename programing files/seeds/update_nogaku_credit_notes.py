@@ -1,7 +1,7 @@
 """
 農学部 単位チェッカー: 専門科目区分(kyotsu/senmon_only)のnoteに対象科目一覧を追記する
 使い方:
-  python -X utf8 update_nogaku_credit_notes.py [--env dev|prod]
+  python -X utf8 seeds/update_nogaku_credit_notes.py [--env dev|prod]
 
 機械工学科の教養科目区分で先行導入した「対象科目：〜」形式のnote
 （[[project_credit_checker_note_subject_breakdown]]）を、農学部の共通専門基礎科目・
@@ -9,6 +9,10 @@
 subject_credit_categoriesから対象科目名を集計し、note列に追記する
 （既存の注記があれば1行目に残し、対象科目一覧は追加の行として付与する）。
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _env import load_env
 
 COURSE_PREFIXES = ["seisan", "keizai", "doubutsu", "shokubutsu", "seimeika", "kinou"]

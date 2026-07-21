@@ -20,14 +20,15 @@
 
 ## 学部別 初期データ投入（単位チェッカー・CAP・必修科目）
 
-農学部・文学部向けの初回投入スクリプト。**本番デプロイ時に必要なため削除禁止**。
+農学部・文学部向けの初回投入スクリプト。一回限りの投入用として`seeds/`にまとめている。
+**本番デプロイ時に必要なため削除禁止**。
 
 | スクリプト | 用途 |
 |---|---|
-| `seed_nogaku_credit_requirements.py` | 農学部の卒業要件（`credit_requirements`）と履修登録上限単位数（`registration_caps`、54単位・全6コース共通）を投入。冪等 |
-| `seed_nogaku_subject_categories.py` | 農学部の科目→コース別カテゴリ紐付け（`subject_credit_categories`）を投入。`--dry-run`対応 |
-| `update_nogaku_credit_notes.py` | 農学部の専門科目区分のnoteに対象科目一覧を追記 |
-| `seed_bungaku_credit_requirements.py` | 文学部の卒業要件・CAP（54単位）・必修科目（`required_subjects`）を投入 |
+| `seeds/seed_nogaku_credit_requirements.py` | 農学部の卒業要件（`credit_requirements`）と履修登録上限単位数（`registration_caps`、54単位・全6コース共通）を投入。冪等 |
+| `seeds/seed_nogaku_subject_categories.py` | 農学部の科目→コース別カテゴリ紐付け（`subject_credit_categories`）を投入。`--dry-run`対応 |
+| `seeds/update_nogaku_credit_notes.py` | 農学部の専門科目区分のnoteに対象科目一覧を追記 |
+| `seeds/seed_bungaku_credit_requirements.py` | 文学部の卒業要件・CAP（54単位）・必修科目（`required_subjects`）を投入 |
 
 ## リッチメニュー
 

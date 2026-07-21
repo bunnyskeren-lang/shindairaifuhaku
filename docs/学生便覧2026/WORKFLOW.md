@@ -16,10 +16,10 @@
 
 | ファイル | 役割 | 状態 |
 |---|---|---|
-| `seed_nogaku_credit_requirements.py` | 農学部の credit_requirements（6コース×12区分=72件）+ CAP（54単位）投入 | dev投入済み・本番未実行 |
-| `seed_nogaku_subject_categories.py` | 農学部の科目↔コース紐付け（subject_credit_categories 518件）投入。`--dry-run` あり | dev投入済み・本番未実行 |
-| `update_nogaku_credit_notes.py` | 農学部の各区分noteに「対象科目：〜」一覧を追記（seed_nogaku_subject_categories実行後に走らせる） | dev実行済み・本番未実行 |
-| `seed_bungaku_credit_requirements.py` | 文学部の credit_requirements + CAP（54単位）+ required_subjects（基盤系4科目）投入 | dev投入済み・本番未実行 |
+| `seeds/seed_nogaku_credit_requirements.py` | 農学部の credit_requirements（6コース×12区分=72件）+ CAP（54単位）投入 | dev投入済み・本番未実行 |
+| `seeds/seed_nogaku_subject_categories.py` | 農学部の科目↔コース紐付け（subject_credit_categories 518件）投入。`--dry-run` あり | dev投入済み・本番未実行 |
+| `seeds/update_nogaku_credit_notes.py` | 農学部の各区分noteに「対象科目：〜」一覧を追記（seed_nogaku_subject_categories実行後に走らせる） | dev実行済み・本番未実行 |
+| `seeds/seed_bungaku_credit_requirements.py` | 文学部の credit_requirements + CAP（54単位）+ required_subjects（基盤系4科目）投入 | dev投入済み・本番未実行 |
 
 これらは**本番デプロイ時に `--env prod` で再実行する必要がある**ため削除禁止
 （DB同期スクリプト `sync_db_to_prod.py` は credit_requirements 等を同期するが、seedスクリプトは
@@ -113,7 +113,7 @@ Step 0〜3 の手順は、今後新しい学部（医学部医学科・経済学
   `import_syllabus.py` / `fetch_syllabus_info.py` / `core/config.py` / `templates/liff/timetable.html` の4箇所に追加）。
 
 ### Step 5. 単位要件・CAPの投入スクリプト作成
-- `seed_bungaku_credit_requirements.py`（学科分岐なし）または `seed_nogaku_credit_requirements.py`
+- `seeds/seed_bungaku_credit_requirements.py`（学科分岐なし）または `seeds/seed_nogaku_credit_requirements.py`
   （コース分岐あり）をテンプレートに `seed_{学部}_credit_requirements.py` を作成。
 - 投入対象: `credit_requirements`（category_id は `{学部or コース接頭辞}_{区分}` 形式）、
   `registration_caps`（CAP、departmentがNULLなら学部共通値）、確定できる場合のみ `required_subjects`。
@@ -121,11 +121,11 @@ Step 0〜3 の手順は、今後新しい学部（医学部医学科・経済学
 - 冪等に書く（既存行はUPDATE、無ければINSERT）。`--env dev` で実行し件数を確認。
 
 ### Step 6. 科目↔区分の紐付け（対象学部のみ）
-- 便覧の別表に「この区分にはこの科目群」の指定がある学部は、`seed_nogaku_subject_categories.py` を
+- 便覧の別表に「この区分にはこの科目群」の指定がある学部は、`seeds/seed_nogaku_subject_categories.py` を
   テンプレートに `seed_{学部}_subject_categories.py` を作成し `subject_credit_categories` へ投入。
 - 必ず `--dry-run` で未マッチ科目を確認 → 表記ゆれは `NAME_ALIASES` に追加して再実行。
   それでも未マッチのものは学部名.md「5. DB突き合わせ結果」に残課題として記録。
-- 紐付け後、`update_nogaku_credit_notes.py` 相当で各区分の note に「対象科目：〜」一覧を追記
+- 紐付け後、`seeds/update_nogaku_credit_notes.py` 相当で各区分の note に「対象科目：〜」一覧を追記
   （単位チェッカーUIの注記に表示される）。
 
 ### Step 7. フロントエンドへの学部追加
@@ -179,7 +179,7 @@ git push origin dev:shindairaifuhaku-dev   # 両方必須（片方だけでは�
 1. **B章のファイル整理を実行してコミット**（5分で終わる）。
 2. **未投入6学部のDB投入**（本作業のメイン）。1学部ずつ:
    `IMPLEMENTATION_CANDIDATES.md` の確定値から `seed_{学部}_credit_requirements.py` を作成
-   （雛形: 学科・コース分岐あり→`seed_nogaku_credit_requirements.py` / なし→`seed_bungaku_credit_requirements.py`）
+   （雛形: 学科・コース分岐あり→`seeds/seed_nogaku_credit_requirements.py` / なし→`seeds/seed_bungaku_credit_requirements.py`）
    → `--env dev` 実行 → Step 7（`_CREDIT_CHECKER_DEPARTMENTS` 追加）→ Step 9（dev目視）→ Step 10（コミット）。
    科目↔区分の指定がある学部は Step 6（subject_categories 紐付け+note追記）も行う。
 3. **農学部の未マッチ31件**（`NOGAKU_CREDIT_CHECKER_TODO.md` 参照）: 前期科目・開講停止・表記ゆれの

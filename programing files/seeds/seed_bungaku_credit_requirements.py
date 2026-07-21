@@ -1,7 +1,7 @@
 """
 文学部 単位チェッカー・CAP制・必修科目自動登録 初期データ投入スクリプト
 使い方:
-  python -X utf8 seed_bungaku_credit_requirements.py [--env dev|prod]
+  python -X utf8 seeds/seed_bungaku_credit_requirements.py [--env dev|prod]
 
 学生便覧2026（docs/学生便覧2026/binran_2026_bungaku.pdf 別表第1・別表第2・第6条・第7条）に基づき、
 文学部（人文学科1学科のみ、学科分岐なし）の卒業要件（credit_requirements）、
@@ -21,7 +21,9 @@
 """
 import asyncio
 import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _env import load_env
 
 FACULTY = "文学部"
