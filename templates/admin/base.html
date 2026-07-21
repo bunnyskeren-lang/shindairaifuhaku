@@ -169,6 +169,18 @@ function showErrorToast(msg) {
   _errorToastTimer = setTimeout(function() { el.style.display = 'none'; }, 4000);
 }
 
+// 修正理由: 例外発生時(HTTPステータス4xx/5xx、ボディは{"detail":...})でもfetch()自体は
+// rejectしないため、呼び出し側が`.then(data => data.ok)`だけを見ているとボタンが
+// 無反応になるだけで何も起きなかった。ステータス異常時はrejectしてcatch()に流す。
+function fetchJson(url, options) {
+  return fetch(url, options).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(data) {
+      if (!r.ok) throw new Error((data && data.detail) || ('HTTP ' + r.status));
+      return data;
+    });
+  });
+}
+
 function askConfirm(msg, okLabel) {
   return new Promise(function(resolve) {
     var modal = document.getElementById('confirmModal');

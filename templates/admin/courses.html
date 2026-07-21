@@ -521,14 +521,14 @@ function addInstructor(courseId) {
   const name = input.value.trim();
   if (!name) return;
   errEl.style.display = 'none';
-  fetch('/admin/courses/' + courseId + '/instructors/add', {
+  fetchJson('/admin/courses/' + courseId + '/instructors/add', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-Requested-With': 'XMLHttpRequest'
     },
     body: 'name=' + encodeURIComponent(name)
-  }).then(function(r) { return r.json(); }).then(function(data) {
+  }).then(function(data) {
     if (data.ok) {
       const list = document.getElementById('inst-list-' + courseId);
       const empty = document.getElementById('inst-empty-' + courseId);
@@ -574,10 +574,10 @@ function addInstructor(courseId) {
 }
 
 function deleteInstructor(courseId, instId, btn) {
-  fetch('/admin/courses/' + courseId + '/instructors/delete/' + instId, {
+  fetchJson('/admin/courses/' + courseId + '/instructors/delete/' + instId, {
     method: 'POST',
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
-  }).then(function(r) { return r.json(); }).then(function(data) {
+  }).then(function(data) {
     if (data.ok) {
       const chip = document.getElementById('inst-chip-' + instId);
       if (chip) chip.remove();
@@ -594,50 +594,50 @@ function deleteInstructor(courseId, instId, btn) {
 }
 
 function moveCls(name, dir) {
-  fetch('/admin/courses/classification/move', {
+  fetchJson('/admin/courses/classification/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name, direction: dir })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.ok) location.reload();
+  }).then(function(data) {
+    if (data.ok) location.reload(); else showErrorToast();
   }).catch(function() { showErrorToast(); });
 }
 
 function moveInstructor(id, dir) {
-  fetch('/admin/courses/instructor/move', {
+  fetchJson('/admin/courses/instructor/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: id, direction: dir })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.ok) location.reload();
+  }).then(function(data) {
+    if (data.ok) location.reload(); else showErrorToast();
   }).catch(function() { showErrorToast(); });
 }
 
 function moveFaculty(id, dir) {
-  fetch('/admin/courses/faculty/move', {
+  fetchJson('/admin/courses/faculty/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: id, direction: dir })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.ok) location.reload();
+  }).then(function(data) {
+    if (data.ok) location.reload(); else showErrorToast();
   }).catch(function() { showErrorToast(); });
 }
 
 function moveCourse(id, dir) {
-  fetch('/admin/courses/' + id + '/move', {
+  fetchJson('/admin/courses/' + id + '/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ direction: dir })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.ok) location.reload();
+  }).then(function(data) {
+    if (data.ok) location.reload(); else showErrorToast();
   }).catch(function() { showErrorToast(); });
 }
 function toggleTimetableVisibility(id, btn) {
-  fetch('/admin/courses/' + id + '/toggle-timetable-visibility', {
+  fetchJson('/admin/courses/' + id + '/toggle-timetable-visibility', {
     method: 'POST',
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (!data.ok) return;
+  }).then(function(data) {
+    if (!data.ok) { showErrorToast(); return; }
     document.querySelectorAll('#hide-btn-' + id).forEach(function(b) {
       if (data.hide_from_timetable) {
         b.textContent = '🙈 時間割:非表示中';
