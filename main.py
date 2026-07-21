@@ -14,7 +14,7 @@ from core import backup, cache, liff_auth, line_client, prewarm, rate_limit
 from core.activity_log import log_cleanup_loop, save_error_log
 from database import engine, init_db
 from routers import (
-    health, liff_api, pages, richmenu, seiseki_api, timetable_api,
+    health, liff_api, pages, profile_api, review_submit_api, richmenu, seiseki_api, timetable_api,
     timetable_custom_api, timetable_share_api, webhook,
 )
 from routers.admin import (
@@ -194,6 +194,8 @@ app.include_router(health.router)
 app.include_router(pages.router)
 app.include_router(richmenu.router)
 app.include_router(liff_api.router)
+app.include_router(profile_api.router)
+app.include_router(review_submit_api.router)
 app.include_router(timetable_api.router)
 app.include_router(timetable_share_api.router)
 app.include_router(timetable_custom_api.router)

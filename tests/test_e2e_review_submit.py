@@ -1,4 +1,4 @@
-"""liff_api.py /submit (レビュー投稿)のAPI経由E2Eテスト。
+"""review_submit_api.py /submit (レビュー投稿)のAPI経由E2Eテスト。
 
 フォーム投稿→バリデーション→初回プロフィール自動作成→レビュー保存という
 一連のフローと、主要な異常系(不正評価値・学籍番号形式・認証失敗・重複学籍番号)を
@@ -7,20 +7,20 @@
 import pytest
 from sqlalchemy import select
 
-import routers.liff_api as liff_api
+import routers.review_submit_api as review_submit_api
 from models import CourseSection, Instructor, Review, Subject, UserProfile
 
 
 def _fake_verify(monkeypatch, user_id: str = "U65326572657669657765723100000000"):
     async def _verify(id_token, request=None):
         return user_id if id_token == "valid-token" else None
-    monkeypatch.setattr(liff_api, "verify_liff_id_token", _verify)
+    monkeypatch.setattr(review_submit_api, "verify_liff_id_token", _verify)
 
 
 def _stub_push_notification(monkeypatch):
     async def _noop(**kwargs):
         return None
-    monkeypatch.setattr(liff_api, "send_push_notification", _noop)
+    monkeypatch.setattr(review_submit_api, "send_push_notification", _noop)
 
 
 async def _seed_course(test_sessionmaker, name="経営管理", instructor="山田太郎"):
@@ -52,7 +52,7 @@ async def test_submit_creates_review_and_profile_for_new_user(http_client_factor
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     resp = await client.post("/submit", data=VALID_FORM)
     assert resp.status_code == 200
@@ -73,7 +73,7 @@ async def test_submit_unauthenticated_returns_400_with_error_page(http_client_fa
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     form = dict(VALID_FORM, id_token="invalid-token")
     resp = await client.post("/submit", data=form)
@@ -85,7 +85,7 @@ async def test_submit_nonexistent_course_returns_400(http_client_factory, monkey
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     # 科目を一切登録しない
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     resp = await client.post("/submit", data=VALID_FORM)
     assert resp.status_code == 400
@@ -96,7 +96,7 @@ async def test_submit_malformed_student_id_returns_400(http_client_factory, monk
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     form = dict(VALID_FORM, student_id="invalid-id")
     resp = await client.post("/submit", data=form)
@@ -111,7 +111,7 @@ async def test_submit_duplicate_student_id_different_account_returns_400(http_cl
     async with test_sessionmaker() as session:
         session.add(UserProfile(line_user_id="U6578697374696e677573657200000000", name="既存ユーザー", student_id="2345678S"))
         await session.commit()
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     # 別のLINEアカウント(U6e657775736572320000000000000000)が同じ学籍番号で新規投稿しようとするケース
     resp = await client.post("/submit", data=VALID_FORM)
@@ -123,7 +123,7 @@ async def test_submit_empty_comment_returns_400(http_client_factory, monkeypatch
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     form = dict(VALID_FORM, comment="   ")
     resp = await client.post("/submit", data=form)
@@ -138,7 +138,7 @@ async def test_submit_rating_boundary_values_accepted(http_client_factory, monke
         _fake_verify(monkeypatch, user_id=f"U{rating}".ljust(33, "0"))
         _stub_push_notification(monkeypatch)
         await _seed_course(test_sessionmaker, name=f"科目{rating}", instructor=f"講師{rating}")
-        client = http_client_factory(liff_api, monkeypatch)
+        client = http_client_factory(review_submit_api, monkeypatch)
 
         form = dict(VALID_FORM, course_name=f"科目{rating}", rating=rating, student_id=f"234567{rating}S")
         resp = await client.post("/submit", data=form)
@@ -150,7 +150,7 @@ async def test_submit_rating_out_of_range_returns_400(http_client_factory, monke
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     form = dict(VALID_FORM, rating="6")
     resp = await client.post("/submit", data=form)
@@ -162,7 +162,7 @@ async def test_submit_academic_year_out_of_range_returns_400(http_client_factory
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
-    client = http_client_factory(liff_api, monkeypatch)
+    client = http_client_factory(review_submit_api, monkeypatch)
 
     form = dict(VALID_FORM, academic_year="1999")
     resp = await client.post("/submit", data=form)
