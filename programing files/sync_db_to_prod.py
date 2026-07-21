@@ -133,7 +133,7 @@ async def main():
         # course_sections/subject_credit_categories は下でdev id→prod idに変換して同期する。
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, department, classification, "
-            "category, senmon_group, sort_order, term_type, credits "
+            "category, senmon_group, sort_order, term_type, credits, hide_from_timetable "
             "FROM subjects ORDER BY id"
         )
         dup_keys = [key for key, cnt in
@@ -146,18 +146,19 @@ async def main():
                 """
                 INSERT INTO subjects
                   (name, reading, faculty, department, classification,
-                   category, senmon_group, sort_order, term_type, credits)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                   category, senmon_group, sort_order, term_type, credits, hide_from_timetable)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
                 ON CONFLICT (name, faculty, department) DO UPDATE SET
                   reading=EXCLUDED.reading,
                   classification=EXCLUDED.classification,
                   category=EXCLUDED.category, senmon_group=EXCLUDED.senmon_group,
                   sort_order=EXCLUDED.sort_order,
-                  term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
+                  term_type=EXCLUDED.term_type, credits=EXCLUDED.credits,
+                  hide_from_timetable=EXCLUDED.hide_from_timetable
                 """,
                 [(r["name"], r["reading"], r["faculty"], r["department"],
                   r["classification"], r["category"], r["senmon_group"], r["sort_order"],
-                  r["term_type"], r["credits"])
+                  r["term_type"], r["credits"], r["hide_from_timetable"])
                  for r in subj_rows]
             )
         print(f"subjects: {len(subj_rows)}件 upsert")
