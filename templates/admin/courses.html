@@ -564,7 +564,7 @@ function addInstructor(courseId) {
     } else if (data.error === 'duplicate') {
       errEl.style.display = 'inline';
     }
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 
 function deleteInstructor(courseId, instId, btn) {
@@ -584,7 +584,7 @@ function deleteInstructor(courseId, instId, btn) {
         list.appendChild(empty);
       }
     }
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 
 function moveCls(name, dir) {
@@ -594,7 +594,7 @@ function moveCls(name, dir) {
     body: JSON.stringify({ name: name, direction: dir })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 
 function moveInstructor(id, dir) {
@@ -604,7 +604,7 @@ function moveInstructor(id, dir) {
     body: JSON.stringify({ id: id, direction: dir })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 
 function moveFaculty(id, dir) {
@@ -614,7 +614,7 @@ function moveFaculty(id, dir) {
     body: JSON.stringify({ id: id, direction: dir })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 
 function moveCourse(id, dir) {
@@ -624,7 +624,7 @@ function moveCourse(id, dir) {
     body: JSON.stringify({ direction: dir })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 function toggleTimetableVisibility(id, btn) {
   fetch('/admin/courses/' + id + '/toggle-timetable-visibility', {
@@ -643,7 +643,7 @@ function toggleTimetableVisibility(id, btn) {
         b.style.color = '#374151';
       }
     });
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 </script>
 {% endblock %}

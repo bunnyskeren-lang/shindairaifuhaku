@@ -172,7 +172,7 @@ function moveCreditGroup(groupName, dir) {
     body: JSON.stringify({ faculty: "{{ group_faculty }}", group_name: groupName, direction: dir })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
-  }).catch(function() {});
+  }).catch(function() { showErrorToast(); });
 }
 
 async function deleteReq(btn) {
