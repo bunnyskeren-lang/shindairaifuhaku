@@ -5,6 +5,7 @@ os.environ.setdefault("LINE_CHANNEL_SECRET", "test_channel_secret")
 os.environ.setdefault("LINE_CHANNEL_ACCESS_TOKEN", "test_channel_access_token")
 os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 
+import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from sqlalchemy import BigInteger  # noqa: E402
 from sqlalchemy.dialects.postgresql import JSONB  # noqa: E402
@@ -72,6 +73,17 @@ def patch_async_session_local(monkeypatch, module, sessionmaker_):
     そのモジュール内の参照は古いエンジンを掴んだままになる。使用側モジュールの
     属性を個別に差し替えることでテスト用DBへ向ける。"""
     monkeypatch.setattr(module, "AsyncSessionLocal", sessionmaker_)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limit_buckets():
+    """core.rate_limit._bucketsはIPアドレス単位のグローバル状態で、テストクライアントは
+    毎回同一の疑似IPを使うため、レート制限テスト以外のE2Eテストが429で誤って
+    落ちるのを防ぐためテストごとにクリアする。"""
+    from core.rate_limit import _buckets
+    _buckets.clear()
+    yield
+    _buckets.clear()
 
 
 @pytest_asyncio.fixture
