@@ -17,9 +17,11 @@ from routers import health, liff_api, pages, richmenu, seiseki_api, timetable_ap
 from routers.admin import (
     auth as admin_auth,
     binran_discrepancies as admin_binran_discrepancies,
+    classifications as admin_classifications,
     courses as admin_courses,
     credit_requirements as admin_credit_requirements,
     dashboard as admin_dashboard,
+    instructors as admin_instructors,
     registration_caps as admin_registration_caps,
     reviews as admin_reviews,
     stats as admin_stats,
@@ -195,6 +197,8 @@ app.include_router(seiseki_api.router)
 app.include_router(admin_auth.router)
 app.include_router(admin_dashboard.router)
 app.include_router(admin_courses.router)
+app.include_router(admin_instructors.router)
+app.include_router(admin_classifications.router)
 app.include_router(admin_reviews.router)
 app.include_router(admin_users_errors.router)
 app.include_router(admin_stats.router)
