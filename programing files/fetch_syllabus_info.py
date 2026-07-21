@@ -6,15 +6,16 @@
   python -X utf8 fetch_syllabus_info.py --env dev --force   # 既取得分も上書き
 """
 import asyncio
-import os
 import re
-import sys
 import time
 import urllib.request
 import urllib.error
-from pathlib import Path
+
+from _env import load_env
 
 SYLLABUS_BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.html"
+
+REQUEST_INTERVAL_SECONDS = 0.3  # サーバー負荷軽減
 
 # 時間割コードの2文字目 → URL パス番号（学部が増えたらここに追加）
 FACULTY_PATH: dict[str, str] = {
@@ -31,8 +32,7 @@ FACULTY_PATH: dict[str, str] = {
 }
 
 # 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで「T」「N」を
-# 共有しており数字部分の範囲でしか判別できない（import_syllabus.pyのENGINEERING_RANGESと
-# 同じ対応表。学科を追加する際は両方を更新すること）
+# 共有しており数字部分の範囲でしか判別できない
 ENGINEERING_RANGES: list[tuple[int, int, str]] = [
     (0, 99, "0921"),      # 工学部建築学科
     (100, 149, "0922"),   # 工学部市民工学科
@@ -53,7 +53,6 @@ MEDICINE_RANGES: list[tuple[int, int, str]] = [
 ]
 
 # 保健学科の専攻同士は数字部分の範囲が重なりうるため所属名を優先する
-# （import_syllabus.pyのDEPARTMENT_PATH_OVERRIDEと同じ対応表）
 DEPARTMENT_PATH_OVERRIDE: dict[str, str] = {
     "医学部保健学科看護学専攻": "080201",
     "医学部保健学科検査技術科学専攻": "080202",
@@ -66,18 +65,6 @@ DEPARTMENT_PATH_OVERRIDE: dict[str, str] = {
     "理学部惑星学科": "0707",
     "工学部": "09",  # 工学部の全学科共通科目（所属列が学科名を含まず「工学部」のみ）
 }
-
-
-def load_env(env: str):
-    env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
-    if not env_file.exists():
-        print(f"ERROR: {env_file} が見つかりません", file=sys.stderr)
-        sys.exit(1)
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
 
 
 def make_syllabus_url(code: str, department: str = "") -> str | None:
@@ -280,7 +267,7 @@ async def run(dry_run: bool = False, force: bool = False):
                 print(f"  進捗: {i+1}/{len(courses)}")
                 if not dry_run:
                     await session.commit()
-            time.sleep(0.3)  # サーバー負荷軽減
+            time.sleep(REQUEST_INTERVAL_SECONDS)
 
         if not dry_run:
             await session.commit()
@@ -344,7 +331,7 @@ async def run_credits(dry_run: bool = False, force: bool = False):
                 counts["updated"] += 1
             except ValueError:
                 pass
-        time.sleep(0.3)  # サーバー負荷軽減
+        time.sleep(REQUEST_INTERVAL_SECONDS)
 
     # 長時間の一括処理でSupabase側のアイドルタイムアウト等により接続が切れても
     # 全体が失敗しないよう、一定件数ごとに新しいセッションへ切り替えてコミットする
@@ -426,7 +413,7 @@ async def run_senmon_classification(dry_run: bool = False, force: bool = False):
         else:
             counts["review"] += 1
             review_list.append(f"{subj.name}（コード: {nc or '取得不可'}）")
-        time.sleep(0.3)  # サーバー負荷軽減
+        time.sleep(REQUEST_INTERVAL_SECONDS)
 
     BATCH_SIZE = 20
     for batch_start in range(0, len(subjects), BATCH_SIZE):
