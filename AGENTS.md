@@ -182,8 +182,10 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 例: `3U020` → `/20/` → `2026_3U020.html` / `3B379` → `/06/` → `2026_3B379.html` / `1X058` → `/15/` → `2026_1X058.html`
 
 新しい学部のデータを追加する際は、実際のシラバスURLを確認してpathの数字を特定し、
-`programing files/import_syllabus.py` と `programing files/fetch_syllabus_info.py` と
-`templates/liff/timetable.html` の `FACULTY_PATH` / `FACULTY_PATH_JS` に追記すること。
+`core/config.py` と `programing files/fetch_syllabus_info.py` と
+`templates/liff/timetable.html` の `FACULTY_PATH` / `FACULTY_PATH_JS` に追記すること
+（`programing files/import_syllabus.py`には同種のロジックが以前あったが、シラバスURL
+動的生成方式への移行後に呼び出し元が無くなり2026-07-21に削除済み。この3箇所のみでよい）。
 
 新しい学部で学科・専攻ごとにURLのpathが分かれる場合（工学部・理学部・医学部保健学科のような
 ケース）は、上記に加えて `programing files/import_syllabus.py` の `_FACULTY_DEPARTMENT_SPLIT`
