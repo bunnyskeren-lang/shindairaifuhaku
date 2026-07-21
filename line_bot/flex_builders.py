@@ -119,7 +119,7 @@ def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
                 contents=[
                     FlexText(text=course.name, weight="bold", size="md", color="#ffffff", wrap=True),
                 ],
-                background_color="#94a3b8",
+                background_color="#6366f1",
                 padding_all="lg",
             ),
             body=FlexBox(
@@ -222,7 +222,9 @@ def make_help_flex() -> FlexMessage:
                 contents=[
                     section_label("📱  リッチメニュー"),
                     card("📚", "教養", "教養科目を分類別に一覧表示", bg="#f5f3ff"),
+                    card("🎓", "専門", "学部・学科ごとに専門科目を一覧表示", bg="#f5f3ff"),
                     card("✏️", "レビュー投稿", "レビュー投稿フォームを開く", bg="#f5f3ff"),
+                    card("📅", "My時間割", "時間割の登録・確認ができます", bg="#f5f3ff"),
                     section_label("💬  チャット"),
                     card("🔍", "科目名を送る",
                          "授業情報・レビューを表示\n例：「英語」「データサイエンス」",
@@ -390,17 +392,27 @@ def _variant_suffix(base: str, full: str) -> str:
 
 def make_variant_selection_bubble(base_name: str, variant_names: list[str], reviewed_names: set[str] = frozenset()) -> FlexMessage:
     suffix_str = " / ".join(_variant_suffix(base_name, n) for n in variant_names)
+    any_reviewed = any(n in reviewed_names for n in variant_names)
     rows = []
     for name in variant_names:
-        color = "#4f46e5" if name in reviewed_names else "#94a3b8"
+        has_review = name in reviewed_names
+        color = "#4f46e5" if has_review else "#64748b"
+        display = f"✓ {name}" if has_review else name
         rows.append(
             FlexBox(
                 layout="vertical",
                 action=PostbackAction(label=name[:20], data=name),
-                contents=[FlexText(text=name, wrap=True, size="sm", color=color)],
+                contents=[FlexText(text=display, wrap=True, size="sm", color=color)],
                 padding_top="sm",
                 padding_bottom="sm",
             )
+        )
+    footer = None
+    if any_reviewed:
+        footer = FlexBox(
+            layout="vertical",
+            contents=[FlexText(text="✓ = レビュー投稿済み", size="xxs", color="#94a3b8", align="center")],
+            padding_all="sm",
         )
     return FlexMessage(
         alt_text=f"📚 {base_name} — {suffix_str} どれを見ますか？",
@@ -420,6 +432,7 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str], revi
                 spacing="xs",
                 padding_all="md",
             ),
+            footer=footer,
         ),
     )
 
@@ -427,7 +440,7 @@ def make_variant_selection_bubble(base_name: str, variant_names: list[str], revi
 def make_category_select_flex() -> FlexMessage:
     categories = [
         ("📚 教養科目", "教養科目の系統を選んで表示します", "教養", "#6366f1", "#eef2ff", "#4f46e5"),
-        ("🎓 専門科目", "経営学部の専門科目を表示します",   "専門", "#0ea5e9", "#e0f2fe", "#0284c7"),
+        ("🎓 専門科目", "学部を選んで専門科目を表示します",   "専門", "#0ea5e9", "#e0f2fe", "#0284c7"),
     ]
     btns = [
         FlexBox(
@@ -491,7 +504,7 @@ def make_classification_select_flex(
             action=PostbackAction(label=label[:20], data=f"{data_prefix}{value}"),
             contents=[
                 FlexText(
-                    text=label,
+                    text=f"✓ {label}" if label in reviewed_cls else label,
                     size="lg",
                     color="#0f172a" if label in reviewed_cls else "#94a3b8",
                     weight="bold",
@@ -506,19 +519,21 @@ def make_classification_select_flex(
         )
         for label, value in items
     ]
-    footer = None
-    if back_label and back_data:
-        footer = FlexBox(
-            layout="vertical",
-            contents=[
-                FlexButton(
-                    action=PostbackAction(label=back_label[:20], data=back_data),
-                    style="secondary",
-                    height="sm",
-                )
-            ],
-            padding_all="md",
+    footer_contents = []
+    if reviewed_cls:
+        footer_contents.append(
+            FlexText(text="✓ = レビュー投稿済みを含む", size="xxs", color="#94a3b8", align="center")
         )
+    if back_label and back_data:
+        footer_contents.append(
+            FlexButton(
+                action=PostbackAction(label=back_label[:20], data=back_data),
+                style="secondary",
+                height="sm",
+                margin="sm" if reviewed_cls else "none",
+            )
+        )
+    footer = FlexBox(layout="vertical", contents=footer_contents, padding_all="md") if footer_contents else None
     return FlexMessage(
         alt_text=f"{title} — {subtitle}",
         contents=FlexBubble(
