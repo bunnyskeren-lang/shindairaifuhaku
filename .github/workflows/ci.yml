@@ -5,10 +5,8 @@ on:
     branches: [dev, main]
   pull_request:
     branches: [dev, main]
-  schedule:
-    # 毎日9:00 JST (UTC 0:00)。コード変更が無い日でも依存パッケージの更新等による
-    # リグレッションを検知するため、pushの有無に関わらず定期実行する
-    - cron: "0 0 * * *"
+  # GitHub Actions画面の「Run workflow」ボタンから任意タイミングで手動実行できる。
+  # 定期(cron)実行は不要という判断のため、pushの無い日は自動実行されない。
   workflow_dispatch: {}
 
 jobs:
