@@ -33,13 +33,26 @@ def _compile_biginteger_as_integer_for_sqlite(element, compiler, **kw):
     return "INTEGER"
 
 
+def _register_postgres_stub_functions(dbapi_connection, connection_record):
+    """core/required_subjects.pyのregister_syllabus_for_user()は同時押し対策として
+    PostgreSQL固有のpg_advisory_xact_lock(hashtext(...))でユーザー単位のトランザクション
+    ロックを取る。SQLiteにこの関数は存在しないため、SQL文はそのまま実行しつつ
+    ロック自体は何もしないスタブ関数をDBAPI接続に登録する（単一プロセス内のテストでは
+    実際のロック取得は不要なため副作用として問題ない）。"""
+    dbapi_connection.create_function("hashtext", 1, lambda s: hash(s) % (2**31))
+    dbapi_connection.create_function("pg_advisory_xact_lock", 1, lambda _lock_id: None)
+
+
 @pytest_asyncio.fixture
 async def async_engine():
     """テストごとに独立したSQLiteインメモリDBを作成し、全テーブルを作成する。"""
+    from sqlalchemy import event
+
     import database
     import models  # noqa: F401  (Base.metadataへのテーブル登録に必要)
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    event.listens_for(engine.sync_engine, "connect")(_register_postgres_stub_functions)
     async with engine.begin() as conn:
         await conn.run_sync(database.Base.metadata.create_all)
     yield engine
