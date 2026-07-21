@@ -41,6 +41,7 @@ async def dump_all_tables_to_sql() -> bytes:
         CreditRequirement, UserSeisekiRaw,
         Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
         CourseSectionView, UserSyllabus, SubjectCreditCategory,
+        UserCustomCourse, RequiredSubject, RegistrationCap,
     )
 
     lines = []

@@ -46,7 +46,7 @@ async def init_db():
         MessageLog, DisplayOrder, UserProfile,
         CreditRequirement, UserSeisekiRaw,
         Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
-        SubjectCreditCategory,
+        SubjectCreditCategory, RegistrationCap, RequiredSubject,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
