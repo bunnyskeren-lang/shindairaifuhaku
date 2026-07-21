@@ -837,6 +837,41 @@ def _log_reply_timing(kind: str, start: float, compute_ms: float | None = None) 
         print(f"[linebot_reply] {kind} {duration_ms:.0f}ms{marker}", flush=True)
 
 
+async def _handle_reply_event(event, user_id: str, input_text: str, label: str, log_text: str, t0: float) -> None:
+    """PostbackEvent/MessageEventで共通の応答処理。未登録なら登録誘導Flexを返し、
+    それ以外はhandle_message()を呼んで返信する。タイムアウト・例外時はエラーログを
+    保存した上でフォールバックメッセージを返す（従来この一連の流れがpostback/message
+    それぞれに別実装され、エラー文言・ログのaction文字列がわずかに食い違っていたため統一）。
+    label はログ・action文字列のプレフィックス("postback"/"message")、
+    log_text は受信ログに残す生テキスト。"""
+    try:
+        asyncio.create_task(save_log_bg(user_id, "in", log_text))
+        if await _registration_incomplete(user_id):
+            register_url = make_register_url(user_id)
+            await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
+            _log_reply_timing(f"{label}:register", t0)
+            return
+        messages = await asyncio.wait_for(handle_message(input_text, user_id), timeout=25.0)
+        t_compute = time.perf_counter()
+        await line_client.reply(event.reply_token, messages[:5])
+        asyncio.create_task(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
+        _log_reply_timing(f"{label}:{input_text[:30]}", t0, compute_ms=(t_compute - t0) * 1000)
+    except asyncio.TimeoutError:
+        await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=f"{label}:{input_text}")
+        try:
+            await line_client.reply(event.reply_token, [TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")])
+        except Exception as reply_exc:
+            await save_error_log(reply_exc, user_id=user_id, action=f"{label}_reply_failed:{input_text}")
+        _log_reply_timing(f"{label}:{input_text[:30]}:timeout", t0)
+    except Exception as exc:
+        await save_error_log(exc, user_id=user_id, action=f"{label}:{input_text}")
+        try:
+            await line_client.reply(event.reply_token, [TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")])
+        except Exception as reply_exc:
+            await save_error_log(reply_exc, user_id=user_id, action=f"{label}_reply_failed:{input_text}")
+        _log_reply_timing(f"{label}:{input_text[:30]}:error", t0)
+
+
 async def process_events(events) -> None:
     try:
         for event in events:
@@ -863,35 +898,7 @@ async def process_events(events) -> None:
             if isinstance(event, PostbackEvent):
                 user_id = event.source.user_id
                 data = event.postback.data
-                try:
-                    asyncio.create_task(save_log_bg(user_id, "in", f"[postback]{data}"))
-                    if await _registration_incomplete(user_id):
-                        register_url = make_register_url(user_id)
-                        await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
-                        _log_reply_timing("postback:register", _t0)
-                        continue
-                    messages = await asyncio.wait_for(
-                        handle_message(data, user_id),
-                        timeout=25.0,
-                    )
-                    _t_compute = time.perf_counter()
-                    await line_client.reply(event.reply_token, messages[:5])
-                    asyncio.create_task(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
-                    _log_reply_timing(f"postback:{data[:30]}", _t0, compute_ms=(_t_compute - _t0) * 1000)
-                except asyncio.TimeoutError:
-                    await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=data)
-                    try:
-                        await line_client.reply(event.reply_token, [TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")])
-                    except Exception as reply_exc:
-                        await save_error_log(reply_exc, user_id=user_id, action=f"postback_reply_failed:{data}")
-                    _log_reply_timing(f"postback:{data[:30]}:timeout", _t0)
-                except Exception as exc:
-                    await save_error_log(exc, user_id=user_id, action=f"postback:{data}")
-                    try:
-                        await line_client.reply(event.reply_token, [TextMessage(text="エラーが発生しました。もう一度お試しください。")])
-                    except Exception as reply_exc:
-                        await save_error_log(reply_exc, user_id=user_id, action=f"postback_reply_failed:{data}")
-                    _log_reply_timing(f"postback:{data[:30]}:error", _t0)
+                await _handle_reply_event(event, user_id, data, "postback", f"[postback]{data}", _t0)
                 continue
 
             if not isinstance(event, MessageEvent):
@@ -901,35 +908,6 @@ async def process_events(events) -> None:
 
             user_id = event.source.user_id
             user_text = event.message.text
-
-            try:
-                asyncio.create_task(save_log_bg(user_id, "in", user_text))
-                if await _registration_incomplete(user_id):
-                    register_url = make_register_url(user_id)
-                    await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
-                    _log_reply_timing("message:register", _t0)
-                    continue
-                messages = await asyncio.wait_for(
-                    handle_message(user_text, user_id),
-                    timeout=25.0,
-                )
-                _t_compute = time.perf_counter()
-                await line_client.reply(event.reply_token, messages[:5])
-                asyncio.create_task(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
-                _log_reply_timing(f"message:{user_text[:30]}", _t0, compute_ms=(_t_compute - _t0) * 1000)
-            except asyncio.TimeoutError:
-                await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=user_text)
-                try:
-                    await line_client.reply(event.reply_token, [TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")])
-                except Exception as reply_exc:
-                    await save_error_log(reply_exc, user_id=user_id, action=f"message_reply_failed:{user_text}")
-                _log_reply_timing(f"message:{user_text[:30]}:timeout", _t0)
-            except Exception as exc:
-                await save_error_log(exc, user_id=user_id, action=user_text)
-                try:
-                    await line_client.reply(event.reply_token, [TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")])
-                except Exception as reply_exc:
-                    await save_error_log(reply_exc, user_id=user_id, action=f"message_reply_failed:{user_text}")
-                _log_reply_timing(f"message:{user_text[:30]}:error", _t0)
+            await _handle_reply_event(event, user_id, user_text, "message", user_text, _t0)
     except Exception as exc:
         await save_error_log(exc, action="process_events")
