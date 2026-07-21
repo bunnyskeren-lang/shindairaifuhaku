@@ -98,10 +98,6 @@ EASE_LABEL = {"SS": "天国", "S": "楽々", "A": "標準", "B": "大変", "C": 
 EASE_COLOR = {"SS": "#10b981", "S": "#6366f1", "A": "#f59e0b", "B": "#f97316", "C": "#ef4444"}
 EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★☆☆", "B": "★★☆☆☆", "C": "★☆☆☆☆"}
 
-RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
-VARIANT_ICONS = {0: "🅰", 1: "🅱", 2: "🅲", 3: "🅳"}
-VARIANT_COLORS = ["#6366f1", "#0d9488", "#f59e0b", "#ef4444"]
-
 # 以下、programing files/import_syllabus.pyのFACULTY_PATH/DEPARTMENT_PATH_OVERRIDE/
 # ENGINEERING_RANGES/MEDICINE_RANGES/MEDICINE_SUBLETTERSと同じ対応表。
 # シラバスURL生成ロジックを変更する際は、fetch_syllabus_info.py・
@@ -197,6 +193,11 @@ def make_register_url(user_id: str) -> str:
     if REGISTER_LIFF_ID:
         return f"https://liff.line.me/{REGISTER_LIFF_ID}?uid={user_id}"
     return f"{APP_URL}/register?uid={user_id}"
+
+
+def escape_like(s: str) -> str:
+    """ILIKE検索語のワイルドカード(\\, %, _)をエスケープする。呼び出し側はescape="\\\\"を指定すること。"""
+    return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
 
 
 def normalize_instructor_name(name: str) -> str:

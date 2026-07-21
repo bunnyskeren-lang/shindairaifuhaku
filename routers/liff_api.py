@@ -12,7 +12,7 @@ from core.activity_log import save_error_log
 from core.config import (
     APP_URL, DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, EASE_ORDER, FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
-    is_profile_complete, make_syllabus_url, syllabus_department_key,
+    escape_like, is_profile_complete, make_syllabus_url, syllabus_department_key,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -74,11 +74,9 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
     async with AsyncSessionLocal() as session:
         if q.strip():
             tokens = [tok for tok in _re.split(r'[\s　]+', q.strip()) if tok]
-            def _escape(tok: str) -> str:
-                return tok.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
             stmt = select(Subject)
             for tok in tokens:
-                t = _escape(tok)
+                t = escape_like(tok)
                 stmt = stmt.where(or_(
                     Subject.name.ilike(f"%{t}%", escape="\\"),
                     Subject.reading.ilike(f"%{t}%", escape="\\"),
@@ -92,7 +90,7 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                 norm_tokens = [_normalize_form_q(tok) for tok in tokens]
                 stmt2 = select(Subject)
                 for tok in norm_tokens:
-                    t = _escape(tok)
+                    t = escape_like(tok)
                     stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
                 stmt2 = stmt2.order_by(Subject.name).limit(_SEARCH_RESULT_LIMIT)
                 courses = (await session.execute(stmt2)).scalars().all()
@@ -156,10 +154,8 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
     if not q.strip():
         return {"instructors": []}
     async with AsyncSessionLocal() as session:
-        def _esc(s: str) -> str:
-            return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
         q_clean = q.replace("　", " ").strip()
-        escaped = _esc(q_clean)
+        escaped = escape_like(q_clean)
         insts_raw = (await session.execute(
             select(Instructor.name)
             .where(Instructor.name.ilike(f"%{escaped}%", escape="\\"))
@@ -171,7 +167,7 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
             norm_col = Instructor.name
             for ch in ('・', '･', '（', '）', '(', ')'):
                 norm_col = func.replace(norm_col, ch, '')
-            escaped_norm = _esc(_normalize_form_q(q_clean))
+            escaped_norm = escape_like(_normalize_form_q(q_clean))
             insts_raw = (await session.execute(
                 select(Instructor.name)
                 .where(norm_col.ilike(f"%{escaped_norm}%", escape="\\"))

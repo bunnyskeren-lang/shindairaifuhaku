@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 
 from core import cache
-from core.config import make_cls_sort, make_syllabus_url, normalize_instructor_name, reading, syllabus_department_key
+from core.config import escape_like, make_cls_sort, make_syllabus_url, normalize_instructor_name, reading, syllabus_department_key
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -28,7 +28,7 @@ async def admin_courses(
     q = q.strip()
 
     def _search_filter(q: str):
-        q_safe = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        q_safe = escape_like(q)
         return or_(
             Subject.name.ilike(f"%{q_safe}%", escape="\\"),
             Subject.reading.ilike(f"%{q_safe}%", escape="\\"),
