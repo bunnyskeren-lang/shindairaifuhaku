@@ -15,6 +15,106 @@ from models import CreditRequirement, DisplayOrder, Subject, SubjectCreditCatego
 
 router = APIRouter()
 
+
+# ── 単位要件CRUDの共通ヘルパー ─────────────────────────────────────────────────
+# update/add/deleteは5学部(経営・システム情報・文学部・工学部各学科・農学部各コース)で
+# 完全に同一のロジックだったため共通化した。department_filterはNoneなら絞り込み無し
+# （経営・システム情報・文学部は元々departmentで絞り込んでいなかった挙動をそのまま維持）、
+# 値を渡すと工学部・農学部のように学科/コース単位で絞り込む。
+
+
+async def _credit_requirements_update(request: Request, faculty: str, department_filter: str | None, redirect_url: str):
+    form = await request.form()
+    async with AsyncSessionLocal() as session:
+        conds = [CreditRequirement.faculty == faculty]
+        if department_filter is not None:
+            conds.append(CreditRequirement.department == department_filter)
+        existing_ids = {
+            r for (r,) in (await session.execute(
+                select(CreditRequirement.category_id).where(*conds)
+            )).all()
+        }
+        for cat_id in existing_ids:
+            values: dict = {}
+            if f"req_{cat_id}" in form:
+                try:
+                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
+                except ValueError:
+                    pass
+            if f"max_{cat_id}" in form:
+                max_val = form[f"max_{cat_id}"].strip()
+                try:
+                    values["max_credits"] = max(0, int(max_val)) if max_val else None
+                except ValueError:
+                    pass
+            if f"note_{cat_id}" in form:
+                note_val = form[f"note_{cat_id}"].strip()
+                values["note"] = note_val or None
+            if f"label_{cat_id}" in form:
+                values["label"] = form[f"label_{cat_id}"].strip()
+            if f"group_{cat_id}" in form:
+                values["group_name"] = form[f"group_{cat_id}"].strip()
+            if f"sort_{cat_id}" in form:
+                try:
+                    values["sort_order"] = int(form[f"sort_{cat_id}"])
+                except ValueError:
+                    pass
+            if values:
+                await session.execute(
+                    sa_update(CreditRequirement)
+                    .where(CreditRequirement.category_id == cat_id)
+                    .values(**values)
+                )
+        await session.commit()
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+async def _credit_requirements_add(
+    request: Request, faculty: str, department_value: str | None, cat_id_prefix: str, redirect_url: str,
+):
+    form = await request.form()
+    label = form.get("new_label", "").strip()
+    group = form.get("new_group", "").strip()
+    note = form.get("new_note", "").strip() or None
+    if not label:
+        return RedirectResponse(f"{redirect_url}?error=invalid", status_code=303)
+    try:
+        req = max(0, int(form.get("new_req", "0")))
+        sort_v = int(form.get("new_sort", "999"))
+    except ValueError:
+        req, sort_v = 0, 999
+    cat_id = f"{cat_id_prefix}_{int(time.time() * 1000)}"
+    async with AsyncSessionLocal() as session:
+        session.add(CreditRequirement(
+            category_id=cat_id,
+            label=label,
+            group_name=group,
+            sort_order=sort_v,
+            required_credits=req,
+            note=note,
+            faculty=faculty,
+            department=department_value,
+        ))
+        await session.commit()
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+async def _credit_requirements_delete(cat_id: str, redirect_url: str):
+    async with AsyncSessionLocal() as session:
+        row = await session.get(CreditRequirement, cat_id)
+        if row:
+            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
+            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
+            in_use = (await session.execute(
+                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
+            )).scalar_one_or_none()
+            if in_use:
+                return RedirectResponse(f"{redirect_url}?error=in_use", status_code=303)
+            await session.delete(row)
+            await session.commit()
+    return RedirectResponse(redirect_url, status_code=303)
+
+
 # ── 経営学部 管理ページ ────────────────────────────────────────────────────────
 
 
@@ -107,91 +207,17 @@ async def admin_keiei_set_group(course_id: int, request: Request, _: str = Depen
 
 @router.post("/admin/keiei/credit_requirements/update")
 async def admin_keiei_update_requirements(request: Request, _: str = Depends(check_admin)):
-    form = await request.form()
-    async with AsyncSessionLocal() as session:
-        existing_ids = {
-            r for (r,) in (await session.execute(
-                select(CreditRequirement.category_id)
-                .where(CreditRequirement.faculty == "経営学部")
-            )).all()
-        }
-        for cat_id in existing_ids:
-            values: dict = {}
-            if f"req_{cat_id}" in form:
-                try:
-                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
-                except ValueError:
-                    pass
-            if f"max_{cat_id}" in form:
-                max_val = form[f"max_{cat_id}"].strip()
-                try:
-                    values["max_credits"] = max(0, int(max_val)) if max_val else None
-                except ValueError:
-                    pass
-            if f"note_{cat_id}" in form:
-                note_val = form[f"note_{cat_id}"].strip()
-                values["note"] = note_val or None
-            if f"label_{cat_id}" in form:
-                values["label"] = form[f"label_{cat_id}"].strip()
-            if f"group_{cat_id}" in form:
-                values["group_name"] = form[f"group_{cat_id}"].strip()
-            if f"sort_{cat_id}" in form:
-                try:
-                    values["sort_order"] = int(form[f"sort_{cat_id}"])
-                except ValueError:
-                    pass
-            if values:
-                await session.execute(
-                    sa_update(CreditRequirement)
-                    .where(CreditRequirement.category_id == cat_id)
-                    .values(**values)
-                )
-        await session.commit()
-    return RedirectResponse("/admin/keiei", status_code=303)
+    return await _credit_requirements_update(request, "経営学部", None, "/admin/keiei")
 
 
 @router.post("/admin/keiei/credit_requirements/add")
 async def admin_keiei_add_requirement(request: Request, _: str = Depends(check_admin)):
-    form = await request.form()
-    label  = form.get("new_label", "").strip()
-    group  = form.get("new_group", "").strip()
-    note   = form.get("new_note", "").strip() or None
-    if not label:
-        return RedirectResponse("/admin/keiei?error=invalid", status_code=303)
-    try:
-        req    = max(0, int(form.get("new_req", "0")))
-        sort_v = int(form.get("new_sort", "999"))
-    except ValueError:
-        req, sort_v = 0, 999
-    cat_id = f"cat_{int(time.time() * 1000)}"
-    async with AsyncSessionLocal() as session:
-        session.add(CreditRequirement(
-            category_id=cat_id,
-            label=label,
-            group_name=group,
-            sort_order=sort_v,
-            required_credits=req,
-            note=note,
-        ))
-        await session.commit()
-    return RedirectResponse("/admin/keiei", status_code=303)
+    return await _credit_requirements_add(request, "経営学部", None, "cat", "/admin/keiei")
 
 
 @router.post("/admin/keiei/credit_requirements/{cat_id}/delete")
-async def admin_keiei_delete_requirement(cat_id: str, request: Request, _: str = Depends(check_admin)):
-    async with AsyncSessionLocal() as session:
-        row = await session.get(CreditRequirement, cat_id)
-        if row:
-            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
-            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
-            in_use = (await session.execute(
-                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
-            )).scalar_one_or_none()
-            if in_use:
-                return RedirectResponse("/admin/keiei?error=in_use", status_code=303)
-            await session.delete(row)
-            await session.commit()
-    return RedirectResponse("/admin/keiei", status_code=303)
+async def admin_keiei_delete_requirement(cat_id: str, _: str = Depends(check_admin)):
+    return await _credit_requirements_delete(cat_id, "/admin/keiei")
 
 
 @router.post("/admin/credit_requirements/group/move")
@@ -276,92 +302,17 @@ async def admin_sysinfo(request: Request, _: str = Depends(check_admin)):
 
 @router.post("/admin/sysinfo/credit_requirements/update")
 async def admin_sysinfo_update_requirements(request: Request, _: str = Depends(check_admin)):
-    form = await request.form()
-    async with AsyncSessionLocal() as session:
-        existing_ids = {
-            r for (r,) in (await session.execute(
-                select(CreditRequirement.category_id)
-                .where(CreditRequirement.faculty == "システム情報学部")
-            )).all()
-        }
-        for cat_id in existing_ids:
-            values: dict = {}
-            if f"req_{cat_id}" in form:
-                try:
-                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
-                except ValueError:
-                    pass
-            if f"max_{cat_id}" in form:
-                max_val = form[f"max_{cat_id}"].strip()
-                try:
-                    values["max_credits"] = max(0, int(max_val)) if max_val else None
-                except ValueError:
-                    pass
-            if f"note_{cat_id}" in form:
-                note_val = form[f"note_{cat_id}"].strip()
-                values["note"] = note_val or None
-            if f"label_{cat_id}" in form:
-                values["label"] = form[f"label_{cat_id}"].strip()
-            if f"group_{cat_id}" in form:
-                values["group_name"] = form[f"group_{cat_id}"].strip()
-            if f"sort_{cat_id}" in form:
-                try:
-                    values["sort_order"] = int(form[f"sort_{cat_id}"])
-                except ValueError:
-                    pass
-            if values:
-                await session.execute(
-                    sa_update(CreditRequirement)
-                    .where(CreditRequirement.category_id == cat_id)
-                    .values(**values)
-                )
-        await session.commit()
-    return RedirectResponse("/admin/sysinfo", status_code=303)
+    return await _credit_requirements_update(request, "システム情報学部", None, "/admin/sysinfo")
 
 
 @router.post("/admin/sysinfo/credit_requirements/add")
 async def admin_sysinfo_add_requirement(request: Request, _: str = Depends(check_admin)):
-    form = await request.form()
-    label  = form.get("new_label", "").strip()
-    group  = form.get("new_group", "").strip()
-    note   = form.get("new_note", "").strip() or None
-    if not label:
-        return RedirectResponse("/admin/sysinfo?error=invalid", status_code=303)
-    try:
-        req    = max(0, int(form.get("new_req", "0")))
-        sort_v = int(form.get("new_sort", "999"))
-    except ValueError:
-        req, sort_v = 0, 999
-    cat_id = f"si_{int(time.time() * 1000)}"
-    async with AsyncSessionLocal() as session:
-        session.add(CreditRequirement(
-            category_id=cat_id,
-            label=label,
-            group_name=group,
-            sort_order=sort_v,
-            required_credits=req,
-            note=note,
-            faculty="システム情報学部",
-        ))
-        await session.commit()
-    return RedirectResponse("/admin/sysinfo", status_code=303)
+    return await _credit_requirements_add(request, "システム情報学部", None, "si", "/admin/sysinfo")
 
 
 @router.post("/admin/sysinfo/credit_requirements/{cat_id}/delete")
-async def admin_sysinfo_delete_requirement(cat_id: str, request: Request, _: str = Depends(check_admin)):
-    async with AsyncSessionLocal() as session:
-        row = await session.get(CreditRequirement, cat_id)
-        if row:
-            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
-            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
-            in_use = (await session.execute(
-                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
-            )).scalar_one_or_none()
-            if in_use:
-                return RedirectResponse("/admin/sysinfo?error=in_use", status_code=303)
-            await session.delete(row)
-            await session.commit()
-    return RedirectResponse("/admin/sysinfo", status_code=303)
+async def admin_sysinfo_delete_requirement(cat_id: str, _: str = Depends(check_admin)):
+    return await _credit_requirements_delete(cat_id, "/admin/sysinfo")
 
 
 # ── 文学部 管理ページ ──────────────────────────────────────────────────────────
@@ -396,93 +347,17 @@ async def admin_bungaku(request: Request, _: str = Depends(check_admin)):
 
 @router.post("/admin/bungaku/credit_requirements/update")
 async def admin_bungaku_update_requirements(request: Request, _: str = Depends(check_admin)):
-    form = await request.form()
-    async with AsyncSessionLocal() as session:
-        existing_ids = {
-            r for (r,) in (await session.execute(
-                select(CreditRequirement.category_id)
-                .where(CreditRequirement.faculty == "文学部")
-            )).all()
-        }
-        for cat_id in existing_ids:
-            values: dict = {}
-            if f"req_{cat_id}" in form:
-                try:
-                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
-                except ValueError:
-                    pass
-            if f"max_{cat_id}" in form:
-                max_val = form[f"max_{cat_id}"].strip()
-                try:
-                    values["max_credits"] = max(0, int(max_val)) if max_val else None
-                except ValueError:
-                    pass
-            if f"note_{cat_id}" in form:
-                note_val = form[f"note_{cat_id}"].strip()
-                values["note"] = note_val or None
-            if f"label_{cat_id}" in form:
-                values["label"] = form[f"label_{cat_id}"].strip()
-            if f"group_{cat_id}" in form:
-                values["group_name"] = form[f"group_{cat_id}"].strip()
-            if f"sort_{cat_id}" in form:
-                try:
-                    values["sort_order"] = int(form[f"sort_{cat_id}"])
-                except ValueError:
-                    pass
-            if values:
-                await session.execute(
-                    sa_update(CreditRequirement)
-                    .where(CreditRequirement.category_id == cat_id)
-                    .values(**values)
-                )
-        await session.commit()
-    return RedirectResponse("/admin/bungaku", status_code=303)
+    return await _credit_requirements_update(request, "文学部", None, "/admin/bungaku")
 
 
 @router.post("/admin/bungaku/credit_requirements/add")
 async def admin_bungaku_add_requirement(request: Request, _: str = Depends(check_admin)):
-    form = await request.form()
-    label  = form.get("new_label", "").strip()
-    group  = form.get("new_group", "").strip()
-    note   = form.get("new_note", "").strip() or None
-    if not label:
-        return RedirectResponse("/admin/bungaku?error=invalid", status_code=303)
-    try:
-        req    = max(0, int(form.get("new_req", "0")))
-        sort_v = int(form.get("new_sort", "999"))
-    except ValueError:
-        req, sort_v = 0, 999
-    cat_id = f"bungaku_{int(time.time() * 1000)}"
-    async with AsyncSessionLocal() as session:
-        session.add(CreditRequirement(
-            category_id=cat_id,
-            label=label,
-            group_name=group,
-            sort_order=sort_v,
-            required_credits=req,
-            note=note,
-            faculty="文学部",
-            department="人文学科",
-        ))
-        await session.commit()
-    return RedirectResponse("/admin/bungaku", status_code=303)
+    return await _credit_requirements_add(request, "文学部", "人文学科", "bungaku", "/admin/bungaku")
 
 
 @router.post("/admin/bungaku/credit_requirements/{cat_id}/delete")
-async def admin_bungaku_delete_requirement(cat_id: str, request: Request, _: str = Depends(check_admin)):
-    async with AsyncSessionLocal() as session:
-        row = await session.get(CreditRequirement, cat_id)
-        if row:
-            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
-            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
-            in_use = (await session.execute(
-                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
-            )).scalar_one_or_none()
-            if in_use:
-                return RedirectResponse("/admin/bungaku?error=in_use", status_code=303)
-            await session.delete(row)
-            await session.commit()
-    return RedirectResponse("/admin/bungaku", status_code=303)
+async def admin_bungaku_delete_requirement(cat_id: str, _: str = Depends(check_admin)):
+    return await _credit_requirements_delete(cat_id, "/admin/bungaku")
 
 
 # ── 工学部 各学科 管理ページ（学生便覧の別表第2に基づく卒業要件） ──────────────────
@@ -545,95 +420,19 @@ async def admin_koubu_dept(dept_key: str, request: Request, _: str = Depends(che
 @router.post("/admin/koubu/{dept_key}/credit_requirements/update")
 async def admin_koubu_update_requirements(dept_key: str, request: Request, _: str = Depends(check_admin)):
     dept_name = _koubu_department_name(dept_key)
-    form = await request.form()
-    async with AsyncSessionLocal() as session:
-        existing_ids = {
-            r for (r,) in (await session.execute(
-                select(CreditRequirement.category_id)
-                .where(CreditRequirement.faculty == "工学部", CreditRequirement.department == dept_name)
-            )).all()
-        }
-        for cat_id in existing_ids:
-            values: dict = {}
-            if f"req_{cat_id}" in form:
-                try:
-                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
-                except ValueError:
-                    pass
-            if f"max_{cat_id}" in form:
-                max_val = form[f"max_{cat_id}"].strip()
-                try:
-                    values["max_credits"] = max(0, int(max_val)) if max_val else None
-                except ValueError:
-                    pass
-            if f"note_{cat_id}" in form:
-                note_val = form[f"note_{cat_id}"].strip()
-                values["note"] = note_val or None
-            if f"label_{cat_id}" in form:
-                values["label"] = form[f"label_{cat_id}"].strip()
-            if f"group_{cat_id}" in form:
-                values["group_name"] = form[f"group_{cat_id}"].strip()
-            if f"sort_{cat_id}" in form:
-                try:
-                    values["sort_order"] = int(form[f"sort_{cat_id}"])
-                except ValueError:
-                    pass
-            if values:
-                await session.execute(
-                    sa_update(CreditRequirement)
-                    .where(CreditRequirement.category_id == cat_id)
-                    .values(**values)
-                )
-        await session.commit()
-    return RedirectResponse(f"/admin/koubu/{dept_key}", status_code=303)
+    return await _credit_requirements_update(request, "工学部", dept_name, f"/admin/koubu/{dept_key}")
 
 
 @router.post("/admin/koubu/{dept_key}/credit_requirements/add")
 async def admin_koubu_add_requirement(dept_key: str, request: Request, _: str = Depends(check_admin)):
     dept_name = _koubu_department_name(dept_key)
-    form = await request.form()
-    label  = form.get("new_label", "").strip()
-    group  = form.get("new_group", "").strip()
-    note   = form.get("new_note", "").strip() or None
-    if not label:
-        return RedirectResponse(f"/admin/koubu/{dept_key}?error=invalid", status_code=303)
-    try:
-        req    = max(0, int(form.get("new_req", "0")))
-        sort_v = int(form.get("new_sort", "999"))
-    except ValueError:
-        req, sort_v = 0, 999
-    cat_id = f"{dept_key}_{int(time.time() * 1000)}"
-    async with AsyncSessionLocal() as session:
-        session.add(CreditRequirement(
-            category_id=cat_id,
-            label=label,
-            group_name=group,
-            sort_order=sort_v,
-            required_credits=req,
-            note=note,
-            faculty="工学部",
-            department=dept_name,
-        ))
-        await session.commit()
-    return RedirectResponse(f"/admin/koubu/{dept_key}", status_code=303)
+    return await _credit_requirements_add(request, "工学部", dept_name, dept_key, f"/admin/koubu/{dept_key}")
 
 
 @router.post("/admin/koubu/{dept_key}/credit_requirements/{cat_id}/delete")
-async def admin_koubu_delete_requirement(dept_key: str, cat_id: str, request: Request, _: str = Depends(check_admin)):
+async def admin_koubu_delete_requirement(dept_key: str, cat_id: str, _: str = Depends(check_admin)):
     _koubu_department_name(dept_key)
-    async with AsyncSessionLocal() as session:
-        row = await session.get(CreditRequirement, cat_id)
-        if row:
-            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
-            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
-            in_use = (await session.execute(
-                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
-            )).scalar_one_or_none()
-            if in_use:
-                return RedirectResponse(f"/admin/koubu/{dept_key}?error=in_use", status_code=303)
-            await session.delete(row)
-            await session.commit()
-    return RedirectResponse(f"/admin/koubu/{dept_key}", status_code=303)
+    return await _credit_requirements_delete(cat_id, f"/admin/koubu/{dept_key}")
 
 
 # 機械工学科の必修/選択フラグ（現状 core.seiseki.is_kikai_hisshu() が参照するのは
@@ -712,92 +511,16 @@ async def admin_nogaku_dept(dept_key: str, request: Request, _: str = Depends(ch
 @router.post("/admin/nogaku/{dept_key}/credit_requirements/update")
 async def admin_nogaku_update_requirements(dept_key: str, request: Request, _: str = Depends(check_admin)):
     dept_name = _nogaku_department_name(dept_key)
-    form = await request.form()
-    async with AsyncSessionLocal() as session:
-        existing_ids = {
-            r for (r,) in (await session.execute(
-                select(CreditRequirement.category_id)
-                .where(CreditRequirement.faculty == "農学部", CreditRequirement.department == dept_name)
-            )).all()
-        }
-        for cat_id in existing_ids:
-            values: dict = {}
-            if f"req_{cat_id}" in form:
-                try:
-                    values["required_credits"] = max(0, int(form[f"req_{cat_id}"]))
-                except ValueError:
-                    pass
-            if f"max_{cat_id}" in form:
-                max_val = form[f"max_{cat_id}"].strip()
-                try:
-                    values["max_credits"] = max(0, int(max_val)) if max_val else None
-                except ValueError:
-                    pass
-            if f"note_{cat_id}" in form:
-                note_val = form[f"note_{cat_id}"].strip()
-                values["note"] = note_val or None
-            if f"label_{cat_id}" in form:
-                values["label"] = form[f"label_{cat_id}"].strip()
-            if f"group_{cat_id}" in form:
-                values["group_name"] = form[f"group_{cat_id}"].strip()
-            if f"sort_{cat_id}" in form:
-                try:
-                    values["sort_order"] = int(form[f"sort_{cat_id}"])
-                except ValueError:
-                    pass
-            if values:
-                await session.execute(
-                    sa_update(CreditRequirement)
-                    .where(CreditRequirement.category_id == cat_id)
-                    .values(**values)
-                )
-        await session.commit()
-    return RedirectResponse(f"/admin/nogaku/{dept_key}", status_code=303)
+    return await _credit_requirements_update(request, "農学部", dept_name, f"/admin/nogaku/{dept_key}")
 
 
 @router.post("/admin/nogaku/{dept_key}/credit_requirements/add")
 async def admin_nogaku_add_requirement(dept_key: str, request: Request, _: str = Depends(check_admin)):
     dept_name = _nogaku_department_name(dept_key)
-    form = await request.form()
-    label  = form.get("new_label", "").strip()
-    group  = form.get("new_group", "").strip()
-    note   = form.get("new_note", "").strip() or None
-    if not label:
-        return RedirectResponse(f"/admin/nogaku/{dept_key}?error=invalid", status_code=303)
-    try:
-        req    = max(0, int(form.get("new_req", "0")))
-        sort_v = int(form.get("new_sort", "999"))
-    except ValueError:
-        req, sort_v = 0, 999
-    cat_id = f"{dept_key}_{int(time.time() * 1000)}"
-    async with AsyncSessionLocal() as session:
-        session.add(CreditRequirement(
-            category_id=cat_id,
-            label=label,
-            group_name=group,
-            sort_order=sort_v,
-            required_credits=req,
-            note=note,
-            faculty="農学部",
-            department=dept_name,
-        ))
-        await session.commit()
-    return RedirectResponse(f"/admin/nogaku/{dept_key}", status_code=303)
+    return await _credit_requirements_add(request, "農学部", dept_name, dept_key, f"/admin/nogaku/{dept_key}")
 
 
 @router.post("/admin/nogaku/{dept_key}/credit_requirements/{cat_id}/delete")
-async def admin_nogaku_delete_requirement(dept_key: str, cat_id: str, request: Request, _: str = Depends(check_admin)):
+async def admin_nogaku_delete_requirement(dept_key: str, cat_id: str, _: str = Depends(check_admin)):
     _nogaku_department_name(dept_key)
-    async with AsyncSessionLocal() as session:
-        row = await session.get(CreditRequirement, cat_id)
-        if row:
-            # 修正理由: SubjectCreditCategory.category_idはondelete指定なし(RESTRICT相当)のため、
-            # 科目が紐づけ済みのカテゴリを削除しようとすると未処理のIntegrityErrorで500になっていた。
-            in_use = (await session.execute(
-                select(SubjectCreditCategory).where(SubjectCreditCategory.category_id == cat_id).limit(1)
-            )).scalar_one_or_none()
-            if in_use:
-                return RedirectResponse(f"/admin/nogaku/{dept_key}?error=in_use", status_code=303)
-            await session.delete(row)
-            await session.commit()
-    return RedirectResponse(f"/admin/nogaku/{dept_key}", status_code=303)
+    return await _credit_requirements_delete(cat_id, f"/admin/nogaku/{dept_key}")
