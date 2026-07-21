@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import case, func, or_, select, text
+from sqlalchemy import case, func, or_, select
 
 from core import cache
 from core.config import DEFAULT_ACADEMIC_YEAR, FACULTY_DEPARTMENTS, syllabus_department_key
 from core.liff_auth import verify_liff_id_token
 from core.required_subjects import auto_register_required_subjects, register_syllabus_for_user
-from core.security import make_share_token, verify_share_token
 from database import AsyncSessionLocal
 from models import (
     CourseSection, Instructor, RegistrationCap, Schedule, Subject, Syllabus,
@@ -283,58 +282,6 @@ async def api_timetable_my(
         return {"courses": courses, "cap": cap}
 
 
-@router.get("/api/timetable/share_token")
-async def api_timetable_share_token(
-    request: Request, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
-):
-    user_id = await _require_liff_user(x_liff_id_token, request)
-    async with AsyncSessionLocal() as session:
-        profile = await session.get(UserProfile, user_id)
-        version = profile.share_token_version if profile else 0
-    return {"token": make_share_token(user_id, version)}
-
-
-@router.post("/api/timetable/share_revoke")
-async def api_timetable_share_revoke(request: Request):
-    """発行済みの共有リンクをすべて無効化する（share_token_versionをインクリメント）。"""
-    body = await request.json()
-    user_id = await _require_liff_user(body.get("id_token", ""), request)
-    async with AsyncSessionLocal() as session:
-        profile = await session.get(UserProfile, user_id)
-        if not profile:
-            raise HTTPException(status_code=404, detail="user profile not found")
-        profile.share_token_version = (profile.share_token_version or 0) + 1
-        await session.commit()
-    return {"ok": True}
-
-
-@router.get("/api/timetable/shared")
-async def api_timetable_shared(
-    request: Request, token: str = Query(...), year: int = DEFAULT_ACADEMIC_YEAR,
-    x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
-):
-    viewer_id = await verify_liff_id_token(x_liff_id_token, request)
-    if not viewer_id:
-        raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
-
-    decoded = verify_share_token(token)
-    if not decoded:
-        raise HTTPException(status_code=404, detail="共有リンクが無効です")
-    owner_id, token_version = decoded
-
-    async with AsyncSessionLocal() as session:
-        viewer_profile = await session.get(UserProfile, viewer_id)
-        if not viewer_profile:
-            raise HTTPException(status_code=403, detail="登録済みユーザーのみ閲覧できます")
-
-        owner_profile = await session.get(UserProfile, owner_id)
-        if not owner_profile or (owner_profile.share_token_version or 0) != token_version:
-            raise HTTPException(status_code=404, detail="共有リンクが無効です（停止された可能性があります）")
-
-        courses = await _load_timetable_courses(session, owner_id, year)
-        return {"owner_name": owner_profile.name, "courses": courses}
-
-
 @router.post("/api/timetable/classroom/{syllabus_id}")
 async def api_timetable_classroom_set(syllabus_id: int, request: Request):
     body = await request.json()
@@ -424,115 +371,3 @@ async def api_timetable_unregister(
     return {"ok": True}
 
 
-@router.post("/api/timetable/custom")
-async def api_timetable_custom_create(request: Request):
-    """マイ時間割にシラバスDBに無い科目を手動追加する。他ユーザーには表示されない個人用の科目。"""
-    body = await request.json()
-    user_id = await _require_liff_user(body.get("id_token", ""), request)
-
-    name = (body.get("name") or "").strip()[:100]
-    if not name:
-        raise HTTPException(status_code=400, detail="name is required")
-    instructor = (body.get("instructor") or "").strip()[:100] or None
-    # classificationはcredit_requirements.category_idと一致させ、単位チェッカーの取得単位数に
-    # 加算する（core/seiseki.pyのapi_seiseki_credits参照）。フロントエンドは自由入力ではなく
-    # ユーザーの学部・学科の区分一覧から選択させるため、ここでは形式チェックのみ行う。
-    classification = (body.get("classification") or "").strip()[:100] or None
-    try:
-        credits = int(body.get("credits"))
-    except (TypeError, ValueError):
-        credits = 2
-    credits = max(1, min(credits, 10))
-
-    day = body.get("day_of_week")
-    if day not in _VALID_DAYS:
-        raise HTTPException(status_code=400, detail="invalid day")
-    try:
-        year = int(body.get("year"))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="year must be an integer")
-
-    if day == "集":
-        period = 0
-    else:
-        try:
-            period = int(body.get("period"))
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail="period must be an integer")
-        if not (1 <= period <= 6):
-            raise HTTPException(status_code=400, detail="period must be between 1 and 6")
-
-    async with AsyncSessionLocal() as session:
-        # register_syllabus_for_userと同様、同時押し等でのすり抜けを防ぐため直列化する
-        await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:uid))"), {"uid": user_id})
-
-        if day != "集":
-            # 「1コマ1科目」の原則に合わせ、同一曜日・時限の既存登録（マスタ科目・手動追加科目とも）を
-            # 差し替える。手動追加科目はクォーター等の学期情報を持たないため、集中講義以外は
-            # 学期を問わず常に差し替える（register_syllabus_for_userのような学期重複判定は行わない）
-            await session.execute(
-                UserCustomCourse.__table__.delete().where(
-                    UserCustomCourse.line_user_id == user_id,
-                    UserCustomCourse.year == year,
-                    UserCustomCourse.day_of_week == day,
-                    UserCustomCourse.period == period,
-                )
-            )
-            conflicting_ids = (await session.execute(
-                select(UserSyllabus.syllabus_id)
-                .join(Schedule, Schedule.syllabus_id == UserSyllabus.syllabus_id)
-                .join(Syllabus, Syllabus.id == UserSyllabus.syllabus_id)
-                .where(
-                    UserSyllabus.line_user_id == user_id,
-                    Syllabus.year == year,
-                    Schedule.day_of_week == day,
-                    Schedule.period == period,
-                )
-            )).scalars().all()
-            if conflicting_ids:
-                await session.execute(
-                    UserSyllabus.__table__.delete().where(
-                        UserSyllabus.line_user_id == user_id,
-                        UserSyllabus.syllabus_id.in_(conflicting_ids),
-                    )
-                )
-
-        course = UserCustomCourse(
-            line_user_id=user_id, name=name, instructor=instructor,
-            classification=classification, credits=credits,
-            year=year, day_of_week=day, period=period,
-        )
-        session.add(course)
-        await session.commit()
-        await session.refresh(course)
-
-    return {
-        "ok": True,
-        "course": {
-            "id": course.id,
-            "name": course.name,
-            "instructor": course.instructor or "",
-            "classification": course.classification or "",
-            "credits": course.credits,
-            "academic_term": None,
-            "timetable_code": "",
-            "department": "",
-            "target_grades": "",
-            "subject_category": "",
-            "registered": True,
-            "is_custom": True,
-        },
-    }
-
-
-@router.delete("/api/timetable/custom/{custom_id}")
-async def api_timetable_custom_delete(
-    request: Request, custom_id: int, x_liff_id_token: str = Header("", alias="X-Liff-Id-Token"),
-):
-    user_id = await _require_liff_user(x_liff_id_token, request)
-    async with AsyncSessionLocal() as session:
-        course = await session.get(UserCustomCourse, custom_id)
-        if course and course.line_user_id == user_id:
-            await session.delete(course)
-            await session.commit()
-    return {"ok": True}

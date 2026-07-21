@@ -13,7 +13,10 @@ from starlette.middleware.gzip import GZipMiddleware
 from core import backup, cache, liff_auth, line_client, prewarm, rate_limit
 from core.activity_log import log_cleanup_loop, save_error_log
 from database import engine, init_db
-from routers import health, liff_api, pages, richmenu, seiseki_api, timetable_api, webhook
+from routers import (
+    health, liff_api, pages, richmenu, seiseki_api, timetable_api,
+    timetable_custom_api, timetable_share_api, webhook,
+)
 from routers.admin import (
     auth as admin_auth,
     binran_discrepancies as admin_binran_discrepancies,
@@ -192,6 +195,8 @@ app.include_router(pages.router)
 app.include_router(richmenu.router)
 app.include_router(liff_api.router)
 app.include_router(timetable_api.router)
+app.include_router(timetable_share_api.router)
+app.include_router(timetable_custom_api.router)
 app.include_router(seiseki_api.router)
 
 app.include_router(admin_auth.router)
