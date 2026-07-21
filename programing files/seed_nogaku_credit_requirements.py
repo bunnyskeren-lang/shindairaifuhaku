@@ -11,9 +11,8 @@
 (faculty, department, year)の一意制約で既存行を検索し、無ければ追加する。
 """
 import asyncio
-import os
-import sys
-from pathlib import Path
+
+from _env import load_env
 
 FACULTY = "農学部"
 YEAR = 2026
@@ -28,7 +27,8 @@ COURSES = {
         "senmon_note": (
             "生産環境工学コースは便覧別表第2で「専門科目については別に定める指定科目から"
             "修得すること」とされており、必修・選択の内訳が便覧だけでは確定できないため、"
-            "合計値（88単位）のみ登録しています。詳細はdocs/学生便覧2026/NOGAKU_TODO.md参照。"
+            "合計値（88単位）のみ登録しています。詳細はdocs/学生便覧2026/nogaku/"
+            "NOGAKU_CREDIT_CHECKER_TODO.md参照。"
         ),
     },
     "keizai":     {"name": "食料環境経済学コース",   "kyoyo_all": 12, "kyotsu": 16, "senmon": 85},
