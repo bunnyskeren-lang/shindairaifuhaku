@@ -1,4 +1,6 @@
-from core.seiseki import classify_seiseki_raw, classify_senmon, extract_seiseki_raw, is_kikai_hisshu, is_senmon2
+import pytest
+
+from core.seiseki import PDFPLUMBER_OK, classify_seiseki_raw, classify_senmon, extract_seiseki_raw, is_kikai_hisshu, is_senmon2, parse_seiseki_pdf
 
 
 def test_classify_senmon_groups():
@@ -160,3 +162,139 @@ def test_extract_seiseki_raw_kenko_label_fallback_without_suffix():
     )
     raw = extract_seiseki_raw(text)
     assert raw["summaries"]["健康・スポーツ科学系"] == 1.5
+
+
+# ── 異常系 ──────────────────────────────────────────────────────────────────
+
+def test_extract_seiseki_raw_empty_text_returns_zeroed_structure():
+    raw = extract_seiseki_raw("")
+    assert raw["gaigo_courses"] == []
+    assert raw["senmon_courses"] == []
+    assert all(v == 0.0 for v in raw["summaries"].values())
+
+
+def test_extract_seiseki_raw_ignores_unmatched_lines():
+    # 科目行の正規表現にマッチしない行（ヘッダー・空行・注記等）は無視され例外にならない
+    text = (
+        "成績照会\n"
+        "\n"
+        "氏名: 神戸太郎\n"
+        "【専門科目】\n"
+        "これは科目行ではない\n"
+        "経営管理  2.0  良\n"
+    )
+    raw = extract_seiseki_raw(text)
+    assert raw["senmon_courses"] == [{"name": "経営管理", "credits": 2.0, "section": "専門科目"}]
+
+
+def test_extract_seiseki_raw_all_grade_labels_except_fukashi_are_counted():
+    # 秀・優・良・可・合格・認定はすべて修得済みとして扱う。「不可」だけ除外する
+    text = (
+        "【専門科目】\n"
+        "科目秀  2.0  秀\n"
+        "科目優  2.0  優\n"
+        "科目良  2.0  良\n"
+        "科目可  2.0  可\n"
+        "科目合格  2.0  合格\n"
+        "科目認定  2.0  認定\n"
+        "科目不可  2.0  不可\n"
+    )
+    raw = extract_seiseki_raw(text)
+    names = {c["name"] for c in raw["senmon_courses"]}
+    assert names == {"科目秀", "科目優", "科目良", "科目可", "科目合格", "科目認定"}
+    assert "科目不可" not in names
+
+
+def test_classify_seiseki_raw_handles_completely_empty_dict():
+    # summaries/gaigo_courses/senmon_coursesが一切無い辞書でもKeyErrorにならず全項目0を返す
+    result = classify_seiseki_raw({})
+    assert result["senmon1"] == 0.0
+    assert result["senmon3"] == 0.0
+    assert result["gaigo1"] == 0.0
+    assert result["kikai_kyotsu_hisshu"] == 0.0
+    assert result["senmon_all"] == 0.0
+
+
+def test_classify_senmon_empty_string_falls_back_to_dai3():
+    assert classify_senmon("") == "第3群"
+
+
+def test_is_kikai_hisshu_empty_string_is_false():
+    assert not is_kikai_hisshu("", kyotsu=True)
+    assert not is_kikai_hisshu("", kyotsu=False)
+
+
+def test_parse_seiseki_pdf_raises_when_pdfplumber_unavailable(monkeypatch):
+    monkeypatch.setattr("core.seiseki.PDFPLUMBER_OK", False)
+    with pytest.raises(RuntimeError):
+        parse_seiseki_pdf(b"dummy")
+
+
+# ── 境界値 ──────────────────────────────────────────────────────────────────
+
+def test_is_senmon2_prefix_boundary_does_not_match_unrelated_names():
+    # 前方一致は「簿記」で始まる名前のみ対象。似た文字列を含むだけでは誤マッチしない
+    assert is_senmon2("簿記")
+    assert is_senmon2("簿記Ⅰ")
+    assert is_senmon2("簿記論")  # 「簿記」で始まるので前方一致対象
+    assert not is_senmon2("財務簿記")  # 先頭が「簿記」でないため対象外
+    assert not is_senmon2("経営管理論")  # 完全一致リストの「経営管理」とは別科目
+
+
+def test_classify_seiseki_raw_senmon3_clamped_to_zero_when_breakdown_exceeds_total():
+    # 専門科目の内訳合計(第1群等)がsummariesの専門科目合計を上回る不整合データでも、
+    # senmon3（その他専門科目）は負値にならずゼロにクランプされる
+    raw = {
+        "summaries": {"専門科目": 2.0},
+        "gaigo_courses": [],
+        "senmon_courses": [
+            {"name": "経営学基礎論", "credits": 10.0, "section": "専門科目"},  # 第1群、合計を上回る
+        ],
+    }
+    result = classify_seiseki_raw(raw)
+    assert result["senmon1"] == 10.0
+    assert result["senmon3"] == 0.0
+
+
+def test_classify_seiseki_raw_gaigo_odd_total_rounds_half_and_half():
+    # 外国語科目の内訳(英語/その他)が無く合計のみ判明している場合、均等に按分する。
+    # 奇数値(3.0)は0.5刻みで丸められる
+    raw = {
+        "summaries": {"外国語科目": 3.0},
+        "gaigo_courses": [],
+        "senmon_courses": [],
+    }
+    result = classify_seiseki_raw(raw)
+    assert result["gaigo1"] == 1.5
+    assert result["gaigo2"] == 1.5
+
+
+def test_classify_seiseki_raw_zero_credits_course_counts_as_zero():
+    raw = {
+        "summaries": {"専門科目": 0.0},
+        "gaigo_courses": [],
+        "senmon_courses": [{"name": "経営管理", "credits": 0.0, "section": "専門科目"}],
+    }
+    result = classify_seiseki_raw(raw)
+    assert result["senmon2"] == 0.0
+    assert result["senmon3"] == 0.0
+
+
+@pytest.mark.skipif(not PDFPLUMBER_OK, reason="pdfplumber not installed")
+def test_parse_seiseki_pdf_gpa_absent_returns_none(monkeypatch):
+    class _FakePage:
+        def extract_text(self):
+            return "GPAの記載が無い成績表テキスト"
+
+    class _FakePdf:
+        pages = [_FakePage()]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("core.seiseki._pdfplumber.open", lambda *a, **kw: _FakePdf())
+    result = parse_seiseki_pdf(b"dummy")
+    assert result["gpa"] is None
