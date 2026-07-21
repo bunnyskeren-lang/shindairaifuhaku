@@ -1,0 +1,4 @@
+# programing files/ 配下のスクリプト専用の追加依存（Renderにはデプロイされないため requirements.txt には含めない）
+# 本体アプリと同じ仮想環境を使う場合は requirements.txt / requirements-dev.txt と合わせてインストールすること
+-r ../requirements.txt
+pillow==10.4.0
