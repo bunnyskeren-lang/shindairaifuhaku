@@ -16,6 +16,14 @@ router = APIRouter()
 # IPアドレス単位で1分あたり5回までに制限する
 _parse_seiseki_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
 
+# 修正理由: /api/reclassify_seiseki は認証不要で誰でも叩ける上、raw の中身に
+# サイズ上限が無いため、巨大なJSONを連投されるとCPU/メモリを消費するDoSが可能だった。
+# /api/seiseki/save_raw は認証必須だが同様にrawのサイズ上限が無く、
+# 正規ユーザー1人でもuser_seiseki_rawへの書き込みを無制限に連打できたため、
+# 他の書き込み系エンドポイントと同水準のレート制限を揃える。
+_reclassify_seiseki_rate_limit = rate_limiter(max_requests=20, window_seconds=60)
+_save_raw_rate_limit = rate_limiter(max_requests=10, window_seconds=60)
+
 
 @router.post("/api/parse_seiseki")
 async def api_parse_seiseki(
@@ -58,7 +66,7 @@ async def api_parse_seiseki(
 
 
 @router.post("/api/reclassify_seiseki")
-async def api_reclassify_seiseki(request: Request):
+async def api_reclassify_seiseki(request: Request, _rl: None = Depends(_reclassify_seiseki_rate_limit)):
     body = await request.json()
     raw = body.get("raw")
     if not isinstance(raw, dict):
@@ -96,7 +104,7 @@ async def api_seiseki_credits(
 
 
 @router.post("/api/seiseki/save_raw")
-async def api_seiseki_save_raw(request: Request):
+async def api_seiseki_save_raw(request: Request, _rl: None = Depends(_save_raw_rate_limit)):
     body = await request.json()
     uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     raw = body.get("raw")
