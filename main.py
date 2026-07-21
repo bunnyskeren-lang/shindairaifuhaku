@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
-from core import backup, cache, liff_auth, line_client, prewarm
+from core import backup, cache, liff_auth, line_client, prewarm, rate_limit
 from core.activity_log import log_cleanup_loop, save_error_log
 from database import engine, init_db
 from routers import health, liff_api, pages, richmenu, seiseki_api, timetable_api, webhook
@@ -46,11 +46,13 @@ async def lifespan(app: FastAPI):
     ping_task = asyncio.create_task(line_client.self_ping())
     backup_task = asyncio.create_task(backup.backup_loop())
     cleanup_task = asyncio.create_task(log_cleanup_loop())
+    rate_limit_cleanup_task = asyncio.create_task(rate_limit.rate_limit_cleanup_loop())
     yield
     ping_task.cancel()
     backup_task.cancel()
     cleanup_task.cancel()
-    for task in (ping_task, backup_task, cleanup_task):
+    rate_limit_cleanup_task.cancel()
+    for task in (ping_task, backup_task, cleanup_task, rate_limit_cleanup_task):
         try:
             await task
         except asyncio.CancelledError:
@@ -71,6 +73,10 @@ _BODY_LIMIT_EXEMPT_PATHS = {"/api/parse_seiseki"}
 
 # Starlette の BaseHTTPMiddleware は各リクエストで追加タスク生成+anyioストリーム経由の
 # 中継が発生し全リクエストに一定のオーバーヘッドが乗るため、素のASGIミドルウェアとして実装する。
+class _BodyTooLargeError(Exception):
+    pass
+
+
 class BodySizeLimitMiddleware:
     def __init__(self, app):
         self.app = app
@@ -88,7 +94,25 @@ class BodySizeLimitMiddleware:
                     return await response(scope, receive, send)
             except ValueError:
                 pass
-        await self.app(scope, receive, send)
+
+        # Content-Length ヘッダーが無い(chunked encoding等)リクエストはここまでのチェックを
+        # 素通りするため、実際に受信したボディの累計バイト数もreceive()をラップして監視する。
+        received = 0
+
+        async def limited_receive():
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body") or b"")
+                if received > _MAX_BODY_BYTES:
+                    raise _BodyTooLargeError()
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except _BodyTooLargeError:
+            response = _JSONResponse(status_code=413, content={"detail": "リクエストが大きすぎます"})
+            await response(scope, receive, send)
 
 
 # 修正理由: リクエストごとの処理時間・ステータスコードを記録する仕組みが

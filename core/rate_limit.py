@@ -1,3 +1,4 @@
+import asyncio
 import time
 from collections import defaultdict
 
@@ -8,6 +9,11 @@ from fastapi import HTTPException, Request
 # Renderは単一dyno構成のため、インメモリのスライディングウィンドウで
 # IPアドレス単位に制限する（再起動でカウンタはリセットされる）。
 _buckets: dict[str, list[float]] = defaultdict(list)
+
+# 修正理由: 一度でもアクセスされたpath:ipの組み合わせのキー自体はbucketが空になっても
+# 辞書から消えず、長期稼働で単調増加し続けていた。既存rate_limiterのwindow_secondsは
+# 全て60秒以下のため、5分アクセスが無いキーは安全に破棄できる。
+_CLEANUP_INTERVAL_SECONDS = 300
 
 
 def client_ip(request: Request) -> str:
@@ -37,3 +43,13 @@ def rate_limiter(max_requests: int, window_seconds: float):
             )
         bucket.append(now)
     return _dep
+
+
+async def rate_limit_cleanup_loop() -> None:
+    """アクセスの絶えたpath:ipキーを_bucketsから間引き、辞書の単調増加を防ぐ。"""
+    while True:
+        await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
+        cutoff = time.monotonic() - _CLEANUP_INTERVAL_SECONDS
+        stale_keys = [k for k, v in _buckets.items() if not v or v[-1] < cutoff]
+        for k in stale_keys:
+            _buckets.pop(k, None)
