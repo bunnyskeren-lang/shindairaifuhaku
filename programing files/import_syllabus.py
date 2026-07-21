@@ -14,10 +14,10 @@ course_sections）ともに全学期（前期・後期・クォーター・集�
 （2026-07-14以前は前期を除外していたが、前期のシラバスデータも投入する運用に変更した）。
 """
 import asyncio
-import os
 import re
-import sys
 from pathlib import Path
+
+from _env import load_env
 
 _LOG_PATH = Path(__file__).parent / "import_debug.log"
 
@@ -56,17 +56,6 @@ def split_faculty_department(dept_faculty: str) -> tuple[str, str]:
     Subject.faculty/department書き込み用の(学部名, 学科名)ペアに分割する。"""
     return _FACULTY_DEPARTMENT_SPLIT.get(dept_faculty, (dept_faculty, ""))
 
-
-def load_env(env: str):
-    env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")
-    if not env_file.exists():
-        print(f"ERROR: {env_file} が見つかりません", file=sys.stderr)
-        sys.exit(1)
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
 
 _FULLWIDTH_ALNUM = str.maketrans({
     chr(c): chr(c - 0xFEE0)
@@ -460,11 +449,14 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         )
                     else:
                         cls = classification or default_classification(dept_faculty)
+                        # 修正理由: department列はnullable=False+空文字プレースホルダ方式なのに
+                        # facultyだけpure_faculty=""をNoneに変換して非対称にしていた
+                        # (将来faculty列をNOT NULL化する前提を崩さないよう空文字のまま渡す)
                         subj = Subject(
                             name=c["name"],
                             classification=cls,
                             category="専門",
-                            faculty=pure_faculty or None,
+                            faculty=pure_faculty,
                             department=dept_suffix,
                             reading="",
                             term_type=normalize_term_type(c["term"]),
@@ -487,7 +479,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                         name=c["name"],
                         classification=cls,
                         category="専門",
-                        faculty=pure_faculty or None,
+                        faculty=pure_faculty,
                         department=dept_suffix,
                         reading="",
                     )

@@ -488,7 +488,10 @@ async def admin_courses_update(
             course.reading = reading(new_name)
             course.term_type = term_type.strip() or None
             course.credits = credits if credits else None
-            course.faculty = faculty.strip() or None
+            # 修正理由: department列はnullable=False+空文字プレースホルダ方式なのに対し、
+            # facultyだけ空欄保存でNULLになる非対称な状態だった。UNIQUE制約はNULL同士を
+            # 区別しないため空文字に揃えておく(将来faculty列をNOT NULL化する際の前提)
+            course.faculty = faculty.strip()
             await session.commit()
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
