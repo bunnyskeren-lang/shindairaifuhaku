@@ -26,72 +26,6 @@ def _log(msg: str) -> None:
     with open(_LOG_PATH, "a", encoding="utf-8") as f:
         f.write(msg + "\n")
 
-SYLLABUS_BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.html"
-FACULTY_PATH: dict[str, str] = {
-    "U": "20",
-    "B": "06",
-    "X": "15",  # システム情報学部
-    "G": "20",  # 教養科目の一部で使われるコード（Uと同じpath）
-    "Z": "14",  # 海洋政策科学部
-    "E": "05",  # 経済学部
-    "H": "13",  # 国際人間科学部
-    "A": "10",  # 農学部
-    "L": "01",  # 文学部
-    "J": "04",  # 法学部
-}
-
-# 医学部は学科によって時間割コードの3文字目（Mの次）にさらに1文字付く場合と、
-# 数字がそのまま続くが番号帯で学科が異なる場合がある（例: 医療創成工学科は
-# "MB" のように英字が入る。医学科は900番台・看護学専攻は000-399番台）。
-# 保健学科の他専攻（検査技術科学専攻・理学療法学専攻・作業療法学専攻）を追加する際は
-# 実データの番号帯を確認し、既存レンジと重ならないよう追記・調整すること。
-MEDICINE_SUBLETTERS: dict[str, str] = {
-    "B": "0803",  # 医学部医療創成工学科
-}
-MEDICINE_RANGES: list[tuple[int, int, str]] = [
-    (0, 399, "080201"),  # 医学部保健学科看護学専攻（暫定上限。他専攻データ確認後に調整）
-    (900, 999, "0801"),  # 医学部医学科
-]
-
-# 保健学科の専攻同士は数字部分の範囲が重なりうる（看護学専攻・検査技術科学専攻ともに
-# 000-300番台の数字を使う）ため、番号帯だけでは判別できない。import_syllabus.pyは
-# 元データの「所属」列を持っているため、ここに登録された所属名は範囲判定より優先して
-# 直接pathを決める。新しい専攻を追加する際は必ずこちらに追記すること
-# （番号帯が本当に重ならないと確認できない限り、MEDICINE_RANGESへの追加だけで済ませない）。
-DEPARTMENT_PATH_OVERRIDE: dict[str, str] = {
-    "医学部保健学科看護学専攻": "080201",
-    "医学部保健学科検査技術科学専攻": "080202",
-    "医学部保健学科理学療法学専攻": "080203",
-    "医学部保健学科作業療法学専攻": "080204",
-    # 理学部は学科ごとにpathが分かれるが、時間割コードの2文字目「S」は全学科共通で、
-    # 数字部分の範囲が学科間で重なる（例: 化学科と生物学科がともに415番台を使う）ため
-    # 番号帯では判別できない。所属名（=学科）で直接pathを決める
-    "理学部数学科": "0701",
-    "理学部物理学科": "0702",
-    "理学部化学科": "0703",
-    "理学部生物学科": "0704",
-    "理学部惑星学科": "0707",
-    # 工学部の全学科共通科目（所属列が学科名を含まず「工学部」のみ）は、時間割コードの
-    # 数字帯が建築学科（000-099）と重なるため番号帯では判別できない。所属名で直接pathを決める
-    # （実URLで確認済み: 1T027等は/09/、建築学科の1T066等は/0921/）
-    "工学部": "09",
-}
-
-# 工学部は学科ごとにpathが分かれるが、時間割コードの2文字目は学科をまたいで
-# 「T」（現行カリキュラム）・「N」（旧カリキュラム科目、例: 創造思考ゼミナールⅠ-a（-21））を
-# 共有しており数字部分の範囲でしか判別できない（例: 建築学科は000-099番台、
-# 市民工学科は100-149番台、電気電子工学科は150-199番台。TとNで番号帯とpathの
-# 対応は同じことを確認済み）。他学科を追加する際はこのリストに(下限, 上限, path)を追記すること。
-# 追記時は実データの番号帯を確認し、既存レンジと重ならないよう上限も調整すること。
-ENGINEERING_RANGES: list[tuple[int, int, str]] = [
-    (0, 99, "0921"),      # 工学部建築学科
-    (100, 149, "0922"),   # 工学部市民工学科
-    (150, 199, "0923"),   # 工学部電気電子工学科
-    (200, 249, "0924"),   # 工学部機械工学科
-    (250, 299, "0925"),   # 工学部応用化学科
-]
-ENGINEERING_LETTERS = {"T", "N"}
-
 # subjects.faculty/departmentは「学部名のみ」「学科名（未設定なら空文字）」のペア形式で持つ
 # （credit_requirements等の既存テーブルと同じ形。database.py init_db()の一回限りバックフィルと
 # 同じ16パターン）。dept_faculty（所属列から作った学部+学科の複合文字列、分類名生成や
@@ -122,40 +56,6 @@ def split_faculty_department(dept_faculty: str) -> tuple[str, str]:
     Subject.faculty/department書き込み用の(学部名, 学科名)ペアに分割する。"""
     return _FACULTY_DEPARTMENT_SPLIT.get(dept_faculty, (dept_faculty, ""))
 
-
-def make_syllabus_url(code: str, department: str = "") -> str | None:
-    if len(code) < 2:
-        return None
-    if department in DEPARTMENT_PATH_OVERRIDE:
-        return SYLLABUS_BASE.format(path=DEPARTMENT_PATH_OVERRIDE[department], code=code)
-    letter = code[1].upper()
-    if letter in ENGINEERING_LETTERS:
-        digits = code[2:]
-        if not digits.isdigit():
-            return None
-        num = int(digits)
-        for lo, hi, path in ENGINEERING_RANGES:
-            if lo <= num <= hi:
-                return SYLLABUS_BASE.format(path=path, code=code)
-        return None
-    if letter == "M":
-        if len(code) >= 3 and code[2].isalpha():
-            path = MEDICINE_SUBLETTERS.get(code[2].upper())
-            if not path:
-                return None
-            return SYLLABUS_BASE.format(path=path, code=code)
-        digits = code[2:]
-        if not digits.isdigit():
-            return None
-        num = int(digits)
-        for lo, hi, path in MEDICINE_RANGES:
-            if lo <= num <= hi:
-                return SYLLABUS_BASE.format(path=path, code=code)
-        return None
-    path = FACULTY_PATH.get(letter)
-    if not path:
-        return None
-    return SYLLABUS_BASE.format(path=path, code=code)
 
 def load_env(env: str):
     env_file = Path(__file__).parent / (".env.dev" if env == "dev" else ".env")

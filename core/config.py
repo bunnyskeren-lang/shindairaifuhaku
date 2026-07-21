@@ -98,10 +98,13 @@ EASE_LABEL = {"SS": "天国", "S": "楽々", "A": "標準", "B": "大変", "C": 
 EASE_COLOR = {"SS": "#10b981", "S": "#6366f1", "A": "#f59e0b", "B": "#f97316", "C": "#ef4444"}
 EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★☆☆", "B": "★★☆☆☆", "C": "★☆☆☆☆"}
 
-# 以下、programing files/import_syllabus.pyのFACULTY_PATH/DEPARTMENT_PATH_OVERRIDE/
+# 以下、programing files/fetch_syllabus_info.pyのFACULTY_PATH/DEPARTMENT_PATH_OVERRIDE/
 # ENGINEERING_RANGES/MEDICINE_RANGES/MEDICINE_SUBLETTERSと同じ対応表。
-# シラバスURL生成ロジックを変更する際は、fetch_syllabus_info.py・
-# templates/liff/timetable.html（JS版FACULTY_PATH_JS）も含め4箇所すべてを同時に更新すること
+# シラバスURL生成ロジックを変更する際は、templates/liff/timetable.html
+# （JS版FACULTY_PATH_JS）も含め3箇所すべてを同時に更新すること
+# （programing files/import_syllabus.py側の同名ロジックは2026-07に呼び出し元が
+# 無くなり死んでいたため削除済み。import_syllabus.pyはシラバスURLを保存せず、
+# シラバス投入後にfetch_syllabus_info.py側のロジックで動的生成する設計）
 _SYLLABUS_FACULTY_PATH = {"U": "20", "B": "06", "X": "15", "G": "20", "Z": "14", "H": "13", "E": "05", "A": "10", "L": "01", "J": "04"}
 
 _ENGINEERING_RANGES = [
