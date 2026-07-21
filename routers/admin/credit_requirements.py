@@ -101,6 +101,26 @@ async def _credit_requirements_add(
     return RedirectResponse(redirect_url, status_code=303)
 
 
+async def _fetch_sorted_credit_requirements(
+    session, faculty: str, department: str | None = None,
+) -> tuple[list[CreditRequirement], list[str]]:
+    """5学部の管理GETハンドラで完全に同一だった「単位要件をグループ表示順で並べ替え、
+    group_namesを重複無く抽出する」処理を共通化したもの。"""
+    conds = [CreditRequirement.faculty == faculty]
+    if department is not None:
+        conds.append(CreditRequirement.department == department)
+    reqs = (await session.execute(
+        select(CreditRequirement).where(*conds).order_by(CreditRequirement.sort_order)
+    )).scalars().all()
+    group_order = await cache.get_credit_group_order()
+    reqs = sorted(
+        reqs,
+        key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
+    )
+    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
+    return reqs, group_names
+
+
 async def _credit_requirements_delete(cat_id: str, redirect_url: str):
     async with AsyncSessionLocal() as session:
         row = await session.get(CreditRequirement, cat_id)
@@ -129,16 +149,7 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
             .where(Subject.faculty.like("%経営学部%"))
             .order_by(Subject.classification, Subject.sort_order, Subject.name)
         )).scalars().all()
-        reqs = (await session.execute(
-            select(CreditRequirement)
-            .where(CreditRequirement.faculty == "経営学部")
-            .order_by(CreditRequirement.sort_order)
-        )).scalars().all()
-        group_order = await cache.get_credit_group_order()
-        reqs = sorted(
-            reqs,
-            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
-        )
+        reqs, group_names = await _fetch_sorted_credit_requirements(session, "経営学部")
         kyotsu_candidates = (await session.execute(
             select(Subject.name, Subject.credits)
             .where(Subject.classification.like("%共通専門基礎%"))
@@ -152,7 +163,6 @@ async def admin_keiei(request: Request, _: str = Depends(check_admin)):
     for cat_id, course_name in approved_rows:
         approved_by_cat.setdefault(cat_id, set()).add(course_name)
     auto_groups = {c.id: classify_senmon(c.name) for c in courses}
-    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     return templates.TemplateResponse("admin/keiei.html", {
         "request": request,
         "courses": courses,
@@ -279,22 +289,12 @@ async def admin_credit_group_move(request: Request, _: str = Depends(check_admin
 @router.get("/admin/sysinfo", response_class=HTMLResponse)
 async def admin_sysinfo(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        reqs = (await session.execute(
-            select(CreditRequirement)
-            .where(CreditRequirement.faculty == "システム情報学部")
-            .order_by(CreditRequirement.sort_order)
-        )).scalars().all()
-        group_order = await cache.get_credit_group_order()
-        reqs = sorted(
-            reqs,
-            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
-        )
+        reqs, group_names = await _fetch_sorted_credit_requirements(session, "システム情報学部")
         courses = (await session.execute(
             select(Subject)
             .where(Subject.faculty.like("%システム情報学部%"))
             .order_by(Subject.name)
         )).scalars().all()
-    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     return templates.TemplateResponse("admin/sysinfo.html", {
         "request": request,
         "reqs": reqs,
@@ -324,22 +324,12 @@ async def admin_sysinfo_delete_requirement(cat_id: str, _: str = Depends(check_a
 @router.get("/admin/bungaku", response_class=HTMLResponse)
 async def admin_bungaku(request: Request, _: str = Depends(check_admin)):
     async with AsyncSessionLocal() as session:
-        reqs = (await session.execute(
-            select(CreditRequirement)
-            .where(CreditRequirement.faculty == "文学部")
-            .order_by(CreditRequirement.sort_order)
-        )).scalars().all()
-        group_order = await cache.get_credit_group_order()
-        reqs = sorted(
-            reqs,
-            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
-        )
+        reqs, group_names = await _fetch_sorted_credit_requirements(session, "文学部")
         courses = (await session.execute(
             select(Subject)
             .where(Subject.faculty == "文学部")
             .order_by(Subject.name)
         )).scalars().all()
-    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     return templates.TemplateResponse("admin/bungaku.html", {
         "request": request,
         "reqs": reqs,
@@ -388,22 +378,12 @@ def _koubu_department_name(dept_key: str) -> str:
 async def admin_koubu_dept(dept_key: str, request: Request, _: str = Depends(check_admin)):
     dept_name = _koubu_department_name(dept_key)
     async with AsyncSessionLocal() as session:
-        reqs = (await session.execute(
-            select(CreditRequirement)
-            .where(CreditRequirement.faculty == "工学部", CreditRequirement.department == dept_name)
-            .order_by(CreditRequirement.sort_order)
-        )).scalars().all()
-        group_order = await cache.get_credit_group_order()
-        reqs = sorted(
-            reqs,
-            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
-        )
+        reqs, group_names = await _fetch_sorted_credit_requirements(session, "工学部", dept_name)
         courses = (await session.execute(
             select(Subject)
             .where(Subject.faculty == "工学部", Subject.department == dept_name)
             .order_by(Subject.name)
         )).scalars().all()
-    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     # 必修/選択の仕分けは現状 機械工学科（専門科目）のみ core.seiseki.is_kikai_hisshu() が対応。
     # 本一覧はfaculty="工学部"かつdepartment=学科名のみを表示するため、教養教育院扱いの
     # 共通専門基礎科目（線形代数等）はここには含まれず、必修判定もkyotsu=False（専門科目扱い）のみで行う。
@@ -483,22 +463,12 @@ def _nogaku_department_name(dept_key: str) -> str:
 async def admin_nogaku_dept(dept_key: str, request: Request, _: str = Depends(check_admin)):
     dept_name = _nogaku_department_name(dept_key)
     async with AsyncSessionLocal() as session:
-        reqs = (await session.execute(
-            select(CreditRequirement)
-            .where(CreditRequirement.faculty == "農学部", CreditRequirement.department == dept_name)
-            .order_by(CreditRequirement.sort_order)
-        )).scalars().all()
-        group_order = await cache.get_credit_group_order()
-        reqs = sorted(
-            reqs,
-            key=lambda r: (group_order.get((r.faculty, r.group_name), cache.CREDIT_GROUP_ORDER_FALLBACK), r.sort_order),
-        )
+        reqs, group_names = await _fetch_sorted_credit_requirements(session, "農学部", dept_name)
         courses = (await session.execute(
             select(Subject)
             .where(Subject.faculty.like("%農学部%"))
             .order_by(Subject.name)
         )).scalars().all()
-    group_names = list(dict.fromkeys(r.group_name for r in reqs if r.group_name))
     return templates.TemplateResponse("admin/koubu_dept.html", {
         "request": request,
         "dept_key": dept_key,
