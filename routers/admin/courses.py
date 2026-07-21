@@ -12,6 +12,7 @@ from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus, UserSyllabus
+from routers.admin._common import reorder_sort_order, swap_by_index, upsert_display_order_sequence
 
 router = APIRouter()
 
@@ -295,20 +296,8 @@ async def admin_instructor_move(request: Request, _=Depends(check_admin)):
         all_instr = list((await session.execute(
             select(Instructor).order_by(Instructor.sort_order, Instructor.name)
         )).scalars().all())
-
-        try:
-            idx = next(i for i, inst in enumerate(all_instr) if inst.id == instructor_id)
-        except StopIteration:
+        if not reorder_sort_order(all_instr, instructor_id, direction):
             return JSONResponse({"ok": False})
-
-        delta = -1 if direction == "up" else 1
-        swap_idx = idx + delta
-        if swap_idx < 0 or swap_idx >= len(all_instr):
-            return JSONResponse({"ok": True})
-
-        all_instr[idx], all_instr[swap_idx] = all_instr[swap_idx], all_instr[idx]
-        for i, inst in enumerate(all_instr):
-            inst.sort_order = i
         await session.commit()
     cache.invalidate_courses_cache()
     return JSONResponse({"ok": True})
@@ -326,20 +315,8 @@ async def admin_faculty_move(request: Request, _=Depends(check_admin)):
         all_fac = list((await session.execute(
             select(DisplayOrder).where(DisplayOrder.kind == "faculty").order_by(DisplayOrder.sort_order)
         )).scalars().all())
-
-        try:
-            idx = next(i for i, f in enumerate(all_fac) if f.id == faculty_id)
-        except StopIteration:
+        if not reorder_sort_order(all_fac, faculty_id, direction):
             return JSONResponse({"ok": False})
-
-        delta = -1 if direction == "up" else 1
-        swap_idx = idx + delta
-        if swap_idx < 0 or swap_idx >= len(all_fac):
-            return JSONResponse({"ok": True})
-
-        all_fac[idx], all_fac[swap_idx] = all_fac[swap_idx], all_fac[idx]
-        for i, f in enumerate(all_fac):
-            f.sort_order = i
         await session.commit()
     cache.invalidate_faculty_order_cache()
     return JSONResponse({"ok": True})
@@ -421,27 +398,12 @@ async def admin_cls_move(request: Request, _=Depends(check_admin)):
         _cls_sort = make_cls_sort(cls_map)
         sorted_cls = sorted(all_cls, key=_cls_sort)
 
-        try:
-            idx = sorted_cls.index(name)
-        except ValueError:
+        moved = swap_by_index(sorted_cls, name, direction)
+        if moved is None:
             return JSONResponse({"ok": False})
-
-        delta = -1 if direction == "up" else 1
-        swap_idx = idx + delta
-        if swap_idx < 0 or swap_idx >= len(sorted_cls):
-            return JSONResponse({"ok": True})
-
-        sorted_cls[idx], sorted_cls[swap_idx] = sorted_cls[swap_idx], sorted_cls[idx]
-
-        for i, cls_name in enumerate(sorted_cls):
-            existing = (await session.execute(
-                select(DisplayOrder).where(DisplayOrder.kind == "classification", DisplayOrder.name == cls_name)
-            )).scalar_one_or_none()
-            if existing:
-                existing.sort_order = i
-            else:
-                session.add(DisplayOrder(kind="classification", name=cls_name, sort_order=i))
-        await session.commit()
+        if moved:
+            await upsert_display_order_sequence(session, "classification", sorted_cls)
+            await session.commit()
     cache.invalidate_cls_caches()
     cache.invalidate_courses_cache()
     return JSONResponse({"ok": True})
@@ -498,20 +460,8 @@ async def admin_course_move(course_id: int, request: Request, _=Depends(check_ad
             .where(Subject.classification == (course.classification or ""))
             .order_by(Subject.sort_order, Subject.name)
         )).scalars().all())
-
-        try:
-            idx = next(i for i, c in enumerate(all_in_cls) if c.id == course_id)
-        except StopIteration:
+        if not reorder_sort_order(all_in_cls, course_id, direction):
             return JSONResponse({"ok": False})
-
-        delta = -1 if direction == "up" else 1
-        swap_idx = idx + delta
-        if swap_idx < 0 or swap_idx >= len(all_in_cls):
-            return JSONResponse({"ok": True})
-
-        all_in_cls[idx], all_in_cls[swap_idx] = all_in_cls[swap_idx], all_in_cls[idx]
-        for i, c in enumerate(all_in_cls):
-            c.sort_order = i
         await session.commit()
     cache.invalidate_courses_cache()
     return JSONResponse({"ok": True})

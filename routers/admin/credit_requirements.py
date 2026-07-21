@@ -11,7 +11,8 @@ from core.security import check_admin
 from core.seiseki import SENMON_GROUPS, classify_senmon, is_kikai_hisshu
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CreditRequirement, DisplayOrder, Subject, SubjectCreditCategory
+from models import CreditRequirement, Subject, SubjectCreditCategory
+from routers.admin._common import swap_by_index, upsert_display_order_sequence
 
 router = APIRouter()
 
@@ -255,31 +256,12 @@ async def admin_credit_group_move(request: Request, _: str = Depends(check_admin
             key=lambda g: group_order.get((faculty, g), cache.CREDIT_GROUP_ORDER_FALLBACK),
         )
 
-        try:
-            idx = sorted_groups.index(group_name)
-        except ValueError:
+        moved = swap_by_index(sorted_groups, group_name, direction)
+        if moved is None:
             return JSONResponse({"ok": False})
-
-        delta = -1 if direction == "up" else 1
-        swap_idx = idx + delta
-        if swap_idx < 0 or swap_idx >= len(sorted_groups):
-            return JSONResponse({"ok": True})
-
-        sorted_groups[idx], sorted_groups[swap_idx] = sorted_groups[swap_idx], sorted_groups[idx]
-
-        for i, g in enumerate(sorted_groups):
-            existing = (await session.execute(
-                select(DisplayOrder).where(
-                    DisplayOrder.kind == "credit_requirement_group",
-                    DisplayOrder.name == g,
-                    DisplayOrder.faculty == faculty,
-                )
-            )).scalar_one_or_none()
-            if existing:
-                existing.sort_order = i
-            else:
-                session.add(DisplayOrder(kind="credit_requirement_group", name=g, faculty=faculty, sort_order=i))
-        await session.commit()
+        if moved:
+            await upsert_display_order_sequence(session, "credit_requirement_group", sorted_groups, faculty=faculty)
+            await session.commit()
     cache.invalidate_credit_group_order_cache()
     return JSONResponse({"ok": True})
 
