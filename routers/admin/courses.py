@@ -12,7 +12,7 @@ from core.config import make_cls_sort, make_syllabus_url, normalize_instructor_n
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus
+from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus, UserSyllabus
 
 router = APIRouter()
 
@@ -657,6 +657,16 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
                 )).scalar()
                 if has_reviews:
                     return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
+                # 修正理由: user_syllabi(ユーザーのマイ時間割登録)はCASCADE削除で保護されておらず、
+                # レビューが無いセクションなら科目削除でユーザーの登録済み時間割が予告なく消えていた。
+                # reviewsと同様、件数があれば削除をブロックし管理者に気付かせる。
+                has_user_syllabi = (await session.execute(
+                    select(func.count(UserSyllabus.id))
+                    .join(Syllabus, Syllabus.id == UserSyllabus.syllabus_id)
+                    .where(Syllabus.course_section_id.in_(cs_ids))
+                )).scalar()
+                if has_user_syllabi:
+                    return RedirectResponse(url="/admin/courses?msg=has_user_syllabi", status_code=303)
             await session.delete(course)
             await session.commit()
     cache.invalidate_courses_cache()

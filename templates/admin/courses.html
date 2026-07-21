@@ -98,6 +98,12 @@
 </div>
 {% endif %}
 
+{% if error == 'has_reviews' %}
+<div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin:16px 0 0">⚠ レビューが紐づいているため削除できません</div>
+{% elif error == 'has_user_syllabi' %}
+<div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin:16px 0 0">⚠ マイ時間割に登録しているユーザーがいるため削除できません</div>
+{% endif %}
+
 <!-- タブ -->
 <div style="display:flex;gap:4px;margin:16px 0 0">
   <a href="/admin/courses{% if q %}?q={{ q }}{% endif %}"
