@@ -29,6 +29,15 @@ _FORM_PUNCT = '・･（）()'
 _submit_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 # 修正理由: student_idの総当たりによる他人の氏名取得を防ぐため、IPアドレス単位で1分あたり10回までに制限する
 _autofill_rate_limit = rate_limiter(max_requests=10, window_seconds=60)
+# 修正理由: 未認証・無制限のILIKE全文検索が連打可能だった（/api/preloadの読み込み失敗時のフォールバック用途で
+# 通常は高頻度に呼ばれないため、正規利用を妨げない範囲で1分あたり30回までに制限する）
+_search_rate_limit = rate_limiter(max_requests=30, window_seconds=60)
+# 修正理由: 検索結果に上限が無く、LIMIT無しの全件ILIKEクエリを無制限件数で返しうる状態だった
+_SEARCH_RESULT_LIMIT = 50
+# 修正理由: /submit等の他の書き込み系エンドポイントにはレート制限があるのに/api/registerだけ
+# 無制限だった。id_token検証には120秒のキャッシュ(core/liff_auth.py)があり、有効なトークン1つで
+# 検証をバイパスしてDB書き込みを連打できたため、同水準の制限を設ける
+_register_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
 
 
 def _normalize_form_q(s: str) -> str:
@@ -61,7 +70,7 @@ async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
 
 
 @router.get("/api/courses")
-async def search_courses(q: str = ""):
+async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
     async with AsyncSessionLocal() as session:
         if q.strip():
             tokens = [tok for tok in _re.split(r'[\s　]+', q.strip()) if tok]
@@ -74,7 +83,7 @@ async def search_courses(q: str = ""):
                     Subject.name.ilike(f"%{t}%", escape="\\"),
                     Subject.reading.ilike(f"%{t}%", escape="\\"),
                 ))
-            stmt = stmt.order_by(Subject.name)
+            stmt = stmt.order_by(Subject.name).limit(_SEARCH_RESULT_LIMIT)
             courses = (await session.execute(stmt)).scalars().all()
             if not courses:
                 norm_col = Subject.name
@@ -85,7 +94,8 @@ async def search_courses(q: str = ""):
                 for tok in norm_tokens:
                     t = _escape(tok)
                     stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
-                courses = (await session.execute(stmt2.order_by(Subject.name))).scalars().all()
+                stmt2 = stmt2.order_by(Subject.name).limit(_SEARCH_RESULT_LIMIT)
+                courses = (await session.execute(stmt2)).scalars().all()
         else:
             stmt = select(Subject).order_by(Subject.name).limit(30)
             courses = (await session.execute(stmt)).scalars().all()
@@ -142,7 +152,7 @@ async def api_faculties():
 
 
 @router.get("/api/instructors")
-async def search_instructors(q: str = ""):
+async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
     if not q.strip():
         return {"instructors": []}
     async with AsyncSessionLocal() as session:
@@ -154,6 +164,7 @@ async def search_instructors(q: str = ""):
             select(Instructor.name)
             .where(Instructor.name.ilike(f"%{escaped}%", escape="\\"))
             .distinct()
+            .limit(_SEARCH_RESULT_LIMIT)
         )).scalars().all()
         insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))
         if not insts:
@@ -165,6 +176,7 @@ async def search_instructors(q: str = ""):
                 select(Instructor.name)
                 .where(norm_col.ilike(f"%{escaped_norm}%", escape="\\"))
                 .distinct()
+                .limit(_SEARCH_RESULT_LIMIT)
             )).scalars().all()
             insts = sorted(insts_raw, key=lambda n: (0 if n.lower().startswith(q_clean.lower()) else 1, n))
 
@@ -232,6 +244,7 @@ async def register_profile(
     faculty: str = Form(...),
     grade: int = Form(...),
     department: str = Form(...),
+    _rl=Depends(_register_rate_limit),
 ):
     def _form_error(msg: str):
         return templates.TemplateResponse(
