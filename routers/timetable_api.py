@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import case, func, or_, select, text
 
 from core import cache
@@ -68,20 +69,26 @@ async def api_timetable_profile_get(
         return {"faculty": p.faculty, "grade": p.grade, "department": p.department}
 
 
+class TimetableProfileRequest(BaseModel):
+    id_token: str = ""
+    faculty: str | None = None
+    grade: int | None = Field(None, ge=1, le=6)
+    department: str | None = None
+
+    # 修正理由: フロントはfaculty/departmentが未選択のとき空文字列を送ってくるため、
+    # 従来の`data.get("faculty") or None`と同じ意味になるようbefore validatorで変換する。
+    @field_validator("faculty", "department", mode="before")
+    @classmethod
+    def _blank_to_none(cls, v):
+        return v or None
+
+
 @router.post("/api/timetable/profile")
-async def api_timetable_profile_set(request: Request):
-    data = await request.json()
-    user_id = await _require_liff_user(data.get("id_token", ""), request)
-    faculty = data.get("faculty") or None
-    grade = data.get("grade")
-    if grade is not None:
-        try:
-            grade = int(grade)
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail="grade must be an integer")
-        if not (1 <= grade <= 6):
-            raise HTTPException(status_code=400, detail="grade must be between 1 and 6")
-    department = data.get("department") or None
+async def api_timetable_profile_set(data: TimetableProfileRequest, request: Request):
+    user_id = await _require_liff_user(data.id_token, request)
+    faculty = data.faculty
+    grade = data.grade
+    department = data.department
     if department is not None and department not in FACULTY_DEPARTMENTS.get(faculty, []):
         raise HTTPException(status_code=400, detail="department does not match faculty")
     async with AsyncSessionLocal() as session:
