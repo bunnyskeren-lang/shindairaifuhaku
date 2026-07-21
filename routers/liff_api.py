@@ -599,7 +599,7 @@ async def api_course(course_id: int):
             "instructor": instructor_str,
             "classification": subject.classification or "",
             "category": subject.category or "",
-            "term": subject.term_type or "",
+            "term_type": subject.term_type or "",
             "credits": float(subject.credits) if subject.credits else 0,
             "syllabus_url": syllabus_url or "",
             "avg_rating": avg_rating,

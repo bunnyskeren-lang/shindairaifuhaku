@@ -1412,9 +1412,9 @@ function updateIntensiveSection() {
   list.innerHTML = "";
   const courses = (window._myIntensiveCourses || []).filter(c => {
     if (c.is_custom) return true;
-    if (!c.term) return false;
-    if (c.term.startsWith("第" + currentQuarter)) return true;
-    if ((c.term === "後期" || c.term === "集中") && (currentQuarter === "3" || currentQuarter === "4")) return true;
+    if (!c.academic_term) return false;
+    if (c.academic_term.startsWith("第" + currentQuarter)) return true;
+    if ((c.academic_term === "後期" || c.academic_term === "集中") && (currentQuarter === "3" || currentQuarter === "4")) return true;
     return false;
   });
   if (courses.length === 0) {
@@ -1430,7 +1430,7 @@ function updateIntensiveSection() {
     const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
     info.innerHTML = `
       <div class="intensive-item-name">${esc(c.name)}</div>
-      <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.is_custom ? '手動追加' : c.term)}</div>
+      <div class="intensive-item-meta">${esc(c.instructor)} ／ ${esc(c.is_custom ? '手動追加' : c.academic_term)}</div>
       ${sylUrl ? `<a href="${esc(sylUrl)}" target="_blank" class="syllabus-link" onclick="event.stopPropagation()">シラバス →</a>` : ''}
     `;
     div.appendChild(info);
@@ -1451,9 +1451,9 @@ function updateCell(div, day, period) {
   const key = `${day}-${period}`;
   const courses = ((window._myCourses || {})[key] || []).filter(c => {
     if (c.is_custom) return true;
-    if (!c.term) return false;
-    if (c.term.startsWith("第" + currentQuarter)) return true;
-    if (c.term === "後期" && (currentQuarter === "3" || currentQuarter === "4")) return true;
+    if (!c.academic_term) return false;
+    if (c.academic_term.startsWith("第" + currentQuarter)) return true;
+    if (c.academic_term === "後期" && (currentQuarter === "3" || currentQuarter === "4")) return true;
     return false;
   });
   div.innerHTML = "";
@@ -1548,9 +1548,9 @@ function setFilter(q) {
   const filtered = drawerCourses.filter(c => {
     if (c.is_custom) return true;
     if (q === "all") return true;
-    if (!c.term) return false;
-    if (c.term.startsWith("第" + q)) return true;
-    if ((c.term === "後期" || c.term === "集中") && (q === "3" || q === "4")) return true;
+    if (!c.academic_term) return false;
+    if (c.academic_term.startsWith("第" + q)) return true;
+    if ((c.academic_term === "後期" || c.academic_term === "集中") && (q === "3" || q === "4")) return true;
     return false;
   });
   document.getElementById("drawer-sub").textContent = `${filtered.length}科目`;
@@ -1584,7 +1584,7 @@ function makeReadOnlyCourseItem(c) {
     `;
   } else {
     const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
-    const metaParts = [c.instructor, c.term].filter(Boolean);
+    const metaParts = [c.instructor, c.academic_term].filter(Boolean);
     info.innerHTML = `
       <div class="course-name ${categoryClass}">${esc(c.name)}</div>
       <div class="course-meta">${esc(metaParts.join(' ／ '))}${c.classroom ? ` ／ 教室:${esc(c.classroom)}` : ''}</div>
@@ -1636,7 +1636,7 @@ function makeCourseItem(c) {
   const sylUrl = makeSyllabusUrl(c.timetable_code, c.department);
   info.innerHTML = `
     <div class="course-name ${categoryClass}">${esc(c.name)}${isEarned ? '<span class="earned-badge">習得済み</span>' : ''}</div>
-    <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.term)}</div>
+    <div class="course-meta">${esc(c.instructor)} ／ ${esc(c.academic_term)}</div>
     ${sylUrl ? `<a href="${esc(sylUrl)}" target="_blank" class="syllabus-link">シラバス →</a>` : ''}
   `;
 

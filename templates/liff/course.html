@@ -210,9 +210,9 @@ async function main() {
   if (data.classification)
     meta.insertAdjacentHTML("beforeend",
       `<span class="badge badge-cls">📂 ${esc(data.classification)}</span>`);
-  if (data.term)
+  if (data.term_type)
     meta.insertAdjacentHTML("beforeend",
-      `<span class="badge badge-term">📅 ${esc(data.term)}</span>`);
+      `<span class="badge badge-term">📅 ${esc(data.term_type)}</span>`);
   if (data.credits)
     meta.insertAdjacentHTML("beforeend",
       `<span class="badge badge-cr">🎓 ${esc(data.credits)}単位</span>`);
