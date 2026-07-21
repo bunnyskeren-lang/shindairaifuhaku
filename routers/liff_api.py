@@ -518,24 +518,29 @@ async def api_course(course_id: int):
                 .order_by(CourseSection.id)
             )).all()
 
-        async def _agg(cs_ids: list):
+        # 修正理由: agg(平均・件数)とease内訳は同じReviewテーブル・同じ絞り込み条件に対する集計で、
+        # 別々のAsyncSessionLocal()×2本（＝DBコネクション2本）に分ける必要が無かった。
+        # SUM(rating)/COUNT(rating)はSQLのNULL無視の挙動によりgroup byありでも全体平均に正しく
+        # 再合成できるため、ease_rating別の内訳クエリ1本に統合しコネクション使用数を1本減らす
+        # （/api/course/{id}は1リクエストあたり最大6本のDBコネクションを個別セッションで並行して
+        # 掴んでおり、一斉アクセス時にDB接続プールを圧迫しやすい経路だったため）。
+        async def _agg_and_ease(cs_ids: list):
             if not cs_ids:
-                return None
+                return None, []
             async with AsyncSessionLocal() as s:
-                return (await s.execute(
-                    select(func.avg(Review.rating), func.count(Review.id))
-                    .where(Review.course_section_id.in_(cs_ids), Review.is_approved.is_(True))
-                )).first()
-
-        async def _ease(cs_ids: list):
-            if not cs_ids:
-                return []
-            async with AsyncSessionLocal() as s:
-                return (await s.execute(
-                    select(Review.ease_rating, func.count(Review.id))
+                rows = (await s.execute(
+                    select(
+                        Review.ease_rating, func.count(Review.id),
+                        func.sum(Review.rating), func.count(Review.rating),
+                    )
                     .where(Review.course_section_id.in_(cs_ids), Review.is_approved.is_(True))
                     .group_by(Review.ease_rating)
                 )).all()
+            ease_rows = [(ease, cnt) for ease, cnt, _, _ in rows]
+            rating_sum = sum((rsum or 0) for _, _, rsum, _ in rows)
+            rating_count = sum(rcnt for _, _, _, rcnt in rows)
+            avg_rating = (rating_sum / rating_count) if rating_count else None
+            return avg_rating, ease_rows
 
         async def _reviews(cs_ids: list):
             if not cs_ids:
@@ -560,8 +565,8 @@ async def api_course(course_id: int):
 
         cs_ids = [cs.id for cs, _ in cs_instr_rows]
 
-        agg, ease_rows, reviews_raw, sc_row = await asyncio.gather(
-            _agg(cs_ids), _ease(cs_ids), _reviews(cs_ids), _syllabus_code()
+        (avg_rating, ease_rows), reviews_raw, sc_row = await asyncio.gather(
+            _agg_and_ease(cs_ids), _reviews(cs_ids), _syllabus_code()
         )
 
         # ビューカウント記録
@@ -588,7 +593,6 @@ async def api_course(course_id: int):
         # 最新年度のsyllabiからtimetable_codeを取得しシラバスURLを動的生成
         syllabus_url = make_syllabus_url(sc_row[0], syllabus_department_key(subject)) if sc_row else ""
         instructor_str = "・".join(instr.name for _, instr in cs_instr_rows)
-        avg_rating = float(agg[0]) if agg and agg[0] else None
         top_ease = None
         if ease_rows:
             top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]

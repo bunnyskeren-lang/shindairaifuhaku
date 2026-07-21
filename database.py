@@ -500,3 +500,21 @@ async def init_db():
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_subjects_classification ON subjects (classification)"
         ))
+        # 冗長インデックスの削除: 以下はいずれも同テーブルの複合UNIQUE制約/複合INDEXの先頭列と
+        # 完全に重複しており、複合indexが先頭列だけの検索（等値・IN）にもそのまま使えるため
+        # 検索速度には一切寄与せず、INSERT/UPDATE/DELETE時のB-tree更新コストだけを増やしていた。
+        # 特にuser_syllabiは履修登録・取消の書き込みが集中するテーブルのため、1万人規模での
+        # 履修登録ラッシュ時の書き込みレイテンシに直接効いてくる。
+        #   ix_subjects_name              → uq_subjects_name_faculty_department (name, faculty, department)
+        #   ix_subjects_faculty           → ix_subjects_faculty_department_category / ix_subjects_faculty_classification
+        #   ix_course_sections_subject_id → uq_course_sections_subject_instructor (subject_id, instructor_id)
+        #   ix_user_syllabi_line_user_id  → uq_user_syllabi (line_user_id, syllabus_id)
+        #   ix_required_subjects_faculty  → uq_required_subjects (faculty, department, grade, subject_id)
+        #   ix_registration_caps_faculty  → uq_registration_caps (faculty, department, year)
+        #   ix_user_activity_user_id      → UniqueConstraint (user_id, action)
+        for _redundant_index in (
+            "ix_subjects_name", "ix_subjects_faculty", "ix_course_sections_subject_id",
+            "ix_user_syllabi_line_user_id", "ix_required_subjects_faculty",
+            "ix_registration_caps_faculty", "ix_user_activity_user_id",
+        ):
+            await conn.execute(text(f"DROP INDEX IF EXISTS {_redundant_index}"))

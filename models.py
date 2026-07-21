@@ -65,7 +65,8 @@ class UserActivity(Base):
     __table_args__ = (UniqueConstraint("user_id", "action"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    # user_idの単独indexは張らない。UniqueConstraint(user_id, action)の先頭列プレフィックスで代替できる
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(200), nullable=False)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -134,9 +135,13 @@ class Subject(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    # name/facultyの単独indexは張らない。uq_subjects_name_faculty_department（name, faculty, department）と
+    # ix_subjects_faculty_department_category / ix_subjects_faculty_classification（いずれもfacultyが先頭列）が
+    # 既にある以上、単独indexは先頭列プレフィックスとして完全に重複し検索速度に寄与せず書き込みコストだけ増やす
+    # （2026-07-21のindex追加時にこの重複を作り込んでいた。詳細はdatabase.py init_db()のDROP INDEX箇所参照）
+    name: Mapped[str] = mapped_column(Text, nullable=False)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # 学部内で学科・専攻ごとに卒業要件が異なる場合の学科名（工学部5学科・理学部5学科・
     # 医学部保健学科4専攻等）。credit_requirements/registration_caps/required_subjects/
     # user_profilesと同じ「faculty列+department列」のペア形式。学科の区別が無い学部では
@@ -173,7 +178,9 @@ class CourseSection(Base):
     __table_args__ = (UniqueConstraint("subject_id", "instructor_id", name="uq_course_sections_subject_instructor"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
+    # subject_idの単独indexは張らない。uq_course_sections_subject_instructor(subject_id, instructor_id)が
+    # 先頭列としてsubject_id単体の検索もカバーするため（instructor_idは先頭列ではないので単独indexが必要）
+    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
     instructor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
@@ -234,7 +241,9 @@ class UserSyllabus(TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("line_user_id", "syllabus_id", name="uq_user_syllabi"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    # line_user_idの単独indexは張らない。uq_user_syllabi(line_user_id, syllabus_id)の先頭列プレフィックスで
+    # 代替できる（履修登録・取消で書き込みが集中するテーブルのため、冗長indexの維持コストが特に響く）
+    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
     syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
     classroom: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -265,7 +274,9 @@ class RequiredSubject(TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("faculty", "department", "grade", "subject_id", name="uq_required_subjects"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    faculty: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    # facultyの単独indexは張らない。uq_required_subjects(faculty, department, grade, subject_id)の
+    # 先頭列プレフィックスで代替できる
+    faculty: Mapped[str] = mapped_column(Text, nullable=False)
     department: Mapped[str] = mapped_column(Text, nullable=False)
     grade: Mapped[int] = mapped_column(Integer, nullable=False)
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -279,7 +290,9 @@ class RegistrationCap(TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("faculty", "department", "year", name="uq_registration_caps"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    faculty: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    # facultyの単独indexは張らない。uq_registration_caps(faculty, department, year)の
+    # 先頭列プレフィックスで代替できる
+    faculty: Mapped[str] = mapped_column(Text, nullable=False)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     max_credits: Mapped[int] = mapped_column(Integer, nullable=False)
