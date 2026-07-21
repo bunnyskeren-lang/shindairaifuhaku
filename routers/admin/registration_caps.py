@@ -31,6 +31,10 @@ async def admin_registration_caps(request: Request, _: str = Depends(check_admin
 @router.post("/admin/registration_caps/update")
 async def admin_registration_caps_update(request: Request, _: str = Depends(check_admin)):
     form = await request.form()
+    # 修正理由: 数値変換に失敗した項目を無言でスキップしており、入力ミスがあっても
+    # 管理者に一切通知されなかった（他の正常な項目だけ保存され気づきにくい）。
+    # add系エンドポイントと同じ ?error=invalid クエリパラメータでフィードバックする。
+    had_invalid = False
     async with AsyncSessionLocal() as session:
         ids = {
             r for (r,) in (await session.execute(select(RegistrationCap.id))).all()
@@ -42,11 +46,14 @@ async def admin_registration_caps_update(request: Request, _: str = Depends(chec
             try:
                 max_credits = int(form[key])
             except ValueError:
+                had_invalid = True
                 continue
             await session.execute(
                 sa_update(RegistrationCap).where(RegistrationCap.id == cap_id).values(max_credits=max_credits)
             )
         await session.commit()
+    if had_invalid:
+        return RedirectResponse("/admin/registration_caps?error=invalid", status_code=303)
     return RedirectResponse("/admin/registration_caps", status_code=303)
 
 
