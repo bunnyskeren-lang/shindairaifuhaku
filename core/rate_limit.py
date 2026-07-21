@@ -45,11 +45,16 @@ def rate_limiter(max_requests: int, window_seconds: float):
     return _dep
 
 
+def _sweep_stale_buckets() -> int:
+    """アクセスの絶えたpath:ipキーを_bucketsから間引く。戻り値は削除件数(テスト用)。"""
+    cutoff = time.monotonic() - _CLEANUP_INTERVAL_SECONDS
+    stale_keys = [k for k, v in _buckets.items() if not v or v[-1] < cutoff]
+    for k in stale_keys:
+        _buckets.pop(k, None)
+    return len(stale_keys)
+
+
 async def rate_limit_cleanup_loop() -> None:
-    """アクセスの絶えたpath:ipキーを_bucketsから間引き、辞書の単調増加を防ぐ。"""
     while True:
         await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
-        cutoff = time.monotonic() - _CLEANUP_INTERVAL_SECONDS
-        stale_keys = [k for k, v in _buckets.items() if not v or v[-1] < cutoff]
-        for k in stale_keys:
-            _buckets.pop(k, None)
+        _sweep_stale_buckets()

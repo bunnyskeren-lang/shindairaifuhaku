@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from core.rate_limit import client_ip, rate_limiter
+from core.rate_limit import _buckets, _sweep_stale_buckets, client_ip, rate_limiter
 
 
 def _make_request(headers: dict[str, str] | None = None, client_host: str = "1.2.3.4") -> Request:
@@ -102,3 +102,41 @@ async def test_rate_limiter_buckets_are_independent_per_path():
         await dep(req_p1)
     # 同一IPでもエンドポイント(path)が違えばバケットは独立している
     await dep(req_p2)
+
+
+# ── 境界値: _sweep_stale_buckets() ──────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_sweep_stale_buckets_removes_keys_with_no_recent_access(monkeypatch):
+    # 修正理由: 一度でもアクセスされたpath:ipキーはbucketが空になっても辞書に残り続け、
+    # 長期稼働でメモリが単調増加していた。5分(_CLEANUP_INTERVAL_SECONDS)アクセスが無い
+    # キーは間引かれることを確認する
+    _buckets.clear()
+    dep = rate_limiter(max_requests=5, window_seconds=1)
+    t = [1000.0]
+    monkeypatch.setattr("core.rate_limit.time.monotonic", lambda: t[0])
+    req = _make_request(client_host="192.0.2.100")
+    req.scope["path"] = "/sweep-test"
+    await dep(req)
+    assert "/sweep-test:192.0.2.100" in _buckets
+
+    t[0] += 301  # _CLEANUP_INTERVAL_SECONDS(300秒)より後
+    removed = _sweep_stale_buckets()
+    assert removed == 1
+    assert "/sweep-test:192.0.2.100" not in _buckets
+
+
+@pytest.mark.asyncio
+async def test_sweep_stale_buckets_keeps_recently_active_keys(monkeypatch):
+    _buckets.clear()
+    dep = rate_limiter(max_requests=5, window_seconds=600)
+    t = [1000.0]
+    monkeypatch.setattr("core.rate_limit.time.monotonic", lambda: t[0])
+    req = _make_request(client_host="192.0.2.101")
+    req.scope["path"] = "/sweep-test-active"
+    await dep(req)
+
+    t[0] += 10  # まだ間引き対象外
+    removed = _sweep_stale_buckets()
+    assert removed == 0
+    assert "/sweep-test-active:192.0.2.101" in _buckets
