@@ -44,9 +44,7 @@ class Base(DeclarativeBase):
 async def init_db():
     from models import (  # noqa: F401
         MessageLog, DisplayOrder, UserProfile,
-        CreditRequirement, UserSeisekiRaw,
-        Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
-        SubjectCreditCategory, RegistrationCap, RequiredSubject,
+        Subject, Instructor, CourseSection, Syllabus, Review,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

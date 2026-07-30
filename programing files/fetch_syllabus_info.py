@@ -1,5 +1,5 @@
 """
-シラバスページから対象年次・科目分類を取得してDBに保存するスクリプト
+シラバスページから単位数・経営学部専門科目の群を取得してDBに保存するスクリプト
 使い方:
   python -X utf8 fetch_syllabus_info.py --env dev
   python -X utf8 fetch_syllabus_info.py --env dev --dry-run
@@ -111,34 +111,6 @@ def fetch_html(url: str) -> str | None:
         return None
 
 
-def parse_target_grades(html_text: str) -> str:
-    """開講年次を "1,2,3,4" 形式で返す"""
-    # 実際のHTML: <td class="...">開講年次</td><td width="300">1 ･ 2 ･ 3 ･ 4 年</td>
-    m = re.search(r'開講年次</td>\s*<td[^>]*>(.*?)</td>', html_text, re.DOTALL)
-    if not m:
-        m = re.search(r'開講年次.*?<td[^>]*>(.*?)</td>', html_text, re.DOTALL)
-    if not m:
-        return ""
-    raw = re.sub(r'<[^>]+>', '', m.group(1)).strip()
-    nums = [int(n) for n in re.findall(r'[1-4]', raw)]
-    if not nums:
-        return ""
-    if any(c in raw for c in "～〜~－-"):
-        nums = list(range(min(nums), max(nums) + 1))
-    return ",".join(str(n) for n in sorted(set(nums)))
-
-
-def parse_subject_category(html_text: str) -> str:
-    """科目分類を返す（例：教養科目、専門科目）"""
-    # 実際のHTML: <td class="...">科目分類</td><td width="300">教養科目</td>
-    m = re.search(r'科目分類</td>\s*<td[^>]*>(.*?)</td>', html_text, re.DOTALL)
-    if not m:
-        m = re.search(r'科目分類.*?<td[^>]*>(.*?)</td>', html_text, re.DOTALL)
-    if not m:
-        return ""
-    return re.sub(r'<[^>]+>', '', m.group(1)).strip()
-
-
 def parse_numbering_code(html_text: str) -> str | None:
     """科目ナンバリングコード（例: B1BB202）を返す"""
     m = re.search(r'ナンバリングコード.*?([A-Z]\d[A-Z]{2}\d{3})', html_text, re.DOTALL)
@@ -169,113 +141,6 @@ def parse_credits(html_text: str) -> str:
     if not m:
         return ""
     return re.sub(r'<[^>]+>', '', m.group(1)).strip()
-
-
-# 科目分類がこの値の科目は「高度教養科目」（他学部生向けの乗り入れ枠で、本来の専門科目・
-# 教養科目の単位区分のいずれにも綺麗に収まらない）としてsubjects側に一切登録しない方針
-# （ユーザー指示、2026-07-13）。run()が検出した時点でSubject自体を削除する。
-KODO_KYOYO_CATEGORY = "高度教養科目"
-
-
-async def _delete_kodo_kyoyo_subject(session, course_section_id: int) -> bool:
-    """course_section_idから辿れるSubjectを削除する。レビューが付いていて削除できない場合はFalseを返す。"""
-    from sqlalchemy.exc import IntegrityError
-    from models import CourseSection, Subject
-
-    cs = await session.get(CourseSection, course_section_id)
-    if cs is None:
-        return False
-    subj = await session.get(Subject, cs.subject_id)
-    if subj is None:
-        return False
-    try:
-        # SAVEPOINTでスコープを絞る。レビュー付きでRESTRICT違反した場合でも、
-        # 同一バッチ内で既に溜まっている他の更新（target_grades等）を巻き込んでロールバックしない
-        async with session.begin_nested():
-            await session.delete(subj)
-            await session.flush()
-        return True
-    except IntegrityError:
-        return False
-
-
-async def run(dry_run: bool = False, force: bool = False):
-    from sqlalchemy import select, or_
-    from database import AsyncSessionLocal, init_db
-    from models import CourseSection, Subject, Syllabus
-
-    await init_db()
-
-    async with AsyncSessionLocal() as session:
-        q = select(Syllabus).where(Syllabus.timetable_code.isnot(None))
-        if not force:
-            # target_gradesだけが先に埋まりsubject_category(高度教養科目判定)が
-            # 一度もチェックされないまま残るケースがあるため、どちらか一方でも
-            # 未取得なら対象に含める（2026-07-16、経済学部等で発覚した取りこぼし対応）
-            q = q.where(or_(Syllabus.target_grades.is_(None), Syllabus.subject_category.is_(None)))
-        courses = (await session.execute(q)).scalars().all()
-        # departmentはSyllabusではなくSubject.faculty/department側にあるため、
-        # course_section_id単位でまとめて引いておく
-        cs_ids = {c.course_section_id for c in courses}
-        dept_by_cs: dict[int, str] = {}
-        if cs_ids:
-            for cs_id, faculty, department in (await session.execute(
-                select(CourseSection.id, Subject.faculty, Subject.department)
-                .join(Subject, Subject.id == CourseSection.subject_id)
-                .where(CourseSection.id.in_(cs_ids))
-            )).all():
-                dept_by_cs[cs_id] = f"{faculty or ''}{department or ''}"
-
-    print(f"対象コース: {len(courses)}件")
-    updated = skipped = not_found = removed_kodo_kyoyo = 0
-
-    async with AsyncSessionLocal() as session:
-        for i, c in enumerate(courses):
-            url = make_syllabus_url(c.timetable_code, dept_by_cs.get(c.course_section_id, ""))
-            if not url:
-                skipped += 1
-                continue
-
-            html_text = fetch_html(url)
-            if not html_text:
-                not_found += 1
-                if i < 10 or not_found <= 5:
-                    print(f"  404: {c.timetable_code}")
-                continue
-
-            grades = parse_target_grades(html_text)
-            category = parse_subject_category(html_text)
-
-            if dry_run:
-                print(f"  {c.timetable_code}: grades={grades!r}, category={category!r}")
-            elif category == KODO_KYOYO_CATEGORY:
-                if await _delete_kodo_kyoyo_subject(session, c.course_section_id):
-                    removed_kodo_kyoyo += 1
-                else:
-                    print(f"  [レビューあり・削除スキップ] {c.timetable_code}")
-                    sc = await session.get(Syllabus, c.id)
-                    sc.target_grades = grades or None
-                    sc.subject_category = category or None
-                    updated += 1
-            else:
-                sc = await session.get(Syllabus, c.id)
-                sc.target_grades = grades or None
-                sc.subject_category = category or None
-                updated += 1
-
-            if (i + 1) % 20 == 0:
-                print(f"  進捗: {i+1}/{len(courses)}")
-                if not dry_run:
-                    await session.commit()
-            time.sleep(REQUEST_INTERVAL_SECONDS)
-
-        if not dry_run:
-            await session.commit()
-
-    if removed_kodo_kyoyo:
-        print(f"高度教養科目のため削除: {removed_kodo_kyoyo}件")
-
-    print(f"完了: 更新={updated}, スキップ={skipped}(未対応学部), 404={not_found}")
 
 
 async def run_credits(dry_run: bool = False, force: bool = False):
@@ -360,9 +225,9 @@ async def run_senmon_classification(dry_run: bool = False, force: bool = False):
     """経営学部専門科目の群(第1群/第2群/第3群/グローバル)をシラバスのナンバリングコードから
     自動判定し、classification に反映する。シラバスURLはrun_credits()と同様に
     syllabi.timetable_code/departmentから毎回動的生成する（syllabiを持たない科目はスキップ）。
-    「初年次セミナー」は科目名判定で解決済み(core/seiseki.py)のため対象外。
+    「初年次セミナー」は下の名前フィルタで対象外にする。
     203/303/204等ナンバリングだけでは群を確定できない科目、ページ取得に失敗した科目は
-    自動更新せず「要レビュー」として一覧表示するのみに留める(/admin/keieiで手動判定できる)。"""
+    自動更新せず「要レビュー」として一覧表示するのみに留める。"""
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
     from models import Subject, CourseSection, Syllabus
@@ -451,11 +316,10 @@ def main():
     load_env(args.env)
 
     async def _main():
-        # run()・run_credits()・run_senmon_classificationを同一イベントループ内で実行する。
+        # run_credits()・run_senmon_classificationを同一イベントループ内で実行する。
         # asyncio.run()を分けるとSQLAlchemyの非同期エンジンが保持する
         # コネクションプールが前のイベントループに紐づいたままになり、
         # 2回目以降の呼び出しで「Event loop is closed」になるため。
-        await run(args.dry_run, args.force)
         await run_credits(args.dry_run, args.force)
         await run_senmon_classification(args.dry_run, args.force)
 

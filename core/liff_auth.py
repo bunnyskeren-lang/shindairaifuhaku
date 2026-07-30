@@ -5,7 +5,7 @@ import httpx
 from fastapi import Request
 
 from core.activity_log import save_error_log
-from core.config import LIFF_ID, REGISTER_LIFF_ID, REVIEW_LIFF_ID, TIMETABLE_LIFF_ID
+from core.config import LIFF_ID, REGISTER_LIFF_ID, REVIEW_LIFF_ID
 from core.rate_limit import client_ip
 
 LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify"
@@ -45,8 +45,7 @@ def _channel_id(liff_id: str) -> str | None:
 # 複数LIFFアプリは基本的に同じchannelIdを共有するため、重複は自然に1件へ集約される。
 LIFF_CHANNEL_IDS = {
     cid for cid in (
-        _channel_id(LIFF_ID), _channel_id(TIMETABLE_LIFF_ID),
-        _channel_id(REGISTER_LIFF_ID), _channel_id(REVIEW_LIFF_ID),
+        _channel_id(LIFF_ID), _channel_id(REGISTER_LIFF_ID), _channel_id(REVIEW_LIFF_ID),
     ) if cid
 }
 

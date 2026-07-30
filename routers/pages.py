@@ -6,8 +6,8 @@ from fastapi.responses import HTMLResponse, Response
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOYO_REQUIRED_CREDITS,
-    LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, REVIEW_LIFF_ID, TIMETABLE_LIFF_ID,
+    APP_URL, FACULTY_DEPARTMENTS, IS_DEV,
+    LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, REVIEW_LIFF_ID,
 )
 from core.templates import templates
 
@@ -110,14 +110,3 @@ async def liff_course(request: Request):
     except Exception as exc:
         await save_error_log(exc, action="liff_course")
         raise
-
-
-@router.get("/liff/timetable", response_class=HTMLResponse)
-async def liff_timetable(request: Request):
-    return templates.TemplateResponse("liff/timetable.html", {
-        "request": request,
-        "liff_id": TIMETABLE_LIFF_ID,
-        "base_url": APP_URL,
-        "IS_DEV": IS_DEV,
-        "kyoyo_required_credits": KYOYO_REQUIRED_CREDITS,
-    })

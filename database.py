@@ -1,4 +1,3 @@
-import json
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
@@ -38,10 +37,8 @@ async def init_db():
     from models import (  # noqa: F401
         MessageLog, UserProfile, UserActivity, ErrorLog,
         PushSubscription, DisplayOrder, RichMenuTap,
-        CreditRequirement, UserSeisekiRaw,
-        Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
-        CourseSectionView, UserSyllabus, SubjectCreditCategory, RequiredSubject,
-        RegistrationCap, UserCustomCourse,
+        Subject, Instructor, CourseSection, Syllabus, Review,
+        CourseSectionView,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:
@@ -79,60 +76,6 @@ async def init_db():
                 "VALUES ('faculty', :name, '', :sort) "
                 "ON CONFLICT (kind, name, faculty) DO NOTHING"
             ), {"name": faculty_name, "sort": i})
-        await conn.execute(text(
-            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS note TEXT"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS label VARCHAR(100) NOT NULL DEFAULT ''"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS group_name VARCHAR(50) NOT NULL DEFAULT ''"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0"
-        ))
-        # 学科別の卒業要件に対応するための列（NULL＝学部内の全学科共通の要件）
-        await conn.execute(text(
-            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS department TEXT"
-        ))
-        # (cat_id, req, note, label, group_name, sort_order)
-        # kyoyo_kei（人文系・自然系をまとめた1区分）は2026-07-11、jinbun/shizen/shakai/sougou
-        # の4区分＋合算行（jinbun_shizen/kyoyo_all）に置き換え済み（このファイル末尾の
-        # 「経営学部: 教養科目（人文系・自然系・社会系・総合系）」ブロック参照）
-        defaults = [
-            ("kyoyo_kiban",  4, "基礎教養科目（情報リテラシー等）と情報科目を合算したもの。",                       "基盤系",                          "教養科目", 20),
-            ("gaigo1",       4, "Academic English Communication / Literacy など英語科目が対象。",                  "外国語第1",                       "教養科目", 30),
-            ("gaigo2",       4, "ドイツ語・フランス語・中国語・韓国語・ロシア語など第二外国語が対象。",             "外国語第2",                       "教養科目", 40),
-            ("kyotsu",       6, "全学部共通の専門基礎科目。成績表の「共通専門基礎科目」欄の合計。",                 "共通専門基礎科目",                "共通専門",  50),
-            ("shonen",       1, "1年次必修の初年次セミナー（2単位）。必要単位数は1科目=2単位。",                    "初年次セミナー",                  "専門科目", 60),
-            ("senmon1",      6, "経営学基礎論・会計学基礎論・市場システム基礎論の3科目（各2単位・計6単位）。",     "第1群科目",                       "専門科目", 70),
-            ("senmon2",     12, "経営管理・経営戦略・簿記・財務会計・マーケティングなど第2群の専門科目。",          "第2群科目",                       "専門科目", 80),
-            ("global",       4, "英語で開講される専門科目・外国書講読・外国文献講義が対象。",                      "グローバル科目群",                "専門科目", 90),
-            ("senmon3",      0, "第1・2群・グローバル以外の専門科目（人的資源管理・証券市場など）。PDFから自動計算。", "第3群・その他",                  "専門科目", 100),
-            ("kanren",       0, "", "関連科目",                          "", 110),
-            ("sonota",      12, "", "その他必要と認める科目",            "", 120),
-        ]
-        for cat_id, req, note, label, group_name, sort_order in defaults:
-            await conn.execute(text(
-                "INSERT INTO credit_requirements (category_id, required_credits, note, label, group_name, sort_order) "
-                "VALUES (:cat, :req, :note, :label, :gname, :sort) "
-                "ON CONFLICT (category_id) DO UPDATE SET "
-                "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order "
-                "WHERE credit_requirements.label = ''"
-            ), {"cat": cat_id, "req": req, "note": note, "label": label, "gname": group_name, "sort": sort_order})
-        # sonota(その他必要と認める科目)の上限12単位は2026-07-11、required_creditsの代用ではなく
-        # max_creditsで正しく表現するよう変更済み（このファイル後方の該当UPDATE文を参照）。
-        # 旧: "UPDATE credit_requirements SET required_credits = 12 WHERE category_id='sonota' AND required_credits=0"
-        # は毎起動ごとにmax_credits化した後のrequired_credits=0を12へ巻き戻してしまうバグがあったため削除。
-        # display_orders(kind='credit_requirement_group') の初期シード
-        # 各(faculty, group_name)の現行sort_order最小値を引き継ぐ（未登録の場合のみ）
-        await conn.execute(text(
-            "INSERT INTO display_orders (kind, name, faculty, sort_order) "
-            "SELECT 'credit_requirement_group', group_name, faculty, MIN(sort_order) "
-            "FROM credit_requirements WHERE group_name != '' "
-            "GROUP BY faculty, group_name "
-            "ON CONFLICT (kind, name, faculty) DO NOTHING"
-        ))
         # インデックス追加
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_message_logs_user_id ON message_logs (user_id)"
@@ -190,15 +133,6 @@ async def init_db():
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$
         """))
-        # user_seiseki_raw.raw_json を TEXT→JSONB に変換（まだ TEXT の場合のみ）
-        await conn.execute(text("""
-            DO $$ BEGIN
-              IF (SELECT data_type FROM information_schema.columns
-                  WHERE table_name='user_seiseki_raw' AND column_name='raw_json') = 'text' THEN
-                ALTER TABLE user_seiseki_raw ALTER COLUMN raw_json TYPE JSONB USING raw_json::jsonb;
-              END IF;
-            END $$
-        """))
         # updated_at 自動更新トリガー
         await conn.execute(text("""
             CREATE OR REPLACE FUNCTION fn_set_updated_at()
@@ -208,11 +142,6 @@ async def init_db():
               RETURN NEW;
             END;
             $$ LANGUAGE plpgsql
-        """))
-        await conn.execute(text("""
-            CREATE OR REPLACE TRIGGER trg_user_seiseki_raw_updated_at
-            BEFORE UPDATE ON user_seiseki_raw
-            FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at()
         """))
         await conn.execute(text("""
             CREATE OR REPLACE TRIGGER trg_user_profiles_updated_at
@@ -240,10 +169,6 @@ async def init_db():
             EXCEPTION WHEN undefined_object THEN NULL;
             END $$
         """))
-        # subjects.hide_from_timetable（管理者がマイ時間割への表示を科目単位で止められるようにする）
-        await conn.execute(text(
-            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS hide_from_timetable BOOLEAN NOT NULL DEFAULT FALSE"
-        ))
         # 既存科目のうち reading 未設定のものをバックフィル
         # 修正理由: programing files/import_syllabus.pyがSubject新規作成時にreading=""を
         # プレースホルダとして入れており、"IS NULL"だけだとこれらが永久にヒットせず
@@ -304,9 +229,6 @@ async def init_db():
             "ALTER TABLE course_sections DROP COLUMN IF EXISTS course_type"
         ))
         await conn.execute(text(
-            "ALTER TABLE schedules DROP COLUMN IF EXISTS classroom"
-        ))
-        await conn.execute(text(
             "ALTER TABLE push_subscriptions DROP COLUMN IF EXISTS line_user_id"
         ))
         # subjects の UNIQUE制約は当初 name 単独だったが、「卒業研究」「国際関係論」等
@@ -328,8 +250,7 @@ async def init_db():
             END $$
         """))
         # subjects.department: 学部内で学科・専攻ごとに卒業要件が異なる場合の学科名を持つ列。
-        # credit_requirements/registration_caps/required_subjects/user_profilesと同じ
-        # 「faculty列+department列」のペア形式に揃える。従来はfacultyに学部名+学科名を
+        # user_profilesと同じ「faculty列+department列」のペア形式に揃える。従来はfacultyに学部名+学科名を
         # 連結した複合文字列（例:「工学部建築学科」）を入れる場当たり的な運用だった。
         # syllabi.departmentは実データの94%がsubjects.facultyと完全一致する重複列で、
         # 差分197件（法学部/経営学部/経済学部の「　昼間主コース」接尾辞）も全科目に一律
@@ -380,90 +301,6 @@ async def init_db():
             EXCEPTION WHEN duplicate_object OR duplicate_table OR unique_violation THEN NULL;
             END $$
         """))
-        # GPAをlocalStorageだけでなくDBにも永続化する
-        await conn.execute(text(
-            "ALTER TABLE user_seiseki_raw ADD COLUMN IF NOT EXISTS gpa DOUBLE PRECISION"
-        ))
-        # 単位チェッカー: 複数区分の合計に対する合算制約（例:第2群+第3群+グローバル=55単位）と、
-        # 取得単位数の上限（例:その他必要と認める科目=12単位まで）に対応する列
-        await conn.execute(text(
-            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS combined_of JSONB"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE credit_requirements ADD COLUMN IF NOT EXISTS max_credits INTEGER"
-        ))
-        # sonota(その他必要と認める科目)はrequired_creditsを上限の代用にしていたが、
-        # 学生便覧上は必要最低数ではなく上限（自由選択・12単位以内）のためmax_creditsへ移す
-        await conn.execute(text("""
-            UPDATE credit_requirements SET max_credits = required_credits, required_credits = 0
-            WHERE category_id = 'sonota' AND max_credits IS NULL AND required_credits > 0
-        """))
-        # 経営学部: 学生便覧「経営学部規則 別表第2 履修要件」に明記された合算制約
-        # （第2群+第3群+グローバル科目群=55単位以上、専門科目全体=98単位以上）を追加
-        _keiei_combined = [
-            ("senmon_55", "第2群＋第3群＋グローバル科目群 計", "専門科目", 85, 55,
-             ["senmon2", "senmon3", "global"]),
-            ("senmon_98", "初年次＋第1群＋第2群＋第3群＋グローバル科目群 計", "専門科目", 95, 98,
-             ["shonen", "senmon1", "senmon2", "senmon3", "global"]),
-        ]
-        for cat_id, label, group_name, sort_order, req, members in _keiei_combined:
-            await conn.execute(text(
-                "INSERT INTO credit_requirements "
-                "  (category_id, label, group_name, sort_order, required_credits, faculty, combined_of) "
-                "VALUES (:cat, :label, :gname, :sort, :req, '経営学部', CAST(:members AS JSONB)) "
-                "ON CONFLICT (category_id) DO UPDATE SET "
-                "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order, "
-                "  required_credits = EXCLUDED.required_credits, combined_of = EXCLUDED.combined_of"
-            ), {
-                "cat": cat_id, "label": label, "gname": group_name,
-                "sort": sort_order, "req": req, "members": json.dumps(members),
-            })
-        # 経営学部: 教養科目（人文系・自然系・社会系・総合系）を成績表の新カリキュラム区分に合わせて
-        # 4区分に分割し、「人文系+自然系=8単位以上」「4区分合計=12単位」の合算制約を追加。
-        # 旧 kyoyo_kei(人文系・自然系をまとめた1区分)/syakaisogo(社会系・総合系)は
-        # subject_credit_categoriesの参照が無いことを確認済みのため削除して置き換える
-        await conn.execute(text(
-            "DELETE FROM credit_requirements WHERE category_id IN ('kyoyo_kei', 'syakaisogo')"
-        ))
-        _keiei_kyoyo = [
-            ("jinbun", "人文系", "教養科目", 10, 0, None),
-            ("shizen", "自然系", "教養科目", 11, 0, None),
-            ("shakai", "社会系", "教養科目", 12, 0, None),
-            ("sougou", "総合系", "教養科目", 13, 0, None),
-            ("jinbun_shizen", "人文系＋自然系 計", "教養科目", 14, 8, ["jinbun", "shizen"]),
-            ("kyoyo_all", "人文系＋自然系＋社会系＋総合系 計", "教養科目", 16, 12,
-             ["jinbun", "shizen", "shakai", "sougou"]),
-        ]
-        for cat_id, label, group_name, sort_order, req, members in _keiei_kyoyo:
-            await conn.execute(text(
-                "INSERT INTO credit_requirements "
-                "  (category_id, label, group_name, sort_order, required_credits, faculty, combined_of) "
-                "VALUES (:cat, :label, :gname, :sort, :req, '経営学部', CAST(:members AS JSONB)) "
-                "ON CONFLICT (category_id) DO UPDATE SET "
-                "  label = EXCLUDED.label, group_name = EXCLUDED.group_name, sort_order = EXCLUDED.sort_order, "
-                "  required_credits = EXCLUDED.required_credits, combined_of = EXCLUDED.combined_of"
-            ), {
-                "cat": cat_id, "label": label, "gname": group_name,
-                "sort": sort_order, "req": req,
-                "members": json.dumps(members) if members else None,
-            })
-        # My時間割: ユーザーが登録科目ごとに教室名を自由入力できる欄
-        await conn.execute(text(
-            "ALTER TABLE user_syllabi ADD COLUMN IF NOT EXISTS classroom TEXT"
-        ))
-        # 手動追加科目の単位数（単位チェッカーの取得単位数への加算に使う）
-        await conn.execute(text(
-            "ALTER TABLE user_custom_courses ADD COLUMN IF NOT EXISTS credits INTEGER NOT NULL DEFAULT 2"
-        ))
-        # マイ時間割のコマタップ（/api/timetable/slots/{day}/{period}）はseq scanになっていたため、
-        # syllabus_idを含まない(day_of_week, period)単体の複合インデックスを追加
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_schedules_day_period ON schedules (day_of_week, period)"
-        ))
-        # マイ時間割の共有リンク世代番号（「共有を停止する」で発行済みリンクを一括失効させる）
-        await conn.execute(text(
-            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS share_token_version INTEGER NOT NULL DEFAULT 0"
-        ))
         # course_sections.syllabus_url は年度をまたぐURL変更を表現できず陳腐化する問題があったため廃止。
         # syllabi.timetable_code + Subject.faculty/department（course_sections経由、
         # core.config.syllabus_department_key()で再構成）から毎回動的生成する方式に統一する
@@ -484,14 +321,7 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE syllabi DROP COLUMN IF EXISTS department"
         ))
-        # マイ時間割の科目選択（/api/timetable/slots）はSubject.faculty==X, department.in_(...),
-        # category==専門 のAND条件でフィルタするが、subjectsは4000件超でfaculty単体indexしか
-        # 無くseq scanになっていたため複合インデックスを追加
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_subjects_faculty_department_category "
-            "ON subjects (faculty, department, category)"
-        ))
-        # 同じくfaculty=='教養教育院' AND classification=='...' / LIKE '教養(%' の絞り込み向け
+        # faculty=='教養教育院' AND classification=='...' / LIKE '教養(%' の絞り込み向け
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_subjects_faculty_classification "
             "ON subjects (faculty, classification)"
@@ -503,18 +333,36 @@ async def init_db():
         # 冗長インデックスの削除: 以下はいずれも同テーブルの複合UNIQUE制約/複合INDEXの先頭列と
         # 完全に重複しており、複合indexが先頭列だけの検索（等値・IN）にもそのまま使えるため
         # 検索速度には一切寄与せず、INSERT/UPDATE/DELETE時のB-tree更新コストだけを増やしていた。
-        # 特にuser_syllabiは履修登録・取消の書き込みが集中するテーブルのため、1万人規模での
-        # 履修登録ラッシュ時の書き込みレイテンシに直接効いてくる。
         #   ix_subjects_name              → uq_subjects_name_faculty_department (name, faculty, department)
-        #   ix_subjects_faculty           → ix_subjects_faculty_department_category / ix_subjects_faculty_classification
+        #   ix_subjects_faculty           → ix_subjects_faculty_classification
         #   ix_course_sections_subject_id → uq_course_sections_subject_instructor (subject_id, instructor_id)
-        #   ix_user_syllabi_line_user_id  → uq_user_syllabi (line_user_id, syllabus_id)
-        #   ix_required_subjects_faculty  → uq_required_subjects (faculty, department, grade, subject_id)
-        #   ix_registration_caps_faculty  → uq_registration_caps (faculty, department, year)
         #   ix_user_activity_user_id      → UniqueConstraint (user_id, action)
         for _redundant_index in (
             "ix_subjects_name", "ix_subjects_faculty", "ix_course_sections_subject_id",
-            "ix_user_syllabi_line_user_id", "ix_required_subjects_faculty",
-            "ix_registration_caps_faculty", "ix_user_activity_user_id",
+            "ix_user_activity_user_id",
         ):
             await conn.execute(text(f"DROP INDEX IF EXISTS {_redundant_index}"))
+
+        # ── 2026-07-30 大規模リニューアル: My時間割・単位チェッカー・CAP制・
+        # 必修科目自動登録機能を全廃止。関連テーブル・列をDROPする ──────────────
+        for _dropped_table in (
+            "user_syllabi", "user_custom_courses", "required_subjects",
+            "registration_caps", "credit_requirements", "subject_credit_categories",
+            "user_seiseki_raw", "schedules",
+        ):
+            await conn.execute(text(f'DROP TABLE IF EXISTS "{_dropped_table}" CASCADE'))
+        await conn.execute(text(
+            "ALTER TABLE subjects DROP COLUMN IF EXISTS hide_from_timetable"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE subjects DROP COLUMN IF EXISTS senmon_group"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE user_profiles DROP COLUMN IF EXISTS share_token_version"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE syllabi DROP COLUMN IF EXISTS target_grades"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE syllabi DROP COLUMN IF EXISTS subject_category"
+        ))

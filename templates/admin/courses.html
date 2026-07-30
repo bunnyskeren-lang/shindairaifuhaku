@@ -80,7 +80,7 @@
 
 {% if all_faculties %}
 <div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0">学部一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可。会員登録フォーム・マイ時間割の学部選択の表示順に反映）</span></h2>
+  <h2 style="margin-top:0">学部一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可。会員登録フォームの学部選択の表示順に反映）</span></h2>
   <div class="table-wrap">
   <table style="margin-top:0">
     <tr><th>順番</th><th>学部名</th></tr>
@@ -100,8 +100,6 @@
 
 {% if error == 'has_reviews' %}
 <div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin:16px 0 0">⚠ レビューが紐づいているため削除できません</div>
-{% elif error == 'has_user_syllabi' %}
-<div style="color:#b91c1c;background:#fee2e2;padding:8px 12px;border-radius:6px;margin:16px 0 0">⚠ マイ時間割に登録しているユーザーがいるため削除できません</div>
 {% endif %}
 
 <!-- タブ -->
@@ -180,10 +178,6 @@
       </button>
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
-      <button type="button" id="hide-btn-{{ c.id }}" class="btn" style="padding:4px 10px;background:{{ '#fef3c7' if c.hide_from_timetable else '#f3f4f6' }};color:{{ '#92400e' if c.hide_from_timetable else '#374151' }}"
-              onclick="event.stopPropagation();toggleTimetableVisibility({{ c.id }},this)">
-        {{ '🙈 時間割:非表示中' if c.hide_from_timetable else '👁 時間割:表示中' }}
-      </button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
             data-confirm="削除しますか？">
         <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
@@ -291,10 +285,6 @@
       </button>
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
-      <button type="button" id="hide-btn-{{ c.id }}" class="btn" style="padding:4px 10px;background:{{ '#fef3c7' if c.hide_from_timetable else '#f3f4f6' }};color:{{ '#92400e' if c.hide_from_timetable else '#374151' }}"
-              onclick="event.stopPropagation();toggleTimetableVisibility({{ c.id }},this)">
-        {{ '🙈 時間割:非表示中' if c.hide_from_timetable else '👁 時間割:表示中' }}
-      </button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
             data-confirm="削除しますか？">
         <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
@@ -630,25 +620,6 @@ function moveCourse(id, dir) {
     body: JSON.stringify({ direction: dir })
   }).then(function(data) {
     if (data.ok) location.reload(); else showErrorToast();
-  }).catch(function() { showErrorToast(); });
-}
-function toggleTimetableVisibility(id, btn) {
-  fetchJson('/admin/courses/' + id + '/toggle-timetable-visibility', {
-    method: 'POST',
-    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-  }).then(function(data) {
-    if (!data.ok) { showErrorToast(); return; }
-    document.querySelectorAll('#hide-btn-' + id).forEach(function(b) {
-      if (data.hide_from_timetable) {
-        b.textContent = '🙈 時間割:非表示中';
-        b.style.background = '#fef3c7';
-        b.style.color = '#92400e';
-      } else {
-        b.textContent = '👁 時間割:表示中';
-        b.style.background = '#f3f4f6';
-        b.style.color = '#374151';
-      }
-    });
   }).catch(function() { showErrorToast(); });
 }
 </script>

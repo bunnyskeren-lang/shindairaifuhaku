@@ -6,7 +6,6 @@
 必要な環境変数 (.env.dev / .env):
   LINE_CHANNEL_ACCESS_TOKEN
   REVIEW_FORM_URL
-  TIMETABLE_LIFF_ID  (My時間割ボタンのLIFF URL用)
   REVIEW_LIFF_ID     (レビュー投稿ボタンのLIFF URL用)
 """
 import argparse
@@ -34,7 +33,6 @@ REVIEW_FORM_URL = os.environ.get(
     "https://shindairaifuhaku-1.onrender.com" if args.env == "dev"
     else "https://shindairaifuhaku.onrender.com",
 )
-TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
 
@@ -64,7 +62,10 @@ SIDE_X  = 1514   # 右サイドバー左端
 ROW2_Y  = 427    # Row1/2 境界
 ROW3_Y  = 665    # Row2/3 境界
 REV_W   = 472    # レビュー投稿 右端
-COL2_X  = 610    # My時間割/教養 境界
+# 2026-07-30 My時間割機能廃止でボタンを削除。画像(assets/richmenu.png)側は
+# My時間割/教養/専門の3分割レイアウトのまま未更新のため、x=0〜COL2_Xは
+# クリック領域未定義（TODO: 画像を2分割レイアウトに再デザインしたらCOL2_Xも調整すること）
+COL2_X  = 610    # 教養 左端（旧: My時間割/教養 境界）
 COL3_X  = 1092   # 教養/専門 境界
 R3C1_X  = 426    # 生協メニュー/生協アプリ 境界（Row3）
 R3C2_X  = 736    # 生協アプリ/近隣飲食店 境界（Row3）
@@ -74,12 +75,6 @@ R3C3_X  = 1091   # 近隣飲食店/バイト 境界（Row3）
 SY1 = 245   # 図書館 / 市バス 境界
 SY2 = 480   # 市バス / うりぼーポータル 境界
 SY3 = 730   # うりぼーポータル / ヘルプ 境界
-
-
-def _timetable_action():
-    if TIMETABLE_LIFF_ID:
-        return URIAction(label="My時間割", uri=f"https://liff.line.me/{TIMETABLE_LIFF_ID}")
-    return PostbackAction(label="My時間割", data="時間割", display_text="📅 My時間割")
 
 
 def _review_action():
@@ -101,11 +96,7 @@ AREAS = [
         "action": URIAction(label="BEEF+", uri="https://beefplus.center.kobe-u.ac.jp/login?openExternalBrowser=1"),
     },
     # ── Row 2 ────────────────────────────────────────────────────
-    {
-        "label": "My時間割",
-        "x": 0, "y": ROW2_Y, "w": COL2_X, "h": ROW3_Y - ROW2_Y,
-        "action": _timetable_action(),
-    },
+    # x=0〜COL2_X（旧My時間割ボタン領域）はクリック領域未定義（上のTODO参照）
     {
         "label": "教養",
         "x": COL2_X, "y": ROW2_Y, "w": COL3_X - COL2_X, "h": ROW3_Y - ROW2_Y,
@@ -265,7 +256,6 @@ def main():
             print("[警告] REGISTER_LIFF_ID が未設定のため、登録前リッチメニューは作成されませんでした")
 
         print(f"\n環境: {args.env}  /  REVIEW_FORM_URL: {REVIEW_FORM_URL}")
-        print(f"TIMETABLE_LIFF_ID: {TIMETABLE_LIFF_ID or '(未設定 → メッセージアクション)'}")
         print("\nボタン配置（通常メニュー）:")
         for a in AREAS:
             print(f"  {a['label']:16s} → {a['action'].__class__.__name__}")

@@ -17,14 +17,9 @@ VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
-TIMETABLE_LIFF_ID = os.environ.get("TIMETABLE_LIFF_ID", "")
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
 RICHMENU_ID_PREREGISTER = os.environ.get("RICHMENU_ID_PREREGISTER", "")
-try:
-    KYOYO_REQUIRED_CREDITS = int(os.environ.get("KYOYO_REQUIRED_CREDITS", "1"))
-except ValueError:
-    KYOYO_REQUIRED_CREDITS = 1
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 IS_DEV = os.environ.get("ENV", "prod") == "dev"
 
@@ -44,10 +39,7 @@ except ValueError:
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
-# マイ時間割・必修科目自動登録が対象とする年度
-DEFAULT_ACADEMIC_YEAR = 2026
-
-# 登録フォーム用の学部・学科選択肢（templates/liff/timetable.html のプロフィール学部プルダウンと同じ11学部）
+# 登録フォーム用の学部・学科選択肢（11学部）
 FACULTIES = [
     "文学部", "国際人間科学部", "法学部", "経済学部", "経営学部",
     "システム情報学部", "理学部", "医学部", "工学部", "農学部", "海洋政策科学部",
@@ -63,7 +55,7 @@ FACULTY_DEPARTMENTS = {
     "理学部": ["数学科", "物理学科", "化学科", "生物学科", "惑星学科"],
     "医学部": ["医学科", "医療創成工学科", "保健学科"],
     "工学部": ["建築学科", "市民工学科", "電気電子工学科", "機械工学科", "応用化学科"],
-    # 農学部は2年次からコースに分かれ、卒業要件（単位チェッカー）もコース単位で異なるため、
+    # 農学部は2年次からコースに分かれるため、
     # 工学部の学科と同じ扱いでコース名をdepartmentの値とする（学科名は使わない）
     "農学部": [
         "生産環境工学コース", "食料環境経済学コース",
@@ -73,9 +65,6 @@ FACULTY_DEPARTMENTS = {
     "海洋政策科学部": ["海洋基礎科学領域", "海洋応用科学領域", "海洋ガバナンス領域", "航海学領域", "機関学領域"],
 }
 
-# 農学部はコース未選択（1年次等）でも単位チェッカーを表示するため、代表コースにフォールバックする。
-# templates/liff/timetable.html の _CREDIT_CHECKER_DEFAULT_DEPARTMENT と同じ内容を保つこと
-CREDIT_CHECKER_DEFAULT_DEPARTMENT = {"農学部": "生産環境工学コース"}
 
 # 2年次からコース分岐する学部は、初回登録時点で所属コースが存在しない学生（1年次等）がいるため、
 # 会員登録フォームで「コース未定」を選べるようにする。この値が送信されたらdepartmentはNULLで保存する。
@@ -100,8 +89,8 @@ EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★�
 
 # 以下、programing files/fetch_syllabus_info.pyのFACULTY_PATH/DEPARTMENT_PATH_OVERRIDE/
 # ENGINEERING_RANGES/MEDICINE_RANGES/MEDICINE_SUBLETTERSと同じ対応表。
-# シラバスURL生成ロジックを変更する際は、templates/liff/timetable.html
-# （JS版FACULTY_PATH_JS）も含め3箇所すべてを同時に更新すること
+# シラバスURL生成ロジックを変更する際は、programing files/fetch_syllabus_info.py側も
+# 同時に更新すること
 # （programing files/import_syllabus.py側の同名ロジックは2026-07に呼び出し元が
 # 無くなり死んでいたため削除済み。import_syllabus.pyはシラバスURLを保存せず、
 # シラバス投入後にfetch_syllabus_info.py側のロジックで動的生成する設計）

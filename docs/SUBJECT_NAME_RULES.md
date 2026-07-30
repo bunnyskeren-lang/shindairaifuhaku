@@ -24,9 +24,8 @@
 
 この統合は**`line_bot/handler.py`のLINE bot表示専用**。DB上は常に個別のSubjectレコードのまま。
 
-- 科目管理画面（admin）・My時間割（LIFF `timetable.html` / `routers/timetable_api.py`）は元々このロジックを使っておらず、統合前の個別科目のまま選択・表示される。
-  - 例: `routers/timetable_api.py`の`/api/timetable/slots/{day}/{period}`は`Subject.name`をそのまま返すため、`生物学各論A1`〜`E2`が同じ曜日・時限にあれば科目選択ドロワーに8件バラバラで並ぶ。まとめられることはない。
-- これは意図的な仕様であり、LINE bot一覧とMy時間割・admin画面の見た目の違いを不具合と誤認しないこと。
+- 科目管理画面（admin）は元々このロジックを使っておらず、統合前の個別科目のまま選択・表示される。
+- これは意図的な仕様であり、LINE bot一覧とadmin画面の見た目の違いを不具合と誤認しないこと。
 
 ## 3. 未解決の別問題（保留中・要注意）
 

@@ -12,7 +12,6 @@ from core.config import (
 )
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
-from core.required_subjects import auto_register_required_subjects
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import Review, UserProfile
@@ -93,7 +92,7 @@ async def register_profile(
     if not (1 <= grade <= 6):
         return _form_error("学年を選択してください")
     # 2年次からコース分岐する学部（農学部等）は1年次に所属コースが無いため「コース未定」を許容し、
-    # departmentはNULLで保存する（単位チェッカーは代表コースへフォールバックする）
+    # departmentはNULLで保存する
     if faculty in DEPARTMENT_UNDECIDED_FACULTIES and department == DEPARTMENT_UNDECIDED_VALUE:
         department = None
     elif department not in FACULTY_DEPARTMENTS.get(faculty, []):
@@ -124,7 +123,6 @@ async def register_profile(
             )
             session.add(profile)
         try:
-            await auto_register_required_subjects(session, uid, profile)
             await session.commit()
         except Exception as exc:
             await session.rollback()

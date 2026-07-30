@@ -9,7 +9,7 @@
 所属列が「教養教育院」の行は科目名から分類（教養(人文)等）を自動判定するため、
 --classification/--faculty を指定する必要はない。他学部を一括登録する場合は
 --classification/--faculty で明示するか、無指定なら所属列から学部名を推定する。
-時間割（syllabi/schedules、マイ時間割に表示するコマ情報）・担当教員（instructors/
+シラバス（syllabi、シラバスURL生成に使うtimetable_code情報）・担当教員（instructors/
 course_sections）ともに全学期（前期・後期・クォーター・集中）を対象にインポートします
 （2026-07-14以前は前期を除外していたが、前期のシラバスデータも投入する運用に変更した）。
 """
@@ -373,7 +373,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                          auto_create: bool = True):
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
-    from models import Subject, Instructor, CourseSection, Syllabus, Schedule, normalize_instructor_name
+    from models import Subject, Instructor, CourseSection, Syllabus, normalize_instructor_name
 
     await init_db()
 
@@ -521,7 +521,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             if not is_tt:
                 return
 
-            # ── syllabi / schedules ──
+            # ── syllabi ──
             # timetable_code 重複チェック
             existing_syl = (await session.execute(
                 select(Syllabus).where(Syllabus.timetable_code == c["timetable_code"])
@@ -553,13 +553,6 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             )
             session.add(syl)
             await session.flush()
-
-            for day, period in c["slots"]:
-                session.add(Schedule(
-                    syllabus_id=syl.id,
-                    day_of_week=day,
-                    period=period,
-                ))
             counts["tt_added"] += 1
 
     # 数千件規模のバッチを1つのDBコネクションで抱え続けると、Supabase側の

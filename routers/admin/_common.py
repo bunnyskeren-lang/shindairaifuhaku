@@ -1,8 +1,8 @@
 """admin系ルーター間で共有する並び替え(up/down)処理のヘルパー。
 
-instructor/faculty/course/classification/credit_requirement_group の各
-「上へ/下へ」エンドポイントが、対象を1つ隣にスワップして並び順を振り直す
-という同一パターンをそれぞれ個別実装していたため、ここに集約する。
+instructor/faculty/course/classification の各「上へ/下へ」エンドポイントが、
+対象を1つ隣にスワップして並び順を振り直すという同一パターンをそれぞれ
+個別実装していたため、ここに集約する。
 """
 from sqlalchemy import select
 

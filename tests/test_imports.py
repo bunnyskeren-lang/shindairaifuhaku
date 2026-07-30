@@ -13,7 +13,6 @@ MODULES = [
     "core.push",
     "core.prewarm",
     "core.templates",
-    "core.seiseki",
     "core.backup",
     "line_bot.flex_builders",
     "line_bot.handler",
@@ -24,10 +23,6 @@ MODULES = [
     "routers.liff_api",
     "routers.profile_api",
     "routers.review_submit_api",
-    "routers.timetable_api",
-    "routers.timetable_share_api",
-    "routers.timetable_custom_api",
-    "routers.seiseki_api",
     "routers.admin.auth",
     "routers.admin.dashboard",
     "routers.admin.courses",
@@ -36,8 +31,6 @@ MODULES = [
     "routers.admin.reviews",
     "routers.admin.users_errors",
     "routers.admin.stats",
-    "routers.admin.timetable_check",
-    "routers.admin.credit_requirements",
     "main",
 ]
 

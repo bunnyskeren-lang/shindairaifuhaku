@@ -55,13 +55,13 @@ P1中心に実装した。実装できた項目はdevブランチにpush・dev�
    接続できないこの実行環境では安全に実施できないため見送った。
 
 7. **FACULTY_PATH等5種の対応表をDBテーブル化（P2・DB migration）**
-   `core/config.py`・`programing files/fetch_syllabus_info.py`・
-   `templates/liff/timetable.html`(JS版)の3箇所に手動複製されている
+   `core/config.py`・`programing files/fetch_syllabus_info.py`の2箇所に手動複製されている
    （FACULTY_PATH/ENGINEERING_RANGES/MEDICINE_SUBLETTERS/MEDICINE_RANGES/
-   DEPARTMENT_PATH_OVERRIDE）。今回は完全なDBテーブル化の代わりに、3箇所の値が
+   DEPARTMENT_PATH_OVERRIDE、2026-07-30のMy時間割機能全廃止で`templates/liff/timetable.html`
+   （JS版）が削除され3箇所→2箇所に減った）。今回は完全なDBテーブル化の代わりに、値が
    一致していることを検証する自動テスト（`tests/test_syllabus_path_sync.py`）を追加し
-   更新漏れの早期検知だけ対応した。DBテーブル化自体（新テーブル設計＋4箇所の参照を
-   API呼び出しに置き換え＋JS側の非同期化）は、キャッシュ無効化漏れ等の新たなバグを
+   更新漏れの早期検知だけ対応した。DBテーブル化自体（新テーブル設計＋参照箇所を
+   API呼び出しに置き換え）は、キャッシュ無効化漏れ等の新たなバグを
    生むリスクとdev DBでの動作確認ができない制約から見送った。
 
 ## 次回セッションへの引き継ぎ

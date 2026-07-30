@@ -13,22 +13,10 @@
 
 | スクリプト | 用途 |
 |---|---|
-| `import_syllabus.py` | シラバスの時間割データをDBへ投入するメインスクリプト。`--also-courses`で`subjects`/`instructors`/`course_sections`（LINE bot用）にも登録、`--classification`/`--faculty`で分類・学部名を指定。実行時に`fetch_syllabus_info.py`を自動呼び出し |
-| `fetch_syllabus_info.py` | 神戸大学シラバスページをスクレイピングし、科目分類・開講年次・単位数をDBへ書き込む。`--env dev`でdev DB、`--force`で既取得分も上書き |
-| `sync_db_to_prod.py` | dev→本番DBの同期（`credit_requirements`/`display_orders`/`subjects`/`instructors`/`course_sections`/`subject_credit_categories`の6テーブルのみ）。UPSERTに加え、本番のみに存在する行の削除も行うが、`reviews`/`syllabi`が紐づく行は`KEEP(要確認)`表示に留めて削除しない |
+| `import_syllabus.py` | シラバスデータをDBへ投入するメインスクリプト。`--also-courses`で`subjects`/`instructors`/`course_sections`（LINE bot用）にも登録、`--classification`/`--faculty`で分類・学部名を指定。実行時に`fetch_syllabus_info.py`を自動呼び出し |
+| `fetch_syllabus_info.py` | 神戸大学シラバスページをスクレイピングし、単位数・経営学部専門科目の群をDBへ書き込む。`--env dev`でdev DB、`--force`で既取得分も上書き |
+| `sync_db_to_prod.py` | dev→本番DBの同期（`display_orders`/`subjects`/`instructors`/`course_sections`の4テーブルのみ）。UPSERTに加え、本番のみに存在する行の削除も行うが、`reviews`/`syllabi`が紐づく行は`KEEP(要確認)`表示に留めて削除しない |
 | `download_prod_backup.py` | Supabase Storage上のDBバックアップ（`core/backup.py`が生成）を差分ダウンロードし`backups/{env}/`へ保存。`--env dev\|prod` |
-
-## 学部別 初期データ投入（単位チェッカー・CAP・必修科目）
-
-農学部・文学部向けの初回投入スクリプト。一回限りの投入用として`seeds/`にまとめている。
-**本番デプロイ時に必要なため削除禁止**。
-
-| スクリプト | 用途 |
-|---|---|
-| `seeds/seed_nogaku_credit_requirements.py` | 農学部の卒業要件（`credit_requirements`）と履修登録上限単位数（`registration_caps`、54単位・全6コース共通）を投入。冪等 |
-| `seeds/seed_nogaku_subject_categories.py` | 農学部の科目→コース別カテゴリ紐付け（`subject_credit_categories`）を投入。`--dry-run`対応 |
-| `seeds/update_nogaku_credit_notes.py` | 農学部の専門科目区分のnoteに対象科目一覧を追記 |
-| `seeds/seed_bungaku_credit_requirements.py` | 文学部の卒業要件・CAP（54単位）・必修科目（`required_subjects`）を投入 |
 
 ## リッチメニュー
 

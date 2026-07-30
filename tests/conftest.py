@@ -8,21 +8,11 @@ os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from sqlalchemy import BigInteger  # noqa: E402
-from sqlalchemy.dialects.postgresql import JSONB  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 from sqlalchemy.ext.compiler import compiles  # noqa: E402
 
 # 修正理由: 結合テストではdev DB(Supabase/PostgreSQL)に接続できない実行環境が
-# あるため、SQLiteインメモリDBで代替する。models.pyのCreditRequirement.combined_of/
-# UserSeisekiRaw.raw_jsonはPostgreSQL固有のJSONB型を使っており、SQLiteのDDL
-# コンパイラは素通しできず`UnsupportedCompilationError`になる。models.py本体は
-# 本番のPostgreSQL用定義のまま変更せず、テスト時のみSQLite方言でJSONB→JSON
-# として振る舞うようcompilerルールを追加する。
-
-
-@compiles(JSONB, "sqlite")
-def _compile_jsonb_as_json_for_sqlite(element, compiler, **kw):
-    return "JSON"
+# あるため、SQLiteインメモリDBで代替する。
 
 
 # 修正理由: 全テーブルのid主キーはBigInteger(autoincrement=True)だが、SQLiteは
@@ -34,26 +24,13 @@ def _compile_biginteger_as_integer_for_sqlite(element, compiler, **kw):
     return "INTEGER"
 
 
-def _register_postgres_stub_functions(dbapi_connection, connection_record):
-    """core/required_subjects.pyのregister_syllabus_for_user()は同時押し対策として
-    PostgreSQL固有のpg_advisory_xact_lock(hashtext(...))でユーザー単位のトランザクション
-    ロックを取る。SQLiteにこの関数は存在しないため、SQL文はそのまま実行しつつ
-    ロック自体は何もしないスタブ関数をDBAPI接続に登録する（単一プロセス内のテストでは
-    実際のロック取得は不要なため副作用として問題ない）。"""
-    dbapi_connection.create_function("hashtext", 1, lambda s: hash(s) % (2**31))
-    dbapi_connection.create_function("pg_advisory_xact_lock", 1, lambda _lock_id: None)
-
-
 @pytest_asyncio.fixture
 async def async_engine():
     """テストごとに独立したSQLiteインメモリDBを作成し、全テーブルを作成する。"""
-    from sqlalchemy import event
-
     import database
     import models  # noqa: F401  (Base.metadataへのテーブル登録に必要)
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    event.listens_for(engine.sync_engine, "connect")(_register_postgres_stub_functions)
     async with engine.begin() as conn:
         await conn.run_sync(database.Base.metadata.create_all)
     yield engine

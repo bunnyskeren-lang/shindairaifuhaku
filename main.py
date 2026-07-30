@@ -10,25 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
-from core import backup, cache, liff_auth, line_client, prewarm, rate_limit
+from core import backup, liff_auth, line_client, prewarm, rate_limit
 from core.activity_log import log_cleanup_loop, save_error_log
 from database import engine, init_db
 from routers import (
-    health, liff_api, pages, profile_api, review_submit_api, richmenu, seiseki_api, timetable_api,
-    timetable_custom_api, timetable_share_api, webhook,
+    health, liff_api, pages, profile_api, review_submit_api, richmenu, webhook,
 )
 from routers.admin import (
     auth as admin_auth,
     binran_discrepancies as admin_binran_discrepancies,
     classifications as admin_classifications,
     courses as admin_courses,
-    credit_requirements as admin_credit_requirements,
     dashboard as admin_dashboard,
     instructors as admin_instructors,
-    registration_caps as admin_registration_caps,
     reviews as admin_reviews,
     stats as admin_stats,
-    timetable_check as admin_timetable_check,
     users_errors as admin_users_errors,
 )
 
@@ -38,7 +34,6 @@ async def lifespan(app: FastAPI):
     try:
         await init_db()
         print("DB OK", flush=True)
-        asyncio.create_task(cache.reload_senmon_cache())
         asyncio.create_task(prewarm.prewarm_caches())
     except Exception as e:
         _traceback.print_exc()
@@ -68,12 +63,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# 修正理由: リクエストボディサイズの上限が一切なく、JSON受信エンドポイント
-# （/api/timetable/profile、/api/seiseki/save_raw 等）に巨大なペイロードを
-# 送りつけるとメモリ枯渇DoSになり得た。/api/parse_seiseki はPDFアップロード用に
-# 既存の10MB上限（ハンドラ内でファイル読み込み後にチェック）があるため除外する。
+# 修正理由: リクエストボディサイズの上限が一切なく、JSON受信エンドポイントに
+# 巨大なペイロードを送りつけるとメモリ枯渇DoSになり得た。
 _MAX_BODY_BYTES = 2 * 1024 * 1024
-_BODY_LIMIT_EXEMPT_PATHS = {"/api/parse_seiseki"}
+_BODY_LIMIT_EXEMPT_PATHS = set()
 
 
 # Starlette の BaseHTTPMiddleware は各リクエストで追加タスク生成+anyioストリーム経由の
@@ -196,10 +189,6 @@ app.include_router(richmenu.router)
 app.include_router(liff_api.router)
 app.include_router(profile_api.router)
 app.include_router(review_submit_api.router)
-app.include_router(timetable_api.router)
-app.include_router(timetable_share_api.router)
-app.include_router(timetable_custom_api.router)
-app.include_router(seiseki_api.router)
 
 app.include_router(admin_auth.router)
 app.include_router(admin_dashboard.router)
@@ -209,7 +198,4 @@ app.include_router(admin_classifications.router)
 app.include_router(admin_reviews.router)
 app.include_router(admin_users_errors.router)
 app.include_router(admin_stats.router)
-app.include_router(admin_timetable_check.router)
-app.include_router(admin_credit_requirements.router)
-app.include_router(admin_registration_caps.router)
 app.include_router(admin_binran_discrepancies.router)

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 dev → 本番 DB の同期スクリプト
-同期対象テーブル（この6テーブルのみ）:
-  credit_requirements, display_orders, subjects, instructors, course_sections, subject_credit_categories
+同期対象テーブル（この4テーブルのみ）:
+  display_orders, subjects, instructors, course_sections
 
 絶対に同期しないテーブル:
   reviews, message_logs, user_profiles, user_activity, error_logs,
-  push_subscriptions, richmenu_taps, user_syllabi, syllabi, schedules 等
+  push_subscriptions, richmenu_taps, syllabi 等
 
 UPSERTに加えて、本番のみに存在する行（devで削除・変更済みの行）も削除する。
 ただし display_orders 以外（subjects/instructors/course_sections）は、
@@ -18,7 +18,6 @@ CASCADE/RESTRICTでユーザーデータを巻き込む恐れがあるため削�
   python -X utf8 sync_db_to_prod.py
 """
 import asyncio
-import json
 import os
 import ssl
 import sys
@@ -57,36 +56,6 @@ async def main():
     prod = await asyncpg.connect(PROD_URL, ssl=_ssl())
 
     try:
-        # ── 0. credit_requirements: UPSERT by category_id ───────────────────────
-        # subject_credit_categories.category_id が参照するFK先。先にUPSERTしておかないと
-        # 後段のsubject_credit_categories INSERTがFK違反になる（2026-07-16に実際に発生）。
-        # 孤児削除はsubject_credit_categoriesの洗い替え後（末尾）に行う。
-        cr_rows = await dev.fetch(
-            "SELECT category_id, label, group_name, sort_order, required_credits, "
-            "note, faculty, department, combined_of, max_credits "
-            "FROM credit_requirements ORDER BY category_id"
-        )
-        async with prod.transaction():
-            await prod.executemany(
-                """
-                INSERT INTO credit_requirements
-                  (category_id, label, group_name, sort_order, required_credits,
-                   note, faculty, department, combined_of, max_credits)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)
-                ON CONFLICT (category_id) DO UPDATE SET
-                  label=EXCLUDED.label, group_name=EXCLUDED.group_name,
-                  sort_order=EXCLUDED.sort_order, required_credits=EXCLUDED.required_credits,
-                  note=EXCLUDED.note, faculty=EXCLUDED.faculty, department=EXCLUDED.department,
-                  combined_of=EXCLUDED.combined_of, max_credits=EXCLUDED.max_credits
-                """,
-                [(r["category_id"], r["label"], r["group_name"], r["sort_order"], r["required_credits"],
-                  r["note"], r["faculty"], r["department"],
-                  json.dumps(r["combined_of"]) if r["combined_of"] is not None else None,
-                  r["max_credits"])
-                 for r in cr_rows]
-            )
-        print(f"credit_requirements: {len(cr_rows)}件 upsert")
-
         # ── 1. display_orders: UPSERT by (kind, name, faculty) ──────────────────
         # 分類/学部/単位要件グループの並び順マスタ。文字列一致で参照するのみで FK 依存はない。
         # 以前はid直接コピー+DELETE&INSERTだったが、本番側のオートインクリメントの
@@ -133,7 +102,7 @@ async def main():
         # course_sections/subject_credit_categories は下でdev id→prod idに変換して同期する。
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, department, classification, "
-            "category, senmon_group, sort_order, term_type, credits, hide_from_timetable "
+            "category, sort_order, term_type, credits "
             "FROM subjects ORDER BY id"
         )
         dup_keys = [key for key, cnt in
@@ -146,19 +115,18 @@ async def main():
                 """
                 INSERT INTO subjects
                   (name, reading, faculty, department, classification,
-                   category, senmon_group, sort_order, term_type, credits, hide_from_timetable)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                   category, sort_order, term_type, credits)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                 ON CONFLICT (name, faculty, department) DO UPDATE SET
                   reading=EXCLUDED.reading,
                   classification=EXCLUDED.classification,
-                  category=EXCLUDED.category, senmon_group=EXCLUDED.senmon_group,
+                  category=EXCLUDED.category,
                   sort_order=EXCLUDED.sort_order,
-                  term_type=EXCLUDED.term_type, credits=EXCLUDED.credits,
-                  hide_from_timetable=EXCLUDED.hide_from_timetable
+                  term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
                 """,
                 [(r["name"], r["reading"], r["faculty"], r["department"],
-                  r["classification"], r["category"], r["senmon_group"], r["sort_order"],
-                  r["term_type"], r["credits"], r["hide_from_timetable"])
+                  r["classification"], r["category"], r["sort_order"],
+                  r["term_type"], r["credits"])
                  for r in subj_rows]
             )
         print(f"subjects: {len(subj_rows)}件 upsert")
@@ -303,42 +271,6 @@ async def main():
             deleted_cs += 1
         print(f"course_sections: 本番のみの{len(orphan_cs)}件中 {deleted_cs}件削除、"
               f"{kept_cs}件は時間割登録/レビューが紐づくため保持")
-
-        # ── 5. subject_credit_categories ──────────────────────────────────────
-        # ユーザーデータへの依存なし → DELETE + INSERT で上書き（subject_id は prod ID に変換）
-        scc_rows = await dev.fetch(
-            "SELECT subject_id, category_id, credits FROM subject_credit_categories ORDER BY id"
-        )
-        scc_params = []
-        scc_skipped = 0
-        for r in scc_rows:
-            prod_subj_id = dev_subj_id_to_prod_id.get(r["subject_id"])
-            if prod_subj_id is None:
-                scc_skipped += 1
-                continue
-            scc_params.append((prod_subj_id, r["category_id"], r["credits"]))
-        async with prod.transaction():
-            await prod.execute("DELETE FROM subject_credit_categories")
-            if scc_params:
-                await prod.executemany(
-                    "INSERT INTO subject_credit_categories (subject_id, category_id, credits) "
-                    "VALUES ($1, $2, $3)",
-                    scc_params
-                )
-        print(f"subject_credit_categories: {len(scc_params)}件, {scc_skipped}件スキップ")
-
-        # credit_requirements: 本番のみに存在するカテゴリを削除。
-        # subject_credit_categoriesを上で洗い替え済みのため、RESTRICT違反は起きない。
-        dev_cr_ids = {r["category_id"] for r in cr_rows}
-        prod_cr_ids = {r["category_id"] for r in await prod.fetch("SELECT category_id FROM credit_requirements")}
-        orphan_cr = prod_cr_ids - dev_cr_ids
-        if orphan_cr:
-            async with prod.transaction():
-                await prod.executemany(
-                    "DELETE FROM credit_requirements WHERE category_id=$1",
-                    [(cid,) for cid in orphan_cr]
-                )
-        print(f"credit_requirements: 本番のみに存在した{len(orphan_cr)}件を削除")
 
     finally:
         await dev.close()

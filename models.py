@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
 from core.config import normalize_instructor_name, normalize_subject_name
@@ -43,9 +42,6 @@ class UserProfile(TimestampMixin, Base):
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # マイ時間割の共有リンクに埋め込む世代番号。「共有を停止する」でインクリメントすると
-    # それ以前に発行済みのリンク（友達に送信済みのものを含む）が一括で無効になる
-    share_token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -91,34 +87,6 @@ class PushSubscription(TimestampMixin, Base):
     auth: Mapped[str] = mapped_column(String(100), nullable=False)
 
 
-class CreditRequirement(Base):
-    __tablename__ = "credit_requirements"
-
-    category_id: Mapped[str] = mapped_column(String(50), primary_key=True)
-    label: Mapped[str] = mapped_column(String(100), nullable=False, default="")
-    group_name: Mapped[str] = mapped_column(String(50), nullable=False, default="")
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    required_credits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
-    faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="経営学部", default="経営学部")
-    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
-    # 複数区分の合計に対する合算制約を表す行の場合、対象category_idのリスト（例: 第2群+第3群+グローバル=55単位）
-    # NULLなら通常の区分（自区分の取得単位のみで判定）
-    combined_of: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=None)
-    # 取得単位数がこれを超えても卒業要件には超過分を算入しない上限（例: その他必要と認める科目=12単位）
-    # NULLなら上限なし
-    max_credits: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
-
-
-class UserSeisekiRaw(Base):
-    __tablename__ = "user_seiseki_raw"
-
-    line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    gpa: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-
 # ── 新スキーマ ────────────────────────────────────────────────────────────────
 
 
@@ -126,8 +94,6 @@ class Subject(Base):
     __tablename__ = "subjects"
     __table_args__ = (
         UniqueConstraint("name", "faculty", "department", name="uq_subjects_name_faculty_department"),
-        # マイ時間割の科目選択(/api/timetable/slots)向け: faculty==X, department.in_(...), category==専門
-        Index("ix_subjects_faculty_department_category", "faculty", "department", "category"),
         # 教養教育院の分類絞り込み(classification==/LIKE)向け
         Index("ix_subjects_faculty_classification", "faculty", "classification"),
         # 管理画面(/admin/courses)のclassification単体GROUP BY・完全一致検索向け
@@ -136,25 +102,21 @@ class Subject(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     # name/facultyの単独indexは張らない。uq_subjects_name_faculty_department（name, faculty, department）と
-    # ix_subjects_faculty_department_category / ix_subjects_faculty_classification（いずれもfacultyが先頭列）が
-    # 既にある以上、単独indexは先頭列プレフィックスとして完全に重複し検索速度に寄与せず書き込みコストだけ増やす
-    # （2026-07-21のindex追加時にこの重複を作り込んでいた。詳細はdatabase.py init_db()のDROP INDEX箇所参照）
+    # ix_subjects_faculty_classification（facultyが先頭列）が既にある以上、単独indexは
+    # 先頭列プレフィックスとして完全に重複し検索速度に寄与せず書き込みコストだけ増やす
     name: Mapped[str] = mapped_column(Text, nullable=False)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # 学部内で学科・専攻ごとに卒業要件が異なる場合の学科名（工学部5学科・理学部5学科・
-    # 医学部保健学科4専攻等）。credit_requirements/registration_caps/required_subjects/
-    # user_profilesと同じ「faculty列+department列」のペア形式。学科の区別が無い学部では
-    # 空文字（subjects.readingと同じプレースホルダ方式、UNIQUE制約でNULL同士を区別しないPostgresの
-    # 挙動を避けるためNOT NULL）。
+    # 医学部保健学科4専攻等）。user_profilesと同じ「faculty列+department列」のペア形式。
+    # 学科の区別が無い学部では空文字（subjects.readingと同じプレースホルダ方式、UNIQUE制約で
+    # NULL同士を区別しないPostgresの挙動を避けるためNOT NULL）。
     department: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    senmon_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
-    hide_from_timetable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
     @validates("name")
     def _normalize_name(self, key, value):
@@ -197,18 +159,6 @@ class Syllabus(TimestampMixin, Base):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     academic_term: Mapped[str] = mapped_column(Text, nullable=False)
     timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
-    target_grades: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    subject_category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-
-class Schedule(TimestampMixin, Base):
-    __tablename__ = "schedules"
-    __table_args__ = (UniqueConstraint("syllabus_id", "day_of_week", "period", name="uq_schedules_syllabus_day_period"),)
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
-    day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
-    period: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class Review(TimestampMixin, Base):
@@ -234,75 +184,3 @@ class CourseSectionView(Base):
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), primary_key=True)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
-class UserSyllabus(TimestampMixin, Base):
-    __tablename__ = "user_syllabi"
-    __table_args__ = (UniqueConstraint("line_user_id", "syllabus_id", name="uq_user_syllabi"),)
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    # line_user_idの単独indexは張らない。uq_user_syllabi(line_user_id, syllabus_id)の先頭列プレフィックスで
-    # 代替できる（履修登録・取消で書き込みが集中するテーブルのため、冗長indexの維持コストが特に響く）
-    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    syllabus_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("syllabi.id", ondelete="CASCADE"), nullable=False, index=True)
-    classroom: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-
-class UserCustomCourse(TimestampMixin, Base):
-    """ユーザーがマイ時間割で手動追加した個人用の科目（シラバスマスタに存在しない科目）。
-    line_user_idの本人にのみ表示され、他ユーザーの科目一覧には表示されない。
-    classificationはcredit_requirements.category_idと一致させ、単位チェッカーの取得単位数に
-    creditsを加算する（routers/seiseki_api.pyのapi_seiseki_credits参照）。"""
-    __tablename__ = "user_custom_courses"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    credits: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
-    year: Mapped[int] = mapped_column(Integer, nullable=False)
-    day_of_week: Mapped[str] = mapped_column(Text, nullable=False)
-    period: Mapped[int] = mapped_column(Integer, nullable=False)
-
-
-class RequiredSubject(TimestampMixin, Base):
-    """学部・学科・学年ごとの必修科目マスタ。時間割登録時に自動でuser_syllabiへ登録する対象を管理する。
-    student_id_parity は学籍番号末尾1桁の偶奇でクラスが分かれる科目（機械工学科の実習/製図等）向けの絞り込み。
-    NULLなら全員が対象。"""
-    __tablename__ = "required_subjects"
-    __table_args__ = (UniqueConstraint("faculty", "department", "grade", "subject_id", name="uq_required_subjects"),)
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    # facultyの単独indexは張らない。uq_required_subjects(faculty, department, grade, subject_id)の
-    # 先頭列プレフィックスで代替できる
-    faculty: Mapped[str] = mapped_column(Text, nullable=False)
-    department: Mapped[str] = mapped_column(Text, nullable=False)
-    grade: Mapped[int] = mapped_column(Integer, nullable=False)
-    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
-    student_id_parity: Mapped[Optional[str]] = mapped_column(String(4), nullable=True, default=None)
-    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
-
-
-class RegistrationCap(TimestampMixin, Base):
-    """学部・学科・年度ごとの履修登録上限単位数（CAP制）。departmentがNULLの行はその学部の学科共通値として扱う。"""
-    __tablename__ = "registration_caps"
-    __table_args__ = (UniqueConstraint("faculty", "department", "year", name="uq_registration_caps"),)
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    # facultyの単独indexは張らない。uq_registration_caps(faculty, department, year)の
-    # 先頭列プレフィックスで代替できる
-    faculty: Mapped[str] = mapped_column(Text, nullable=False)
-    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    year: Mapped[int] = mapped_column(Integer, nullable=False)
-    max_credits: Mapped[int] = mapped_column(Integer, nullable=False)
-
-
-class SubjectCreditCategory(Base):
-    __tablename__ = "subject_credit_categories"
-    __table_args__ = (UniqueConstraint("subject_id", "category_id", name="uq_subject_credit_categories"),)
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
-    category_id: Mapped[str] = mapped_column(String(50), ForeignKey("credit_requirements.category_id"), nullable=False, index=True)
-    credits: Mapped[float] = mapped_column(Numeric(3, 1), nullable=False, default=2.0)

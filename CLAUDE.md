@@ -85,15 +85,13 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 
 **本番デプロイ時は、コードのプッシュに加えて必ず dev → prod のDB同期も行うこと。**
 
-同期対象（この6テーブルのみ）：
-- `credit_requirements`
+同期対象（この4テーブルのみ）：
 - `display_orders`
 - `subjects`
 - `instructors`
 - `course_sections`
-- `subject_credit_categories`
 
-`credit_requirements`は2026-07-16に同期対象へ追加した。新学部の単位要件をdevへ追加しただけでは本番に反映されず、`subject_credit_categories`の同期がFK違反で失敗する事故があったため（`sync_db_to_prod.py`ではUPSERTを`subject_credit_categories`より先に実行し、本番のみに存在するカテゴリの削除は`subject_credit_categories`洗い替え後に行う）。
+`credit_requirements`/`subject_credit_categories`は2026-07-30の大規模リニューアル（My時間割・単位チェッカー・CAP制・必修科目自動登録の全廃止）でテーブル自体をDROPしたため、同期対象からも削除した。
 
 絶対に同期しないテーブル（ユーザーデータ・ログ・レビュー・利用履歴）：
 - `reviews`
@@ -103,7 +101,7 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 - `error_logs`
 - `push_subscriptions`
 - `richmenu_taps`
-- `syllabi` / `schedules` / `user_syllabi`（時間割データ・import_syllabus.py で別途管理）
+- `syllabi`（シラバスデータ・import_syllabus.py で別途管理）
 
 同期方法：
 ```bash
@@ -111,7 +109,7 @@ cd "programing files"
 python -X utf8 sync_db_to_prod.py
 ```
 
-`sync_db_to_prod.py`はUPSERTだけでなく、本番のみに存在する行（devで削除・変更済みの行）も削除する（2026-07-16追加）。ただし`display_orders`/`credit_requirements`以外（`subjects`/`instructors`/`course_sections`）は、`course_sections`経由で`syllabi`（時間割登録データ）や`reviews`が紐づく場合は削除せず、`KEEP(要確認)`としてログ表示するのみに留める。このログが出た場合は、同名科目のfaculty違いによる重複などが原因のことが多いので、手動でreviewsのcourse_section_id付け替え→旧行削除の対応が必要になる。
+`sync_db_to_prod.py`はUPSERTだけでなく、本番のみに存在する行（devで削除・変更済みの行）も削除する（2026-07-16追加）。ただし`display_orders`以外（`subjects`/`instructors`/`course_sections`）は、`course_sections`経由で`syllabi`（シラバスデータ）や`reviews`が紐づく場合は削除せず、`KEEP(要確認)`としてログ表示するのみに留める。このログが出た場合は、同名科目のfaculty違いによる重複などが原因のことが多いので、手動でreviewsのcourse_section_id付け替え→旧行削除の対応が必要になる。
 
 ### LIFF ID の固定ルール
 
@@ -161,11 +159,11 @@ python -X utf8 sync_db_to_prod.py
 そのため、シラバスURLは「科目名」だけに紐づけるのではなく、**「科目名 × 担当教員」の組み合わせ**に紐づけることが望ましい。
 
 `course_sections` テーブルが `subjects`（科目）と `instructors`（教員）を結び「科目×担当教員」単位のセクションを管理する。
-シラバスURLは列としては持たず、`syllabi.timetable_code` と `subjects.faculty`/`subjects.department`（`course_sections`経由、`core.config.syllabus_department_key()`で連結）から `core.config.make_syllabus_url()`（および同ロジックの4箇所の複製）で**毎回動的生成**する
+シラバスURLは列としては持たず、`syllabi.timetable_code` と `subjects.faculty`/`subjects.department`（`course_sections`経由、`core.config.syllabus_department_key()`で連結）から `core.config.make_syllabus_url()`（および同ロジックの2箇所の複製）で**毎回動的生成**する
 （2026-07に `course_sections.syllabus_url` 列から移行済み。年度が変わり時間割コードが変わっても自動で追従し、値が陳腐化しない）。
-`syllabi` レコードを持たない科目（時間割インポート前・レビュー投稿のみ由来のセクション等）はURLを導出できないため、単位数等の自動取得はスキップされ手入力での補完が必要になる。
+`syllabi` レコードを持たない科目（シラバスインポート前・レビュー投稿のみ由来のセクション等）はURLを導出できないため、単位数等の自動取得はスキップされ手入力での補完が必要になる。
 
-**`syllabi.department`は2026-07-18に廃止した。** 従来はシラバス生データの所属列（学科まで含む生の文字列、例:「工学部建築学科」）をそのまま`syllabi.department`に保存していたが、dev DB実データで確認したところ94%が`subjects.faculty`と完全一致する重複列だった。学科粒度の情報を持っていたのは工学部(5学科)・理学部(5学科)・医学部(医学科/医療創成工学科/保健学科×4専攻)の16パターンのみで、これは`subjects.faculty`側にも学部名+学科名を連結した複合文字列としてすでに入っていた（学科名にスペース区切りが無いため`faculty`に丸ごと収まっていた）。この機に`subjects`に`department`列を新設し、`credit_requirements`/`registration_caps`/`required_subjects`/`user_profiles`と同じ「faculty列（学部名のみ）+department列（学科名、無ければ空文字）」のペア形式に統一した（`UNIQUE(name, faculty, department)`）。`subjects.faculty`が複合文字列だったことに暗黙で依存していた3箇所（`routers/admin/credit_requirements.py`のkoubu学科別ページのLIKE検索、`routers/timetable_api.py`の`_build_credit_countable_filter()`、LINE botの専門科目メニューの学部→学科ドリルダウン`line_bot/handler.py`）は`Subject.department`列を直接参照する形に修正済み。
+**`syllabi.department`は2026-07-18に廃止した。** 従来はシラバス生データの所属列（学科まで含む生の文字列、例:「工学部建築学科」）をそのまま`syllabi.department`に保存していたが、dev DB実データで確認したところ94%が`subjects.faculty`と完全一致する重複列だった。学科粒度の情報を持っていたのは工学部(5学科)・理学部(5学科)・医学部(医学科/医療創成工学科/保健学科×4専攻)の16パターンのみで、これは`subjects.faculty`側にも学部名+学科名を連結した複合文字列としてすでに入っていた（学科名にスペース区切りが無いため`faculty`に丸ごと収まっていた）。この機に`subjects`に`department`列を新設し、`user_profiles`と同じ「faculty列（学部名のみ）+department列（学科名、無ければ空文字）」のペア形式に統一した（`UNIQUE(name, faculty, department)`）。`subjects.faculty`が複合文字列だったことに暗黙で依存していた箇所（LINE botの専門科目メニューの学部→学科ドリルダウン`line_bot/handler.py`等）は`Subject.department`列を直接参照する形に修正済み。
 
 神戸大学シラバスサイトのURLは **時間割コード** から一意に決まる。
 
@@ -182,10 +180,11 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 例: `3U020` → `/20/` → `2026_3U020.html` / `3B379` → `/06/` → `2026_3B379.html` / `1X058` → `/15/` → `2026_1X058.html`
 
 新しい学部のデータを追加する際は、実際のシラバスURLを確認してpathの数字を特定し、
-`core/config.py` と `programing files/fetch_syllabus_info.py` と
-`templates/liff/timetable.html` の `FACULTY_PATH` / `FACULTY_PATH_JS` に追記すること
+`core/config.py` と `programing files/fetch_syllabus_info.py` の
+`FACULTY_PATH` に追記すること
 （`programing files/import_syllabus.py`には同種のロジックが以前あったが、シラバスURL
-動的生成方式への移行後に呼び出し元が無くなり2026-07-21に削除済み。この3箇所のみでよい）。
+動的生成方式への移行後に呼び出し元が無くなり2026-07-21に削除済み。`templates/liff/timetable.html`
+のJS版は2026-07-30のMy時間割機能全廃止で削除済み。この2箇所のみでよい）。
 
 新しい学部で学科・専攻ごとにURLのpathが分かれる場合（工学部・理学部・医学部保健学科のような
 ケース）は、上記に加えて `programing files/import_syllabus.py` の `_FACULTY_DEPARTMENT_SPLIT`
@@ -199,35 +198,31 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 
 ```html
 <tr>
-  <td class="gaibu-syllabus-kihon">科目分類</td>
-  <td width="300">教養科目</td>       ← subject_category
-  <td class="gaibu-syllabus-kihon">開講年次</td>
-  <td width="300">1 ･ 2 ･ 3 ･ 4 年</td>  ← target_grades
+  <td class="gaibu-syllabus-kihon" align="center">単位数</th><td>2.0</td>
 </tr>
 ```
 
 - ラベルは `<th>` ではなく `<td>`
-- 開講年次のラベルは **「対象年次」ではなく「開講年次」**（ここを間違えると全件空になる）
 - 単位数（`subjects.credits`）のみ、ラベル側の閉じタグが `</td>` ではなく `</th>` になっている
   （例: `<td class="gaibu-syllabus-kihon">単位数</th><td>2.0</td>`）。正規表現でラベル直後の
   閉じタグを固定せず、次の `<td>` を拾う書き方にすること
 - スクレイピングスクリプト: `programing files/fetch_syllabus_info.py`
   - `--env dev` で dev DB に書き込み、`--force` で既取得分も上書き
-  - 0.3秒スリープ/件、バッチ単位（`Syllabus`は20件、`Subject`は40件）でセッションを切り替えてコミット・失敗時リトライ
-  - 単位数（`subjects.credits`）は `run_credits()` が担当。`run()`（target_grades/subject_category）とは独立して全件処理する。
-    `syllabi`レコードを持たない科目（時間割インポート前等）はシラバスURLを導出できずスキップされ、`credits`はNULLのまま残る（手入力で補完）
-  - `import_syllabus.py`の実行時に自動で呼ばれるため、単位数・開講年次の取得だけを目的に
+  - 0.3秒スリープ/件、バッチ単位（`Subject`は40件、`run_senmon_classification()`は20件）でセッションを切り替えてコミット・失敗時リトライ
+  - 単位数（`subjects.credits`）は `run_credits()` が担当。
+    `syllabi`レコードを持たない科目（シラバスインポート前等）はシラバスURLを導出できずスキップされ、`credits`はNULLのまま残る（手入力で補完）
+  - 経営学部専門科目の群（第1群〜第3群・グローバル科目群）は `run_senmon_classification()` がナンバリングコードから自動判定し`Subject.classification`に反映
+  - `import_syllabus.py`の実行時に自動で呼ばれるため、単位数取得だけを目的に
     単体で実行する必要は通常ない（既存分の再取得や`--force`上書きをしたい場合のみ単体実行する）
+  - **2026-07-30の大規模リニューアル（My時間割機能全廃止）で、対象年次・科目分類を取得する`run()`（`Syllabus.target_grades`/`subject_category`列）は削除済み**
 
-### 時間割DBテーブル構成（新スキーマ）
+### シラバスDBテーブル構成（新スキーマ）
 
 | テーブル | 用途 |
 |---|---|
-| `syllabi` | 時間割マスタ（course_section_id, timetable_code, term, target_grades, subject_category） |
-| `schedules` | 曜日・時限（syllabus_id, day_of_week, period） |
-| `user_syllabi` | ユーザーの登録科目（line_user_id, syllabus_id） |
+| `syllabi` | シラバスマスタ（course_section_id, timetable_code, term） |
 
-ユーザーの学部・学年・学科プロフィールは `user_profiles`（faculty/grade/department列）で管理する（旧`timetable_profiles`は2026-07-06に統合・廃止）。
+ユーザーの学部・学年・学科プロフィールは `user_profiles`（faculty/grade/department列）で管理する（旧`timetable_profiles`は2026-07-06に統合・廃止）。My時間割機能（`schedules`/`user_syllabi`テーブル等）は2026-07-30の大規模リニューアルで全廃止した。
 
 インポートスクリプト: `programing files/import_syllabus.py`
 - `--also-courses` を付けると `subjects`/`instructors`/`course_sections`（LINE bot用）にも登録
@@ -250,7 +245,6 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 | DB | PostgreSQL（Supabase） |
 | テンプレート | Jinja2 |
 | LINE連携 | line-bot-sdk v3（`linebot.v3`） |
-| PDF解析 | pdfplumber（成績表パース） |
 | よみがな生成 | pykakasi |
 | プッシュ通知 | pywebpush（VAPID） |
 | ホスティング | Render（Web Service） |
@@ -276,7 +270,6 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── push.py                  ← Web Push (VAPID) 通知送信
 │   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
 │   ├── templates.py               ← Jinja2Templates・jstフィルタ
-│   ├── seiseki.py                  ← 成績表PDFの単位分類ロジック（経営学部専門科目群判定など）
 │   ├── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
 │   └── binran_discrepancies.py       ← `docs/学生便覧2026/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータスで一覧化（DB非経由、ファイル読み込みのみ）
 ├── line_bot/                ← LINE Bot応答ロジック
@@ -285,11 +278,9 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 ├── routers/                 ← FastAPI APIRouter（URLプレフィックス単位）
 │   ├── webhook.py             ← POST /callback（LINE Webhook）
 │   ├── health.py               ← /health
-│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /privacy, /sw.js, /liff/course, /liff/timetable
+│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /privacy, /sw.js, /liff/course
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
 │   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /api/faculties, /submit, /api/course/{id}
-│   ├── timetable_api.py             ← /api/timetable/*
-│   ├── seiseki_api.py                ← /api/parse_seiseki 等（成績PDF解析）
 │   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
 │       ├── auth.py                     ← /admin/login, /admin/logout
 │       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe
@@ -297,16 +288,12 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │       ├── reviews.py                     ← /admin/reviews*
 │       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/activity
 │       ├── stats.py                         ← /admin/richmenu-stats, /admin/usage-stats
-│       ├── timetable_check.py                ← /admin/timetable/check
-│       ├── credit_requirements.py             ← /admin/keiei*, /admin/sysinfo*, /admin/credit_requirements/group/move（グループ並び替え）
-│       ├── registration_caps.py                ← /admin/registration_caps*（学部・学科・年度別CAP＝履修登録上限単位数のCRUD）
-│       └── binran_discrepancies.py               ← /admin/binran_discrepancies（学生便覧ver2×DBの齟齬一覧、`core/binran_discrepancies.py`のパーサー参照）
+│       └── binran_discrepancies.py           ← /admin/binran_discrepancies（学生便覧ver2×DBの齟齬一覧、`core/binran_discrepancies.py`のパーサー参照）
 ├── templates/
-│   ├── admin/              ← courses / reviews / keiei / sysinfo / logs / users / errors /
-│   │                          activity / usage_stats / richmenu / timetable_check / registration_caps / binran_discrepancies / login / base 等
+│   ├── admin/              ← courses / reviews / logs / users / errors /
+│   │                          activity / usage_stats / richmenu / binran_discrepancies / login / base 等
 │   ├── liff/
-│   │   ├── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
-│   │   └── timetable.html ← マイ時間割（LIFFページ）
+│   │   └── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
 │   ├── form_index.html    ← レビュー投稿フォーム
 │   ├── form_success.html
 │   ├── form_error.html
@@ -316,11 +303,11 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 ├── docs/                  ← ドキュメント類（2026-07-17に全体をgit管理化・デプロイ対象。管理画面`/admin/binran_discrepancies`が本番/dev環境で読む`学生便覧2026/IMPLEMENTATION_CANDIDATES.md`もここに含まれる。`学生便覧2026/`は学部ごとのサブフォルダ構成（`bungaku/`/`hougaku/`/`igaku/`/`kaiyo/`/`keiei/`/`kokusai_ningen/`/`kougaku/`/`nogaku/`/`rigaku/`/`sysinfo/`、2026-07-16に旧ver2/フォルダ・フラット構成から再編）で、各学部フォルダにPDF/txt/png原本と学部別まとめ.md、スクリプトがある場合は`pdf_extraction/`（PDF抽出系）・`db_check/`（DB確認クエリ系、いずれもDB書き込みは行わない）を内包する。学部を横断する`BINRAN_READING_GUIDE.md`・`IMPLEMENTATION_CANDIDATES.md`・`mid_dump.txt`（全学共通の学則抜粋）はルート直下に残す。新学部を調査する際は同じ命名規則（学部フォルダ名は既存ファイル名接頭辞のローマ字を踏襲）でサブフォルダを追加すること）
 ├── backups/               ← download_prod_backup.pyのダウンロード先（.gitignore対象、env別サブフォルダ）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
-    ├── import_syllabus.py         ← 時間割データをDB投入
-    ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング
+    ├── import_syllabus.py         ← シラバスデータをDB投入
+    ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング（単位数・経営学部専門科目の群）
     ├── import_kyoyo_courses.py    ← 教養科目インポート
     ├── setup_richmenu.py          ← LINEリッチメニュー設定（--env dev/prod）
-    ├── sync_db_to_prod.py         ← dev→本番DBの5テーブル同期
+    ├── sync_db_to_prod.py         ← dev→本番DBの4テーブル同期
     ├── download_prod_backup.py    ← Supabase Storage上のDBバックアップをローカルbackups/へ差分ダウンロード（--env dev/prod）
     ├── models.py / database.py    ← スクリプト群専用のDBアクセス層（ルートのmodels.pyとは別定義）
     ├── assets/richmenu.png        ← リッチメニュー原本画像（setup_richmenu.pyのデフォルト画像、git管理下）
@@ -336,22 +323,16 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `subjects` | 科目マスタ（name, faculty, department, classification, term, credits 等。facultyは学部名のみ・departmentは学科名（無ければ空文字）のペア形式。UNIQUE(name, faculty, department)） |
 | `instructors` | 教員マスタ |
 | `course_sections` | 科目×教員のセクション |
-| `syllabi` | シラバス（年度・クォーター・時間割コード・対象学年・科目分類。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み） |
-| `schedules` | 曜日・時限・教室 |
+| `syllabi` | シラバス（年度・クォーター・時間割コード。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み、target_grades/subject_category列は2026-07-30に廃止済み） |
 | `reviews` | 投稿レビュー（`is_approved` で承認管理） |
 | `course_section_views` | 科目セクションの閲覧数 |
-| `user_syllabi` | ユーザーの時間割登録 |
-| `subject_credit_categories` | 科目↔単位カテゴリの紐付け |
 
 共通・運用系:
 
 | テーブル | 用途 |
 |----------|------|
-| `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順、`credit_requirement_group`=単位要件グループの表示順（`faculty`列で経営学部/システム情報学部を区別）） |
-| `credit_requirements` | 単位要件定義（学部別、category_id, required_credits, label） |
-| `registration_caps` | 履修登録上限単位数（CAP制、faculty/department/yearごと。departmentがNULLなら学部共通値） |
+| `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順） |
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み） |
-| `user_seiseki_raw` | 成績表PDFの解析済みJSON（line_user_id で1件） |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
 | `error_logs` | サーバーエラーログ |
@@ -375,9 +356,9 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 core.line_client / core.prewarm 等のimport
 → FastAPI app 生成 → lifespan（init_db + prewarm + self-ping、core.line_client.startup/shutdown）
 → 例外ハンドラ登録（core.activity_log.save_error_log でエラーログ保存）
-→ include_router（webhook / health / pages / richmenu / liff_api / timetable_api / seiseki_api /
+→ include_router（webhook / health / pages / richmenu / liff_api / profile_api / review_submit_api /
                   admin.auth / admin.dashboard / admin.courses / admin.reviews /
-                  admin.users_errors / admin.stats / admin.timetable_check / admin.credit_requirements）
+                  admin.users_errors / admin.stats / admin.binran_discrepancies）
 ```
 
 **キャッシュ設計（core/cache.py に集約したモジュールレベルグローバル変数）**
