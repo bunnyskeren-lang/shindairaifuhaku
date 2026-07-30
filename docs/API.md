@@ -12,7 +12,7 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 | **LIFF ID token** | `/api/*` の大半 | フロントがLINEログインで取得した `id_token` をリクエストボディ or `X-Liff-Id-Token` ヘッダーで送信。`core.liff_auth.verify_liff_id_token()` がLINEプラットフォームに問い合わせて検証し、120秒キャッシュする。検証失敗時は `line_user_id` が得られず、多くのエンドポイントは401またはログイン前扱いの空データを返す |
 | **管理者Cookie** | `/admin/*`（`/admin/login`除く） | `core.security.check_admin` が全 `/admin/*` ルートに `Depends()` で付与。Cookie名 `admin_tok`、`HMAC-SHA256(CHANNEL_SECRET + ADMIN_PASSWORD, "admin:{timestamp}")`、TTL 4時間 |
 | **LINE署名検証** | `POST /callback` | `X-Line-Signature` ヘッダーをチャネルシークレットで検証（`core.security.verify_line_signature`） |
-| 認証なし | `/api/courses`, `/api/preload`, `/api/faculties`, `/api/instructors`, `/api/course/{id}`, `/health`, 各種ページ | 公開情報のみ返す |
+| 認証なし | `/api/courses`, `/api/preload`, `/api/instructors`, `/api/course/{id}`, `/health`, 各種ページ | 公開情報のみ返す |
 
 ## レート制限
 
@@ -60,7 +60,6 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 |---|---|---|
 | `GET /api/courses` | `q`（検索語、空白区切りAND） | 科目名・よみがなをILIKE部分一致検索（記号除去した正規化検索へのフォールバック付き）。最大50件、教員一覧付き |
 | `GET /api/preload` | - | 全科目・全教員の軽量一覧（キャッシュ、`Cache-Control: public, max-age=300`）。フロントの検索インデックス用 |
-| `GET /api/faculties` | - | 学部一覧（表示順）と学部→学科マッピング（キャッシュ） |
 | `GET /api/instructors` | `q`（検索語） | 教員名の部分一致検索、担当科目一覧付き（最大50件） |
 | `GET /api/course/{course_id}` | - | 科目詳細（担当教員一覧・平均評価・楽単度分布・承認済みレビュー最大20件・最新シラバスURL）。閲覧時に`course_section_views`をインクリメント |
 

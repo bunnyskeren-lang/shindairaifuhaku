@@ -280,7 +280,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── health.py               ← /health
 │   ├── pages.py                  ← /, /register（会員登録必須ページ）, /privacy, /sw.js, /liff/course
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
-│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /api/faculties, /submit, /api/course/{id}
+│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /submit, /api/course/{id}
 │   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
 │       ├── auth.py                     ← /admin/login, /admin/logout
 │       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe

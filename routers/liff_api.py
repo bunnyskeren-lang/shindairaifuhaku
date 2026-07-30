@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    EASE_ORDER, FACULTY_DEPARTMENTS,
+    EASE_ORDER,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.rate_limit import rate_limiter
@@ -133,13 +133,6 @@ async def api_preload():
         data = {"courses": course_list, "instructors": instructor_list}
         cache.set_preload_cache(data)
     res = JSONResponse(data)
-    res.headers["Cache-Control"] = "public, max-age=300"
-    return res
-
-
-@router.get("/api/faculties")
-async def api_faculties():
-    res = JSONResponse({"faculties": await cache.get_faculty_order(), "departments": FACULTY_DEPARTMENTS})
     res.headers["Cache-Control"] = "public, max-age=300"
     return res
 

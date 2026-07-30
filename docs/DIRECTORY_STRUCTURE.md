@@ -40,7 +40,7 @@ shindairaifuhaku/
 │   ├── health.py                ← GET /health
 │   ├── pages.py                  ← HTMLページ全般（/, /register, /liff/review, /coop, /privacy, /sw.js, /liff/course）
 │   ├── richmenu.py                ← GET /r/{name}（クリック計測付きリダイレクト）
-│   ├── liff_api.py                 ← 科目検索・詳細（/api/courses, /api/preload, /api/faculties, /api/instructors, /api/course/{id}）
+│   ├── liff_api.py                 ← 科目検索・詳細（/api/courses, /api/preload, /api/instructors, /api/course/{id}）
 │   ├── profile_api.py               ← 会員登録・プロフィール（/api/profile/*, /api/register, /api/autofill）
 │   ├── review_submit_api.py          ← レビュー投稿（POST /submit）
 │   └── admin/                         ← 管理画面（HMAC Cookie認証、全ルートにcheck_adminを付与）
