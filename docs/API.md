@@ -92,7 +92,6 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 | `/admin/reviews*` | レビュー承認・却下・古い未承認レビューのクリーンアップ（承認画面で内容編集可） |
 | `/admin/users`, `/admin/errors` | ユーザー一覧、エラーログ |
 | `/admin/usage-stats` | リッチメニュークリック統計・機能別利用統計・ユーザー別利用履歴 |
-| `/admin/binran_discrepancies` | 学生便覧×DBの齟齬一覧（読み取り専用） |
 
 ## エラーレスポンス形式
 

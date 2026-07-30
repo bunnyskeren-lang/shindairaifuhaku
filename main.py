@@ -18,7 +18,6 @@ from routers import (
 )
 from routers.admin import (
     auth as admin_auth,
-    binran_discrepancies as admin_binran_discrepancies,
     classifications as admin_classifications,
     courses as admin_courses,
     dashboard as admin_dashboard,
@@ -198,4 +197,3 @@ app.include_router(admin_classifications.router)
 app.include_router(admin_reviews.router)
 app.include_router(admin_users_errors.router)
 app.include_router(admin_stats.router)
-app.include_router(admin_binran_discrepancies.router)

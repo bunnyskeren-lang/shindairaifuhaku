@@ -18,7 +18,6 @@
 | `push.py` | Web Push（VAPID）通知の送信 |
 | `templates.py` | `Jinja2Templates`インスタンスと`jst`（JST変換）カスタムフィルタ |
 | `backup.py` | DB自動バックアップ。`BACKUP_ENABLED=true`の環境で`BACKUP_INTERVAL_HOURS`間隔（既定1時間）に全テーブルをダンプしSupabase Storageへアップロード |
-| `binran_discrepancies.py` | `docs/学生便覧2026/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータス別に一覧化（DB非経由、ファイル読み込みのみ） |
 
 ## 設計ルール
 

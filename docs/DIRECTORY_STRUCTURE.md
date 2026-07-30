@@ -28,8 +28,7 @@ shindairaifuhaku/
 │   ├── templates.py                    ← Jinja2Templates・jstフィルタ
 │   ├── rate_limit.py                     ← IPアドレス単位のスライディングウィンドウ・レート制限
 │   ├── db_ssl.py                           ← Supabase接続用SSLコンテキスト生成
-│   ├── backup.py                            ← DB自動バックアップ（全テーブルダンプ→Supabase Storageアップロード）
-│   └── binran_discrepancies.py               ← 学生便覧×DBの齟齬一覧パーサー（DB非経由、ファイル読み込みのみ）
+│   └── backup.py                            ← DB自動バックアップ（全テーブルダンプ→Supabase Storageアップロード）
 │
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py       ← FlexMessage/Bubble生成関数群
@@ -52,12 +51,11 @@ shindairaifuhaku/
 │       ├── classifications.py                 ← /admin/courses/classification/*（分類の改名・削除・並び替え・親グループ設定）
 │       ├── reviews.py                          ← /admin/reviews*（レビュー承認・却下・クリーンアップ）
 │       ├── users_errors.py                      ← /admin/users, /admin/errors
-│       ├── stats.py                              ← /admin/usage-stats
-│       └── binran_discrepancies.py                ← /admin/binran_discrepancies（学生便覧×DBの齟齬一覧表示）
+│       └── stats.py                              ← /admin/usage-stats
 │
 ├── templates/
 │   ├── admin/                ← 管理画面テンプレート（base / login / courses / reviews / logs / users / errors /
-│   │                            activity / usage_stats / richmenu / binran_discrepancies）
+│   │                            activity / usage_stats / richmenu）
 │   ├── liff/                  ← course.html（科目詳細）/ review_redirect.html（レビュー投稿直リンク）
 │   ├── form_index.html          ← レビュー投稿フォーム
 │   ├── form_success.html / form_error.html
@@ -72,8 +70,7 @@ shindairaifuhaku/
 │   ├── SUBJECT_NAME_RULES.md   ← 科目名表記統一・LINE bot一覧のバリアント統合ルール
 │   ├── SCHEMA_REVIEW.md         ← DBスキーマの課題洗い出し（調査メモ）
 │   ├── PERFORMANCE.md            ← パフォーマンス改善メモ
-│   ├── TODO/                      ← 未対応タスクの記録（CREDITS_TODO.md 等）
-│   └── 学生便覧2026/                ← 学部別の学生便覧原本・まとめ（`/admin/binran_discrepancies`が参照）
+│   └── TODO/                      ← 未対応タスクの記録（CREDITS_TODO.md 等）
 ├── backups/                 ← download_prod_backup.pyのダウンロード先（.gitignore対象、env別サブフォルダ）
 ├── tests/                   ← pytest（unit / e2e / integration。詳細は DEVELOPMENT.md）
 │
@@ -96,5 +93,5 @@ shindairaifuhaku/
 
 - **`programing files/models.py` はルート直下の `models.py` とは別ファイル**。内容が乖離しやすいため、スクリプトが触るテーブルの列を追加・変更・削除したら両方のモデル定義を確認・更新すること（`docs/SCHEMA_REVIEW.md` 参照）。
 - `supabase/migrations/` は新規テーブル追加時に増えるSQLの記録用で、既存テーブルへの列追加・変更は基本的に `database.py` の `init_db()` 内の `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 等の後方互換処理で行っている（Alembic等のマイグレーションツールは未導入）。
-- `docs/` は2026-07-17にgit管理化され、Renderのデプロイ対象にも含まれる（`/admin/binran_discrepancies` が `docs/学生便覧2026/IMPLEMENTATION_CANDIDATES.md` を実行時に読むため）。契約書・成績表PDF等の個人情報を含むファイルもあるため、リポジトリの公開範囲には注意する。
+- `docs/` は2026-07-17にgit管理化され、Renderのデプロイ対象にも含まれる。
 - 各ファイルの役割の詳細（関数レベル）はコード内コメント、DBスキーマの詳細は [`DB_SCHEMA.md`](./DB_SCHEMA.md)、APIエンドポイントの詳細は [`API.md`](./API.md) を参照。

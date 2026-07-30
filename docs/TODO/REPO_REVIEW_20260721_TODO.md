@@ -28,14 +28,7 @@ P1中心に実装した。実装できた項目はdevブランチにpush・dev�
    別セッションが並行して編集中（未コミット変更あり）だったため、競合を避けて今回は
    触らなかった。次回、当該ファイルが編集中でないタイミングで再検討すること。
 
-4. **農学部 生産環境工学コースの必修/選択単位内訳の確定（P2・データ品質）**
-   `docs/学生便覧2026/nogaku/NOGAKU_CREDIT_CHECKER_TODO.md`に記載の通り、便覧別表第2で
-   「専門科目については別に定める指定科目から修得すること」とされ、必修/選択の内訳が
-   便覧だけでは確定できないため合計値（88単位）のみ登録した暫定対応のまま。
-   単位チェッカーの計算結果が当該コースの学生には不正確な可能性がある。便覧以外の
-   資料（学部窓口への確認等）がないと解決できないため、ユーザー判断待ち。
-
-5. **`Subject.faculty` NOT NULL化（P2・DB migration）**
+4. **`Subject.faculty` NOT NULL化（P2・DB migration）**
    `department`列はnullable=False+空文字プレースホルダ方式なのに対し、`faculty`列は
    nullable=Trueのまま非対称。今回、新規書き込み経路2箇所（`routers/admin/courses.py`・
    `programing files/import_syllabus.py`）はNULLでなく空文字を書くよう修正済みだが、
@@ -44,7 +37,7 @@ P1中心に実装した。実装できた項目はdevブランチにpush・dev�
    確認できない。次回dev DBにアクセス可能なセッションで、件数確認→バックフィル→
    `ALTER COLUMN faculty SET NOT NULL`の順で対応すること。
 
-6. **`init_db()`のAlembic移行（P1・大規模DB migration）**
+5. **`init_db()`のAlembic移行（P1・大規模DB migration）**
    `database.py`の`init_db()`（465行、`ALTER TABLE`38件・`DO $$`条件分岐11件等）が
    起動のたび手続き型SQLを逐次実行する設計。過去に一度、CHECK制約違反で`DO $$`ブロック
    全体がロールバックし後続マイグレーションが毎回無効化される障害が実際に起きている
@@ -54,7 +47,7 @@ P1中心に実装した。実装できた項目はdevブランチにpush・dev�
    実スキーマ状態を確認しながら`stamp`のタイミングを見極める必要があり、dev DBに
    接続できないこの実行環境では安全に実施できないため見送った。
 
-7. **FACULTY_PATH等5種の対応表をDBテーブル化（P2・DB migration）**
+6. **FACULTY_PATH等5種の対応表をDBテーブル化（P2・DB migration）**
    `core/config.py`・`programing files/fetch_syllabus_info.py`の2箇所に手動複製されている
    （FACULTY_PATH/ENGINEERING_RANGES/MEDICINE_SUBLETTERS/MEDICINE_RANGES/
    DEPARTMENT_PATH_OVERRIDE、2026-07-30のMy時間割機能全廃止で`templates/liff/timetable.html`
@@ -66,6 +59,6 @@ P1中心に実装した。実装できた項目はdevブランチにpush・dev�
 
 ## 次回セッションへの引き継ぎ
 
-- 上記5・6・7はいずれも「dev DBに接続できればすぐ着手できる」項目。次回dev DBに
+- 上記4・5・6はいずれも「dev DBに接続できればすぐ着手できる」項目。次回dev DBに
   アクセス可能なセッションでまとめて再検討すること。
 - 上記1・2・3はDB接続に関係なく、方針確認や競合回避のタイミングを見て着手可能。

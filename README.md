@@ -53,9 +53,9 @@
 
 | レイヤー | 役割 |
 |---|---|
-| `core/` | 環境変数・定数・シラバス URL 生成（`config.py`）、管理者認証・LINE 署名検証（`security.py`）、インメモリキャッシュ（`cache.py`）、エラー/メッセージログ（`activity_log.py`）、LINE API クライアント（`line_client.py`）、LIFF ID token 検証＋キャッシュ（`liff_auth.py`）、Web Push（`push.py`）、起動時プリウォーム（`prewarm.py`）、Jinja2 テンプレート（`templates.py`）、レート制限（`rate_limit.py`）、Supabase 接続用 SSL コンテキスト（`db_ssl.py`）、DB 自動バックアップ（`backup.py`）、学生便覧×DB齟齬パーサー（`binran_discrepancies.py`） |
+| `core/` | 環境変数・定数・シラバス URL 生成（`config.py`）、管理者認証・LINE 署名検証（`security.py`）、インメモリキャッシュ（`cache.py`）、エラー/メッセージログ（`activity_log.py`）、LINE API クライアント（`line_client.py`）、LIFF ID token 検証＋キャッシュ（`liff_auth.py`）、Web Push（`push.py`）、起動時プリウォーム（`prewarm.py`）、Jinja2 テンプレート（`templates.py`）、レート制限（`rate_limit.py`）、Supabase 接続用 SSL コンテキスト（`db_ssl.py`）、DB 自動バックアップ（`backup.py`） |
 | `line_bot/` | LINE Bot 応答ロジック（`flex_builders.py`：FlexMessage 生成、`handler.py`：`handle_message` / `handle_course_list` / `process_events`） |
-| `routers/` | URL プレフィックス単位の FastAPI `APIRouter`（`webhook` / `health` / `pages` / `richmenu` / `liff_api` / `profile_api` / `review_submit_api`、`admin/` 配下 8 ファイル：`auth` / `dashboard` / `courses` / `instructors` / `classifications` / `reviews` / `users_errors` / `stats` / `binran_discrepancies`） |
+| `routers/` | URL プレフィックス単位の FastAPI `APIRouter`（`webhook` / `health` / `pages` / `richmenu` / `liff_api` / `profile_api` / `review_submit_api`、`admin/` 配下 8 ファイル：`auth` / `dashboard` / `courses` / `instructors` / `classifications` / `reviews` / `users_errors` / `stats`） |
 
 - **LINE Bot フロー**：`POST /callback`（`routers/webhook.py`） → `core.security.verify_line_signature` → `core.line_client.parser.parse()` → `asyncio.create_task` で `line_bot.handler.process_events()` を実行し即時200応答。`FollowEvent`（ウェルカム Flex Message、未登録なら会員登録LIFFへ誘導）／`MessageEvent`／`PostbackEvent` を分岐処理。返信は `core.line_client.reply()` 経由。
 - **キャッシュ設計**：`core/cache.py` に集約したモジュールレベルのグローバル変数に TTL 3600秒のインメモリキャッシュを複数保持。他モジュールは必ず `cache.get_*` / `cache.set_*` / `cache.invalidate_*` の関数経由でアクセスする。管理画面での CRUD 後に該当キャッシュを即時無効化。起動時に `core.prewarm.prewarm_caches()` で全ウォームアップ。

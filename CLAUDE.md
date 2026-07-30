@@ -270,8 +270,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── push.py                  ← Web Push (VAPID) 通知送信
 │   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
 │   ├── templates.py               ← Jinja2Templates・jstフィルタ
-│   ├── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
-│   └── binran_discrepancies.py       ← `docs/学生便覧2026/IMPLEMENTATION_CANDIDATES.md`をパースし学部/ステータスで一覧化（DB非経由、ファイル読み込みのみ）
+│   └── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
@@ -287,11 +286,10 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、教員/学部/分類の並び替え）
 │       ├── reviews.py                     ← /admin/reviews*
 │       ├── users_errors.py                 ← /admin/users, /admin/errors
-│       ├── stats.py                         ← /admin/usage-stats
-│       └── binran_discrepancies.py           ← /admin/binran_discrepancies（学生便覧ver2×DBの齟齬一覧、`core/binran_discrepancies.py`のパーサー参照）
+│       └── stats.py                         ← /admin/usage-stats
 ├── templates/
 │   ├── admin/              ← courses / reviews / logs / users / errors /
-│   │                          activity / usage_stats / richmenu / binran_discrepancies / login / base 等
+│   │                          activity / usage_stats / richmenu / login / base 等
 │   ├── liff/
 │   │   └── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
 │   ├── form_index.html    ← レビュー投稿フォーム
@@ -300,7 +298,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   └── privacy.html
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
-├── docs/                  ← ドキュメント類（2026-07-17に全体をgit管理化・デプロイ対象。管理画面`/admin/binran_discrepancies`が本番/dev環境で読む`学生便覧2026/IMPLEMENTATION_CANDIDATES.md`もここに含まれる。`学生便覧2026/`は学部ごとのサブフォルダ構成（`bungaku/`/`hougaku/`/`igaku/`/`kaiyo/`/`keiei/`/`kokusai_ningen/`/`kougaku/`/`nogaku/`/`rigaku/`/`sysinfo/`、2026-07-16に旧ver2/フォルダ・フラット構成から再編）で、各学部フォルダにPDF/txt/png原本と学部別まとめ.md、スクリプトがある場合は`pdf_extraction/`（PDF抽出系）・`db_check/`（DB確認クエリ系、いずれもDB書き込みは行わない）を内包する。学部を横断する`BINRAN_READING_GUIDE.md`・`IMPLEMENTATION_CANDIDATES.md`・`mid_dump.txt`（全学共通の学則抜粋）はルート直下に残す。新学部を調査する際は同じ命名規則（学部フォルダ名は既存ファイル名接頭辞のローマ字を踏襲）でサブフォルダを追加すること）
+├── docs/                  ← ドキュメント類（2026-07-17に全体をgit管理化・デプロイ対象）
 ├── backups/               ← download_prod_backup.pyのダウンロード先（.gitignore対象、env別サブフォルダ）
 └── programing files/      ← 運用・整備用スクリプト群（Renderにはデプロイされない）
     ├── import_syllabus.py         ← シラバスデータをDB投入
@@ -358,7 +356,7 @@ core.line_client / core.prewarm 等のimport
 → 例外ハンドラ登録（core.activity_log.save_error_log でエラーログ保存）
 → include_router（webhook / health / pages / richmenu / liff_api / profile_api / review_submit_api /
                   admin.auth / admin.dashboard / admin.courses / admin.reviews /
-                  admin.users_errors / admin.stats / admin.binran_discrepancies）
+                  admin.users_errors / admin.stats）
 ```
 
 **キャッシュ設計（core/cache.py に集約したモジュールレベルグローバル変数）**
