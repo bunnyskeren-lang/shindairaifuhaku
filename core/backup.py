@@ -38,10 +38,8 @@ async def dump_all_tables_to_sql() -> bytes:
     from models import (  # noqa: F401
         MessageLog, UserProfile, UserActivity, ErrorLog,
         PushSubscription, DisplayOrder, RichMenuTap,
-        CreditRequirement, UserSeisekiRaw,
-        Subject, Instructor, CourseSection, Syllabus, Schedule, Review,
-        CourseSectionView, UserSyllabus, SubjectCreditCategory,
-        UserCustomCourse, RequiredSubject, RegistrationCap,
+        Subject, Instructor, CourseSection, Syllabus, Review,
+        CourseSectionView,
     )
 
     lines = []
