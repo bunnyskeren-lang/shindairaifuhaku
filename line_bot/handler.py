@@ -261,12 +261,13 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
     def _group_syllabus_url(name: str, kind: str, cls: str = "") -> str:
         # 統合表示（variant/numvariant）はbase名がそのままSubject.nameと一致しないため、
-        # グループ内のいずれか1件からシラバスURLが見つかればそれを採用する。
+        # グループ内で表示順（最も左側）を優先し、そのシラバスURLを代表として採用する
+        # （左側が無ければ右側の変種のURLで代替する）。
         if kind == "single":
             return course_syllabus_urls.get(name, "")
         if kind.startswith("variant:"):
             if name in _sem_bases:
-                for n, _ in _sem_bases[name]:
+                for n, _ in sorted(_sem_bases[name], key=lambda x: x[1]):
                     url = course_syllabus_urls.get(n, "")
                     if url:
                         return url
@@ -277,7 +278,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                     return url
             return ""
         if kind.startswith("numvariant:") and (name, cls) in _num_bases:
-            for n, _, _, _ in _num_bases[(name, cls)]:
+            for n, _, _, _ in sorted(_num_bases[(name, cls)], key=lambda x: (x[1], x[2])):
                 url = course_syllabus_urls.get(n, "")
                 if url:
                     return url
