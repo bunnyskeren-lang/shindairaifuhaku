@@ -51,8 +51,8 @@ shindairaifuhaku/
 │       ├── instructors.py                    ← /admin/courses/{id}/instructors/*（教員の追加・削除・並び替え）
 │       ├── classifications.py                 ← /admin/courses/classification/*（分類の改名・削除・並び替え・親グループ設定）
 │       ├── reviews.py                          ← /admin/reviews*（レビュー承認・却下・クリーンアップ）
-│       ├── users_errors.py                      ← /admin/users, /admin/errors, /admin/activity
-│       ├── stats.py                              ← /admin/richmenu-stats, /admin/usage-stats
+│       ├── users_errors.py                      ← /admin/users, /admin/errors
+│       ├── stats.py                              ← /admin/usage-stats
 │       └── binran_discrepancies.py                ← /admin/binran_discrepancies（学生便覧×DBの齟齬一覧表示）
 │
 ├── templates/

@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import ErrorLog, MessageLog, UserActivity, UserProfile
+from models import ErrorLog, MessageLog, UserProfile
 
 router = APIRouter()
 
@@ -75,26 +75,4 @@ async def admin_errors(request: Request, _: str = Depends(check_admin), page: in
         "total_pages": total_pages,
         "total": total,
         "url_prefix": "/admin/errors?page=",
-    })
-
-
-@router.get("/admin/activity", response_class=HTMLResponse)
-async def admin_activity(request: Request, _: str = Depends(check_admin)):
-    async with AsyncSessionLocal() as session:
-        rows = (await session.execute(
-            select(
-                UserActivity.user_id,
-                UserProfile.name,
-                UserProfile.student_id,
-                UserActivity.action,
-                UserActivity.count,
-                UserActivity.last_at,
-            )
-            .outerjoin(UserProfile, UserProfile.line_user_id == UserActivity.user_id)
-            .order_by(UserActivity.user_id, UserActivity.count.desc())
-        )).all()
-
-    return templates.TemplateResponse("admin/activity.html", {
-        "request": request,
-        "rows": rows,
     })

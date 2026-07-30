@@ -286,8 +286,8 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe
 │       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、教員/学部/分類の並び替え）
 │       ├── reviews.py                     ← /admin/reviews*
-│       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/activity
-│       ├── stats.py                         ← /admin/richmenu-stats, /admin/usage-stats
+│       ├── users_errors.py                 ← /admin/users, /admin/errors
+│       ├── stats.py                         ← /admin/usage-stats
 │       └── binran_discrepancies.py           ← /admin/binran_discrepancies（学生便覧ver2×DBの齟齬一覧、`core/binran_discrepancies.py`のパーサー参照）
 ├── templates/
 │   ├── admin/              ← courses / reviews / logs / users / errors /
