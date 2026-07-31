@@ -12,6 +12,7 @@
 | [`docs/API.md`](docs/API.md) | API仕様（全エンドポイント・認証方式・レート制限） |
 | [`docs/DB_SCHEMA.md`](docs/DB_SCHEMA.md) | DB設計書（全テーブルの列・制約・FK・削除挙動） |
 | [`docs/DIRECTORY_STRUCTURE.md`](docs/DIRECTORY_STRUCTURE.md) | ディレクトリ構成（全ファイルの役割） |
+| [`docs/SUBJECT_NAME_RULES.md`](docs/SUBJECT_NAME_RULES.md) | 科目名を触るときのルール（表記統一・LINE bot一覧のバリアント統合） |
 | `CLAUDE.md` / `AGENTS.md` | AIエージェント（Claude Code等）向けの運用ルール（デプロイ確認要否・データ保護ルール等の正） |
 
 ## 主な機能
