@@ -254,7 +254,7 @@ async def main():
         # （subjects/instructors削除で対応済みのものはCASCADEで既に消えているため、
         #  ここに残るのは「科目・教員は両方存在するが組み合わせだけがdevに無い」ケース）。
         # syllabi/reviewsが紐づく場合は保持する。
-        desired_cs_keys = {(s, i) for s, i, _ in cs_params}
+        desired_cs_keys = {(s, i) for s, i in cs_params}
         prod_cs_rows = await prod.fetch("SELECT id, subject_id, instructor_id FROM course_sections")
         orphan_cs = [r for r in prod_cs_rows if (r["subject_id"], r["instructor_id"]) not in desired_cs_keys]
         deleted_cs = 0
