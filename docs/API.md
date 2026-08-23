@@ -76,7 +76,7 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 
 | メソッド/パス | 認証 | 説明 |
 |---|---|---|
-| `POST /submit` | LIFF token（Form） | `course_name`/`rating`(1-5)/`ease_rating`(SS,S,A,B,C)/`grading_method`/`comment`/`id_token`/`reg_name`/`student_id`/`selected_instructor`/`nickname`/`academic_year`。バリデーション後 `is_approved=False` で保存し、管理画面の承認待ちに積む。投稿成功後、Web Push通知をバックグラウンド送信 |
+| `POST /submit` | LIFF token（Form） | `course_name`/`rating`(1-5)/`ease_rating`(SS,S,A,B,C)/`grading_method`/`comment`/`id_token`/`reg_name`/`student_id`/`selected_instructor`/`nickname`/`academic_year`。バリデーション後 `status='pending'` で保存し、管理画面の承認待ちに積む。投稿成功後、Web Push通知をバックグラウンド送信 |
 
 ## 管理画面 API（`routers/admin/*`、要管理者Cookie認証）
 

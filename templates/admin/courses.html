@@ -155,7 +155,7 @@
   </tr>
   {% for c in sub_list %}
   {% set reviews = reviews_by_course[c.id] %}
-  {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
+  {% set pending_count = reviews | selectattr("status", "equalto", "pending") | list | length %}
   <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
     <td>
       {{ c.name }}
@@ -223,8 +223,12 @@
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
         </tr>
         {% for r in reviews %}
-        <tr style="background:{{ '#fffbeb' if not r.is_approved else '#fff' }}">
-          <td style="padding:6px 12px">{% if r.is_approved %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>{% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">未承認</span>{% endif %}</td>
+        <tr style="background:{{ {'pending': '#fffbeb', 'approved': '#fff', 'rejected': '#f3f4f6'}[r.status] }}">
+          <td style="padding:6px 12px">
+            {% if r.status == 'approved' %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
+            {% elif r.status == 'rejected' %}<span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
+            {% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>{% endif %}
+          </td>
           <td style="padding:6px 12px">{{ r.submitter_name }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
           {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
@@ -232,8 +236,9 @@
           <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
           <td style="padding:6px 12px;white-space:nowrap">
-            {% if not r.is_approved %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
-            <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" data-confirm="削除しますか？"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">削除</button></form>
+            {% if r.status != 'approved' %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
+            {% if r.status != 'rejected' %}<form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" data-confirm="却下しますか？"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">却下</button></form>{% endif %}
+            {% if r.status == 'rejected' %}<form method="post" action="/admin/reviews/restore/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn" style="padding:3px 10px;font-size:11px;background:#6b7280;color:#fff">待機中に戻す</button></form>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -260,7 +265,7 @@
   </tr>
   {% for c in group_list %}
   {% set reviews = reviews_by_course[c.id] %}
-  {% set pending_count = reviews | selectattr("is_approved", "equalto", false) | list | length %}
+  {% set pending_count = reviews | selectattr("status", "equalto", "pending") | list | length %}
   <tr class="{{ gid }}" style="display:none">
     <td>
       {{ c.name }}
@@ -331,12 +336,14 @@
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
         </tr>
         {% for r in reviews %}
-        <tr style="background:{{ '#fffbeb' if not r.is_approved else '#fff' }}">
+        <tr style="background:{{ {'pending': '#fffbeb', 'approved': '#fff', 'rejected': '#f3f4f6'}[r.status] }}">
           <td style="padding:6px 12px">
-            {% if r.is_approved %}
+            {% if r.status == 'approved' %}
             <span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
+            {% elif r.status == 'rejected' %}
+            <span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
             {% else %}
-            <span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">未承認</span>
+            <span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>
             {% endif %}
           </td>
           <td style="padding:6px 12px">{{ r.submitter_name }}</td>
@@ -346,15 +353,22 @@
           <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
           <td style="padding:6px 12px;white-space:nowrap">
-            {% if not r.is_approved %}
+            {% if r.status != 'approved' %}
             <form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0">
               <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button>
             </form>
             {% endif %}
+            {% if r.status != 'rejected' %}
             <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0"
-                  data-confirm="削除しますか？">
-              <button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">削除</button>
+                  data-confirm="却下しますか？">
+              <button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">却下</button>
             </form>
+            {% endif %}
+            {% if r.status == 'rejected' %}
+            <form method="post" action="/admin/reviews/restore/{{ r.id }}" style="display:inline;margin:0">
+              <button type="submit" class="btn" style="padding:3px 10px;font-size:11px;background:#6b7280;color:#fff">待機中に戻す</button>
+            </form>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}

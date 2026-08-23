@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.post("/admin/reviews/cleanup")
 async def admin_reviews_cleanup(_: str = Depends(check_admin)):
-    # 未承認の孤立レビュー（subject が削除済み）を削除。承認済みは削除しない。
+    # 待機中の孤立レビュー（subject が削除済み）を削除。承認済み・却下済みは削除しない。
     async with AsyncSessionLocal() as session:
         orphan_cs_ids = (await session.execute(
             select(CourseSection.id).where(
@@ -27,7 +27,7 @@ async def admin_reviews_cleanup(_: str = Depends(check_admin)):
             await session.execute(
                 delete(Review).where(
                     Review.course_section_id.in_(orphan_cs_ids),
-                    Review.is_approved.is_(False),
+                    Review.status == "pending",
                 )
             )
             await session.commit()
@@ -43,7 +43,7 @@ def _make_review_ns(rev: Review, course_name: str) -> SimpleNamespace:
         rating=rev.rating,
         ease_rating=rev.ease_rating,
         grading_method=rev.grading_method,
-        is_approved=rev.is_approved,
+        status=rev.status,
         selected_instructor=rev.selected_instructor,
         created_at=rev.created_at,
         submitter_name=rev.submitter_name,
@@ -60,23 +60,33 @@ async def admin_reviews(request: Request, _: str = Depends(check_admin)):
             select(Review, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == Review.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
-            .where(Review.is_approved.is_(False))
+            .where(Review.status == "pending")
             .order_by(Review.created_at.desc())
         )).all()
         approved_rows = (await session.execute(
             select(Review, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == Review.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
-            .where(Review.is_approved.is_(True))
+            .where(Review.status == "approved")
+            .order_by(Review.created_at.desc())
+            .limit(50)
+        )).all()
+        rejected_rows = (await session.execute(
+            select(Review, Subject.name.label("subj_name"))
+            .join(CourseSection, CourseSection.id == Review.course_section_id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .where(Review.status == "rejected")
             .order_by(Review.created_at.desc())
             .limit(50)
         )).all()
     pending = [_make_review_ns(r, n) for r, n in pending_rows]
     approved = [_make_review_ns(r, n) for r, n in approved_rows]
+    rejected = [_make_review_ns(r, n) for r, n in rejected_rows]
     return templates.TemplateResponse("admin/reviews.html", {
         "request": request,
         "pending": pending,
         "approved": approved,
+        "rejected": rejected,
     })
 
 
@@ -108,7 +118,7 @@ async def admin_review_approve(
                 review.selected_instructor = selected_instructor.strip() or None
             if nickname is not None:
                 review.nickname = nickname.strip() or None
-            review.is_approved = True
+            review.status = "approved"
             await session.commit()
     cache.invalidate_review_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
@@ -116,10 +126,23 @@ async def admin_review_approve(
 
 @router.post("/admin/reviews/reject/{review_id}")
 async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
+    # 投稿レビューは削除しない方針のため、物理削除ではなくstatus='rejected'にする
     async with AsyncSessionLocal() as session:
         review = await session.get(Review, review_id)
         if review:
-            await session.delete(review)
+            review.status = "rejected"
+            await session.commit()
+    cache.invalidate_review_cache()
+    return RedirectResponse("/admin/reviews", status_code=303)
+
+
+@router.post("/admin/reviews/restore/{review_id}")
+async def admin_review_restore(review_id: int, _: str = Depends(check_admin)):
+    # 却下済みレビューを待機中に戻す
+    async with AsyncSessionLocal() as session:
+        review = await session.get(Review, review_id)
+        if review:
+            review.status = "pending"
             await session.commit()
     cache.invalidate_review_cache()
     return RedirectResponse("/admin/reviews", status_code=303)

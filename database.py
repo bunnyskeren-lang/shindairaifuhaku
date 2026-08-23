@@ -366,3 +366,37 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE syllabi DROP COLUMN IF EXISTS subject_category"
         ))
+
+        # ── 2026-08-23: reviews.is_approved(Boolean) → status(pending/approved/rejected)への移行 ──
+        # 従来「却下」は即物理削除だったが、投稿レビューは削除しない方針(CLAUDE.md)に合わせ、
+        # 却下もstatus='rejected'として保持し管理画面から復元・承認できるようにする
+        await conn.execute(text(
+            "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS status TEXT"
+        ))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'reviews' AND column_name = 'is_approved'
+              ) THEN
+                UPDATE reviews SET status = CASE WHEN is_approved THEN 'approved' ELSE 'pending' END
+                WHERE status IS NULL;
+                ALTER TABLE reviews DROP COLUMN is_approved;
+              END IF;
+            END $$
+        """))
+        await conn.execute(text(
+            "UPDATE reviews SET status = 'pending' WHERE status IS NULL"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE reviews ALTER COLUMN status SET NOT NULL"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE reviews ALTER COLUMN status SET DEFAULT 'pending'"
+        ))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE reviews ADD CONSTRAINT chk_reviews_status CHECK (status IN ('pending', 'approved', 'rejected'));
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))

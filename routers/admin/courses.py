@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 
 from core import cache
 from core.config import escape_like, make_cls_sort, make_syllabus_url, reading, syllabus_department_key
@@ -111,7 +111,10 @@ async def admin_courses(
                 .join(CourseSection, CourseSection.id == Review.course_section_id)
                 .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(CourseSection.subject_id.in_(course_ids))
-                .order_by(Review.is_approved, Review.created_at.desc())
+                .order_by(
+                    case((Review.status == "pending", 0), (Review.status == "approved", 1), else_=2),
+                    Review.created_at.desc(),
+                )
             )).all()
 
         all_instructors = [] if q or category else (await session.execute(
@@ -160,7 +163,7 @@ async def admin_courses(
             rating=rev.rating,
             ease_rating=rev.ease_rating,
             grading_method=rev.grading_method,
-            is_approved=rev.is_approved,
+            status=rev.status,
             selected_instructor=rev.selected_instructor,
             created_at=rev.created_at,
             submitter_name=rev.submitter_name,

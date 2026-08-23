@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey, Index
+from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, func, UniqueConstraint, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
 from core.config import normalize_instructor_name, normalize_subject_name
@@ -175,7 +175,9 @@ class Review(TimestampMixin, Base):
     student_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     selected_instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # 'pending'(待機中) / 'approved'(承認) / 'rejected'(却下)。CHECK制約はdatabase.py init_db()側で管理。
+    # 却下は物理削除ではなくstatus='rejected'として保持する（投稿レビューは削除しない方針）
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
 
 
 class CourseSectionView(Base):

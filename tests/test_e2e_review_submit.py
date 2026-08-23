@@ -61,7 +61,7 @@ async def test_submit_creates_review_and_profile_for_new_user(http_client_factor
         reviews = (await session.execute(select(Review))).scalars().all()
         assert len(reviews) == 1
         assert reviews[0].content == "とても勉強になりました"
-        assert reviews[0].is_approved is False
+        assert reviews[0].status == "pending"
 
         profile = await session.get(UserProfile, "U65326572657669657765723100000000")
         assert profile is not None

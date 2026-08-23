@@ -84,7 +84,7 @@ UNIQUE(course_section_id, year, academic_term)。子テーブル: なし（`sche
 | student_id | Text, nullable | 学籍番号 |
 | academic_year | Integer, nullable | 受講年度 |
 | selected_instructor | Text, nullable | 投稿時に選択した教員名（表記ゆれ吸収用） |
-| is_approved | Boolean, default false | 管理画面での承認フラグ。承認済みのみLIFF等で公開 |
+| status | Text, default 'pending' | 'pending'/'approved'/'rejected'。承認済みのみLIFF等で公開。却下は削除せずstatusで保持（2026-08-23、旧is_approved Booleanから移行） |
 | created_at | DateTime(tz) | |
 
 **絶対にユーザーから消去しないテーブル**（CLAUDE.md参照）。子テーブル: なし。
@@ -202,7 +202,7 @@ instructors ──CASCADE──> course_sections
 
 ## reviews
 
-- **現状**: id, course_section_id (FK→course_sections **RESTRICT**), content, rating, ease_rating, grading_method, submitter_name, nickname, student_id, academic_year, selected_instructor, is_approved (Boolean), created_at
+- **現状**: id, course_section_id (FK→course_sections **RESTRICT**), content, rating, ease_rating, grading_method, submitter_name, nickname, student_id, academic_year, selected_instructor, status (Text: pending/approved/rejected), created_at
 - **問題点**:
   1. `rating`（想定1〜5）・`ease_rating`（想定 SS/S/A/B/C、`routers/liff_api.py` でのみ検証）にCHECK制約がない。`message_logs.direction` には CHECK 制約が付与されているのに、同様に値集合が固定されている `reviews` には一切ない、という一貫性の欠如がある。
   2. `course_section_id` の `ON DELETE RESTRICT` はCLAUDE.mdの「レビューを巻き添え削除しない」方針をDBレベルで保証する良い設計だが、そのぶんアプリ側の教員削除・科目削除・第三外国語一括削除・末尾数字マージ等、`routers/admin/courses.py` の複数の削除系エンドポイントそれぞれで「レビューが紐づいていればスキップ/中止する」という同じ事前チェックロジックが個別に実装されている。DB制約があるので最悪ケースでもデータは守られるが、チェック漏れがあるとRESTRICT違反の500エラーとしてユーザーに露出する（データ破損はしないが、UXとしては不親切）。

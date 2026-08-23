@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 import re as _re
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
+from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
 
@@ -123,5 +123,5 @@ class Review(Base):
     student_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     selected_instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

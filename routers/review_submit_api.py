@@ -131,7 +131,7 @@ async def submit(
             nickname=nickname.strip()[:30] or None,
             academic_year=academic_year,
             student_id=sid or None,
-            is_approved=False,
+            status="pending",
         )
         session.add(review)
         await session.commit()

@@ -73,7 +73,7 @@
 |---|---|
 | `subjects` / `instructors` / `course_sections` | 科目・教員マスタと科目×教員セクション |
 | `syllabi` | シラバス（年度別）。シラバスURLは`timetable_code`から動的生成（列としては持たない） |
-| `reviews` | 投稿レビュー（`is_approved`で承認管理、`ON DELETE RESTRICT`で誤削除を防止） |
+| `reviews` | 投稿レビュー（`status`(pending/approved/rejected)で承認管理、`ON DELETE RESTRICT`で誤削除を防止。却下も削除せずstatusで保持） |
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科） |
 | `display_orders` | 表示順マスタ（`kind`列で分類/学部を区別） |
 | `message_logs` / `user_activity` / `error_logs` / `push_subscriptions` / `richmenu_taps` / `course_section_views` | 運用・ログ系 |

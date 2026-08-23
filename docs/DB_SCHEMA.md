@@ -85,7 +85,7 @@ subjects ─┬─< course_sections >─┬─ instructors
 | `student_id` | Text | NULL可 | |
 | `academic_year` | Integer | NULL可 | 受講年度 |
 | `selected_instructor` | Text | NULL可 | |
-| `is_approved` | Boolean | NOT NULL, デフォルトfalse | 管理画面で承認するまで非公開 |
+| `status` | Text | NOT NULL, デフォルト'pending' | 'pending'(待機中)/'approved'(承認)/'rejected'(却下)。承認済みのみLIFF等で公開。却下は削除せずstatusで保持（レビューは削除しない方針） |
 | `created_at` | DateTime(tz) | NOT NULL | |
 
 > **投稿されたレビューは、ユーザーから絶対に消去しない**（CLAUDE.mdのデータ保護ルール）。科目の削除・変更・マージ等でレビューを巻き添えにしないこと。
