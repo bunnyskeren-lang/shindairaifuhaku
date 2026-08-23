@@ -9,6 +9,22 @@
 {% endblock %}
 
 {% from "admin/base.html" import pager %}
+
+{% macro review_summary_badges(c_id) %}
+{% set summary = review_summary_by_course.get(c_id) %}
+{% if summary %}
+<div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">
+  {% for s in summary %}
+  <span style="font-size:10px;background:#eef2ff;color:#4338ca;padding:1px 6px;border-radius:8px;white-space:nowrap;display:inline-flex;gap:5px;align-items:center;width:fit-content">
+    👨‍🏫 {{ s.instructor_name }} {{ s.total }}件
+    {% if s.pending %}<span style="color:#f59e0b;font-weight:bold">待機{{ s.pending }}</span>{% endif %}
+    {% if s.rejected %}<span style="color:#6b7280;font-weight:bold">却下{{ s.rejected }}</span>{% endif %}
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="card">
   <h2 style="margin-top:0">分類一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（↑↓で並び替え可）</span></h2>
@@ -174,8 +190,9 @@
       </button>
       <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
               onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
-        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">未承認{{ pending_count }}</span>{% endif %}
+        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
       </button>
+      {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
@@ -214,6 +231,7 @@
       <table style="margin:0;border-radius:0;font-size:12px">
         <tr style="background:#e5e7eb">
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">担当教員</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
@@ -229,6 +247,7 @@
             {% elif r.status == 'rejected' %}<span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
             {% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>{% endif %}
           </td>
+          <td style="padding:6px 12px">{{ r.selected_instructor or "未選択" }}</td>
           <td style="padding:6px 12px">{{ r.submitter_name }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
           {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
@@ -286,8 +305,9 @@
       </button>
       <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
               onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
-        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">未承認{{ pending_count }}</span>{% endif %}
+        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
       </button>
+      {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
       <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
@@ -327,6 +347,7 @@
       <table style="margin:0;border-radius:0;font-size:12px">
         <tr style="background:#e5e7eb">
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
+          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">担当教員</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
           <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
@@ -346,6 +367,7 @@
             <span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>
             {% endif %}
           </td>
+          <td style="padding:6px 12px">{{ r.selected_instructor or "未選択" }}</td>
           <td style="padding:6px 12px">{{ r.submitter_name }}</td>
           <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
           {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>

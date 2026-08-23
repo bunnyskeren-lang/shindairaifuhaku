@@ -172,6 +172,24 @@ async def admin_courses(
             student_id=rev.student_id,
         ))
 
+    # 科目カードのレビューボタンを教員ごとに分割表示するための集計（担当教員未選択は「未選択」にまとめる）
+    _summary_tmp: dict = defaultdict(dict)
+    for rev, subj_id, _subj_name in reviews_data:
+        instructor_name = rev.selected_instructor or "未選択"
+        bucket = _summary_tmp[subj_id].setdefault(
+            instructor_name,
+            {"instructor_name": instructor_name, "total": 0, "pending": 0, "approved": 0, "rejected": 0},
+        )
+        bucket["total"] += 1
+        bucket[rev.status] += 1
+    review_summary_by_course: dict = {
+        subj_id: sorted(
+            (SimpleNamespace(**v) for v in by_instructor.values()),
+            key=lambda s: (s.instructor_name == "未選択", s.instructor_name),
+        )
+        for subj_id, by_instructor in _summary_tmp.items()
+    }
+
     # groupby順を保持するため事前グループ化
     cls_parent_map = await cache.get_cls_parent_map()
     child_cls_set = set(cls_parent_map.keys())
@@ -206,6 +224,7 @@ async def admin_courses(
         "class_counts": class_counts,
         "courses_data": courses_data,
         "reviews_by_course": reviews_by_course,
+        "review_summary_by_course": review_summary_by_course,
         "instructors_by_course": instructors_by_course,
         "all_instructors": all_instructors,
         "all_faculties": all_faculties,
