@@ -36,8 +36,22 @@ try:
 except ValueError:
     BACKUP_INTERVAL_HOURS = 1
 
+# レビュー投稿フォームのメールアドレス認証（なりすまし防止）。Brevo等の送信サービス・
+# 送信ドメインの契約が整うまではEMAIL_VERIFICATION_ENABLED=falseのままにし、
+# 従来通り即時投稿の挙動を維持する（core/mail.pyもBREVO_API_KEY未設定時はログ出力のみ）
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+MAIL_FROM_ADDRESS = os.environ.get("MAIL_FROM_ADDRESS", "")
+MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "神大ライフハック")
+EMAIL_VERIFICATION_ENABLED = os.environ.get("EMAIL_VERIFICATION_ENABLED", "false").lower() in ("1", "true", "yes")
+EMAIL_VERIFICATION_TTL_MINUTES = 30
+
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
+
+
+def student_email(student_id: str) -> str:
+    """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""
+    return f"{student_id.strip().lower()}@stu.kobe-u.ac.jp"
 
 # 登録フォーム用の学部・学科選択肢（11学部）
 FACULTIES = [

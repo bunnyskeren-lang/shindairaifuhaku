@@ -38,7 +38,7 @@ async def init_db():
         MessageLog, UserProfile, UserActivity, ErrorLog,
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
-        CourseSectionView,
+        CourseSectionView, EmailVerification,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:
@@ -400,3 +400,12 @@ async def init_db():
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$
         """))
+
+        # ── 2026-08-24: レビュー投稿フォームのメールアドレス認証（なりすまし防止） ──
+        # LINEアカウント×学籍番号の組み合わせを初めて登録する際、大学メール
+        # ({学籍番号を小文字化}@stu.kobe-u.ac.jp)宛のマジックリンクで本人確認する。
+        # email_verificationsテーブル自体はcreate_all()で新規作成されるため、ここでは
+        # 既存のuser_profilesへのカラム追加のみ行う。
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ"
+        ))
