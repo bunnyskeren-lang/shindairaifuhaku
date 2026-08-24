@@ -463,3 +463,44 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles DROP COLUMN IF EXISTS grade"
         ))
+
+        # ── 2026-08-25: reviews.grading_methodを旧区切り文字列からJSON配列形式へ移行 ──
+        # parse_grading_method()（core/grading_method.py）は表示時に旧形式へフォールバックする
+        # ため機能上は必須ではないが、フォールバック分岐を恒久的に残さないよう既存データも
+        # 新形式へ揃える（ユーザーの了承のもと実施。content/rating/status等は一切変更しない）。
+        # 既にJSON配列の行はparse時にlist判定でスキップするため、毎起動時に実行しても安全
+        result = await conn.execute(text(
+            "SELECT id, grading_method FROM reviews WHERE grading_method IS NOT NULL AND grading_method != ''"
+        ))
+        gm_rows = result.fetchall()
+        if gm_rows:
+            import json as _json
+
+            from core.grading_method import parse_grading_method
+
+            to_update = []
+            for row in gm_rows:
+                try:
+                    already = _json.loads(row.grading_method)
+                except (ValueError, TypeError):
+                    already = None
+                if isinstance(already, list):
+                    continue
+                parts = parse_grading_method(row.grading_method)
+                if parts:
+                    to_update.append((row.id, _json.dumps(parts, ensure_ascii=False)))
+            if to_update:
+                _BATCH = 500
+                for i in range(0, len(to_update), _BATCH):
+                    batch = to_update[i:i + _BATCH]
+                    values_sql = ", ".join(
+                        f"(CAST(:id{j} AS BIGINT), CAST(:g{j} AS TEXT))" for j in range(len(batch))
+                    )
+                    params = {}
+                    for j, (rid, gm) in enumerate(batch):
+                        params[f"id{j}"] = rid
+                        params[f"g{j}"] = gm
+                    await conn.execute(text(
+                        f"UPDATE reviews SET grading_method = v.g FROM (VALUES {values_sql}) AS v(id, g) "
+                        f"WHERE reviews.id = v.id"
+                    ), params)
