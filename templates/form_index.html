@@ -127,6 +127,7 @@
             <p class="text-sm font-semibold text-gray-700 mb-2">📖 科目名 <span class="text-red-500">*</span></p>
             <p class="text-xs text-gray-500 mb-2" id="instructorCourseLabel"></p>
             <div id="instructorCourseItems" class="flex flex-wrap gap-2"></div>
+            <p id="instructorCourseFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの科目はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
           </div>
         </div>
 
@@ -153,6 +154,7 @@
           <p id="instructorHint" class="hidden text-xs font-medium text-indigo-500 mb-2">👆 担当教員をタップして選択してください</p>
           <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
           <p id="instructorUnregistered" class="hidden text-xs text-gray-400">この科目は担当教員が登録されていません</p>
+          <p id="instructorFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの教員はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
         </div>
       </div>
@@ -1013,14 +1015,19 @@
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('instructorError').classList.add('hidden');
       document.getElementById('instructorUnregistered').classList.add('hidden');
+      document.getElementById('instructorFullNotice').classList.add('hidden');
 
       if (currentInstructors.length > 0) {
         chipsEl.classList.remove('hidden');
         document.getElementById('instructorHint').classList.remove('hidden');
-        chipsEl.innerHTML = currentInstructors.map(inst =>
-          `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</button>`
+        chipsEl.innerHTML = currentInstructors.map(inst => inst.full
+          ? `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}" style="opacity:.45;text-decoration:line-through;cursor:not-allowed">${escapeHtml(inst.name)}</button>`
+          : `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</button>`
         ).join('');
-        chipsEl.querySelectorAll('.chip-btn').forEach(btn => {
+        if (currentInstructors.some(inst => inst.full)) {
+          document.getElementById('instructorFullNotice').classList.remove('hidden');
+        }
+        chipsEl.querySelectorAll('.chip-btn:not([disabled])').forEach(btn => {
           btn.onclick = () => {
             chipsEl.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
@@ -1048,6 +1055,7 @@
       chipsEl.innerHTML = '';
       document.getElementById('instructorHint').classList.add('hidden');
       document.getElementById('instructorUnregistered').classList.add('hidden');
+      document.getElementById('instructorFullNotice').classList.add('hidden');
       currentInstructors = [];
       if (searchMode === 'course') {
         searchInput.classList.remove('hidden');
@@ -1081,6 +1089,7 @@
     function clearInstrSearch() {
       instrSearchDropdown.classList.add('hidden');
       document.getElementById('instructorCourseList').classList.add('hidden');
+      document.getElementById('instructorCourseFullNotice').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
     }
 
@@ -1139,12 +1148,15 @@
       const courseLabel = document.getElementById('instructorCourseLabel');
       const courseItems = document.getElementById('instructorCourseItems');
       courseLabel.textContent = `${inst.name} の担当科目（${inst.courses.length}件）`;
-      courseItems.innerHTML = inst.courses.map(c =>
-        `<button type="button" class="chip-btn"
+      courseItems.innerHTML = inst.courses.map(c => c.full
+        ? `<button type="button" class="chip-btn" disabled style="opacity:.45;text-decoration:line-through;cursor:not-allowed"
+            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`
+        : `<button type="button" class="chip-btn"
           data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`
       ).join('');
+      document.getElementById('instructorCourseFullNotice').classList.toggle('hidden', !inst.courses.some(c => c.full));
       document.getElementById('instructorCourseList').classList.remove('hidden');
-      courseItems.querySelectorAll('[data-course-name]').forEach(el => {
+      courseItems.querySelectorAll('[data-course-name]:not([disabled])').forEach(el => {
         el.addEventListener('click', () => {
           courseItems.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
           el.classList.add('active');

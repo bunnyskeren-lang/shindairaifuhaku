@@ -102,9 +102,14 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                 .order_by(Instructor.sort_order, Instructor.name)
             )).all()
         cs_url_map = await _latest_syllabus_urls(session, [cs.id for cs, _ in cs_rows])
+        full_pairs = await cache.get_full_course_section_pairs_cached()
         insts_by_course: dict = {}
         for cs, inst in cs_rows:
-            insts_by_course.setdefault(cs.subject_id, []).append({"name": inst.name, "url": cs_url_map.get(cs.id, "")})
+            insts_by_course.setdefault(cs.subject_id, []).append({
+                "name": inst.name,
+                "url": cs_url_map.get(cs.id, ""),
+                "full": (cs.subject_id, inst.name) in full_pairs,
+            })
     return {"courses": [
         {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
         for c in courses
@@ -117,23 +122,42 @@ async def api_preload():
     if data is None:
         _, courses = await cache.get_courses_cached()
         insts_by_course = await cache.get_all_instructors_cached()
-        inst_courses: dict[str, dict[str, None]] = {}
+        inst_courses: dict[str, dict[int, str]] = {}
         for c in courses:
             for inst in insts_by_course.get(c.id, []):
-                inst_courses.setdefault(inst.name, {})[c.name] = None
+                inst_courses.setdefault(inst.name, {})[c.id] = c.name
         course_list = [
             {"id": c.id, "name": c.name, "reading": c.reading or "",
              "instructors": [{"name": i.name} for i in insts_by_course.get(c.id, [])]}
             for c in courses
         ]
         instructor_list = [
-            {"name": name, "courses": [{"name": cn} for cn in cnames]}
-            for name, cnames in sorted(inst_courses.items())
+            {"name": name, "courses": [{"id": cid, "name": cn} for cid, cn in courses_by_id.items()]}
+            for name, courses_by_id in sorted(inst_courses.items())
         ]
         data = {"courses": course_list, "instructors": instructor_list}
         cache.set_preload_cache(data)
+
+    # 「full」（募集締切）はレビュー投稿状況で頻繁に変わりうるため、
+    # 構造データ本体（数千件規模でTTL 3600秒キャッシュ）とは切り離し、毎リクエスト時に付与する
+    full_pairs = await cache.get_full_course_section_pairs_cached()
+    if full_pairs:
+        data = {
+            "courses": [
+                {**c, "instructors": [
+                    {**i, "full": (c["id"], i["name"]) in full_pairs} for i in c["instructors"]
+                ]}
+                for c in data["courses"]
+            ],
+            "instructors": [
+                {**inst, "courses": [
+                    {**cn, "full": (cn["id"], inst["name"]) in full_pairs} for cn in inst["courses"]
+                ]}
+                for inst in data["instructors"]
+            ],
+        }
     res = JSONResponse(data)
-    res.headers["Cache-Control"] = "public, max-age=300"
+    res.headers["Cache-Control"] = "public, max-age=60"
     return res
 
 
@@ -173,10 +197,11 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
                 .where(Instructor.name.in_(insts))
                 .order_by(Instructor.name, Subject.name)
             )).all()
+            full_pairs = await cache.get_full_course_section_pairs_cached()
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
             for inst_name, c_id, c_name in all_rows:
                 if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
-                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name})
+                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name, "full": (c_id, inst_name) in full_pairs})
             for name in insts:
                 result.append({"name": name, "courses": courses_by_inst[name]})
 

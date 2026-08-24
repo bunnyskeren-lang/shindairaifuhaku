@@ -2,7 +2,7 @@ import time
 
 from sqlalchemy import func, select
 
-from core.config import EASE_ORDER, make_syllabus_url
+from core.config import EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION, make_syllabus_url
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
 
@@ -202,6 +202,36 @@ async def get_all_review_stats_cached() -> dict[str, tuple]:
     return _all_review_stats_cache
 
 
+_full_pairs_cache: set[tuple[int, str]] | None = None
+_full_pairs_cache_at: float = 0.0
+
+
+async def get_full_course_section_pairs_cached() -> set[tuple[int, str]]:
+    """レビュー数（待機中+承認済み）が上限に達した(subject_id, 担当教員名)の組の集合を返す。
+    フォーム側で募集締切表示に使う（実際の受付可否はsubmit時にDBで再確認する）。"""
+    global _full_pairs_cache, _full_pairs_cache_at
+    if _full_pairs_cache is not None and time.monotonic() - _full_pairs_cache_at < _COURSE_CACHE_TTL:
+        return _full_pairs_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(CourseSection.subject_id, Instructor.name)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)))
+            .group_by(CourseSection.subject_id, Instructor.name)
+            .having(func.count(Review.id) >= MAX_REVIEWS_PER_COURSE_SECTION)
+        )).all()
+    _full_pairs_cache = {(sid, name) for sid, name in rows}
+    _full_pairs_cache_at = time.monotonic()
+    return _full_pairs_cache
+
+
+def invalidate_full_pairs_cache():
+    global _full_pairs_cache, _full_pairs_cache_at
+    _full_pairs_cache = None
+    _full_pairs_cache_at = 0.0
+
+
 async def get_syllabus_urls_cached() -> dict[int, str]:
     global _syllabus_url_cache, _syllabus_url_cache_at
     if _syllabus_url_cache and time.monotonic() - _syllabus_url_cache_at < _COURSE_CACHE_TTL:
@@ -263,6 +293,7 @@ def invalidate_review_cache():
     _course_flex_cache = {}
     _ranking_cache = {}
     _course_list_cache = {}
+    invalidate_full_pairs_cache()
 
 
 # ── flex / list / ranking caches (アクセスは必ずこれらの関数経由で行う) ──

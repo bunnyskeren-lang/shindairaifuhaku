@@ -3,8 +3,9 @@ import asyncio
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import func, select
 
+from core import cache
 from core.activity_log import save_error_log
-from core.config import APP_URL, EMAIL_VERIFICATION_ENABLED, STUDENT_ID_RE, LINE_USER_ID_RE
+from core.config import APP_URL, EMAIL_VERIFICATION_ENABLED, MAX_REVIEWS_PER_COURSE_SECTION, STUDENT_ID_RE, LINE_USER_ID_RE
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
 from core.rate_limit import rate_limiter
@@ -126,6 +127,15 @@ async def submit(
         if cs_obj is None:
             return _form_error("この科目の担当教員情報が見つかりません")
 
+        existing_review_count = (await session.execute(
+            select(func.count(Review.id)).where(
+                Review.course_section_id == cs_obj.id,
+                Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+            )
+        )).scalar_one()
+        if existing_review_count >= MAX_REVIEWS_PER_COURSE_SECTION:
+            return _form_error("この科目・担当教員へのレビュー投稿数が上限に達したため、募集は締め切りました")
+
         review = Review(
             course_section_id=cs_obj.id,
             submitter_name=submitter_name,
@@ -141,6 +151,7 @@ async def submit(
         )
         session.add(review)
         await session.commit()
+        cache.invalidate_full_pairs_cache()
 
         review_count = (await session.execute(
             select(func.count(Review.id)).where(Review.student_id == sid)
