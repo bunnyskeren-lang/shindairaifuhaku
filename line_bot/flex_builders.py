@@ -378,10 +378,9 @@ def make_ranking_bubble(title: str, items: list[dict]) -> FlexBubble:
 
 
 def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: str, accent: str) -> FlexMessage:
-    # items: [{"rank": int, "name": str, "stars": str}]
+    # items: [{"rank": int, "name": str, "stars": str}]  rankは選出順の内部管理用で表示はしない
     rows = []
     for item in items:
-        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
         rows.append(
             FlexBox(
                 layout="vertical",
@@ -390,17 +389,10 @@ def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: st
                 padding_all="md",
                 margin="sm",
                 contents=[
-                    FlexBox(
-                        layout="horizontal",
-                        contents=[
-                            FlexText(text=medal, size="sm", flex=0, gravity="center"),
-                            FlexText(
-                                text=item["name"], weight="bold", size="md", color="#1e293b",
-                                wrap=True, margin="sm", flex=1,
-                                action=MessageAction(label=item["name"][:20], text=item["name"]),
-                            ),
-                        ],
-                        spacing="sm",
+                    FlexText(
+                        text=item["name"], weight="bold", size="md", color="#1e293b",
+                        wrap=True,
+                        action=MessageAction(label=item["name"][:20], text=item["name"]),
                     ),
                     FlexText(text=item["stars"], size="sm", color=accent, margin="sm"),
                 ],
