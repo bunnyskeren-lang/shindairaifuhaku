@@ -490,16 +490,26 @@ async def _get_onitan_ranking() -> list:
 async def _get_omikuji() -> list:
     # 全科目からランダムに10件選ぶ。毎回結果を変えたいのでキャッシュしない
     async with AsyncSessionLocal() as _s:
-        rows = (await _s.execute(
-            select(Subject.name, Subject.faculty)
+        subj_rows = (await _s.execute(
+            select(Subject.id, Subject.name)
             .order_by(func.random())
             .limit(10)
         )).all()
-    if not rows:
-        return [TextMessage(text="科目データがまだありません。")]
+        if not subj_rows:
+            return [TextMessage(text="科目データがまだありません。")]
+        ids = [sid for sid, _ in subj_rows]
+        ease_rows = (await _s.execute(
+            select(CourseSection.subject_id, Review.ease_rating)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.status == ReviewStatus.APPROVED, CourseSection.subject_id.in_(ids))
+        )).all()
+    best_ease: dict[int, str] = {}
+    for sid, ease in ease_rows:
+        if sid not in best_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best_ease[sid], 99):
+            best_ease[sid] = ease
     items = [
-        {"rank": i, "name": name, "faculty": faculty or ""}
-        for i, (name, faculty) in enumerate(rows, 1)
+        {"name": name, "stars": EASE_STARS.get(best_ease.get(sid, ""), "")}
+        for sid, name in subj_rows
     ]
     return [make_omikuji_card(items)]
 

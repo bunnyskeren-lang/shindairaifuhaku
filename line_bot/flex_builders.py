@@ -432,34 +432,28 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
 
 
 def make_omikuji_card(items: list[dict]) -> FlexMessage:
-    # items: [{"rank": int, "name": str, "faculty": str}]
+    # items: [{"name": str, "stars": str}]  stars=""なら未レビュー
     rows = []
     for item in items:
-        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
-        row_contents = [
-            FlexBox(
-                layout="horizontal",
-                contents=[
-                    FlexText(text=medal, size="sm", flex=0, gravity="center"),
-                    FlexText(
-                        text=item["name"], weight="bold", size="md", color="#1e293b",
-                        wrap=True, margin="sm", flex=1,
-                        action=MessageAction(label=item["name"][:20], text=item["name"]),
-                    ),
-                ],
-                spacing="sm",
-            ),
-        ]
-        if item.get("faculty"):
-            row_contents.append(FlexText(text=item["faculty"], size="xs", color="#94a3b8", margin="sm"))
+        stars_text = item["stars"] or "評価なし"
+        stars_color = "#f59e0b" if item["stars"] else "#94a3b8"
         rows.append(
             FlexBox(
-                layout="vertical",
+                layout="horizontal",
                 background_color="#f5f3ff",
                 corner_radius="10px",
                 padding_all="md",
                 margin="sm",
-                contents=row_contents,
+                spacing="sm",
+                contents=[
+                    FlexText(
+                        text=item["name"], weight="bold", size="md", color="#1e293b",
+                        wrap=True, flex=1,
+                        action=MessageAction(label=item["name"][:20], text=item["name"]),
+                    ),
+                    FlexText(text=stars_text, size="sm", color=stars_color, flex=0,
+                              align="end", gravity="center"),
+                ],
             )
         )
     title = "⛩️ 10連おみくじ"
