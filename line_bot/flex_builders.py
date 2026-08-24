@@ -5,6 +5,7 @@ from linebot.v3.messaging import (
     FlexBox,
     FlexBubble,
     FlexButton,
+    FlexCarousel,
     FlexMessage,
     FlexSeparator,
     FlexText,
@@ -375,6 +376,54 @@ def make_ranking_bubble(title: str, items: list[dict]) -> FlexBubble:
             padding_all="md",
         ),
     )
+
+
+def make_rakutan_carousel(items: list[dict]) -> FlexMessage:
+    # items: [{"rank": int, "name": str, "stars": str}]
+    bubbles = []
+    for item in items:
+        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
+        bubbles.append(
+            FlexBubble(
+                size="kilo",
+                header=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexText(text=medal, size="sm", color="#fef3c7", weight="bold"),
+                        FlexText(text=item["name"], weight="bold", size="lg", color="#ffffff",
+                                  wrap=True, margin="sm"),
+                    ],
+                    background_color="#f59e0b",
+                    padding_all="lg",
+                ),
+                body=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexBox(
+                            layout="horizontal",
+                            contents=[
+                                FlexText(text="楽単度", size="xs", color="#94a3b8", flex=0),
+                                FlexText(text=item["stars"], size="xl", color="#f59e0b", flex=0, margin="sm"),
+                            ],
+                            align_items="center",
+                        ),
+                        FlexText(text="タップして詳細・レビューを見る", size="xs", color="#94a3b8", margin="md"),
+                    ],
+                    padding_all="lg",
+                ),
+                footer=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexButton(
+                            action=MessageAction(label=item["name"][:20], text=item["name"]),
+                            style="primary", color="#f59e0b", height="sm",
+                        ),
+                    ],
+                    padding_all="md",
+                ),
+            )
+        )
+    return FlexMessage(alt_text="😴 楽単5選", contents=FlexCarousel(contents=bubbles))
 
 
 # ── Course list carousel ────────────────────────────────────────

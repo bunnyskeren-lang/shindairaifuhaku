@@ -1,5 +1,6 @@
 import asyncio
 import math
+import random
 import re as _re
 import time
 from collections import defaultdict
@@ -39,6 +40,7 @@ from line_bot.flex_builders import (
     make_classification_select_flex,
     make_help_flex,
     make_no_review_flex,
+    make_rakutan_carousel,
     make_ranking_bubble,
     make_registration_flex,
     make_variant_selection_bubble,
@@ -421,12 +423,10 @@ async def _get_popular_ranking() -> list:
 
 
 async def _get_rakutan_ranking() -> list:
-    _cached = cache.get_ranking_cache("rakutan")
-    if _cached is not None:
-        return _cached
+    # 「楽単度が最も高い」科目群からランダムに5件選ぶ。毎回結果を変えたいのでキャッシュしない
     async with AsyncSessionLocal() as _s:
         rows = (await _s.execute(
-            select(Subject.name, Review.ease_rating, func.count(Review.id))
+            select(Subject.name, Review.ease_rating)
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
             .where(Review.status == ReviewStatus.APPROVED)
@@ -435,22 +435,26 @@ async def _get_rakutan_ranking() -> list:
     if not rows:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
     course_ease: dict[str, str] = {}
-    for name, ease, _ in rows:
+    for name, ease in rows:
         if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
             course_ease[name] = ease
-    top5 = sorted(course_ease.items(), key=lambda x: EASE_ORDER.get(x[1], 99))[:5]
+    tiers = sorted({ease for ease in course_ease.values()}, key=lambda e: EASE_ORDER.get(e, 99))
+    selected: list[tuple[str, str]] = []
+    for tier in tiers:
+        if len(selected) >= 5:
+            break
+        pool = [(name, ease) for name, ease in course_ease.items() if ease == tier]
+        random.shuffle(pool)
+        selected.extend(pool[:5 - len(selected)])
     items = [
         {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
-        for i, (name, ease) in enumerate(top5, 1)
+        for i, (name, ease) in enumerate(selected, 1)
     ]
-    _res = [FlexMessage(alt_text="😴 楽単ランキング TOP5", contents=make_ranking_bubble("😴 楽単ランキング TOP5", items))]
-    cache.set_ranking_cache("rakutan", _res)
-    return _res
+    return [make_rakutan_carousel(items)]
 
 
 async def prewarm_rankings() -> None:
     await _get_popular_ranking()
-    await _get_rakutan_ranking()
 
 
 # ── Message handler ─────────────────────────────────────────────
