@@ -133,13 +133,17 @@
       const paypayInput = document.getElementById('paypay_id');
       const nameError = document.getElementById('nameError');
       const paypayError = document.getElementById('paypayError');
-      nameError.classList.toggle('hidden', !!nameInput.value.trim());
-      paypayError.classList.toggle('hidden', !!paypayInput.value.trim());
-      if (!nameInput.value.trim() || !paypayInput.value.trim()) {
+      // レビュー投稿フォームと同様、送信直前に前後の空白を除去してからDBへ送る
+      nameInput.value = nameInput.value.trim();
+      paypayInput.value = paypayInput.value.trim();
+      nameError.classList.toggle('hidden', !!nameInput.value);
+      paypayError.classList.toggle('hidden', !!paypayInput.value);
+      if (!nameInput.value || !paypayInput.value) {
         e.preventDefault();
         return;
       }
       const sid = studentIdInput.value.trim().toUpperCase();
+      studentIdInput.value = sid;
       if (!STUDENT_ID_RE.test(sid)) {
         e.preventDefault();
         studentIdError.classList.remove('hidden');
