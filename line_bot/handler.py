@@ -408,29 +408,29 @@ async def _get_rakutan_ranking() -> list:
     # 「楽単度が最も高い」科目群からランダムに5件選ぶ。毎回結果を変えたいのでキャッシュしない
     async with AsyncSessionLocal() as _s:
         rows = (await _s.execute(
-            select(Subject.name, Review.ease_rating)
+            select(Subject.id, Subject.name, Review.ease_rating)
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
             .where(Review.status == ReviewStatus.APPROVED)
-            .group_by(Subject.name, Review.ease_rating)
+            .group_by(Subject.id, Subject.name, Review.ease_rating)
         )).all()
     if not rows:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-    course_ease: dict[str, str] = {}
-    for name, ease in rows:
-        if name not in course_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_ease[name], 99):
-            course_ease[name] = ease
-    tiers = sorted({ease for ease in course_ease.values()}, key=lambda e: EASE_ORDER.get(e, 99))
-    selected: list[tuple[str, str]] = []
+    course_best: dict[int, tuple[str, str]] = {}
+    for sid, name, ease in rows:
+        if sid not in course_best or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_best[sid][1], 99):
+            course_best[sid] = (name, ease)
+    tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: EASE_ORDER.get(e, 99))
+    selected: list[tuple[int, str, str]] = []
     for tier in tiers:
         if len(selected) >= 5:
             break
-        pool = [(name, ease) for name, ease in course_ease.items() if ease == tier]
+        pool = [(sid, name, ease) for sid, (name, ease) in course_best.items() if ease == tier]
         random.shuffle(pool)
         selected.extend(pool[:5 - len(selected)])
     items = [
-        {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
-        for i, (name, ease) in enumerate(selected, 1)
+        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, "")}
+        for i, (sid, name, ease) in enumerate(selected, 1)
     ]
     return [make_rakutan_card(items)]
 
@@ -439,29 +439,29 @@ async def _get_onitan_ranking() -> list:
     # 「鬼単度が最も高い」(=楽単度が最も低い)科目群からランダムに5件選ぶ。毎回結果を変えたいのでキャッシュしない
     async with AsyncSessionLocal() as _s:
         rows = (await _s.execute(
-            select(Subject.name, Review.ease_rating)
+            select(Subject.id, Subject.name, Review.ease_rating)
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
             .where(Review.status == ReviewStatus.APPROVED)
-            .group_by(Subject.name, Review.ease_rating)
+            .group_by(Subject.id, Subject.name, Review.ease_rating)
         )).all()
     if not rows:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-    course_ease: dict[str, str] = {}
-    for name, ease in rows:
-        if name not in course_ease or EASE_ORDER.get(ease, -1) > EASE_ORDER.get(course_ease[name], -1):
-            course_ease[name] = ease
-    tiers = sorted({ease for ease in course_ease.values()}, key=lambda e: -EASE_ORDER.get(e, -1))
-    selected: list[tuple[str, str]] = []
+    course_best: dict[int, tuple[str, str]] = {}
+    for sid, name, ease in rows:
+        if sid not in course_best or EASE_ORDER.get(ease, -1) > EASE_ORDER.get(course_best[sid][1], -1):
+            course_best[sid] = (name, ease)
+    tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: -EASE_ORDER.get(e, -1))
+    selected: list[tuple[int, str, str]] = []
     for tier in tiers:
         if len(selected) >= 5:
             break
-        pool = [(name, ease) for name, ease in course_ease.items() if ease == tier]
+        pool = [(sid, name, ease) for sid, (name, ease) in course_best.items() if ease == tier]
         random.shuffle(pool)
         selected.extend(pool[:5 - len(selected)])
     items = [
-        {"rank": i, "name": name, "stars": ONI_STARS.get(ease, "")}
-        for i, (name, ease) in enumerate(selected, 1)
+        {"rank": i, "id": sid, "name": name, "stars": ONI_STARS.get(ease, "")}
+        for i, (sid, name, ease) in enumerate(selected, 1)
     ]
     return [make_onitan_card(items)]
 

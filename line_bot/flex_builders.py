@@ -321,9 +321,10 @@ def make_registration_flex(register_url: str) -> FlexMessage:
 
 
 def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: str, accent: str) -> FlexMessage:
-    # items: [{"rank": int, "name": str, "stars": str}]  rankは選出順の内部管理用で表示はしない
+    # items: [{"rank": int, "id": int, "name": str, "stars": str}]  rankは選出順の内部管理用で表示はしない
     rows = []
     for item in items:
+        liff_url = f"{APP_URL}/liff/course?course_id={item['id']}"
         rows.append(
             FlexBox(
                 layout="vertical",
@@ -335,7 +336,7 @@ def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: st
                     FlexText(
                         text=item["name"], weight="bold", size="md", color="#1e293b",
                         wrap=True,
-                        action=MessageAction(label=item["name"][:20], text=item["name"]),
+                        action=URIAction(label=item["name"][:20], uri=liff_url),
                     ),
                     FlexText(text=item["stars"], size="sm", color=accent, margin="sm"),
                 ],
