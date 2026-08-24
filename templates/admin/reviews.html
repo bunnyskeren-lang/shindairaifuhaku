@@ -211,7 +211,7 @@
 
 <div class="card">
   <details class="section-details" open>
-    <summary>⏳ 未承認 <span class="section-count">({{ pending|length }}件)</span></summary>
+    <summary>⏳ 待機中 <span class="section-count">({{ pending|length }}件)</span></summary>
     <div class="section-body">
       {% if pending %}
       {% for subj_name, revs in pending|groupby('course_name') %}
@@ -240,7 +240,7 @@
       </div>
       {% endfor %}
       {% else %}
-      <p style="color:#9ca3af;font-size:13px">未承認のレビューはありません</p>
+      <p style="color:#9ca3af;font-size:13px">待機中のレビューはありません</p>
       {% endif %}
     </div>
   </details>
