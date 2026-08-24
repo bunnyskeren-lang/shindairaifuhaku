@@ -75,6 +75,8 @@
     <div class="meta" id="meta"></div>
   </div>
 
+  <div id="lock-card"></div>
+
   <div class="card" id="summary-card">
     <div class="section-title">総合評価</div>
     <div id="ratings"></div>
@@ -144,6 +146,27 @@ function esc(s) {
 }
 
 const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★☆☆", S: "★★★★☆", SS: "★★★★★" };
+
+function buildLockCardHtml(data, userId) {
+  let html = `<div class="card" style="border:2px solid var(--accent)">`;
+  html += `<div class="section-title">🔒 レビューを見るには解除が必要です</div>`;
+  html += `<div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:14px">`
+        + `この科目には${data.review_count}件のレビューがあります。<b>「解除する」ボタンを押すとチケットを1枚使い、この科目のレビューがすぐに見られるようになります。</b>`
+        + `<br>チケットは、あなたのレビューが1件承認されるたびに5枚もらえます（好きな科目に使えます）。</div>`;
+  if (userId) {
+    if ((data.unlock_credits || 0) > 0) {
+      html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケットを1枚使って解除する（残り${data.unlock_credits}枚）</button>`;
+    } else {
+      html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
+            + `今はチケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されると、チケットが5枚もらえます。</div>`;
+    }
+  } else {
+    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
+          + `解除するにはLINEアプリ内からこのページを開いてください。</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
 
 async function main() {
   try {
@@ -232,49 +255,10 @@ async function main() {
   const RATING_LABELS = ['', 'ほぼ学びなし', 'ちょい学び', 'まあまあ学びあり', 'かなり学べた', 'めちゃくちゃ学べた'];
   const EASE_LABELS  = { C: '修羅場', B: '大変', A: '標準', S: '楽々', SS: '天国' };
 
-  const ratingsEl = document.getElementById("ratings");
+  // ── ロック中の解除カード（ページ最上部、ヘッダー直下に表示） ──
+  const lockCard = document.getElementById("lock-card");
   if (data.locked) {
-    ratingsEl.innerHTML = `<div class="no-review">🔒 レビュー${data.review_count}件は閲覧権がありません</div>`;
-  } else if (data.avg_rating != null) {
-    const rLabel = RATING_LABELS[Math.round(data.avg_rating)] || '';
-    let ratingsHtml = '';
-    if (data.top_ease) {
-      const eLabel = EASE_LABELS[data.top_ease] || '';
-      ratingsHtml += `<div class="rating-row">
-           <span class="rating-label">楽単度</span>
-           <span class="stars" style="color:#f59e0b">${EASE_STARS[data.top_ease] || ""}</span>
-           <span style="font-size:12px;color:#64748b;margin-left:6px">${eLabel}</span>
-         </div>`;
-    }
-    ratingsHtml += `<div class="rating-row">
-         <span class="rating-label">充実度</span>
-         <span class="stars" style="color:#a78bfa">${stars(data.avg_rating)}</span>
-         <span style="font-size:12px;color:#64748b;margin-left:6px">${rLabel}</span>
-       </div>`;
-    ratingsEl.innerHTML = ratingsHtml;
-  } else {
-    ratingsEl.innerHTML = `<div class="no-review">⭐ まだレビューはありません。あなたが最初のレビュワーになりませんか？🌟</div>`;
-  }
-
-  // ── レビューカード（1件ずつ） ──
-  const reviewsSection = document.getElementById("reviews-section");
-  if (data.locked) {
-    const box = document.createElement("div");
-    box.className = "card";
-    let html = `<div class="section-title">🔒 レビュー閲覧には解除が必要です</div>`;
-    html += `<div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:12px">この科目には${data.review_count}件のレビューがあります。レビューを1件投稿して承認されると、好きな科目5件分の閲覧権がもらえます。</div>`;
-    if (userId) {
-      if ((data.unlock_credits || 0) > 0) {
-        html += `<button id="btn-unlock" class="btn btn-primary" style="width:auto;padding:10px 18px">🔓 この科目を解除する（残りチケット ${data.unlock_credits}枚）</button>`;
-      } else {
-        html += `<div style="font-size:12px;color:#94a3b8">閲覧チケットがありません。レビューを投稿して承認されるとチケットがもらえます。</div>`;
-      }
-    } else {
-      html += `<div style="font-size:12px;color:#94a3b8">LINEアプリから開くと解除できます。</div>`;
-    }
-    box.innerHTML = html;
-    reviewsSection.appendChild(box);
-
+    lockCard.innerHTML = buildLockCardHtml(data, userId);
     const btn = document.getElementById("btn-unlock");
     if (btn) {
       btn.addEventListener("click", async () => {
@@ -302,7 +286,37 @@ async function main() {
         }
       });
     }
-  } else if (data.reviews && data.reviews.length) {
+  }
+
+  const ratingsEl = document.getElementById("ratings");
+  if (data.locked) {
+    ratingsEl.innerHTML = `<div class="no-review">🔒 上の「解除する」ボタンで解除すると表示されます</div>`;
+  } else if (data.avg_rating != null) {
+    const rLabel = RATING_LABELS[Math.round(data.avg_rating)] || '';
+    let ratingsHtml = '';
+    if (data.top_ease) {
+      const eLabel = EASE_LABELS[data.top_ease] || '';
+      ratingsHtml += `<div class="rating-row">
+           <span class="rating-label">楽単度</span>
+           <span class="stars" style="color:#f59e0b">${EASE_STARS[data.top_ease] || ""}</span>
+           <span style="font-size:12px;color:#64748b;margin-left:6px">${eLabel}</span>
+         </div>`;
+    }
+    ratingsHtml += `<div class="rating-row">
+         <span class="rating-label">充実度</span>
+         <span class="stars" style="color:#a78bfa">${stars(data.avg_rating)}</span>
+         <span style="font-size:12px;color:#64748b;margin-left:6px">${rLabel}</span>
+       </div>`;
+    ratingsEl.innerHTML = ratingsHtml;
+  } else {
+    ratingsEl.innerHTML = `<div class="no-review">⭐ まだレビューはありません。あなたが最初のレビュワーになりませんか？🌟</div>`;
+  }
+
+  // ── レビューカード（1件ずつ） ──
+  // ロック中の解除カード・ボタンはページ最上部（#lock-card）で既に組み立て済みのため、
+  // ここではロック中は何も描画しない
+  const reviewsSection = document.getElementById("reviews-section");
+  if (!data.locked && data.reviews && data.reviews.length) {
     data.reviews.forEach((r, i) => {
       const card = document.createElement("div");
       card.className = "card";
