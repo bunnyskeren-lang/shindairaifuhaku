@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 
+from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, ErrorLog, MessageLog, Review, Subject, UserProfile
+from models import CourseSection, ErrorLog, MessageLog, Review, Subject, SubjectUnlock, UserProfile
 
 router = APIRouter()
 
@@ -29,6 +30,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 last_seen_subq.c.last_seen,
                 UserProfile.name,
                 UserProfile.student_id,
+                UserProfile.unlock_credits,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == last_seen_subq.c.user_id)
             .order_by(last_seen_subq.c.last_seen.desc())
@@ -60,12 +62,48 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 entry["total"] += cnt
                 entry["breakdown"].append((course_name, instructor, status, cnt))
 
+        # レビュー閲覧権チケットの付与数（credit_granted_atが立っている承認済みレビュー件数×付与枚数）・
+        # 使用数（付与総数 - 現在残数）・解除済み科目一覧を、このページに表示する分だけ集計する
+        granted_count_map: dict[str, int] = {}
+        if student_ids:
+            granted_rows = (await session.execute(
+                select(Review.student_id, func.count(Review.id))
+                .where(Review.student_id.in_(student_ids), Review.credit_granted_at.isnot(None))
+                .group_by(Review.student_id)
+            )).all()
+            granted_count_map = {sid: cnt for sid, cnt in granted_rows}
+
+        line_user_ids = [u.user_id for u in users]
+        unlocked_subjects_map: dict[str, list] = {}
+        if line_user_ids:
+            unlock_rows = (await session.execute(
+                select(SubjectUnlock.line_user_id, Subject.name)
+                .join(Subject, Subject.id == SubjectUnlock.subject_id)
+                .where(SubjectUnlock.line_user_id.in_(line_user_ids))
+                .order_by(Subject.name)
+            )).all()
+            for uid, name in unlock_rows:
+                unlocked_subjects_map.setdefault(uid, []).append(name)
+
+        ticket_map: dict[str, dict] = {}
+        for u in users:
+            granted = granted_count_map.get(u.student_id, 0) * REVIEW_APPROVAL_UNLOCK_CREDITS if u.student_id else 0
+            balance = u.unlock_credits or 0
+            ticket_map[u.user_id] = {
+                "balance": balance,
+                "granted": granted,
+                # 付与総数-現在残数=使用数。マイナスにはならない想定だが、表示上の破綻を避けるためガードする
+                "used": max(granted - balance, 0),
+                "subjects": unlocked_subjects_map.get(u.user_id, []),
+            }
+
     total_pages = max(1, (total + per_page - 1) // per_page)
 
     return templates.TemplateResponse("admin/users.html", {
         "request": request,
         "users": users,
         "review_map": review_map,
+        "ticket_map": ticket_map,
         "page": page,
         "total_pages": total_pages,
         "total": total,

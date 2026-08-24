@@ -6,9 +6,10 @@
 {% block content %}
 <div class="card">
   <table>
-    <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th><th>レビュー</th></tr>
+    <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th><th>レビュー</th><th>閲覧権チケット</th></tr>
     {% for u in users %}
     {% set rv = review_map.get(u.student_id) if u.student_id else None %}
+    {% set tk = ticket_map.get(u.user_id) %}
     <tr>
       <td>{{ u.name or "―" }}</td>
       <td style="font-size:12px">{{ u.student_id or "―" }}</td>
@@ -32,9 +33,26 @@
         <span style="font-size:12px;color:#d1d5db">0件</span>
         {% endif %}
       </td>
+      <td>
+        {% if tk and (tk.granted > 0 or tk.balance > 0) %}
+        <div style="font-size:12px;font-weight:700;color:var(--accent)">残{{ tk.balance }} / 付与{{ tk.granted }} / 使用{{ tk.used }}</div>
+        {% if tk.subjects %}
+        <details>
+          <summary style="cursor:pointer;font-size:11px;color:#6b7280">解除済み{{ tk.subjects|length }}科目</summary>
+          <ul style="margin:4px 0 0;padding-left:16px;font-size:11px;color:#6b7280;list-style:disc">
+            {% for name in tk.subjects %}
+            <li>{{ name }}</li>
+            {% endfor %}
+          </ul>
+        </details>
+        {% endif %}
+        {% else %}
+        <span style="font-size:12px;color:#d1d5db">―</span>
+        {% endif %}
+      </td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="empty">ユーザーなし</td></tr>
+    <tr><td colspan="6" class="empty">ユーザーなし</td></tr>
     {% endfor %}
   </table>
   {{ pager(page, total_pages, total, url_prefix) }}
