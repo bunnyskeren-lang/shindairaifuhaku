@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache
@@ -75,7 +75,13 @@ async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
 async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
     async with AsyncSessionLocal() as session:
         if q.strip():
-            tokens = [tok for tok in _re.split(r'[\s　]+', q.strip()) if tok]
+            q_stripped = q.strip()
+            tokens = [tok for tok in _re.split(r'[\s　]+', q_stripped) if tok]
+            q_full = escape_like(q_stripped)
+            relevance = case(
+                (Subject.name.ilike(f"{q_full}%", escape="\\"), 0),
+                else_=1,
+            )
             stmt = select(Subject)
             for tok in tokens:
                 t = escape_like(tok)
@@ -83,18 +89,23 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                     Subject.name.ilike(f"%{t}%", escape="\\"),
                     Subject.reading.ilike(f"%{t}%", escape="\\"),
                 ))
-            stmt = stmt.order_by(Subject.name).limit(_SEARCH_RESULT_LIMIT)
+            stmt = stmt.order_by(relevance, Subject.name).limit(_SEARCH_RESULT_LIMIT)
             courses = (await session.execute(stmt)).scalars().all()
             if not courses:
                 norm_col = Subject.name
                 for ch in ('・', '･', '（', '）', '(', ')'):
                     norm_col = func.replace(norm_col, ch, '')
                 norm_tokens = [_normalize_form_q(tok) for tok in tokens]
+                norm_q_full = escape_like(_normalize_form_q(q_stripped))
+                norm_relevance = case(
+                    (norm_col.ilike(f"{norm_q_full}%", escape="\\"), 0),
+                    else_=1,
+                )
                 stmt2 = select(Subject)
                 for tok in norm_tokens:
                     t = escape_like(tok)
                     stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
-                stmt2 = stmt2.order_by(Subject.name).limit(_SEARCH_RESULT_LIMIT)
+                stmt2 = stmt2.order_by(norm_relevance, Subject.name).limit(_SEARCH_RESULT_LIMIT)
                 courses = (await session.execute(stmt2)).scalars().all()
         else:
             stmt = select(Subject).order_by(Subject.name).limit(30)
