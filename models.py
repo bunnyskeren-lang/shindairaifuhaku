@@ -237,8 +237,7 @@ class Inquiry(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     category: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    # 返信を希望する場合のみ入力される任意項目
-    email: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
     # 'pending'(未対応) / 'handled'(対応済み)。CHECK制約はdatabase.py init_db()側で管理。
     status: Mapped[str] = mapped_column(Text, nullable=False, default=InquiryStatus.PENDING)
     handled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

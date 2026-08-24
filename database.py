@@ -439,3 +439,11 @@ async def init_db():
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$
         """))
+        # メールアドレスを必須化（当初は任意項目だったため、モデル変更に合わせて既存NULL行を
+        # 空文字に寄せてからNOT NULL制約を追加する。公開直後の機能でテストデータのみのため実害なし）
+        await conn.execute(text(
+            "UPDATE inquiries SET email = '' WHERE email IS NULL"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE inquiries ALTER COLUMN email SET NOT NULL"
+        ))

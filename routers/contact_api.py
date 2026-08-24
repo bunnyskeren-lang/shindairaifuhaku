@@ -49,14 +49,14 @@ async def contact_submit(
         return _error("お問い合わせ内容を入力してください")
 
     to_email = email.strip()[:200]
-    if to_email and not _EMAIL_RE.match(to_email):
+    if not _EMAIL_RE.match(to_email):
         return _error("メールアドレスの形式が正しくありません")
 
     async with AsyncSessionLocal() as session:
         session.add(Inquiry(
             category=cat,
             content=body,
-            email=to_email or None,
+            email=to_email,
             status=InquiryStatus.PENDING,
         ))
         await session.commit()

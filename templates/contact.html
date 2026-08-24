@@ -50,16 +50,16 @@
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
-          📧 メールアドレス（任意）
+          📧 メールアドレス <span class="text-red-500">*</span>
         </label>
         <input type="email" name="email" id="email"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          placeholder="返信をご希望の場合はご入力ください" maxlength="200" autocomplete="email">
+          placeholder="例：example@gmail.com" required maxlength="200" autocomplete="email">
         <p id="emailError" class="hidden mt-1 text-red-500 text-xs">メールアドレスの形式が正しくありません</p>
       </div>
 
       <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
-        本お問い合わせについて、運営側からご連絡させていただくことがあります。
+        本お問い合わせについて、運営側からご連絡させていただくことがあります。メールアドレスは普段使うものをご入力ください。
       </div>
 
       <button type="submit"
@@ -84,7 +84,7 @@
 
       categoryError.classList.toggle('hidden', !!categoryInput.value);
       contentError.classList.toggle('hidden', !!contentInput.value);
-      const emailOk = !emailInput.value || EMAIL_RE.test(emailInput.value);
+      const emailOk = EMAIL_RE.test(emailInput.value);
       emailError.classList.toggle('hidden', emailOk);
 
       if (!categoryInput.value || !contentInput.value || !emailOk) {
