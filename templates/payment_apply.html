@@ -6,8 +6,8 @@
   <title>レビュー報酬の支払い申請 | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* ネイティブのnumber inputスピナーは、500円単位からずれた値の状態でクリックすると
-       min値まで巻き戻る等の不可解な挙動をするため非表示にし、代わりに±500円の
+    /* ネイティブのnumber inputスピナーは、100円単位からずれた値の状態でクリックすると
+       min値まで巻き戻る等の不可解な挙動をするため非表示にし、代わりに±100円の
        カスタムボタンで操作させる */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button {
@@ -32,7 +32,7 @@
     <div class="text-center mb-6">
       <div class="text-5xl mb-3">💰</div>
       <h1 class="text-2xl font-bold text-gray-800">レビュー報酬の支払い申請</h1>
-      <p class="text-gray-500 text-sm mt-1">承認されたレビュー1件につき10円、500円単位でPayPayにお支払いします</p>
+      <p class="text-gray-500 text-sm mt-1">承認されたレビュー1件につき10円、100円単位でPayPayにお支払いします</p>
     </div>
 
     <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 space-y-1.5">
@@ -42,7 +42,7 @@
       </div>
       <div class="flex items-start gap-2">
         <span class="text-lg leading-none mt-0.5">🔢</span>
-        <span>申請金額は500円単位です。端数（500円未満）は次回に繰り越されます</span>
+        <span>申請金額は100円単位です。端数（100円未満）は次回に繰り越されます</span>
       </div>
     </div>
 
@@ -93,15 +93,15 @@
           💴 申請金額（円） <span class="text-red-500">*</span>
         </label>
         <div class="flex items-stretch gap-2">
-          <button type="button" id="amountMinus" aria-label="500円減らす"
+          <button type="button" id="amountMinus" aria-label="100円減らす"
             class="shrink-0 w-11 rounded-xl border border-gray-200 text-lg font-bold text-gray-600 hover:bg-gray-50 transition">−</button>
-          <input type="number" name="amount" id="amount" step="500" min="500"
+          <input type="number" name="amount" id="amount" step="100" min="100"
             class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-            placeholder="例：500" required>
-          <button type="button" id="amountPlus" aria-label="500円増やす"
+            placeholder="例：100" required>
+          <button type="button" id="amountPlus" aria-label="100円増やす"
             class="shrink-0 w-11 rounded-xl border border-gray-200 text-lg font-bold text-gray-600 hover:bg-gray-50 transition">＋</button>
         </div>
-        <p id="amountError" class="hidden mt-1 text-red-500 text-xs">500円単位で、申請可能な金額以下を入力してください</p>
+        <p id="amountError" class="hidden mt-1 text-red-500 text-xs">100円単位で、申請可能な金額以下を入力してください</p>
       </div>
 
       <button type="submit"
@@ -152,19 +152,19 @@
       studentIdError.classList.add('hidden');
     });
 
-    // 現在値が500円単位からずれていても、ネイティブのnumber inputスピナーのように
-    // min値まで巻き戻らず、直近の500円単位に揃えたうえで一段階だけ増減させる
+    // 現在値が100円単位からずれていても、ネイティブのnumber inputスピナーのように
+    // min値まで巻き戻らず、直近の100円単位に揃えたうえで一段階だけ増減させる
     function stepAmount(delta) {
       let v = parseInt(amountInput.value, 10);
       if (isNaN(v)) v = 0;
-      v = delta > 0 ? Math.floor(v / 500) * 500 + 500 : Math.ceil(v / 500) * 500 - 500;
-      if (v < 500) v = 500;
+      v = delta > 0 ? Math.floor(v / 100) * 100 + 100 : Math.ceil(v / 100) * 100 - 100;
+      if (v < 100) v = 100;
       if (maxAmount && v > maxAmount) v = maxAmount;
       amountInput.value = v;
       amountError.classList.add('hidden');
     }
-    document.getElementById('amountMinus').addEventListener('click', function() { stepAmount(-500); });
-    document.getElementById('amountPlus').addEventListener('click', function() { stepAmount(500); });
+    document.getElementById('amountMinus').addEventListener('click', function() { stepAmount(-100); });
+    document.getElementById('amountPlus').addEventListener('click', function() { stepAmount(100); });
 
     document.getElementById('paymentForm').addEventListener('submit', function(e) {
       const nameInput = document.getElementById('name');
@@ -188,7 +188,7 @@
         return;
       }
       const amount = parseInt(amountInput.value, 10);
-      if (!amount || amount <= 0 || amount % 500 !== 0 || (maxAmount && amount > maxAmount)) {
+      if (!amount || amount <= 0 || amount % 100 !== 0 || (maxAmount && amount > maxAmount)) {
         e.preventDefault();
         amountError.classList.remove('hidden');
         return;

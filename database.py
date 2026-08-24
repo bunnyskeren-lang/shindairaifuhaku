@@ -411,7 +411,7 @@ async def init_db():
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ"
         ))
 
-        # ── 2026-08-24: レビュー投稿報酬（1件10円、500円単位でPayPay払い）の支払い管理 ──
+        # ── 2026-08-24: レビュー投稿報酬（1件10円、100円単位でPayPay払い）の支払い管理 ──
         # payment_requestsテーブル自体はcreate_all()で新規作成されるため、ここではCHECK制約と
         # 既存のreviewsテーブルへの紐付け列追加のみ行う
         await conn.execute(text("""

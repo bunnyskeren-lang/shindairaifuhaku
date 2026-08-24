@@ -326,7 +326,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `course_sections` | 科目×教員のセクション |
 | `syllabi` | シラバス（年度・クォーター・時間割コード。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み、target_grades/subject_category列は2026-07-30に廃止済み） |
 | `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い） |
-| `payment_requests` | レビュー報酬（1件10円、500円単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/10件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
+| `payment_requests` | レビュー報酬（1件10円、100円単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/10件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
 | `course_section_views` | 科目セクションの閲覧数 |
 
 共通・運用系:
