@@ -290,6 +290,16 @@
               style="border-color:#99f6e4" placeholder="例：出席は成績に加算されない" maxlength="40">
           </div>
 
+          <!-- 抜き打ちか否か（たまにあり選択時のみ表示） -->
+          <div id="attendanceSurpriseSection" class="hidden mt-3 pt-3 border-t border-teal-200">
+            <p class="text-xs font-bold text-teal-700 mb-2">🎲 抜き打ちか <span class="text-red-500">*</span></p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="chip-btn single" data-group="attendance_surprise" data-value="抜き打ちあり">抜き打ちあり</button>
+              <button type="button" class="chip-btn single" data-group="attendance_surprise" data-value="予告あり">予告あり</button>
+            </div>
+            <p id="attendanceSurpriseError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
+          </div>
+
           <!-- 出席確認方法（毎回あり・たまにあり選択時のみ表示） -->
           <div id="attendanceMethodSection" class="hidden mt-3 pt-3 border-t border-teal-200">
             <p class="text-xs font-bold text-teal-700 mb-2">📝 出席確認方法 <span class="text-red-500">*</span> <span class="font-bold text-teal-600">複数選択可</span></p>
@@ -708,7 +718,7 @@
         } else {
           btn.classList.toggle('active');
         }
-        const errMap = { attendance: 'attendanceError', attendance_method: 'attendanceMethodError', homework: 'homeworkError', homework_frequency: 'homeworkFrequencyError', eval: 'evalError', class_format: 'classFormatError' };
+        const errMap = { attendance: 'attendanceError', attendance_method: 'attendanceMethodError', attendance_surprise: 'attendanceSurpriseError', homework: 'homeworkError', homework_frequency: 'homeworkFrequencyError', eval: 'evalError', class_format: 'classFormatError' };
         if (errMap[btn.dataset.group]) document.getElementById(errMap[btn.dataset.group]).classList.add('hidden');
         if (btn.dataset.value === '__custom__') {
           const customInput = document.getElementById('evalCustomInput');
@@ -750,6 +760,14 @@
             document.getElementById('attendanceMethodError').classList.add('hidden');
           } else {
             methodSection.classList.remove('hidden');
+          }
+          const surpriseSection = document.getElementById('attendanceSurpriseSection');
+          if (btn.dataset.value === 'たまにあり') {
+            surpriseSection.classList.remove('hidden');
+          } else {
+            surpriseSection.classList.add('hidden');
+            document.querySelectorAll('[data-group="attendance_surprise"]').forEach(b => b.classList.remove('active'));
+            document.getElementById('attendanceSurpriseError').classList.add('hidden');
           }
         }
         if (PERCENT_GROUPS[btn.dataset.group]) renderGroupPercents(btn.dataset.group);
@@ -846,6 +864,10 @@
       if (formats.length) parts.push(withExtra(`形式:${formats.join('・')}`, 'classFormatExtraInput'));
       const att = document.querySelector('[data-group="attendance"].active');
       if (att) parts.push(withExtra(`出席:${att.dataset.value}`, 'attendanceExtraInput'));
+      if (att && att.dataset.value === 'たまにあり') {
+        const surprise = document.querySelector('[data-group="attendance_surprise"].active');
+        if (surprise) parts.push(`出席確認:${surprise.dataset.value}`);
+      }
       if (att && att.dataset.value !== 'なし') {
         const attMethods = [...document.querySelectorAll('[data-group="attendance_method"].active')].map(b => {
           return b.dataset.value === '__attendance_method_custom__'
@@ -1501,6 +1523,7 @@
           formatCustom: document.getElementById('formatCustomInput').value,
           formatPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="class_format"]')].map(i => [i.dataset.percentFor, i.value])),
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
+          attendanceSurprise: document.querySelector('[data-group="attendance_surprise"].active')?.dataset.value || '',
           attendanceMethods: [...document.querySelectorAll('[data-group="attendance_method"].active')].map(b => b.dataset.value),
           attendanceMethodCustom: document.getElementById('attendanceMethodCustomInput').value,
           homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
@@ -1563,6 +1586,14 @@
           document.querySelectorAll('[data-group="attendance"]').forEach(b => {
             b.classList.toggle('active', b.dataset.value === d.attendance);
           });
+          if (d.attendance === 'たまにあり') {
+            document.getElementById('attendanceSurpriseSection').classList.remove('hidden');
+            if (d.attendanceSurprise) {
+              document.querySelectorAll('[data-group="attendance_surprise"]').forEach(b => {
+                b.classList.toggle('active', b.dataset.value === d.attendanceSurprise);
+              });
+            }
+          }
           if (d.attendance !== 'なし') {
             document.getElementById('attendanceMethodSection').classList.remove('hidden');
             if (d.attendanceMethods?.length) {
@@ -1632,6 +1663,7 @@
         ['easeError','easeCard'],
         ['classFormatError','gradingCard'],
         ['attendanceError','gradingCard'],
+        ['attendanceSurpriseError','gradingCard'],
         ['attendanceMethodError','gradingCard'],
         ['homeworkError','gradingCard'],
         ['homeworkFrequencyError','gradingCard'],
@@ -1656,7 +1688,7 @@
       // 全エラーを一旦リセット
       ['regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
-       'classFormatError','formatCustomError','attendanceError','attendanceMethodError','attendanceMethodCustomError','homeworkError',
+       'classFormatError','formatCustomError','attendanceError','attendanceSurpriseError','attendanceMethodError','attendanceMethodCustomError','homeworkError',
        'homeworkFrequencyError','evalError','evalCustomError','evalPercentError','formatPercentError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -1701,16 +1733,22 @@
       if (!attActive) {
         document.getElementById('attendanceError').classList.remove('hidden');
         valid = false;
-      } else if (attActive.dataset.value !== 'なし') {
-        const attMethodActives = [...document.querySelectorAll('[data-group="attendance_method"].active')];
-        if (attMethodActives.length === 0) {
-          document.getElementById('attendanceMethodError').classList.remove('hidden');
+      } else {
+        if (attActive.dataset.value === 'たまにあり' && !document.querySelector('[data-group="attendance_surprise"].active')) {
+          document.getElementById('attendanceSurpriseError').classList.remove('hidden');
           valid = false;
-        } else if (attMethodActives.some(b => b.dataset.value === '__attendance_method_custom__') &&
-                   !document.getElementById('attendanceMethodCustomInput').value.trim()) {
-          document.getElementById('attendanceMethodCustomError').classList.remove('hidden');
-          document.getElementById('attendanceMethodCustomInput').classList.add('border-red-400');
-          valid = false;
+        }
+        if (attActive.dataset.value !== 'なし') {
+          const attMethodActives = [...document.querySelectorAll('[data-group="attendance_method"].active')];
+          if (attMethodActives.length === 0) {
+            document.getElementById('attendanceMethodError').classList.remove('hidden');
+            valid = false;
+          } else if (attMethodActives.some(b => b.dataset.value === '__attendance_method_custom__') &&
+                     !document.getElementById('attendanceMethodCustomInput').value.trim()) {
+            document.getElementById('attendanceMethodCustomError').classList.remove('hidden');
+            document.getElementById('attendanceMethodCustomInput').classList.add('border-red-400');
+            valid = false;
+          }
         }
       }
       if (!document.querySelector('[data-group="homework"].active')) {
