@@ -275,6 +275,22 @@
             <button type="button" class="chip-btn single" data-group="attendance" data-value="なし">なし</button>
           </div>
           <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
+
+          <!-- 出席確認方法（毎回あり・たまにあり選択時のみ表示） -->
+          <div id="attendanceMethodSection" class="hidden mt-3 pt-3 border-t border-teal-200">
+            <p class="text-xs font-bold text-teal-700 mb-2">📝 出席確認方法 <span class="text-red-500">*</span> <span class="font-bold text-teal-600">複数選択可</span></p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="chip-btn multi" data-group="attendance_method" data-value="コメントシート">コメントシート</button>
+              <button type="button" class="chip-btn multi" data-group="attendance_method" data-value="小テスト">小テスト</button>
+              <button type="button" class="chip-btn multi" data-group="attendance_method" data-value="名簿に名前を書く">名簿に名前を書く</button>
+              <button type="button" class="chip-btn multi" data-group="attendance_method" data-value="__attendance_method_custom__">✏️ その他</button>
+            </div>
+            <input type="text" id="attendanceMethodCustomInput"
+              class="hidden w-full mt-2 border border-teal-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 transition bg-white"
+              placeholder="例：教室で挙手確認など" maxlength="30">
+            <p id="attendanceMethodCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
+            <p id="attendanceMethodError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
+          </div>
         </div>
 
         <!-- 課題の頻度 -->
@@ -635,7 +651,7 @@
         } else {
           btn.classList.toggle('active');
         }
-        const errMap = { attendance: 'attendanceError', homework: 'homeworkError', homework_frequency: 'homeworkFrequencyError', eval: 'evalError', class_format: 'classFormatError' };
+        const errMap = { attendance: 'attendanceError', attendance_method: 'attendanceMethodError', homework: 'homeworkError', homework_frequency: 'homeworkFrequencyError', eval: 'evalError', class_format: 'classFormatError' };
         if (errMap[btn.dataset.group]) document.getElementById(errMap[btn.dataset.group]).classList.add('hidden');
         if (btn.dataset.value === '__custom__') {
           const customInput = document.getElementById('evalCustomInput');
@@ -657,13 +673,35 @@
             formatInput.value = '';
           }
         }
+        if (btn.dataset.value === '__attendance_method_custom__') {
+          const methodInput = document.getElementById('attendanceMethodCustomInput');
+          if (btn.classList.contains('active')) {
+            methodInput.classList.remove('hidden');
+            methodInput.focus();
+          } else {
+            methodInput.classList.add('hidden');
+            methodInput.value = '';
+          }
+        }
+        if (btn.dataset.group === 'attendance') {
+          const methodSection = document.getElementById('attendanceMethodSection');
+          if (btn.dataset.value === 'なし') {
+            methodSection.classList.add('hidden');
+            document.querySelectorAll('[data-group="attendance_method"]').forEach(b => b.classList.remove('active'));
+            document.getElementById('attendanceMethodCustomInput').classList.add('hidden');
+            document.getElementById('attendanceMethodCustomInput').value = '';
+            document.getElementById('attendanceMethodError').classList.add('hidden');
+          } else {
+            methodSection.classList.remove('hidden');
+          }
+        }
         if (PERCENT_GROUPS[btn.dataset.group]) renderGroupPercents(btn.dataset.group);
         updateGradingMethod();
         saveData();
       };
     });
 
-    ['evalCustomInput', 'formatCustomInput'].forEach(id => {
+    ['evalCustomInput', 'formatCustomInput', 'attendanceMethodCustomInput'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
         if (id === 'evalCustomInput') renderGroupPercents('eval');
         if (id === 'formatCustomInput') renderGroupPercents('class_format');
@@ -681,6 +719,12 @@
       if (document.getElementById('formatCustomInput').value.trim()) {
         document.getElementById('formatCustomError').classList.add('hidden');
         document.getElementById('formatCustomInput').classList.remove('border-red-400');
+      }
+    });
+    document.getElementById('attendanceMethodCustomInput').addEventListener('input', () => {
+      if (document.getElementById('attendanceMethodCustomInput').value.trim()) {
+        document.getElementById('attendanceMethodCustomError').classList.add('hidden');
+        document.getElementById('attendanceMethodCustomInput').classList.remove('border-red-400');
       }
     });
 
@@ -732,6 +776,14 @@
       if (formats.length) parts.push(`形式:${formats.join('・')}`);
       const att = document.querySelector('[data-group="attendance"].active');
       if (att) parts.push(`出席:${att.dataset.value}`);
+      if (att && att.dataset.value !== 'なし') {
+        const attMethods = [...document.querySelectorAll('[data-group="attendance_method"].active')].map(b => {
+          return b.dataset.value === '__attendance_method_custom__'
+            ? (document.getElementById('attendanceMethodCustomInput').value.trim() || null)
+            : b.dataset.value;
+        }).filter(Boolean);
+        if (attMethods.length) parts.push(`出席確認方法:${attMethods.join('・')}`);
+      }
       const hw = document.querySelector('[data-group="homework"].active');
       if (hw) parts.push(`課題:${hw.dataset.value}`);
       const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
@@ -1379,6 +1431,8 @@
           formatCustom: document.getElementById('formatCustomInput').value,
           formatPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="class_format"]')].map(i => [i.dataset.percentFor, i.value])),
           attendance: document.querySelector('[data-group="attendance"].active')?.dataset.value || '',
+          attendanceMethods: [...document.querySelectorAll('[data-group="attendance_method"].active')].map(b => b.dataset.value),
+          attendanceMethodCustom: document.getElementById('attendanceMethodCustomInput').value,
           homework: document.querySelector('[data-group="homework"].active')?.dataset.value || '',
           homeworkFrequency: document.querySelector('[data-group="homework_frequency"].active')?.dataset.value || '',
           evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
@@ -1433,6 +1487,19 @@
           document.querySelectorAll('[data-group="attendance"]').forEach(b => {
             b.classList.toggle('active', b.dataset.value === d.attendance);
           });
+          if (d.attendance !== 'なし') {
+            document.getElementById('attendanceMethodSection').classList.remove('hidden');
+            if (d.attendanceMethods?.length) {
+              document.querySelectorAll('[data-group="attendance_method"]').forEach(b => {
+                b.classList.toggle('active', d.attendanceMethods.includes(b.dataset.value));
+              });
+              if (d.attendanceMethods.includes('__attendance_method_custom__')) {
+                const methodInput = document.getElementById('attendanceMethodCustomInput');
+                methodInput.classList.remove('hidden');
+                if (d.attendanceMethodCustom) methodInput.value = d.attendanceMethodCustom;
+              }
+            }
+          }
         }
         if (d.homework) {
           document.querySelectorAll('[data-group="homework"]').forEach(b => {
@@ -1483,6 +1550,7 @@
         ['easeError','easeCard'],
         ['classFormatError','gradingCard'],
         ['attendanceError','gradingCard'],
+        ['attendanceMethodError','gradingCard'],
         ['homeworkError','gradingCard'],
         ['homeworkFrequencyError','gradingCard'],
         ['evalError','gradingCard'],
@@ -1506,7 +1574,7 @@
       // 全エラーを一旦リセット
       ['regNameError','studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
-       'classFormatError','formatCustomError','attendanceError','homeworkError',
+       'classFormatError','formatCustomError','attendanceError','attendanceMethodError','attendanceMethodCustomError','homeworkError',
        'homeworkFrequencyError','evalError','evalCustomError','evalPercentError','formatPercentError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -1547,9 +1615,21 @@
         document.getElementById('instructorError').classList.remove('hidden');
         valid = false;
       }
-      if (!document.querySelector('[data-group="attendance"].active')) {
+      const attActive = document.querySelector('[data-group="attendance"].active');
+      if (!attActive) {
         document.getElementById('attendanceError').classList.remove('hidden');
         valid = false;
+      } else if (attActive.dataset.value !== 'なし') {
+        const attMethodActives = [...document.querySelectorAll('[data-group="attendance_method"].active')];
+        if (attMethodActives.length === 0) {
+          document.getElementById('attendanceMethodError').classList.remove('hidden');
+          valid = false;
+        } else if (attMethodActives.some(b => b.dataset.value === '__attendance_method_custom__') &&
+                   !document.getElementById('attendanceMethodCustomInput').value.trim()) {
+          document.getElementById('attendanceMethodCustomError').classList.remove('hidden');
+          document.getElementById('attendanceMethodCustomInput').classList.add('border-red-400');
+          valid = false;
+        }
       }
       if (!document.querySelector('[data-group="homework"].active')) {
         document.getElementById('homeworkError').classList.remove('hidden');
