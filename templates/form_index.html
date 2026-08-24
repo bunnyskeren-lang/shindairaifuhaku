@@ -128,6 +128,7 @@
             <p class="text-xs text-gray-500 mb-2" id="instructorCourseLabel"></p>
             <div id="instructorCourseItems" class="flex flex-wrap gap-2"></div>
             <p id="instructorCourseFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの科目はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
+            <p id="instructorCourseReviewedNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの科目はこの学籍番号で投稿済みのため、選択できません</p>
           </div>
         </div>
 
@@ -155,6 +156,7 @@
           <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
           <p id="instructorUnregistered" class="hidden text-xs text-gray-400">この科目は担当教員が登録されていません</p>
           <p id="instructorFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの教員はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
+          <p id="instructorReviewedNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの教員はこの学籍番号で投稿済みのため、選択できません</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
         </div>
       </div>
@@ -333,25 +335,6 @@
           </div>
         </div>
 
-        <!-- 補足 -->
-        <div class="rounded-xl bg-gray-50 border border-gray-100 p-3">
-          <p class="text-xs font-bold text-gray-500 mb-2">💬 補足・その他</p>
-
-          <!-- プロンプトチップ -->
-          <div class="mb-2">
-            <p class="text-xs text-gray-400 mb-2">タップして書くきっかけに</p>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" class="prompt-chip" data-prompt="【テスト形式・難易度】">テスト形式や難易度</button>
-              <button type="button" class="prompt-chip" data-prompt="持ち込み可">持ち込み可</button>
-              <button type="button" class="prompt-chip" data-prompt="【要した手間】">要した手間</button>
-              <button type="button" class="prompt-chip" data-prompt="内職可">内職可</button>
-            </div>
-          </div>
-
-          <textarea id="gradingExtra" rows="3"
-            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white resize-none"
-            placeholder="例：持ち込み可、内職可、テスト形式や難易度、要した手間 など" maxlength="200"></textarea>
-        </div>
       </div>
 
       <!-- 6. コメント -->
@@ -360,6 +343,17 @@
           💬 コメント <span class="text-red-500">*</span>
         </label>
         <p class="text-sm font-bold text-indigo-600 bg-indigo-50 rounded-xl px-3 py-2 mb-3">これから履修登録する後輩に！ご自由にお書きください🙏</p>
+
+        <!-- プロンプトチップ -->
+        <div class="mb-2">
+          <p class="text-xs text-gray-400 mb-2">タップして書くきっかけに</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="prompt-chip" data-prompt="【テスト形式・難易度】">テスト形式や難易度</button>
+            <button type="button" class="prompt-chip" data-prompt="持ち込み可">持ち込み可</button>
+            <button type="button" class="prompt-chip" data-prompt="【要した手間】">要した手間</button>
+            <button type="button" class="prompt-chip" data-prompt="内職可">内職可</button>
+          </div>
+        </div>
 
         <textarea name="comment" id="comment" rows="5"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
@@ -543,6 +537,11 @@
       return _liffInitPromise;
     }
 
+    // 修正理由: 同じ学籍番号で同じ科目×担当教員に重複投稿できてしまっていたため、
+    // 既に投稿済みの組み合わせをプリフィル時に取得し、科目選択画面でグレーアウト表示する
+    // （実際の受付可否は/submit側で再確認するため、これはあくまで補助的なUI表示）
+    let _reviewedSet = new Set();
+
     async function initProfilePrefill() {
       try {
         await ensureLiffInit();
@@ -561,6 +560,9 @@
             sidInput.value = d.student_id;
             sidInput.readOnly = true;
             sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+          }
+          if (Array.isArray(d.reviewed_pairs)) {
+            _reviewedSet = new Set(d.reviewed_pairs.map(([cid, name]) => cid + '::' + name));
           }
         } else if (EMAIL_VERIFICATION_ENABLED) {
           // 修正理由: 初めての投稿者はプロフィール作成前に大学メールでの本人確認を
@@ -665,7 +667,7 @@
       };
     });
 
-    ['evalCustomInput', 'formatCustomInput', 'gradingExtra'].forEach(id => {
+    ['evalCustomInput', 'formatCustomInput'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
         if (id === 'evalCustomInput') renderGroupPercents('eval');
         if (id === 'formatCustomInput') renderGroupPercents('class_format');
@@ -740,8 +742,6 @@
       if (hwFreq) parts.push(`頻度:${hwFreq.dataset.value}`);
       const evals = partsForGroup('eval');
       if (evals.length) parts.push(`評価:${evals.join('・')}`);
-      const extra = document.getElementById('gradingExtra').value.trim();
-      if (extra) parts.push(`補足:${extra}`);
       document.getElementById('gradingMethodHidden').value = parts.join(' / ');
     }
 
@@ -962,7 +962,7 @@
       dropdown.classList.remove('hidden');
       dropdown.querySelectorAll('[data-idx]').forEach(el => {
         const c = items[parseInt(el.dataset.idx)];
-        el.addEventListener('click', () => selectCourse(c.name, c.instructors));
+        el.addEventListener('click', () => selectCourse(c.name, c.instructors, c.id));
       });
     }
 
@@ -998,10 +998,12 @@
     });
 
     let currentInstructors = [];
+    let currentCourseId = null;
     const chipsEl = document.getElementById('instructorChips');
 
-    function selectCourse(name, instructors) {
+    function selectCourse(name, instructors, courseId) {
       currentInstructors = instructors || [];
+      currentCourseId = courseId ?? null;
       document.getElementById('courseNameHidden').value = name;
       document.getElementById('selectedCourseName').textContent = name;
       document.getElementById('selectedCourse').classList.remove('hidden');
@@ -1016,16 +1018,29 @@
       document.getElementById('instructorError').classList.add('hidden');
       document.getElementById('instructorUnregistered').classList.add('hidden');
       document.getElementById('instructorFullNotice').classList.add('hidden');
+      document.getElementById('instructorReviewedNotice').classList.add('hidden');
 
       if (currentInstructors.length > 0) {
         chipsEl.classList.remove('hidden');
         document.getElementById('instructorHint').classList.remove('hidden');
-        chipsEl.innerHTML = currentInstructors.map(inst => inst.full
-          ? `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}" style="opacity:.45;text-decoration:line-through;cursor:not-allowed">${escapeHtml(inst.name)}</button>`
-          : `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</button>`
-        ).join('');
-        if (currentInstructors.some(inst => inst.full)) {
+        const withReviewed = currentInstructors.map(inst => ({
+          ...inst,
+          reviewed: !inst.full && currentCourseId != null && _reviewedSet.has(currentCourseId + '::' + inst.name),
+        }));
+        chipsEl.innerHTML = withReviewed.map(inst => {
+          if (inst.full) {
+            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}" style="opacity:.45;text-decoration:line-through;cursor:not-allowed">${escapeHtml(inst.name)}</button>`;
+          }
+          if (inst.reviewed) {
+            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}" style="opacity:.5;cursor:not-allowed">${escapeHtml(inst.name)}（投稿済み）</button>`;
+          }
+          return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</button>`;
+        }).join('');
+        if (withReviewed.some(inst => inst.full)) {
           document.getElementById('instructorFullNotice').classList.remove('hidden');
+        }
+        if (withReviewed.some(inst => inst.reviewed)) {
+          document.getElementById('instructorReviewedNotice').classList.remove('hidden');
         }
         chipsEl.querySelectorAll('.chip-btn:not([disabled])').forEach(btn => {
           btn.onclick = () => {
@@ -1090,6 +1105,7 @@
       instrSearchDropdown.classList.add('hidden');
       document.getElementById('instructorCourseList').classList.add('hidden');
       document.getElementById('instructorCourseFullNotice').classList.add('hidden');
+      document.getElementById('instructorCourseReviewedNotice').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
     }
 
@@ -1148,19 +1164,31 @@
       const courseLabel = document.getElementById('instructorCourseLabel');
       const courseItems = document.getElementById('instructorCourseItems');
       courseLabel.textContent = `${inst.name} の担当科目（${inst.courses.length}件）`;
-      courseItems.innerHTML = inst.courses.map(c => c.full
-        ? `<button type="button" class="chip-btn" disabled style="opacity:.45;text-decoration:line-through;cursor:not-allowed"
-            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`
-        : `<button type="button" class="chip-btn"
-          data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`
-      ).join('');
-      document.getElementById('instructorCourseFullNotice').classList.toggle('hidden', !inst.courses.some(c => c.full));
+      const coursesWithReviewed = inst.courses.map(c => ({
+        ...c,
+        reviewed: !c.full && _reviewedSet.has(c.id + '::' + inst.name),
+      }));
+      courseItems.innerHTML = coursesWithReviewed.map(c => {
+        if (c.full) {
+          return `<button type="button" class="chip-btn" disabled style="opacity:.45;text-decoration:line-through;cursor:not-allowed"
+            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`;
+        }
+        if (c.reviewed) {
+          return `<button type="button" class="chip-btn" disabled style="opacity:.5;cursor:not-allowed"
+            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}（投稿済み）</button>`;
+        }
+        return `<button type="button" class="chip-btn"
+          data-course-name="${escapeHtml(c.name)}" data-course-id="${c.id}">${escapeHtml(c.name)}</button>`;
+      }).join('');
+      document.getElementById('instructorCourseFullNotice').classList.toggle('hidden', !coursesWithReviewed.some(c => c.full));
+      document.getElementById('instructorCourseReviewedNotice').classList.toggle('hidden', !coursesWithReviewed.some(c => c.reviewed));
       document.getElementById('instructorCourseList').classList.remove('hidden');
       courseItems.querySelectorAll('[data-course-name]:not([disabled])').forEach(el => {
         el.addEventListener('click', () => {
           courseItems.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
           el.classList.add('active');
           currentInstructors = [{ name: inst.name }];
+          currentCourseId = el.dataset.courseId ? parseInt(el.dataset.courseId, 10) : null;
           document.getElementById('courseNameHidden').value = el.dataset.courseName;
           document.getElementById('selectedInstructorHidden').value = inst.name;
           document.getElementById('selectedCourseName').textContent = el.dataset.courseName;
@@ -1194,13 +1222,14 @@
 
     document.querySelectorAll('.prompt-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        const el = document.getElementById('gradingExtra');
+        const el = document.getElementById('comment');
         const prompt = chip.dataset.prompt;
         const cur = el.value;
-        if (cur && !cur.endsWith('、') && !cur.endsWith(' ')) el.value = cur + '、';
+        if (cur && !cur.endsWith('、') && !cur.endsWith(' ') && !cur.endsWith('\n')) el.value = cur + '、';
         el.value += prompt;
         el.focus();
         el.setSelectionRange(el.value.length, el.value.length);
+        updateCommentFeedback(el.value.length);
         saveData();
       });
     });
@@ -1284,6 +1313,7 @@
           nickname: document.getElementById('nickname').value,
           academic_year: document.getElementById('academic_year').value,
           course: document.getElementById('courseNameHidden').value,
+          courseId: currentCourseId,
           instructors: currentInstructors,
           selectedInstructor: document.getElementById('selectedInstructorHidden').value,
           rating: currentRating,
@@ -1297,7 +1327,6 @@
           evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
           evalCustom: document.getElementById('evalCustomInput').value,
           evalPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="eval"]')].map(i => [i.dataset.percentFor, i.value])),
-          gradingExtra: document.getElementById('gradingExtra').value,
           comment: document.getElementById('comment').value,
         }));
         document.getElementById('saveStatus').textContent = '自動保存済み ✓';
@@ -1311,7 +1340,7 @@
         if (d.academic_year) document.getElementById('academic_year').value = d.academic_year;
         if (d.nickname) document.getElementById('nickname').value = d.nickname;
         if (d.course) {
-          selectCourse(d.course, d.instructors || []);
+          selectCourse(d.course, d.instructors || [], d.courseId);
           if (d.selectedInstructor) {
             document.getElementById('selectedInstructorHidden').value = d.selectedInstructor;
             document.querySelectorAll('[data-group="instructor"]').forEach(b => {
@@ -1369,7 +1398,6 @@
           }
           renderGroupPercents('eval', d.evalPercents);
         }
-        if (d.gradingExtra) document.getElementById('gradingExtra').value = d.gradingExtra;
         if (d.comment) {
           document.getElementById('comment').value = d.comment;
           updateCommentFeedback(d.comment.length);
@@ -1578,7 +1606,7 @@
       if (!urlCourse) return;
       const trySelect = (data) => {
         const match = (data.courses || []).find(c => c.name === urlCourse);
-        if (match) selectCourse(match.name, match.instructors);
+        if (match) selectCourse(match.name, match.instructors, match.id);
       };
       if (_preload) { trySelect(_preload); return; }
       try {
