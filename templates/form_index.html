@@ -279,9 +279,6 @@
           </div>
           <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
 
-          <input type="text" id="attendanceExtraInput" class="extra-input mt-2"
-            placeholder="💬 補足（任意）例：出席は成績に加算されない" maxlength="40">
-
           <!-- 抜き打ちか否か（たまにあり選択時のみ表示） -->
           <div id="attendanceSurpriseSection" class="hidden mt-3 pt-3 border-t border-teal-200">
             <p class="text-xs font-bold text-teal-700 mb-2">🎲 抜き打ちか <span class="text-red-500">*</span></p>
@@ -784,7 +781,7 @@
       }
     });
 
-    ['classFormatExtraInput', 'attendanceExtraInput', 'attendanceMethodExtraInput',
+    ['classFormatExtraInput', 'attendanceMethodExtraInput',
      'homeworkFrequencyExtraInput', 'homeworkExtraInput', 'evalExtraInput'].forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
         updateGradingMethod();
@@ -844,7 +841,7 @@
       const formats = partsForGroup('class_format');
       if (formats.length) parts.push(withExtra(`形式:${formats.join('・')}`, 'classFormatExtraInput'));
       const att = document.querySelector('[data-group="attendance"].active');
-      if (att) parts.push(withExtra(`出席:${att.dataset.value}`, 'attendanceExtraInput'));
+      if (att) parts.push(`出席:${att.dataset.value}`);
       if (att && att.dataset.value === 'たまにあり') {
         const surprise = document.querySelector('[data-group="attendance_surprise"].active');
         if (surprise) parts.push(`出席確認:${surprise.dataset.value}`);
@@ -1514,7 +1511,6 @@
           evalPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="eval"]')].map(i => [i.dataset.percentFor, i.value])),
           comment: document.getElementById('comment').value,
           classFormatExtra: document.getElementById('classFormatExtraInput').value,
-          attendanceExtra: document.getElementById('attendanceExtraInput').value,
           attendanceMethodExtra: document.getElementById('attendanceMethodExtraInput').value,
           homeworkFrequencyExtra: document.getElementById('homeworkFrequencyExtraInput').value,
           homeworkExtra: document.getElementById('homeworkExtraInput').value,
@@ -1615,7 +1611,6 @@
           updateCommentFeedback(d.comment.length);
         }
         if (d.classFormatExtra) document.getElementById('classFormatExtraInput').value = d.classFormatExtra;
-        if (d.attendanceExtra) document.getElementById('attendanceExtraInput').value = d.attendanceExtra;
         if (d.attendanceMethodExtra) document.getElementById('attendanceMethodExtraInput').value = d.attendanceMethodExtra;
         if (d.homeworkFrequencyExtra) document.getElementById('homeworkFrequencyExtraInput').value = d.homeworkFrequencyExtra;
         if (d.homeworkExtra) document.getElementById('homeworkExtraInput').value = d.homeworkExtra;
