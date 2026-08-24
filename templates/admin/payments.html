@@ -1,0 +1,108 @@
+{% extends "admin/base.html" %}
+{% block title %}支払い管理{% endblock %}
+{% block heading %}💰 レビュー報酬 支払い管理{% endblock %}
+
+{% block extra_style %}
+.payment-card {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.payment-header {
+  background: var(--accent);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.payment-header.paid { background: linear-gradient(135deg, #10b981, #34d399); }
+.payment-amount { font-size: 16px; font-weight: 700; color: #fff; }
+.payment-date { font-size: 10px; color: rgba(255,255,255,.8); white-space: nowrap; }
+.payment-body { padding: 10px 14px; font-size: 13px; color: #374151; display: grid; grid-template-columns: max-content 1fr; row-gap: 6px; column-gap: 10px; }
+.payment-key { color: #9ca3af; }
+.payment-name-mismatch { color: #ef4444; font-weight: 700; }
+.payment-footer { padding: 10px 14px; border-top: 1px solid #f1f5f9; display: flex; gap: 8px; justify-content: flex-end; }
+{% endblock %}
+
+{% from "admin/base.html" import pager %}
+
+{% block content %}
+
+<div class="card">
+  <details class="section-details" open>
+    <summary>⏳ 支払い待ち <span class="section-count">({{ pending|length }}件)</span></summary>
+    <div class="section-body">
+      {% if pending %}
+      {% for r, profile_name in pending %}
+      <div class="payment-card">
+        <div class="payment-header">
+          <span class="payment-amount">💴 {{ r.amount }}円</span>
+          <span class="payment-date">{{ r.created_at | jst }}</span>
+        </div>
+        <div class="payment-body">
+          <span class="payment-key">🪪 申請者名</span>
+          <span>
+            {{ r.name }}
+            {% if profile_name and profile_name != r.name %}
+            <span class="payment-name-mismatch">（登録名: {{ profile_name }} と不一致）</span>
+            {% elif not profile_name %}
+            <span class="payment-name-mismatch">（登録プロフィールが見つかりません）</span>
+            {% endif %}
+          </span>
+          <span class="payment-key">🎓 学籍番号</span>
+          <span>{{ r.student_id }}</span>
+          <span class="payment-key">📱 PayPay ID</span>
+          <span>{{ r.paypay_id }}</span>
+        </div>
+        <div class="payment-footer">
+          <form method="post" action="/admin/payments/reject/{{ r.id }}" style="margin:0"
+                data-confirm="この申請を却下しますか？予約中のレビューは未払いに戻ります">
+            <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🗑 却下</button>
+          </form>
+          <form method="post" action="/admin/payments/pay/{{ r.id }}" style="margin:0"
+                data-confirm="PayPayで{{ r.amount }}円を送金済みですか？">
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 14px">✅ 支払い済みにする</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p style="color:#9ca3af;font-size:13px">支払い待ちの申請はありません</p>
+      {% endif %}
+    </div>
+  </details>
+</div>
+
+<div class="card">
+  <details class="section-details"{% if ppage > 1 %} open{% endif %}>
+    <summary>✅ 支払い済み <span class="section-count">(全{{ ptotal }}件中 {{ paid|length }}件)</span></summary>
+    <div class="section-body">
+      {% if paid %}
+      {% for r, profile_name in paid %}
+      <div class="payment-card">
+        <div class="payment-header paid">
+          <span class="payment-amount">💴 {{ r.amount }}円</span>
+          <span class="payment-date">{{ r.paid_at | jst }}</span>
+        </div>
+        <div class="payment-body">
+          <span class="payment-key">🪪 申請者名</span>
+          <span>{{ r.name }}</span>
+          <span class="payment-key">🎓 学籍番号</span>
+          <span>{{ r.student_id }}</span>
+          <span class="payment-key">📱 PayPay ID</span>
+          <span>{{ r.paypay_id }}</span>
+        </div>
+      </div>
+      {% endfor %}
+      {{ pager(ppage, ptotal_pages, ptotal, "/admin/payments?ppage=") }}
+      {% else %}
+      <p style="color:#9ca3af;font-size:13px">支払い済みの申請はありません</p>
+      {% endif %}
+    </div>
+  </details>
+</div>
+
+{% endblock %}

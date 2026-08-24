@@ -38,7 +38,7 @@ async def init_db():
         MessageLog, UserProfile, UserActivity, ErrorLog,
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
-        CourseSectionView, EmailVerification,
+        CourseSectionView, EmailVerification, PaymentRequest,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:
@@ -409,3 +409,23 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ"
         ))
+
+        # ── 2026-08-24: レビュー投稿報酬（1件10円、500円単位でPayPay払い）の支払い管理 ──
+        # payment_requestsテーブル自体はcreate_all()で新規作成されるため、ここではCHECK制約と
+        # 既存のreviewsテーブルへの紐付け列追加のみ行う
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE payment_requests ADD CONSTRAINT chk_payment_requests_status CHECK (status IN ('pending', 'paid', 'rejected'));
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text(
+            "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS payment_request_id BIGINT"
+        ))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE reviews ADD CONSTRAINT fk_reviews_payment_request
+                FOREIGN KEY (payment_request_id) REFERENCES payment_requests(id) ON DELETE SET NULL;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))

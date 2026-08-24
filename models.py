@@ -171,6 +171,29 @@ class ReviewStatus:
     REJECTED = "rejected"
 
 
+class PaymentRequestStatus:
+    """PaymentRequest.statusの取りうる値。CHECK制約はdatabase.py init_db()側で管理。"""
+    PENDING = "pending"
+    PAID = "paid"
+    REJECTED = "rejected"
+
+
+class PaymentRequest(TimestampMixin, Base):
+    """レビュー投稿報酬（1件10円、500円単位）の支払い申請。
+    承認時に対象のreviews（古い順にamount/10件）へpayment_request_idを付与して予約し、
+    二重申請・二重支払いを防ぐ（reviews側の紐付けが実質の「支払い済みフラグ」）。"""
+    __tablename__ = "payment_requests"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    student_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    paypay_id: Mapped[str] = mapped_column(Text, nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 'pending'(支払い待ち) / 'paid'(支払い済み) / 'rejected'(却下、予約したreviewsは解放)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default=PaymentRequestStatus.PENDING)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Review(TimestampMixin, Base):
     __tablename__ = "reviews"
 
@@ -188,6 +211,8 @@ class Review(TimestampMixin, Base):
     # 'pending'(待機中) / 'approved'(承認) / 'rejected'(却下)。CHECK制約はdatabase.py init_db()側で管理。
     # 却下は物理削除ではなくstatus='rejected'として保持する（投稿レビューは削除しない方針）
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    # 支払い報酬の予約/支払い済み紐付け。NULL＝未払い（database.py init_db()でFK列を追加）
+    payment_request_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("payment_requests.id", ondelete="SET NULL"), nullable=True, index=True)
 
 
 class CourseSectionView(Base):

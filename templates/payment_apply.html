@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レビュー報酬の支払い申請 | 神大ライフハック</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
+
+  <div class="max-w-md mx-auto px-4 pt-8">
+
+    {% if IS_DEV %}
+    <div class="bg-orange-500 text-white text-center text-sm font-bold py-2 px-4 rounded-2xl mb-4">
+      🚧 開発環境
+    </div>
+    {% endif %}
+
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-3">💰</div>
+      <h1 class="text-2xl font-bold text-gray-800">レビュー報酬の支払い申請</h1>
+      <p class="text-gray-500 text-sm mt-1">承認されたレビュー1件につき10円、500円単位でPayPayにお支払いします</p>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 space-y-1.5">
+      <div class="flex items-start gap-2">
+        <span class="text-lg leading-none mt-0.5">✋</span>
+        <span>学籍番号は投稿時に入力したものと同じものを入力してください</span>
+      </div>
+      <div class="flex items-start gap-2">
+        <span class="text-lg leading-none mt-0.5">🔢</span>
+        <span>申請金額は500円単位です。端数（500円未満）は次回に繰り越されます</span>
+      </div>
+    </div>
+
+    <form id="paymentForm" action="/payment/apply/submit" method="post" novalidate class="space-y-4">
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="name" class="block text-sm font-semibold text-gray-700 mb-2">
+          🪪 お名前（漢字） <span class="text-red-500">*</span>
+        </label>
+        <input type="text" name="name" id="name"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          placeholder="例：神戸 太郎" required maxlength="50">
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="student_id" class="block text-sm font-semibold text-gray-700 mb-1">
+          🎓 学籍番号 <span class="text-red-500">*</span>
+        </label>
+        <input type="text" name="student_id" id="student_id"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
+          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="paypay_id" class="block text-sm font-semibold text-gray-700 mb-2">
+          📱 PayPay ID <span class="text-red-500">*</span>
+        </label>
+        <input type="text" name="paypay_id" id="paypay_id"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          placeholder="PayPayアプリの「送る」画面で確認できるID" required maxlength="50">
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-1">承認済み（未払い）レビュー数</label>
+        <p id="eligibleCount" class="text-2xl font-bold text-indigo-600 mb-1">学籍番号を入力してください</p>
+        <p id="eligibleAmount" class="text-xs text-gray-400 mb-4"></p>
+
+        <label for="amount" class="block text-sm font-semibold text-gray-700 mb-2">
+          💴 申請金額（円） <span class="text-red-500">*</span>
+        </label>
+        <input type="number" name="amount" id="amount" step="500" min="500"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          placeholder="例：500" required>
+        <p id="amountError" class="hidden mt-1 text-red-500 text-xs">500円単位で、申請可能な金額以下を入力してください</p>
+      </div>
+
+      <button type="submit"
+        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm shadow-sm">
+        申請する
+      </button>
+    </form>
+  </div>
+
+  <script>
+    const studentIdInput = document.getElementById('student_id');
+    const studentIdError = document.getElementById('studentIdError');
+    const eligibleCount = document.getElementById('eligibleCount');
+    const eligibleAmount = document.getElementById('eligibleAmount');
+    const amountInput = document.getElementById('amount');
+    const amountError = document.getElementById('amountError');
+    const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
+    let maxAmount = 0;
+
+    async function refreshEligibility() {
+      const sid = studentIdInput.value.trim().toUpperCase();
+      studentIdInput.value = sid;
+      if (!STUDENT_ID_RE.test(sid)) {
+        eligibleCount.textContent = '学籍番号を入力してください';
+        eligibleAmount.textContent = '';
+        maxAmount = 0;
+        return;
+      }
+      try {
+        const res = await fetch('/api/payment/eligible?student_id=' + encodeURIComponent(sid));
+        const data = await res.json();
+        if (!data.valid) {
+          eligibleCount.textContent = '学籍番号を確認してください';
+          eligibleAmount.textContent = '';
+          maxAmount = 0;
+          return;
+        }
+        eligibleCount.textContent = data.count + '件';
+        maxAmount = data.max_amount;
+        eligibleAmount.textContent = '申請可能な最大金額：' + maxAmount + '円（端数は次回に繰越）';
+        amountInput.max = maxAmount || '';
+      } catch (e) {
+        eligibleCount.textContent = '取得に失敗しました';
+      }
+    }
+    studentIdInput.addEventListener('blur', refreshEligibility);
+    studentIdInput.addEventListener('input', function() {
+      studentIdError.classList.add('hidden');
+    });
+
+    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+      const sid = studentIdInput.value.trim().toUpperCase();
+      if (!STUDENT_ID_RE.test(sid)) {
+        e.preventDefault();
+        studentIdError.classList.remove('hidden');
+        return;
+      }
+      const amount = parseInt(amountInput.value, 10);
+      if (!amount || amount <= 0 || amount % 500 !== 0 || (maxAmount && amount > maxAmount)) {
+        e.preventDefault();
+        amountError.classList.remove('hidden');
+        return;
+      }
+    });
+  </script>
+</body>
+</html>

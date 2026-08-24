@@ -77,6 +77,7 @@ def _make_review_ns(rev: Review, course_name: str) -> SimpleNamespace:
         nickname=rev.nickname,
         academic_year=rev.academic_year,
         student_id=rev.student_id,
+        paid=rev.payment_request_id is not None,
     )
 
 
@@ -181,9 +182,10 @@ async def admin_review_update(
 @router.post("/admin/reviews/reject/{review_id}")
 async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
     # 投稿レビューは削除しない方針のため、物理削除ではなくstatus='rejected'にする
+    # 支払い済み（payment_request_id紐付き）のレビューは帳簿保護のため状態変更不可
     async with AsyncSessionLocal() as session:
         review = await session.get(Review, review_id)
-        if review:
+        if review and review.payment_request_id is None:
             review.status = ReviewStatus.REJECTED
             await session.commit()
     cache.invalidate_review_cache()
@@ -193,9 +195,10 @@ async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
 @router.post("/admin/reviews/restore/{review_id}")
 async def admin_review_restore(review_id: int, _: str = Depends(check_admin)):
     # 承認済み・却下済みレビューを待機中に戻す
+    # 支払い済み（payment_request_id紐付き）のレビューは帳簿保護のため状態変更不可
     async with AsyncSessionLocal() as session:
         review = await session.get(Review, review_id)
-        if review:
+        if review and review.payment_request_id is None:
             review.status = ReviewStatus.PENDING
             await session.commit()
     cache.invalidate_review_cache()

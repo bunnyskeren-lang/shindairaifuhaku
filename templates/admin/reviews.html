@@ -50,10 +50,14 @@
 .stars-ease   { color: var(--accent-light); font-size: 15px; letter-spacing: 1px; }
 .grading-section { margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
 .grading-title { font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: .05em; margin-bottom: 6px; }
-.grading-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
-.grading-key { font-size: 10px; font-weight: 700; color: var(--accent); background: #ede9fe; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
-.grading-val { font-size: 12px; color: #374151; line-height: 1.5; }
-.grading-plain { font-size: 12px; color: #374151; }
+.grading-grid { display: grid; grid-template-columns: max-content 1fr; column-gap: 10px; row-gap: 6px; align-items: baseline; }
+.grading-key { font-size: 11px; font-weight: 700; color: var(--accent); background: #ede9fe; padding: 3px 8px; border-radius: 4px; white-space: nowrap; justify-self: start; }
+.grading-val { font-size: 13px; color: #374151; line-height: 1.5; }
+.grading-plain { grid-column: 1 / -1; font-size: 13px; color: #374151; }
+.grading-preview-wrap { margin-top: 8px; }
+.grading-preview-label { font-size: 10px; font-weight: 700; color: #9ca3af; letter-spacing: .05em; margin-bottom: 4px; }
+.grading-preview { background: #f8fafc; border-radius: 6px; padding: 8px 10px; min-height: 20px; }
+.grading-preview-empty { color: #9ca3af; font-size: 12px; }
 .comment-box {
   margin-top: 10px;
   background: #f8fafc;
@@ -180,18 +184,36 @@
   <div class="grading-section">
     <div class="grading-title">📋 成績評価方法{% if editable %}（例: 中間試験:40% / 期末試験:60%）{% endif %}</div>
     {% if editable %}
-    <textarea name="grading_method" class="edit-textarea" rows="2" placeholder="中間試験:40% / 期末試験:60%">{{ r.grading_method or '' }}</textarea>
+    <textarea name="grading_method" class="edit-textarea" rows="2" placeholder="中間試験:40% / 期末試験:60%"
+              data-preview-target="grading-preview-{{ r.id }}" oninput="renderGradingPreview(this)">{{ r.grading_method or '' }}</textarea>
+    <div class="grading-preview-wrap">
+      <div class="grading-preview-label">↓ 保存後の表示プレビュー</div>
+      <div class="grading-grid grading-preview" id="grading-preview-{{ r.id }}">
+        {% if r.grading_method %}
+          {% for part in r.grading_method.split(' / ') %}
+            {% if ':' in part %}
+              <span class="grading-key">{{ part.split(':')[0] }}</span>
+              <span class="grading-val">{{ part.split(':', 1)[1] }}</span>
+            {% else %}
+              <div class="grading-plain">{{ part }}</div>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          <span class="grading-preview-empty">(未入力)</span>
+        {% endif %}
+      </div>
+    </div>
     {% else %}
+    <div class="grading-grid">
     {% for part in r.grading_method.split(' / ') %}
       {% if ':' in part %}
-        <div class="grading-row">
-          <span class="grading-key">{{ part.split(':')[0] }}</span>
-          <span class="grading-val">{{ part.split(':', 1)[1] }}</span>
-        </div>
+        <span class="grading-key">{{ part.split(':')[0] }}</span>
+        <span class="grading-val">{{ part.split(':', 1)[1] }}</span>
       {% else %}
         <div class="grading-plain">{{ part }}</div>
       {% endif %}
     {% endfor %}
+    </div>
     {% endif %}
   </div>
   {% endif %}
@@ -254,13 +276,14 @@
       {% for r in approved %}
       <div class="review-card">
         <div class="review-header">
-          <span class="review-course-name">📖 {{ r.course_name }}</span>
+          <span class="review-course-name">📖 {{ r.course_name }}{% if r.paid %} <span class="badge" style="background:#10b981;color:#fff">💰 支払済</span>{% endif %}</span>
           <span class="review-date">{{ r.created_at | jst }}</span>
         </div>
         <form method="post" action="/admin/reviews/update/{{ r.id }}" id="edit-form-{{ r.id }}">
           {{ review_body(r, editable=True) }}
         </form>
         <div class="review-footer">
+          {% if not r.paid %}
           <form method="post" action="/admin/reviews/restore/{{ r.id }}" style="margin:0">
             <button class="btn" style="font-size:12px;padding:5px 14px;background:#6b7280;color:#fff">↩ 待機中に戻す</button>
           </form>
@@ -268,6 +291,7 @@
                 data-confirm="このレビューを却下しますか？">
             <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🚫 却下</button>
           </form>
+          {% endif %}
           <button type="submit" form="edit-form-{{ r.id }}" class="btn btn-primary" style="font-size:12px;padding:5px 14px">💾 保存</button>
         </div>
       </div>
@@ -313,4 +337,40 @@
   </details>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderGradingPreview(textarea) {
+  const target = document.getElementById(textarea.dataset.previewTarget);
+  if (!target) return;
+  const parts = (textarea.value || '').split(' / ').filter(p => p.trim() !== '');
+  target.innerHTML = '';
+  if (parts.length === 0) {
+    const empty = document.createElement('span');
+    empty.className = 'grading-preview-empty';
+    empty.textContent = '(未入力)';
+    target.appendChild(empty);
+    return;
+  }
+  for (const part of parts) {
+    const idx = part.indexOf(':');
+    if (idx !== -1) {
+      const key = document.createElement('span');
+      key.className = 'grading-key';
+      key.textContent = part.slice(0, idx);
+      const val = document.createElement('span');
+      val.className = 'grading-val';
+      val.textContent = part.slice(idx + 1);
+      target.appendChild(key);
+      target.appendChild(val);
+    } else {
+      const plain = document.createElement('div');
+      plain.className = 'grading-plain';
+      plain.textContent = part;
+      target.appendChild(plain);
+    }
+  }
+}
+</script>
 {% endblock %}
