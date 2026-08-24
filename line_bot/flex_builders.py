@@ -7,7 +7,6 @@ from linebot.v3.messaging import (
     FlexButton,
     FlexMessage,
     FlexText,
-    MessageAction,
     PostbackAction,
     URIAction,
 )
@@ -494,7 +493,7 @@ def make_category_select_flex() -> FlexMessage:
     btns = [
         FlexBox(
             layout="vertical",
-            action=MessageAction(label=label[:20], text=text),
+            action=PostbackAction(label=label[:20], data=text),
             contents=[
                 FlexText(text=label, size="lg", color=fg, weight="bold", align="center"),
                 FlexText(text=desc,  size="xs", color="#64748b", align="center", wrap=True),
