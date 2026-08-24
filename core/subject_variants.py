@@ -1,8 +1,11 @@
 """科目名の末尾バリアント統合ロジック（レビュー投稿フォーム・管理画面用）。
 
 line_bot/handler.py の _vnum_match()・variant/numvariant 判定ロジックと同じ規則
-（文字A/B/C/Dとセミナー系はclassification非依存、数字・ローマ数字はclassification単位）
-をレビュー投稿フォーム（/api/preload）向けに複製したもの。Flex Message構築に密結合した
+（文字A/B/C/Dとセミナー系はfaculty/department非依存、数字・ローマ数字はfaculty+department単位。
+2026-08-25以前はclassification単位だったが、classificationは学部をまたいで共有されうる
+表示カテゴリでしかなく、subjects.nameの実際の識別単位（UNIQUE制約 name+faculty+department）
+と食い違うことがあったため、handler.pyの_handle_course_search()と同じfaculty+department単位に
+統一した）をレビュー投稿フォーム（/api/preload）向けに複製したもの。Flex Message構築に密結合した
 handler.py側のロジックとは独立させているため、判定規則を変更する場合は両方を更新すること。
 
 compute_variant_display_groups() は管理画面の科目一覧（routers/admin/courses.py）向けに
@@ -33,15 +36,15 @@ def _vnum_match(name: str) -> tuple[str, str, int, str] | None:
     return base, letter, int(raw), raw
 
 
-def compute_variant_groups(names_with_classification: list[tuple[str, str]]) -> dict[str, str]:
-    """(科目名, classification)のリストから、末尾のアルファベット/数字/ローマ数字/セミナー言語
+def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) -> dict[str, str]:
+    """(科目名, faculty, department)のリストから、末尾のアルファベット/数字/ローマ数字/セミナー言語
     だけが異なる2件以上の科目名をグループ化し、科目名→表示用グループラベル（ベース名）の
     マップを返す。グループに属さない（＝バリアントが1件だけ、または該当パターンなし）
     科目名はマップに含めない。
     """
-    names = [n for n, _ in names_with_classification]
+    names = [n for n, _, _ in names_with_faculty_dept]
     name_set = set(names)
-    cls_by_name = dict(names_with_classification)
+    fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
     result: dict[str, str] = {}
 
     # 1) セミナー系（外国語セミナーA(英語) → 外国語セミナー(英語)）
@@ -65,17 +68,18 @@ def compute_variant_groups(names_with_classification: list[tuple[str, str]]) -> 
             if len(variants) >= 2:
                 result[name] = base
 
-    # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化）
-    num_bases: dict[tuple[str, str], list[str]] = {}
+    # 3) 数字・ローマ数字バリアント（同一faculty+department単位でグループ化）
+    num_bases: dict[tuple[str, str, str], list[str]] = {}
     for name in names:
         if name in result:
             continue
         m = _vnum_match(name)
         if m:
             base, _letter, _sk, _disp = m
-            key = (base, cls_by_name.get(name) or "その他")
+            fac, dept = fd_by_name.get(name, ("", ""))
+            key = (base, fac, dept)
             num_bases.setdefault(key, []).append(name)
-    for (base, _cls), members in num_bases.items():
+    for (base, _fac, _dept), members in num_bases.items():
         if len(members) >= 2:
             for n in members:
                 result[n] = base

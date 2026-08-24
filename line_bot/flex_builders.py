@@ -399,7 +399,7 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
             row_contents.append(
                 FlexButton(
                     action=URIAction(label="✏️ レビューを投稿する", uri=form_url),
-                    style="secondary", height="sm", margin="sm",
+                    style="link", height="sm", margin="sm", color="#7c3aed",
                 )
             )
         rows.append(

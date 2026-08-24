@@ -176,18 +176,21 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
     # Pre-compute numeric variant groups: ベースの漢字部分が同じで、末尾のアルファベット・
     # 数字だけが違う科目（例: 生物学各論A1/A2/C1/C2、微分積分1/2/3/4）を1行にまとめる。
-    # classificationが異なれば別学部・別学科の同名ベース科目（例: 工学部「制御工学Ⅰ/Ⅱ」と
+    # faculty/departmentが異なれば別学部・別学科の同名ベース科目（例: 工学部「制御工学Ⅰ/Ⅱ」と
     # システム情報学部「制御工学1/2」）である可能性が高いため、base名だけでなく
-    # classification単位でグループを分ける
-    _num_bases: dict[tuple[str, str], list[tuple[str, str, int, str]]] = defaultdict(list)
+    # faculty+department単位（subjects.nameのUNIQUE制約と同じ識別単位、
+    # 2026-08-25に_handle_course_search()と同じ基準へ統一。classificationは学部を
+    # またいで共有されうる表示カテゴリでしかなく識別単位としては不正確だったため）で
+    # グループを分ける
+    _num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str]]] = defaultdict(list)
     for _c in rows:
         _match = _vnum_match(_c.name)
         if _match:
             _b, _letter, _sk, _disp = _match
-            _num_bases[(_b, _c.classification or "その他")].append((_c.name, _letter, _sk, _disp))
+            _num_bases[(_b, _c.faculty or "", _c.department or "")].append((_c.name, _letter, _sk, _disp))
     _num_variant_names = {n for _items in _num_bases.values() if len(_items) >= 2 for n, _, _, _ in _items}
     _num_base_for = {n: _key for _key, _items in _num_bases.items() if len(_items) >= 2 for n, _, _, _ in _items}
-    seen_num_base: set[tuple[str, str]] = set()
+    seen_num_base: set[tuple[str, str, str]] = set()
 
     # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
     _VSEM = _re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
@@ -205,7 +208,9 @@ async def handle_course_list(category: str = "", classification: str = "", facul
     _sv_by_id = await cache.get_syllabus_urls_cached()
     course_syllabus_urls: dict[str, str] = {c.name: _sv_by_id[c.id] for c in rows if c.id in _sv_by_id}
     course_liff_urls: dict[str, str] = {c.name: make_course_liff_url(c.id) for c in rows}
-    groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    # entries内タプルの末尾2要素は、numvariant種別の科目のみ(faculty, department)を保持する
+    # （_num_basesの正しいキーをclassificationからだけでは復元できないため。他の種別では""）
+    groups: dict[str, list[tuple[str, str, str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
     cls_faculty: dict[str, str] = {}
     for course in rows:
@@ -220,7 +225,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 seen_sem_base.add(base)
                 items_sorted = sorted(_sem_bases[base], key=lambda x: x[1])
                 suffix = "/".join(sk for _, sk in items_sorted)
-                groups[cls].append((base, f"variant:{suffix}"))
+                groups[cls].append((base, f"variant:{suffix}", "", ""))
             continue
         if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
             base = name[:-1]
@@ -229,7 +234,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 if base not in seen_base:
                     seen_base.add(base)
                     suffix = "/".join(variants)
-                    groups[cls].append((base, f"variant:{suffix}"))
+                    groups[cls].append((base, f"variant:{suffix}", "", ""))
                 continue
         if name in _num_variant_names:
             key = _num_base_for[name]
@@ -237,15 +242,15 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 seen_num_base.add(key)
                 items_sorted = sorted(_num_bases[key], key=lambda x: (x[1], x[2]))
                 suffix = "/".join(f"{letter}{disp}" for _, letter, _sk, disp in items_sorted)
-                groups[cls].append((key[0], f"numvariant:{suffix}"))
+                groups[cls].append((key[0], f"numvariant:{suffix}", key[1], key[2]))
             continue
-        groups[cls].append((name, "single"))
+        groups[cls].append((name, "single", "", ""))
 
     def _cat_order(cls: str) -> int:
         return 0 if cls_category.get(cls, "") == "教養" else 1
     all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), _cls_sort(x[0])))
 
-    def _entry_has_review(name: str, kind: str, cls: str = "") -> bool:
+    def _entry_has_review(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> bool:
         if kind == "single":
             return name in reviewed_names
         if kind.startswith("variant:"):
@@ -256,13 +261,13 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 return any(n in reviewed_names for n, _ in _sem_bases[name])
             return False
         if kind.startswith("numvariant:"):
-            key = (name, cls)
+            key = (name, fd[0], fd[1])
             if key in _num_bases:
                 return any(n in reviewed_names for n, _, _, _ in _num_bases[key])
             return False
         return False
 
-    def _group_syllabus_url(name: str, kind: str, cls: str = "") -> str:
+    def _group_syllabus_url(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> str:
         # 統合表示（variant/numvariant）はbase名がそのままSubject.nameと一致しないため、
         # グループ内で表示順（最も左側）を優先し、そのシラバスURLを代表として採用する
         # （左側が無ければ右側の変種のURLで代替する）。
@@ -280,8 +285,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
                 if url:
                     return url
             return ""
-        if kind.startswith("numvariant:") and (name, cls) in _num_bases:
-            for n, _, _, _ in sorted(_num_bases[(name, cls)], key=lambda x: (x[1], x[2])):
+        if kind.startswith("numvariant:") and (name, fd[0], fd[1]) in _num_bases:
+            for n, _, _, _ in sorted(_num_bases[(name, fd[0], fd[1])], key=lambda x: (x[1], x[2])):
                 url = course_syllabus_urls.get(n, "")
                 if url:
                     return url
@@ -289,14 +294,15 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
     def _make_bubble(classification: str, entries: list) -> FlexBubble:
         btn_contents = []
-        for idx, (name, kind) in enumerate(entries):
+        for idx, (name, kind, fac, dept) in enumerate(entries):
+            fd = (fac, dept)
             if kind.startswith("variant:") or kind.startswith("numvariant:"):
                 suffix = kind.split(":", 1)[1]
                 display = f"{name} ({suffix})"
             else:
                 display = name
-            has_review = _entry_has_review(name, kind, classification)
-            syl_url = _group_syllabus_url(name, kind, classification)
+            has_review = _entry_has_review(name, kind, fd)
+            syl_url = _group_syllabus_url(name, kind, fd)
             has_content = has_review or bool(syl_url)
             text_color = "#0f172a" if has_content else "#94a3b8"
             display_text = f"✓{display}" if has_review else display
@@ -305,8 +311,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             elif kind.startswith("variant:"):
                 first_suffix = kind.split(":", 1)[1].split("/")[0]
                 liff_url = course_liff_urls.get(name + first_suffix, "")
-            elif kind.startswith("numvariant:") and (name, classification) in _num_bases:
-                first_name = min(_num_bases[(name, classification)], key=lambda x: (x[1], x[2]))[0]
+            elif kind.startswith("numvariant:") and (name, fac, dept) in _num_bases:
+                first_name = min(_num_bases[(name, fac, dept)], key=lambda x: (x[1], x[2]))[0]
                 liff_url = course_liff_urls.get(first_name, "")
             else:
                 liff_url = ""
@@ -381,8 +387,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
     for cls, ents in all_groups:
         if cls == "教養(総合)":
-            others = [(n, k) for n, k in ents if "GCP" not in n]
-            gcps   = [(n, k) for n, k in ents if "GCP" in n]
+            others = [e for e in ents if "GCP" not in e[0]]
+            gcps   = [e for e in ents if "GCP" in e[0]]
             _split_to_bubbles("教養(総合)", others)
             _split_to_bubbles("教養(総合) GCP", gcps)
         else:

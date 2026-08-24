@@ -135,7 +135,7 @@ async def api_preload():
                 inst_courses.setdefault(inst.name, {})[c.id] = c.name
         # 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）は
         # レビュー投稿フォームの科目検索でも1件にまとめて選べるようにする（LINE bot科目一覧と同じ統合規則）
-        variant_map = compute_variant_groups([(c.name, c.classification or "") for c in courses])
+        variant_map = compute_variant_groups([(c.name, c.faculty or "", c.department or "") for c in courses])
         course_list = [
             {"id": c.id, "name": c.name, "reading": c.reading or "",
              "variantGroup": variant_map.get(c.name, ""),
@@ -228,11 +228,22 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
     に属する場合、グループラベル・グループ内の全subject_id・全科目名を返す。
     属さない場合はラベル""・[subject.id]のみを返す（レビュー閲覧では単独科目として扱う）。"""
     _, all_courses = await cache.get_courses_cached()
-    variant_map = compute_variant_groups([(c.name, c.classification or "") for c in all_courses])
+    variant_map = compute_variant_groups([(c.name, c.faculty or "", c.department or "") for c in all_courses])
     label = variant_map.get(subject.name, "")
     if not label:
         return "", [subject.id], [subject.name]
-    members = [c for c in all_courses if variant_map.get(c.name) == label]
+    # 修正理由: compute_variant_groups()は「ベース名」というラベル文字列しか返さないため、
+    # 別学部の科目が偶然同じベース名で数字バリアントグループを持つ場合（例: 工学部「制御工学Ⅰ/Ⅱ」と
+    # システム情報学部「制御工学1/2」、どちらも表示ラベルは「制御工学」）、ラベル文字列だけで
+    # membersを再構築すると学部をまたいで誤統合してしまう。compute_variant_groups()自体は
+    # faculty+department単位でグループ化しているため、ここでも対象subjectと同じfaculty/department
+    # の科目だけに絞り込んで正しいグループを再現する。
+    members = [
+        c for c in all_courses
+        if variant_map.get(c.name) == label
+        and (c.faculty or "") == (subject.faculty or "")
+        and (c.department or "") == (subject.department or "")
+    ]
     return label, [c.id for c in members], [c.name for c in members]
 
 
