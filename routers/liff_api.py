@@ -157,7 +157,11 @@ async def api_preload():
             ],
         }
     res = JSONResponse(data)
-    res.headers["Cache-Control"] = "public, max-age=60"
+    # 修正理由: レスポンスに「full」（募集締切、投稿の都度変わりうる）を含めるようになったため、
+    # ブラウザキャッシュを許可すると締切直後のページ遷移でも古い（締切前の）結果が
+    # 再利用され続けてしまう。同一ページロード内では_preload変数に保持し1回しか呼ばないため、
+    # キャッシュを無効化しても呼び出し頻度は増えない。
+    res.headers["Cache-Control"] = "no-store"
     return res
 
 
