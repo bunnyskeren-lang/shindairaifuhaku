@@ -15,25 +15,29 @@ router = APIRouter()
 async def admin_users(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
     per_page = 50
     async with AsyncSessionLocal() as session:
-        # message_logsはユーザー数に比例して増え続けるため、user_id別の
-        # 最終受信日時をサブクエリで先に集約してからページングする
+        # 修正理由: 以前はmessage_logs（LINEからの受信ログ）を主語にしてuser_profilesを
+        # 後から紐付けていたため、message_logsが30日で自動削除される
+        # （core.activity_log.cleanup_old_logs）と、しばらくLINEを開いていないだけの
+        # 登録済みユーザーが一覧から丸ごと消えてしまっていた（レビュー閲覧権チケットの
+        # 残高は消えないため、管理画面から見えなくなるのは実害があった）。
+        # user_profilesを主語にし、最終受信日時は分かる範囲で付随情報として出す。
         last_seen_subq = (
             select(MessageLog.user_id, func.max(MessageLog.created_at).label("last_seen"))
             .where(MessageLog.direction == "in")
             .group_by(MessageLog.user_id)
             .subquery()
         )
-        total = (await session.execute(select(func.count()).select_from(last_seen_subq))).scalar_one()
+        total = (await session.execute(select(func.count(UserProfile.line_user_id)))).scalar_one()
         users = (await session.execute(
             select(
-                last_seen_subq.c.user_id,
+                UserProfile.line_user_id.label("user_id"),
                 last_seen_subq.c.last_seen,
                 UserProfile.name,
                 UserProfile.student_id,
                 UserProfile.unlock_credits,
             )
-            .outerjoin(UserProfile, UserProfile.line_user_id == last_seen_subq.c.user_id)
-            .order_by(last_seen_subq.c.last_seen.desc())
+            .outerjoin(last_seen_subq, last_seen_subq.c.user_id == UserProfile.line_user_id)
+            .order_by(last_seen_subq.c.last_seen.desc().nulls_last())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()
 

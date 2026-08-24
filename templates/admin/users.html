@@ -13,8 +13,8 @@
     <tr>
       <td>{{ u.name or "―" }}</td>
       <td style="font-size:12px">{{ u.student_id or "―" }}</td>
-      <td style="font-size:11px;color:#9ca3af;word-break:break-all">{{ u.user_id if u.name else "―" }}</td>
-      <td>{{ u.last_seen | jst }}</td>
+      <td style="font-size:11px;color:#9ca3af;word-break:break-all">{{ u.user_id }}</td>
+      <td>{{ u.last_seen | jst if u.last_seen else "―" }}</td>
       <td>
         {% if rv %}
         <details>
