@@ -13,9 +13,9 @@ from core.config import (
     EASE_ORDER,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
+from core.grading_method import parse_grading_method
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
-from core.subject_variants import compute_variant_groups
 from database import AsyncSessionLocal
 from models import (
     CourseSection, CourseSectionView, Instructor, Review, ReviewStatus,
@@ -135,7 +135,7 @@ async def api_preload():
                 inst_courses.setdefault(inst.name, {})[c.id] = c.name
         # 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）は
         # レビュー投稿フォームの科目検索でも1件にまとめて選べるようにする（LINE bot科目一覧と同じ統合規則）
-        variant_map = compute_variant_groups([(c.name, c.faculty or "", c.department or "") for c in courses])
+        variant_map = await cache.get_variant_map_cached()
         course_list = [
             {"id": c.id, "name": c.name, "reading": c.reading or "",
              "variantGroup": variant_map.get(c.name, ""),
@@ -228,7 +228,7 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
     に属する場合、グループラベル・グループ内の全subject_id・全科目名を返す。
     属さない場合はラベル""・[subject.id]のみを返す（レビュー閲覧では単独科目として扱う）。"""
     _, all_courses = await cache.get_courses_cached()
-    variant_map = compute_variant_groups([(c.name, c.faculty or "", c.department or "") for c in all_courses])
+    variant_map = await cache.get_variant_map_cached()
     label = variant_map.get(subject.name, "")
     if not label:
         return "", [subject.id], [subject.name]
@@ -399,7 +399,10 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 {
                     "rating": r.rating,
                     "ease_rating": r.ease_rating,
-                    "grading_method": r.grading_method or "",
+                    # 修正理由: JS側での独自パース(旧/新形式判定・区切り文字分解)を無くすため、
+                    # core.grading_method.parse_grading_method()（管理画面等と共通のパーサー）で
+                    # サーバー側であらかじめ[{"label","text"}, ...]へ変換して返す
+                    "grading_method": parse_grading_method(r.grading_method),
                     "comment": r.content or "",
                     "instructor": r.selected_instructor or "",
                     "nickname": r.nickname or "",

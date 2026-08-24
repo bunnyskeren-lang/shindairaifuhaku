@@ -3,6 +3,7 @@ import time
 from sqlalchemy import func, select
 
 from core.config import EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION, make_syllabus_url
+from core.subject_variants import compute_variant_groups
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
 
@@ -263,6 +264,7 @@ def invalidate_courses_cache():
     global _course_flex_cache, _course_list_cache
     global _syllabus_url_cache, _syllabus_url_cache_at
     global _preload_cache, _preload_cache_at
+    global _variant_map_cache, _variant_map_cache_at
     _course_by_name = {}
     _course_list_all = []
     _course_cache_at = 0.0
@@ -276,6 +278,10 @@ def invalidate_courses_cache():
     _syllabus_url_cache_at = 0.0
     _preload_cache = None
     _preload_cache_at = 0.0
+    # 語尾バリアントグループ(compute_variant_groups)も科目一覧に依存する派生データのため、
+    # ここで一緒に無効化する
+    _variant_map_cache = None
+    _variant_map_cache_at = 0.0
 
 
 def invalidate_review_cache():
@@ -352,6 +358,28 @@ def set_preload_cache(data: dict) -> None:
     _preload_cache_at = time.monotonic()
 
 
+_variant_map_cache: dict[str, str] | None = None
+_variant_map_cache_at: float = 0.0
+
+
+async def get_variant_map_cached() -> dict[str, str]:
+    """科目名 → 語尾バリアントグループのベース名ラベルのマップ（compute_variant_groups()の結果）。
+
+    レビュー閲覧権チケットのグループ判定(routers/liff_api.py _group_subject_ids)から
+    リクエストの都度呼ばれるが、計算自体は全科目（数千件規模）を走査する正規表現マッチのため、
+    科目一覧と同じTTLでキャッシュし毎リクエストの再計算を避ける。
+    """
+    global _variant_map_cache, _variant_map_cache_at
+    if _variant_map_cache is not None and time.monotonic() - _variant_map_cache_at < _COURSE_CACHE_TTL:
+        return _variant_map_cache
+    _, all_courses = await get_courses_cached()
+    _variant_map_cache = compute_variant_groups(
+        [(c.name, c.faculty or "", c.department or "") for c in all_courses]
+    )
+    _variant_map_cache_at = time.monotonic()
+    return _variant_map_cache
+
+
 async def warm_query_caches() -> None:
     import asyncio
     await asyncio.gather(
@@ -364,4 +392,5 @@ async def warm_query_caches() -> None:
         get_all_instructors_cached(),
         get_all_review_stats_cached(),
         get_syllabus_urls_cached(),
+        get_variant_map_cached(),
     )

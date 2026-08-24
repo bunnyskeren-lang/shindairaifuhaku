@@ -148,26 +148,6 @@ function esc(s) {
 
 const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★☆☆", S: "★★★★☆", SS: "★★★★★" };
 
-// grading_methodの表示用パース（core/grading_method.pyのparse_grading_method()と同じ規則）。
-// 新形式(JSON配列 [{"label","text"}, ...])・旧形式(' / '区切り文字列)の両方に対応する。
-function parseGradingMethod(raw) {
-  if (!raw) return [];
-  try {
-    const data = JSON.parse(raw);
-    if (Array.isArray(data)) {
-      return data
-        .filter(item => item && typeof item === 'object' && String(item.text || '').trim())
-        .map(item => ({ label: String(item.label || '').trim(), text: String(item.text || '').trim() }));
-    }
-  } catch (e) { /* 旧形式へフォールバック */ }
-  return raw.split(' / ').map(p => p.trim()).filter(Boolean).map(part => {
-    const idx = part.indexOf(':');
-    return idx === -1
-      ? { label: '', text: part }
-      : { label: part.slice(0, idx).trim(), text: part.slice(idx + 1).trim() };
-  });
-}
-
 function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   let html = `<div class="card" style="border:2px solid var(--accent)">`;
   html += `<div class="section-title">🔒 レビューを見るには解除が必要です</div>`;
@@ -399,7 +379,7 @@ async function main() {
         <span class="rating-label">充実度</span>
         <span class="stars" style="color:#a78bfa">${stars(r.rating)}</span>
       </div>`;
-      const gmParts = parseGradingMethod(r.grading_method);
+      const gmParts = r.grading_method || [];
       if (gmParts.length) {
         let gmHtml = '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9">';
         gmHtml += '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.05em;margin-bottom:6px">📋 成績評価方法</div>';
