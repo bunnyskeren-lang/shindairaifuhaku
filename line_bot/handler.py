@@ -41,8 +41,8 @@ from line_bot.flex_builders import (
     make_classification_select_flex,
     make_help_flex,
     make_no_review_flex,
-    make_onitan_carousel,
-    make_rakutan_carousel,
+    make_onitan_card,
+    make_rakutan_card,
     make_ranking_bubble,
     make_registration_flex,
     make_variant_selection_bubble,
@@ -452,7 +452,7 @@ async def _get_rakutan_ranking() -> list:
         {"rank": i, "name": name, "stars": EASE_STARS.get(ease, "")}
         for i, (name, ease) in enumerate(selected, 1)
     ]
-    return [make_rakutan_carousel(items)]
+    return [make_rakutan_card(items)]
 
 
 async def _get_onitan_ranking() -> list:
@@ -483,7 +483,7 @@ async def _get_onitan_ranking() -> list:
         {"rank": i, "name": name, "stars": ONI_STARS.get(ease, "")}
         for i, (name, ease) in enumerate(selected, 1)
     ]
-    return [make_onitan_carousel(items)]
+    return [make_onitan_card(items)]
 
 
 async def prewarm_rankings() -> None:

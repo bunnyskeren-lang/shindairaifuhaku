@@ -5,7 +5,6 @@ from linebot.v3.messaging import (
     FlexBox,
     FlexBubble,
     FlexButton,
-    FlexCarousel,
     FlexMessage,
     FlexSeparator,
     FlexText,
@@ -378,100 +377,58 @@ def make_ranking_bubble(title: str, items: list[dict]) -> FlexBubble:
     )
 
 
-def make_rakutan_carousel(items: list[dict]) -> FlexMessage:
+def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: str, accent: str) -> FlexMessage:
     # items: [{"rank": int, "name": str, "stars": str}]
-    bubbles = []
+    rows = []
     for item in items:
         medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
-        bubbles.append(
-            FlexBubble(
-                size="kilo",
-                header=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexText(text=medal, size="sm", color="#fef3c7", weight="bold"),
-                        FlexText(text=item["name"], weight="bold", size="lg", color="#ffffff",
-                                  wrap=True, margin="sm"),
-                    ],
-                    background_color="#f59e0b",
-                    padding_all="lg",
-                ),
-                body=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexBox(
-                            layout="horizontal",
-                            contents=[
-                                FlexText(text="楽単度", size="xs", color="#94a3b8", flex=0),
-                                FlexText(text=item["stars"], size="xl", color="#f59e0b", flex=0, margin="sm"),
-                            ],
-                            align_items="center",
-                        ),
-                        FlexText(text="タップして詳細・レビューを見る", size="xs", color="#94a3b8", margin="md"),
-                    ],
-                    padding_all="lg",
-                ),
-                footer=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexButton(
-                            action=MessageAction(label=item["name"][:20], text=item["name"]),
-                            style="primary", color="#f59e0b", height="sm",
-                        ),
-                    ],
-                    padding_all="md",
-                ),
+        rows.append(
+            FlexBox(
+                layout="vertical",
+                background_color=row_bg,
+                corner_radius="10px",
+                padding_all="md",
+                margin="sm",
+                contents=[
+                    FlexBox(
+                        layout="horizontal",
+                        contents=[
+                            FlexText(text=medal, size="sm", flex=0, gravity="center"),
+                            FlexText(
+                                text=item["name"], weight="bold", size="md", color="#1e293b",
+                                wrap=True, margin="sm", flex=1,
+                                action=MessageAction(label=item["name"][:20], text=item["name"]),
+                            ),
+                        ],
+                        spacing="sm",
+                    ),
+                    FlexText(text=item["stars"], size="sm", color=accent, margin="sm"),
+                ],
             )
         )
-    return FlexMessage(alt_text="😴 楽単5選", contents=FlexCarousel(contents=bubbles))
+    bubble = FlexBubble(
+        header=FlexBox(
+            layout="vertical",
+            contents=[FlexText(text=title, weight="bold", color="#ffffff", size="md")],
+            background_color=header_bg,
+            padding_all="lg",
+        ),
+        body=FlexBox(layout="vertical", contents=rows, padding_all="lg"),
+        footer=FlexBox(
+            layout="vertical",
+            contents=[FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center")],
+            padding_all="md",
+        ),
+    )
+    return FlexMessage(alt_text=title, contents=bubble)
 
 
-def make_onitan_carousel(items: list[dict]) -> FlexMessage:
-    # items: [{"rank": int, "name": str, "stars": str}]
-    bubbles = []
-    for item in items:
-        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
-        bubbles.append(
-            FlexBubble(
-                size="kilo",
-                header=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexText(text=medal, size="sm", color="#fecaca", weight="bold"),
-                        FlexText(text=item["name"], weight="bold", size="lg", color="#ffffff",
-                                  wrap=True, margin="sm"),
-                    ],
-                    background_color="#b91c1c",
-                    padding_all="lg",
-                ),
-                body=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexBox(
-                            layout="horizontal",
-                            contents=[
-                                FlexText(text="鬼単度", size="xs", color="#94a3b8", flex=0),
-                                FlexText(text=item["stars"], size="xl", color="#b91c1c", flex=0, margin="sm"),
-                            ],
-                            align_items="center",
-                        ),
-                        FlexText(text="タップして詳細・レビューを見る", size="xs", color="#94a3b8", margin="md"),
-                    ],
-                    padding_all="lg",
-                ),
-                footer=FlexBox(
-                    layout="vertical",
-                    contents=[
-                        FlexButton(
-                            action=MessageAction(label=item["name"][:20], text=item["name"]),
-                            style="primary", color="#b91c1c", height="sm",
-                        ),
-                    ],
-                    padding_all="md",
-                ),
-            )
-        )
-    return FlexMessage(alt_text="👹 鬼単5選", contents=FlexCarousel(contents=bubbles))
+def make_rakutan_card(items: list[dict]) -> FlexMessage:
+    return _make_ranking_card("😴 楽単5選", items, header_bg="#f59e0b", row_bg="#fffbeb", accent="#f59e0b")
+
+
+def make_onitan_card(items: list[dict]) -> FlexMessage:
+    return _make_ranking_card("👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c")
 
 
 # ── Course list carousel ────────────────────────────────────────
