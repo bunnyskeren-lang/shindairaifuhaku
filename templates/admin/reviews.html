@@ -261,6 +261,9 @@
           {{ review_body(r, editable=True) }}
         </form>
         <div class="review-footer">
+          <form method="post" action="/admin/reviews/restore/{{ r.id }}" style="margin:0">
+            <button class="btn" style="font-size:12px;padding:5px 14px;background:#6b7280;color:#fff">↩ 待機中に戻す</button>
+          </form>
           <form method="post" action="/admin/reviews/reject/{{ r.id }}"
                 data-confirm="このレビューを却下しますか？">
             <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🚫 却下</button>

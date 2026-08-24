@@ -75,6 +75,19 @@ async def test_restore_moves_rejected_back_to_pending(http_client_factory, monke
 
 
 @pytest.mark.asyncio
+async def test_restore_moves_approved_back_to_pending(http_client_factory, monkeypatch, test_sessionmaker):
+    review_id = await _seed_review(test_sessionmaker, status=ReviewStatus.APPROVED)
+    client = _admin_client(http_client_factory, monkeypatch)
+
+    resp = await client.post(f"/admin/reviews/restore/{review_id}")
+    assert resp.status_code == 303
+
+    async with test_sessionmaker() as session:
+        review = await session.get(Review, review_id)
+        assert review.status == ReviewStatus.PENDING
+
+
+@pytest.mark.asyncio
 async def test_update_edits_content_without_changing_status(http_client_factory, monkeypatch, test_sessionmaker):
     review_id = await _seed_review(test_sessionmaker, status=ReviewStatus.APPROVED, content="元のコメント")
     client = _admin_client(http_client_factory, monkeypatch)

@@ -192,7 +192,7 @@ async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
 
 @router.post("/admin/reviews/restore/{review_id}")
 async def admin_review_restore(review_id: int, _: str = Depends(check_admin)):
-    # 却下済みレビューを待機中に戻す
+    # 承認済み・却下済みレビューを待機中に戻す
     async with AsyncSessionLocal() as session:
         review = await session.get(Review, review_id)
         if review:
