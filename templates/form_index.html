@@ -840,20 +840,24 @@
       }).filter(Boolean);
     }
 
-    function withExtra(base, extraInputId) {
+    function withExtraText(text, extraInputId) {
       const extra = document.getElementById(extraInputId).value.trim();
-      return extra ? `${base}(補足:${extra})` : base;
+      return extra ? `${text}(補足:${extra})` : text;
     }
 
+    // grading_methodは[{"label","text"}, ...]のJSON配列として保存する（core/grading_method.py参照）。
+    // 修正理由: 旧実装は' / '・':'・'・'・括弧が入れ子になった独自区切り文字列を組み立てており、
+    // 補足欄（ユーザー自由記述）にこれらの記号が含まれると表示側のパースが壊れていたため、
+    // JSONで構造化してlabel/textを分離する（textの中身は表示専用の不透明な文字列として扱う）
     function updateGradingMethod() {
       const parts = [];
       const formats = partsForGroup('class_format');
-      if (formats.length) parts.push(withExtra(`形式:${formats.join('・')}`, 'classFormatExtraInput'));
+      if (formats.length) parts.push({ label: '形式', text: withExtraText(formats.join('・'), 'classFormatExtraInput') });
       const att = document.querySelector('[data-group="attendance"].active');
-      if (att) parts.push(`出席:${att.dataset.value}`);
+      if (att) parts.push({ label: '出席', text: att.dataset.value });
       if (att && att.dataset.value === 'たまにあり') {
         const surprise = document.querySelector('[data-group="attendance_surprise"].active');
-        if (surprise) parts.push(`出席確認:${surprise.dataset.value}`);
+        if (surprise) parts.push({ label: '出席確認', text: surprise.dataset.value });
       }
       if (att && att.dataset.value !== 'なし') {
         const attMethods = [...document.querySelectorAll('[data-group="attendance_method"].active')].map(b => {
@@ -861,15 +865,15 @@
             ? (document.getElementById('attendanceMethodCustomInput').value.trim() || null)
             : b.dataset.value;
         }).filter(Boolean);
-        if (attMethods.length) parts.push(withExtra(`出席確認方法:${attMethods.join('・')}`, 'attendanceMethodExtraInput'));
+        if (attMethods.length) parts.push({ label: '出席確認方法', text: withExtraText(attMethods.join('・'), 'attendanceMethodExtraInput') });
       }
       const hw = document.querySelector('[data-group="homework"].active');
-      if (hw) parts.push(withExtra(`課題:${hw.dataset.value}`, 'homeworkExtraInput'));
+      if (hw) parts.push({ label: '課題', text: withExtraText(hw.dataset.value, 'homeworkExtraInput') });
       const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
-      if (hwFreq) parts.push(withExtra(`頻度:${hwFreq.dataset.value}`, 'homeworkFrequencyExtraInput'));
+      if (hwFreq) parts.push({ label: '頻度', text: withExtraText(hwFreq.dataset.value, 'homeworkFrequencyExtraInput') });
       const evals = partsForGroup('eval');
-      if (evals.length) parts.push(withExtra(`評価:${evals.join('・')}`, 'evalExtraInput'));
-      document.getElementById('gradingMethodHidden').value = parts.join(' / ');
+      if (evals.length) parts.push({ label: '評価', text: withExtraText(evals.join('・'), 'evalExtraInput') });
+      document.getElementById('gradingMethodHidden').value = JSON.stringify(parts);
     }
 
     const EVAL_SLIDER_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6'];

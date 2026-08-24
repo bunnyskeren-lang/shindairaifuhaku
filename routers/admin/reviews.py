@@ -8,6 +8,7 @@ from sqlalchemy import delete, func, select
 
 from core import cache
 from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
+from core.grading_method import build_grading_method_from_edit_text
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -56,7 +57,9 @@ def _apply_review_edits(
     if ease_rating is not None:
         review.ease_rating = ease_rating or None
     if grading_method is not None:
-        review.grading_method = grading_method.strip() or None
+        # 管理画面のtextareaは1行1項目の「ラベル: テキスト」編集用フォーマット
+        # （core/grading_method.py参照）。保存はJSON配列文字列で行う
+        review.grading_method = build_grading_method_from_edit_text(grading_method)
     if selected_instructor is not None:
         review.selected_instructor = selected_instructor.strip() or None
     if nickname is not None:

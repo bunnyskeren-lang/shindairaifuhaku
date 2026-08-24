@@ -79,7 +79,7 @@ subjects ─┬─< course_sections >─┬─ instructors
 | `content` | Text | NULL可 | コメント（最大500文字、アプリ側で切り詰め） |
 | `rating` | Integer | NULL可 | 5段階評価 |
 | `ease_rating` | Text | NULL可 | 楽単度（SS/S/A/B/C） |
-| `grading_method` | Text | NULL可 | 評価方法（最大500文字） |
+| `grading_method` | Text | NULL可 | 評価方法。2026-08-25以降はJSON配列文字列（最大2000文字、core/grading_method.py参照）、それ以前の投稿は旧区切り文字列形式のまま残る |
 | `submitter_name` | Text | NULL可 | |
 | `nickname` | Text | NULL可 | 表示用ニックネーム（最大30文字） |
 | `student_id` | Text | NULL可 | |

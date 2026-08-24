@@ -182,20 +182,21 @@
   <!-- 成績評価方法 -->
   {% if editable or r.grading_method %}
   <div class="grading-section">
-    <div class="grading-title">📋 成績評価方法{% if editable %}（例: 中間試験:40% / 期末試験:60%）{% endif %}</div>
+    <div class="grading-title">📋 成績評価方法{% if editable %}（1行1項目、例: 中間試験: 40%）{% endif %}</div>
     {% if editable %}
-    <textarea name="grading_method" class="edit-textarea" rows="2" placeholder="中間試験:40% / 期末試験:60%"
-              data-preview-target="grading-preview-{{ r.id }}" oninput="renderGradingPreview(this)">{{ r.grading_method or '' }}</textarea>
+    <textarea name="grading_method" class="edit-textarea" rows="4" placeholder="中間試験: 40%&#10;期末試験: 60%"
+              data-preview-target="grading-preview-{{ r.id }}" oninput="renderGradingPreview(this)">{{ r.grading_method|grading_edit_text }}</textarea>
     <div class="grading-preview-wrap">
       <div class="grading-preview-label">↓ 保存後の表示プレビュー</div>
       <div class="grading-grid grading-preview" id="grading-preview-{{ r.id }}">
-        {% if r.grading_method %}
-          {% for part in r.grading_method.split(' / ') %}
-            {% if ':' in part %}
-              <span class="grading-key">{{ part.split(':')[0] }}</span>
-              <span class="grading-val">{{ part.split(':', 1)[1] }}</span>
+        {% set parts = r.grading_method|grading_parts %}
+        {% if parts %}
+          {% for part in parts %}
+            {% if part.label %}
+              <span class="grading-key">{{ part.label }}</span>
+              <span class="grading-val">{{ part.text }}</span>
             {% else %}
-              <div class="grading-plain">{{ part }}</div>
+              <div class="grading-plain">{{ part.text }}</div>
             {% endif %}
           {% endfor %}
         {% else %}
@@ -205,12 +206,12 @@
     </div>
     {% else %}
     <div class="grading-grid">
-    {% for part in r.grading_method.split(' / ') %}
-      {% if ':' in part %}
-        <span class="grading-key">{{ part.split(':')[0] }}</span>
-        <span class="grading-val">{{ part.split(':', 1)[1] }}</span>
+    {% for part in r.grading_method|grading_parts %}
+      {% if part.label %}
+        <span class="grading-key">{{ part.label }}</span>
+        <span class="grading-val">{{ part.text }}</span>
       {% else %}
-        <div class="grading-plain">{{ part }}</div>
+        <div class="grading-plain">{{ part.text }}</div>
       {% endif %}
     {% endfor %}
     </div>
@@ -344,7 +345,9 @@
 function renderGradingPreview(textarea) {
   const target = document.getElementById(textarea.dataset.previewTarget);
   if (!target) return;
-  const parts = (textarea.value || '').split(' / ').filter(p => p.trim() !== '');
+  // textareaの中身は保存用JSONではなく「ラベル: テキスト」1行1項目の編集用テキスト
+  // （_apply_review_edits()の保存時にJSONへ変換される）なので、'\n'で分割する
+  const parts = (textarea.value || '').split('\n').filter(p => p.trim() !== '');
   target.innerHTML = '';
   if (parts.length === 0) {
     const empty = document.createElement('span');

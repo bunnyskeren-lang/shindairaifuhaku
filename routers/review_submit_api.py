@@ -157,7 +157,9 @@ async def submit(
             content=comment.strip()[:500],
             rating=rating,
             ease_rating=ease_rating,
-            grading_method=grading_method.strip()[:500] or None,
+            # 修正理由: JSON配列形式（core/grading_method.py）に変わり構造上のオーバーヘッドが
+            # 増えたため、旧形式時代の上限(500)のままだとJSON途中で切り詰められ壊れる恐れがあった
+            grading_method=grading_method.strip()[:2000] or None,
             selected_instructor=instr_name,
             nickname=nickname.strip()[:30] or None,
             academic_year=academic_year,

@@ -205,6 +205,9 @@ class Review(TimestampMixin, Base):
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     ease_rating: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 成績評価方法。2026-08-25以降はJSON配列文字列 [{"label","text"}, ...] で保存する
+    # （core/grading_method.py参照）。それ以前に投稿された行は独自区切り文字列
+    # （' / '・':'区切り）のまま残っており、表示側はparse_grading_method()で両対応する
     grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     submitter_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     nickname: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
