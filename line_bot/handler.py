@@ -41,6 +41,7 @@ from line_bot.flex_builders import (
     make_classification_select_flex,
     make_help_flex,
     make_no_review_flex,
+    make_omikuji_card,
     make_onitan_card,
     make_rakutan_card,
     make_ranking_bubble,
@@ -486,6 +487,23 @@ async def _get_onitan_ranking() -> list:
     return [make_onitan_card(items)]
 
 
+async def _get_omikuji() -> list:
+    # 全科目からランダムに10件選ぶ。毎回結果を変えたいのでキャッシュしない
+    async with AsyncSessionLocal() as _s:
+        rows = (await _s.execute(
+            select(Subject.name, Subject.faculty)
+            .order_by(func.random())
+            .limit(10)
+        )).all()
+    if not rows:
+        return [TextMessage(text="科目データがまだありません。")]
+    items = [
+        {"rank": i, "name": name, "faculty": faculty or ""}
+        for i, (name, faculty) in enumerate(rows, 1)
+    ]
+    return [make_omikuji_card(items)]
+
+
 async def prewarm_rankings() -> None:
     await _get_popular_ranking()
 
@@ -836,6 +854,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
     if t in ["鬼単ランキング", "鬼単", "鬼"]:
         return await _get_onitan_ranking()
+
+    if t in ["10連おみくじ", "10連みくじ", "おみくじ", "みくじ"]:
+        return await _get_omikuji()
 
     return await _handle_course_search(t, user_id)
 

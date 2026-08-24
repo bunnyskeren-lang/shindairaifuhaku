@@ -431,6 +431,55 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
     return _make_ranking_card("👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c")
 
 
+def make_omikuji_card(items: list[dict]) -> FlexMessage:
+    # items: [{"rank": int, "name": str, "faculty": str}]
+    rows = []
+    for item in items:
+        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
+        row_contents = [
+            FlexBox(
+                layout="horizontal",
+                contents=[
+                    FlexText(text=medal, size="sm", flex=0, gravity="center"),
+                    FlexText(
+                        text=item["name"], weight="bold", size="md", color="#1e293b",
+                        wrap=True, margin="sm", flex=1,
+                        action=MessageAction(label=item["name"][:20], text=item["name"]),
+                    ),
+                ],
+                spacing="sm",
+            ),
+        ]
+        if item.get("faculty"):
+            row_contents.append(FlexText(text=item["faculty"], size="xs", color="#94a3b8", margin="sm"))
+        rows.append(
+            FlexBox(
+                layout="vertical",
+                background_color="#f5f3ff",
+                corner_radius="10px",
+                padding_all="md",
+                margin="sm",
+                contents=row_contents,
+            )
+        )
+    title = "⛩️ 10連おみくじ"
+    bubble = FlexBubble(
+        header=FlexBox(
+            layout="vertical",
+            contents=[FlexText(text=title, weight="bold", color="#ffffff", size="md")],
+            background_color="#7c3aed",
+            padding_all="lg",
+        ),
+        body=FlexBox(layout="vertical", contents=rows, padding_all="lg"),
+        footer=FlexBox(
+            layout="vertical",
+            contents=[FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center")],
+            padding_all="md",
+        ),
+    )
+    return FlexMessage(alt_text=title, contents=bubble)
+
+
 # ── Course list carousel ────────────────────────────────────────
 
 

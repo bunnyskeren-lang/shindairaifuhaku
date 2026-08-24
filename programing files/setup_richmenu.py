@@ -105,8 +105,11 @@ AREAS = [
         "x": COL_B, "y": ROW2_Y, "w": SIDE_X - COL_B, "h": H - ROW2_Y,
         "action": PostbackAction(label="鬼単ランキング", data="鬼単"),
     },
-    # 「10連おみくじ」は未実装機能のため、誤った案内をしないよう
-    # クリック領域は定義しない（タップしても何も起きない。実装後に追加すること）
+    {
+        "label": "10連おみくじ",
+        "x": COL_A, "y": ROW2_Y, "w": COL_B - COL_A, "h": H - ROW2_Y,
+        "action": PostbackAction(label="10連おみくじ", data="おみくじ"),
+    },
     # ── 右サイドバー（4段 x 2列）────────────────────────────────
     {
         "label": "うりぼーポータル",
