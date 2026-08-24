@@ -57,6 +57,10 @@ REVIEW_APPROVAL_UNLOCK_CREDITS = 3
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
 
+# 会員登録完了画面で、もらったチケットの使い方を体験してもらうために案内する科目（subjects.id）。
+# 「データサイエンス基礎学」（教養教育院）
+WELCOME_PROMO_SUBJECT_ID = 2
+
 
 def student_email(student_id: str) -> str:
     """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""

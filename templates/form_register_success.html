@@ -17,8 +17,21 @@
         🎁 レビュー閲覧権チケットを{{ welcome_credits }}枚プレゼントしました！
       </div>
       {% endif %}
+      {% if promo_course_url %}
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-6 text-left">
+        <p class="text-sm font-bold text-amber-700 mb-1">📖 さっそく使ってみましょう</p>
+        <p class="text-xs text-amber-700 leading-relaxed mb-3">
+          「{{ promo_course_name }}」の科目ページを開いて、<b>「🔓 チケットを1枚使って解除する」ボタン</b>をタップすると、先輩たちのレビューがすぐに読めます。
+        </p>
+        <a href="{{ promo_course_url }}"
+           class="block w-full bg-amber-500 text-white font-bold py-3 rounded-2xl hover:bg-amber-600 transition text-sm">
+          「{{ promo_course_name }}」のレビューを見る →
+        </a>
+      </div>
+      {% else %}
       <p class="text-gray-500 text-sm mb-8">LINEのトーク画面に戻って、引き続きご利用ください。</p>
-      {% if liff_id %}<button onclick="closeLiff()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">閉じる</button>{% endif %}
+      {% endif %}
+      {% if liff_id %}<button onclick="closeLiff()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">{{ "あとで見る（閉じる）" if promo_course_url else "閉じる" }}</button>{% endif %}
     </div>
   </div>
   {% if liff_id %}
@@ -29,9 +42,13 @@
     (async () => {
       try {
         await liff.init({ liffId: "{{ liff_id }}" });
+        // 通常は登録完了後すぐLINEのトーク画面へ自動で戻すが、初回登録直後は
+        // チケットの使い方を体験してもらう案内を読んでもらいたいため自動では閉じない
+        {% if not promo_course_url %}
         if (liff.isInClient()) {
           setTimeout(closeLiff, 1200);
         }
+        {% endif %}
       } catch (e) {}
     })();
   </script>

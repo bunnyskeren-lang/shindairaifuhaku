@@ -6,8 +6,8 @@
 import pytest
 
 import routers.profile_api as profile_api
-from core.config import REGISTRATION_WELCOME_UNLOCK_CREDITS
-from models import UserProfile
+from core.config import REGISTRATION_WELCOME_UNLOCK_CREDITS, WELCOME_PROMO_SUBJECT_ID
+from models import Subject, UserProfile
 
 USER_ID = "U11111111111111111111111111111111"
 
@@ -67,3 +67,18 @@ async def test_register_existing_user_does_not_double_grant_credits(http_client_
         profile = await session.get(UserProfile, USER_ID)
         assert profile.name == "神戸次郎"
         assert profile.unlock_credits == REGISTRATION_WELCOME_UNLOCK_CREDITS
+
+
+@pytest.mark.asyncio
+async def test_register_new_user_sees_promo_course_link(http_client_factory, monkeypatch, test_sessionmaker):
+    _fake_verify(monkeypatch)
+    _stub_unlink_rich_menu(monkeypatch)
+    async with test_sessionmaker() as session:
+        session.add(Subject(id=WELCOME_PROMO_SUBJECT_ID, name="データサイエンス基礎学", faculty="教養教育院"))
+        await session.commit()
+    client = http_client_factory(profile_api, monkeypatch)
+
+    resp = await client.post("/api/register", data=VALID_FORM)
+    assert resp.status_code == 200
+    assert "データサイエンス基礎学" in resp.text
+    assert f"course_id={WELCOME_PROMO_SUBJECT_ID}" in resp.text

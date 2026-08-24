@@ -8,13 +8,14 @@ from core.activity_log import save_error_log
 from core.config import (
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, STUDENT_ID_RE, LINE_USER_ID_RE,
-    is_profile_complete,
+    WELCOME_PROMO_SUBJECT_ID,
+    is_profile_complete, make_course_liff_url,
 )
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Review, ReviewStatus, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
 
 router = APIRouter()
 
@@ -116,6 +117,12 @@ async def register_profile(
 
         profile = await session.get(UserProfile, uid)
         is_new_registration = profile is None
+        promo_subject_name = None
+        if is_new_registration:
+            # 会員登録直後、もらったチケットの使い方を体験してもらうための案内科目
+            promo_subject_name = (await session.execute(
+                select(Subject.name).where(Subject.id == WELCOME_PROMO_SUBJECT_ID)
+            )).scalar_one_or_none()
         if profile:
             profile.name = name[:100]
             profile.student_id = sid
@@ -151,6 +158,8 @@ async def register_profile(
             "request": request,
             "liff_id": REGISTER_LIFF_ID,
             "welcome_credits": REGISTRATION_WELCOME_UNLOCK_CREDITS if is_new_registration else 0,
+            "promo_course_name": promo_subject_name,
+            "promo_course_url": make_course_liff_url(WELCOME_PROMO_SUBJECT_ID) if promo_subject_name else "",
         }
     )
 
