@@ -14,7 +14,7 @@ from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import Review, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, UserProfile
 
 router = APIRouter()
 
@@ -50,8 +50,20 @@ async def profile_prefill(request: Request):
         return {"found": False}
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
-    if not profile:
-        return {"found": False}
+        if not profile:
+            return {"found": False}
+        # 同一学籍番号での「科目×担当教員」重複投稿をフォーム側でグレーアウト表示するため、
+        # 既に投稿済み（待機中+承認済み）の組み合わせを合わせて返す。実際の受付可否は/submit側で再確認する。
+        reviewed_rows = (await session.execute(
+            select(CourseSection.subject_id, Instructor.name)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .where(
+                Review.student_id == profile.student_id,
+                Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+            )
+            .distinct()
+        )).all()
     return {
         "found": True,
         "name": profile.name,
@@ -59,6 +71,7 @@ async def profile_prefill(request: Request):
         "faculty": profile.faculty,
         "grade": profile.grade,
         "department": profile.department,
+        "reviewed_pairs": [[sid, name] for sid, name in reviewed_rows],
     }
 
 

@@ -127,6 +127,18 @@ async def submit(
         if cs_obj is None:
             return _form_error("この科目の担当教員情報が見つかりません")
 
+        # 修正理由: 同じ学籍番号の人が同じ科目×担当教員の組み合わせへ複数回レビュー投稿できてしまっていたため、
+        # 既に投稿済み（待機中+承認済み）があればサーバー側で拒否する（フォーム側のグレーアウトは補助的なもの）
+        dup_review = (await session.execute(
+            select(Review.id).where(
+                Review.course_section_id == cs_obj.id,
+                Review.student_id == sid,
+                Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+            )
+        )).scalars().first()
+        if dup_review is not None:
+            return _form_error("この科目・担当教員の組み合わせには、既にレビューを投稿済みです")
+
         existing_review_count = (await session.execute(
             select(func.count(Review.id)).where(
                 Review.course_section_id == cs_obj.id,
