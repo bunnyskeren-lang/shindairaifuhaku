@@ -9,6 +9,7 @@ from sqlalchemy import case, func, or_, select
 from core import cache
 from core.config import escape_like, make_cls_sort, make_syllabus_url, reading, syllabus_department_key
 from core.security import check_admin
+from core.subject_variants import compute_variant_display_groups
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
@@ -34,6 +35,19 @@ async def admin_courses(
             Subject.reading.ilike(f"%{q_safe}%", escape="\\"),
             Subject.faculty.ilike(f"%{q_safe}%", escape="\\"),
         )
+
+    # 生物学各論A1/A2/C1/C2のような語尾バリアント科目を、科目一覧画面・レビュー投稿フォームと
+    # 同じ規則で1行に統合表示するための判定（現在の検索・ページングとは独立した全科目データが
+    # 対象。一部だけ検索にヒットした場合でもグループ全体を対象に統合する）
+    _, all_courses_for_variant = await cache.get_courses_cached()
+    label_by_name = compute_variant_display_groups(
+        [(c.name, c.classification or "") for c in all_courses_for_variant]
+    )
+    members_by_label: dict[str, list] = defaultdict(list)
+    for c in all_courses_for_variant:
+        label = label_by_name.get(c.name)
+        if label:
+            members_by_label[label].append(c)
 
     async with AsyncSessionLocal() as session:
         base_stmt = select(Subject)
@@ -70,20 +84,35 @@ async def admin_courses(
         )).all())
         class_counts = {k: class_counts_raw[k] for k in sorted(class_counts_raw, key=_cls_sort)}
 
+        # バリアントグループの行分け（分類ごとのグループ振り分けに使うcls_parent_map等はこの後の
+        # ブロックで取得するため、行のグループ化自体はテンプレート整形部分でまとめて行う。ここでは
+        # 「このページに表示される科目のうち、グループの代表としてどのidを問い合わせに含める必要が
+        # あるか」だけを先に確定させ、担当教員・レビューのDBクエリ対象idに反映する）
         course_ids = [c.id for c in courses]
+        seen_labels_for_query: set[str] = set()
+        extra_ids: set[int] = set()
+        for c in courses:
+            label = label_by_name.get(c.name)
+            if label and label not in seen_labels_for_query:
+                seen_labels_for_query.add(label)
+                extra_ids.update(m.id for m in members_by_label.get(label, []))
+        query_ids = sorted(set(course_ids) | extra_ids)
 
         cs_instr_rows = []
-        if course_ids:
+        if query_ids:
             cs_instr_rows = (await session.execute(
                 select(CourseSection, Instructor)
                 .join(Instructor, Instructor.id == CourseSection.instructor_id)
-                .where(CourseSection.subject_id.in_(course_ids))
+                .where(CourseSection.subject_id.in_(query_ids))
             )).all()
 
         # course_sectionごとに最新年度のsyllabus_urlをtimetable_code/departmentから動的生成
         # （departmentはSyllabusではなくSubject.faculty/departmentから再構成。coursesは既に
         # ロード済みなので追加JOIN不要）
         subj_by_id = {c.id: c for c in courses}
+        for label in seen_labels_for_query:
+            for m in members_by_label.get(label, []):
+                subj_by_id.setdefault(m.id, m)
         cs_subject_map = {cs.id: cs.subject_id for cs, _ in cs_instr_rows}
         cs_url_map: dict[int, str] = {}
         cs_ids_all = [cs.id for cs, _ in cs_instr_rows]
@@ -105,12 +134,12 @@ async def admin_courses(
                 cs_url_map[cs_id] = url
 
         reviews_data = []
-        if course_ids:
+        if query_ids:
             reviews_data = (await session.execute(
                 select(Review, CourseSection.subject_id, Subject.name.label("subj_name"))
                 .join(CourseSection, CourseSection.id == Review.course_section_id)
                 .join(Subject, Subject.id == CourseSection.subject_id)
-                .where(CourseSection.subject_id.in_(course_ids))
+                .where(CourseSection.subject_id.in_(query_ids))
                 .order_by(
                     case((Review.status == ReviewStatus.PENDING, 0), (Review.status == ReviewStatus.APPROVED, 1), else_=2),
                     Review.created_at.desc(),
@@ -195,16 +224,91 @@ async def admin_courses(
     child_cls_set = set(cls_parent_map.keys())
     parent_names_set = set(cls_parent_map.values())
 
+    # 語尾バリアント科目（生物学各論A1/A2/C1/C2等）を1行に統合するグループ行を構築。
+    # 「編集」「削除」はグループ内の全科目に一括適用し、「担当教員」「レビュー」は全科目分を
+    # 1つの一覧に集約表示する（ユーザー確認済みの管理画面統合表示の仕様）
+    group_rows_by_label: dict = {}
+    for c in courses:
+        label = label_by_name.get(c.name)
+        if not label or label in group_rows_by_label:
+            continue
+        members = members_by_label.get(label, [c])
+        ids = [m.id for m in members]
+        member_id_set = set(ids)
+
+        combined_instructors = []
+        seen_inst_ids: set = set()
+        for mid in ids:
+            for inst in instructors_by_course.get(mid, []):
+                if inst.id in seen_inst_ids:
+                    continue
+                seen_inst_ids.add(inst.id)
+                combined_instructors.append(inst)
+
+        combined_reviews = []
+        pending_count = 0
+        summary_tmp_grp: dict = {}
+        for rev, subj_id, subj_name in reviews_data:
+            if subj_id not in member_id_set:
+                continue
+            combined_reviews.append(SimpleNamespace(
+                id=rev.id, course_name=subj_name, comment=rev.content, content=rev.content,
+                rating=rev.rating, ease_rating=rev.ease_rating, grading_method=rev.grading_method,
+                status=rev.status, selected_instructor=rev.selected_instructor, created_at=rev.created_at,
+                submitter_name=rev.submitter_name, nickname=rev.nickname, academic_year=rev.academic_year,
+                student_id=rev.student_id,
+            ))
+            if rev.status == ReviewStatus.PENDING:
+                pending_count += 1
+            instructor_name = rev.selected_instructor or "未選択"
+            bucket = summary_tmp_grp.setdefault(
+                instructor_name,
+                {"instructor_name": instructor_name, "total": 0, ReviewStatus.PENDING: 0, ReviewStatus.APPROVED: 0, ReviewStatus.REJECTED: 0},
+            )
+            bucket["total"] += 1
+            bucket[rev.status] += 1
+        review_summary = sorted(
+            (SimpleNamespace(**v) for v in summary_tmp_grp.values()),
+            key=lambda s: (s.instructor_name == "未選択", s.instructor_name),
+        )
+
+        primary = members[0]
+        group_rows_by_label[label] = SimpleNamespace(
+            type="group",
+            key=f"g{len(group_rows_by_label) + 1}",
+            label=label,
+            members=members,
+            ids=ids,
+            instructors=combined_instructors,
+            reviews=combined_reviews,
+            review_summary=review_summary,
+            pending_count=pending_count,
+            category=primary.category or "",
+            classification=primary.classification or "",
+            faculty=primary.faculty or "",
+            term_type=primary.term_type or "",
+            credits=float(primary.credits) if primary.credits is not None else 0,
+        )
+
     parent_subgroups: dict = defaultdict(lambda: defaultdict(list))
     regular_grouped: dict = defaultdict(list)
+    seen_labels_rendered: set = set()
     for c in courses:
         cls = c.classification or "（未分類）"
-        if cls in child_cls_set:
-            parent_subgroups[cls_parent_map[cls]][cls].append(c)
-        elif cls in parent_names_set:
-            parent_subgroups[cls]["（未分類）"].append(c)
+        label = label_by_name.get(c.name)
+        if label:
+            if label in seen_labels_rendered:
+                continue
+            seen_labels_rendered.add(label)
+            row = group_rows_by_label[label]
         else:
-            regular_grouped[cls].append(c)
+            row = SimpleNamespace(type="single", course=c)
+        if cls in child_cls_set:
+            parent_subgroups[cls_parent_map[cls]][cls].append(row)
+        elif cls in parent_names_set:
+            parent_subgroups[cls]["（未分類）"].append(row)
+        else:
+            regular_grouped[cls].append(row)
 
     # parent_subgroups を並び順に整形
     cls_order_map = await cache.get_cls_order_map()
@@ -213,6 +317,24 @@ async def admin_courses(
         pg: sorted(sub.items(), key=lambda x: _cls_sort(x[0]))
         for pg, sub in sorted(parent_subgroups.items())
     }
+
+    groups_data = (
+        json.dumps({
+            row.key: {
+                "label": row.label,
+                "ids": row.ids,
+                "classification": row.classification,
+                "category": row.category,
+                "faculty": row.faculty,
+                "term_type": row.term_type,
+                "credits": row.credits,
+            }
+            for row in group_rows_by_label.values()
+        }, ensure_ascii=False)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
 
     return templates.TemplateResponse("admin/courses.html", {
         "request": request,
@@ -223,6 +345,7 @@ async def admin_courses(
         "active_category": category,
         "class_counts": class_counts,
         "courses_data": courses_data,
+        "groups_data": groups_data,
         "reviews_by_course": reviews_by_course,
         "review_summary_by_course": review_summary_by_course,
         "instructors_by_course": instructors_by_course,
@@ -310,6 +433,65 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
                     return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
             await session.delete(course)
             await session.commit()
+    cache.invalidate_courses_cache()
+    cache.invalidate_cls_caches()
+    return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+def _parse_group_ids(ids: str) -> list[int]:
+    return [int(x) for x in ids.split(",") if x.strip().isdigit()]
+
+
+@router.post("/admin/courses/group/update")
+async def admin_courses_group_update(
+    _: str = Depends(check_admin),
+    ids: str = Form(...),
+    classification: str = Form(""),
+    category: str = Form("専門"),
+    term_type: str = Form(""),
+    credits: float = Form(0),
+    faculty: str = Form(""),
+):
+    # 統合表示（生物学各論A1/A2/C1/C2等）の編集モーダルはグループ内の全科目に同じ内容を
+    # 一括適用する（科目名はバリアントごとに異なるためここでは変更しない）
+    id_list = _parse_group_ids(ids)
+    async with AsyncSessionLocal() as session:
+        member_courses = (await session.execute(
+            select(Subject).where(Subject.id.in_(id_list))
+        )).scalars().all()
+        for course in member_courses:
+            course.classification = classification.strip() or None
+            course.category = category
+            course.term_type = term_type.strip() or None
+            course.credits = credits if credits else None
+            course.faculty = faculty.strip()
+        await session.commit()
+    cache.invalidate_courses_cache()
+    cache.invalidate_cls_caches()
+    return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@router.post("/admin/courses/group/delete")
+async def admin_courses_group_delete(_: str = Depends(check_admin), ids: str = Form(...)):
+    # 統合表示行の削除はグループ内の全科目を一括削除する。いずれか1件でもレビューが
+    # 紐づいていれば（単独削除と同じ保護ルールで）全体をブロックする
+    id_list = _parse_group_ids(ids)
+    async with AsyncSessionLocal() as session:
+        cs_ids = (await session.execute(
+            select(CourseSection.id).where(CourseSection.subject_id.in_(id_list))
+        )).scalars().all()
+        if cs_ids:
+            has_reviews = (await session.execute(
+                select(func.count(Review.id)).where(Review.course_section_id.in_(cs_ids))
+            )).scalar()
+            if has_reviews:
+                return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
+        member_courses = (await session.execute(
+            select(Subject).where(Subject.id.in_(id_list))
+        )).scalars().all()
+        for course in member_courses:
+            await session.delete(course)
+        await session.commit()
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
     return RedirectResponse(url="/admin/courses", status_code=303)

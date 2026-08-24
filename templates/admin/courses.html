@@ -10,6 +10,114 @@
 
 {% from "admin/base.html" import pager %}
 
+{% macro group_row(row, sgid=none, pgid=none, gid=none) %}
+{% if sgid %}
+{% set main_attrs = 'data-sg="' ~ sgid ~ '" data-pg="' ~ pgid ~ '"' %}
+{% set sub_attrs = main_attrs ~ ' class="inst-row"' %}
+{% set sub_attrs_rv = main_attrs ~ ' class="review-row"' %}
+{% else %}
+{% set main_attrs = 'class="' ~ gid ~ '"' %}
+{% set sub_attrs = 'class="' ~ gid ~ ' inst-row"' %}
+{% set sub_attrs_rv = 'class="' ~ gid ~ ' review-row"' %}
+{% endif %}
+<tr {{ main_attrs|safe }} style="display:none">
+  <td>
+    🔗 {{ row.label }}
+  </td>
+  <td><span class="badge {{ 'badge-cat-kyoyo' if row.category == '教養' else 'badge-cat-senmon' }}">{{ row.category }}</span></td>
+  <td style="white-space:nowrap;width:64px;color:#9ca3af;font-size:11px">統合</td>
+  <td class="actions">
+    <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
+            onclick="event.stopPropagation();toggleRow('inst-{{ row.key }}')">
+      👨‍🏫 担当教員{% if row.instructors %} {{ row.instructors | length }}人{% endif %}
+    </button>
+    <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
+            onclick="event.stopPropagation();toggleReviews('rv-{{ row.key }}')">
+      レビュー {{ row.reviews | length }}件{% if row.pending_count %} <span class="badge-pending">待機中{{ row.pending_count }}</span>{% endif %}
+    </button>
+    {% if row.review_summary %}
+    <div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">
+      {% for s in row.review_summary %}
+      <span style="font-size:10px;background:#eef2ff;color:#4338ca;padding:1px 6px;border-radius:8px;white-space:nowrap;display:inline-flex;gap:5px;align-items:center;width:fit-content">
+        👨‍🏫 {{ s.instructor_name }} {{ s.total }}件
+        {% if s.pending %}<span style="color:#f59e0b;font-weight:bold">待機{{ s.pending }}</span>{% endif %}
+        {% if s.rejected %}<span style="color:#6b7280;font-weight:bold">却下{{ s.rejected }}</span>{% endif %}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <button type="button" class="btn btn-primary" style="padding:4px 10px"
+            onclick="event.stopPropagation();openEditGroup('{{ row.key }}')">編集</button>
+    <form method="post" action="/admin/courses/group/delete" style="display:inline;margin:0"
+          data-confirm="統合されている{{ row.members | length }}件（{{ row.label }}）をまとめて削除しますか？">
+      <input type="hidden" name="ids" value="{{ row.ids | join(',') }}">
+      <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
+    </form>
+  </td>
+</tr>
+<tr id="inst-{{ row.key }}" {{ sub_attrs|safe }} style="display:none">
+  <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
+    <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員（統合科目{{ row.members | length }}件の合計）</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      {% for inst in row.instructors %}
+      <span class="chip">
+        {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
+      </span>
+      {% else %}
+      <span style="color:#9ca3af;font-size:12px">まだ登録なし</span>
+      {% endfor %}
+    </div>
+    <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">統合科目のため教員の追加・削除はできません。個別に操作したい場合は科目名で検索してください。</p>
+  </td>
+</tr>
+<tr id="rv-{{ row.key }}" {{ sub_attrs_rv|safe }} style="display:none">
+  <td colspan="4" style="padding:0;background:#f9fafb">
+    {% if row.reviews %}
+    <div class="table-wrap">
+    <table style="margin:0;border-radius:0;font-size:12px">
+      <tr style="background:#e5e7eb">
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">科目</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">担当教員</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">成績評価</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
+        <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
+      </tr>
+      {% for r in row.reviews %}
+      <tr style="background:{{ {'pending': '#fffbeb', 'approved': '#fff', 'rejected': '#f3f4f6'}[r.status] }}">
+        <td style="padding:6px 12px;white-space:nowrap;color:#6b7280;font-size:11px">{{ r.course_name }}</td>
+        <td style="padding:6px 12px">
+          {% if r.status == 'approved' %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
+          {% elif r.status == 'rejected' %}<span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
+          {% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>{% endif %}
+        </td>
+        <td style="padding:6px 12px">{{ r.selected_instructor or "未選択" }}</td>
+        <td style="padding:6px 12px">{{ r.submitter_name }}</td>
+        <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
+        {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
+        <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method or '―' }}</td>
+        <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
+        <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
+        <td style="padding:6px 12px;white-space:nowrap">
+          {% if r.status != 'approved' %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
+          {% if r.status != 'rejected' %}<form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" data-confirm="却下しますか？"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">却下</button></form>{% endif %}
+          {% if r.status == 'rejected' %}<form method="post" action="/admin/reviews/restore/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn" style="padding:3px 10px;font-size:11px;background:#6b7280;color:#fff">待機中に戻す</button></form>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
+    {% endif %}
+  </td>
+</tr>
+{% endmacro %}
+
 {% macro review_summary_badges(c_id) %}
 {% set summary = review_summary_by_course.get(c_id) %}
 {% if summary %}
@@ -169,7 +277,11 @@
       <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ sub_list | length }}科目）</span>
     </td>
   </tr>
-  {% for c in sub_list %}
+  {% for row in sub_list %}
+  {% if row.type == 'group' %}
+  {{ group_row(row, sgid, pgid) }}
+  {% else %}
+  {% set c = row.course %}
   {% set reviews = reviews_by_course[c.id] %}
   {% set pending_count = reviews | selectattr("status", "equalto", "pending") | list | length %}
   <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
@@ -268,6 +380,7 @@
       {% endif %}
     </td>
   </tr>
+  {% endif %}
   {% endfor %}
   {% endfor %}
   {% endfor %}
@@ -282,7 +395,11 @@
       <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ group_list | length }}科目）</span>
     </td>
   </tr>
-  {% for c in group_list %}
+  {% for row in group_list %}
+  {% if row.type == 'group' %}
+  {{ group_row(row, gid=gid) }}
+  {% else %}
+  {% set c = row.course %}
   {% set reviews = reviews_by_course[c.id] %}
   {% set pending_count = reviews | selectattr("status", "equalto", "pending") | list | length %}
   <tr class="{{ gid }}" style="display:none">
@@ -401,6 +518,7 @@
       {% endif %}
     </td>
   </tr>
+  {% endif %}
   {% endfor %}
   {% endfor %}
   {% else %}
@@ -412,8 +530,10 @@
 <!-- 編集モーダル -->
 <div id="editModal">
   <div id="editBox">
-    <h2 style="margin-top:0">✏️ 科目を編集</h2>
+    <h2 style="margin-top:0" id="editModalTitle">✏️ 科目を編集</h2>
+    <p id="editGroupNote" style="display:none;font-size:12px;color:#6b7280;margin:-8px 0 12px">統合表示されている科目です。ここでの変更はグループ内の全科目（科目名以外）に一括で適用されます。</p>
     <form id="editForm" method="post">
+      <input type="hidden" id="editGroupIds" name="ids" value="">
       <div style="margin-bottom:10px">
         <label>科目名 *<input type="text" id="editName" name="name" required maxlength="200"></label>
       </div>
@@ -464,6 +584,7 @@
 {% block scripts %}
 <script>
 const COURSES = {{ courses_data | safe }};
+const GROUPS = {{ groups_data | safe }};
 {% raw %}
 function toggleParentGrp(pgid, headerTr) {
   var subHdrs = document.querySelectorAll('tr.' + pgid);
@@ -524,13 +645,34 @@ function toggleCard(id, headerEl) {
 }
 function openEdit(id) {
   const c = COURSES[id];
-  document.getElementById('editName').value = c.name;
+  const nameInput = document.getElementById('editName');
+  nameInput.value = c.name;
+  nameInput.disabled = false;
+  document.getElementById('editGroupIds').value = '';
+  document.getElementById('editGroupNote').style.display = 'none';
+  document.getElementById('editModalTitle').textContent = '✏️ 科目を編集';
   document.getElementById('editClassification').value = c.classification;
   document.getElementById('editCategory').value = c.category;
   document.getElementById('editTermType').value = c.term_type || '';
   document.getElementById('editCredits').value = c.credits || 0;
   document.getElementById('editFaculty').value = c.faculty || '';
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
+  document.getElementById('editModal').classList.add('open');
+}
+function openEditGroup(key) {
+  const g = GROUPS[key];
+  const nameInput = document.getElementById('editName');
+  nameInput.value = g.label;
+  nameInput.disabled = true;
+  document.getElementById('editGroupIds').value = g.ids.join(',');
+  document.getElementById('editGroupNote').style.display = 'block';
+  document.getElementById('editModalTitle').textContent = '✏️ 統合科目を一括編集';
+  document.getElementById('editClassification').value = g.classification;
+  document.getElementById('editCategory').value = g.category;
+  document.getElementById('editTermType').value = g.term_type || '';
+  document.getElementById('editCredits').value = g.credits || 0;
+  document.getElementById('editFaculty').value = g.faculty || '';
+  document.getElementById('editForm').action = '/admin/courses/group/update';
   document.getElementById('editModal').classList.add('open');
 }
 function closeModal() {
