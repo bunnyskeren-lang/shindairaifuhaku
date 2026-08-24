@@ -26,6 +26,7 @@
   .badge-cls  { background: rgba(255,255,255,0.2); color: #e0e7ff; }
   .badge-term { background: rgba(255,255,255,0.15); color: #c7d2fe; }
   .badge-cr   { background: rgba(255,255,255,0.15); color: #c7d2fe; }
+  .badge-variant { background: rgba(255,255,255,0.15); color: #fde68a; }
 
   .card {
     background: #fff; border-radius: 12px; margin: 12px; padding: 16px;
@@ -202,11 +203,20 @@ async function main() {
   }
 
   // ── ヘッダー ──
-  document.getElementById("name").textContent = data.name;
+  // 語尾バリアントグループ（例: 生物学各論A1/A2/C1/C2）に属する科目は、グループ名を
+  // タイトルに表示し、レビューはグループ内の全科目分をまとめて表示する
+  // （「レビューを投稿」ボタンのリンク先は元の科目名のまま、投稿フォーム側で解決する）
+  document.getElementById("name").textContent = data.group_label || data.name;
   document.getElementById("instructor").textContent = data.instructor
     ? "👨‍🏫 " + data.instructor : "";
 
   const meta = document.getElementById("meta");
+  if (data.group_label && data.group_variant_names && data.group_variant_names.length > 1) {
+    const suffixes = data.group_variant_names.map(n =>
+      n.startsWith(data.group_label) ? n.slice(data.group_label.length) : n);
+    meta.insertAdjacentHTML("beforeend",
+      `<span class="badge badge-variant">🔀 ${esc(suffixes.join('/'))}のレビューをまとめて表示</span>`);
+  }
   if (data.classification)
     meta.insertAdjacentHTML("beforeend",
       `<span class="badge badge-cls">📂 ${esc(data.classification)}</span>`);

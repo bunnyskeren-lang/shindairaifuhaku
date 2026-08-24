@@ -217,6 +217,19 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
     return {"instructors": result}
 
 
+async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str]]:
+    """科目がレビュー投稿フォームと同じ語尾バリアントグループ（例: 生物学各論A1/A2/C1/C2）
+    に属する場合、グループラベル・グループ内の全subject_id・全科目名を返す。
+    属さない場合はラベル""・[subject.id]のみを返す（レビュー閲覧では単独科目として扱う）。"""
+    _, all_courses = await cache.get_courses_cached()
+    variant_map = compute_variant_groups([(c.name, c.classification or "") for c in all_courses])
+    label = variant_map.get(subject.name, "")
+    if not label:
+        return "", [subject.id], [subject.name]
+    members = [c for c in all_courses if variant_map.get(c.name) == label]
+    return label, [c.id for c in members], [c.name for c in members]
+
+
 @router.get("/api/course/{course_id}")
 async def api_course(course_id: int):
     try:
@@ -227,13 +240,17 @@ async def api_course(course_id: int):
             subject = await session.get(Subject, course_id)
             if not subject:
                 raise HTTPException(status_code=404, detail="course not found")
+            # 語尾バリアントグループに属する科目は、レビュー閲覧も1つの科目として扱い、
+            # グループ内の全科目のレビュー・評価をまとめて表示する（レビュー投稿フォームの
+            # 科目検索での統合表示と対にするため）
+            group_label, group_subject_ids, group_names = await _group_subject_ids(subject)
             # 修正理由: ORDER BY未指定だとPostgreSQLは行順を保証せず、これに依存する
             # 閲覧数記録先(main_cs_id)・表示するシラバスURL・教員名の表示順がリクエスト
             # ごとに変わりうる非決定的な挙動になっていた。id順で固定する。
             cs_instr_rows = (await session.execute(
                 select(CourseSection, Instructor)
                 .join(Instructor, Instructor.id == CourseSection.instructor_id)
-                .where(CourseSection.subject_id == course_id)
+                .where(CourseSection.subject_id.in_(group_subject_ids))
                 .order_by(CourseSection.id)
             )).all()
 
@@ -289,8 +306,12 @@ async def api_course(course_id: int):
         )
 
         # ビューカウント記録
+        # 修正理由: バリアントグループでcs_idsはグループ全体にまたがるため、閲覧数は
+        # 実際にリクエストされた科目自身のcourse_sectionに記録する（無ければグループ内の
+        # 代表にフォールバック）。
+        own_cs_ids = [cs.id for cs, _ in cs_instr_rows if cs.subject_id == course_id]
         if cs_ids:
-            main_cs_id = cs_ids[0]
+            main_cs_id = own_cs_ids[0] if own_cs_ids else cs_ids[0]
             async with AsyncSessionLocal() as s:
                 _now = datetime.now(timezone.utc)
                 _ins = pg_insert(CourseSectionView).values(
@@ -311,7 +332,14 @@ async def api_course(course_id: int):
 
         # 最新年度のsyllabiからtimetable_codeを取得しシラバスURLを動的生成
         syllabus_url = make_syllabus_url(sc_row[0], syllabus_department_key(subject)) if sc_row else ""
-        instructor_str = "・".join(instr.name for _, instr in cs_instr_rows)
+        # バリアントグループでは同じ教員が複数の変種を担当している場合があるため重複除去する
+        _seen_instr: set[str] = set()
+        instr_names: list[str] = []
+        for _, instr in cs_instr_rows:
+            if instr.name not in _seen_instr:
+                _seen_instr.add(instr.name)
+                instr_names.append(instr.name)
+        instructor_str = "・".join(instr_names)
         top_ease = None
         if ease_rows:
             top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
@@ -319,6 +347,8 @@ async def api_course(course_id: int):
         return {
             "id": subject.id,
             "name": subject.name,
+            "group_label": group_label,
+            "group_variant_names": group_names if group_label else [],
             "instructor": instructor_str,
             "classification": subject.classification or "",
             "category": subject.category or "",
