@@ -21,11 +21,12 @@ class MessageLog(TimestampMixin, Base):
 
 
 class DisplayOrder(Base):
-    """汎用の表示順マスタ。kindで対象種別(classification/faculty/credit_requirement_group等)を区別する。"""
+    """汎用の表示順マスタ。kindで対象種別(classification/faculty)を区別する。"""
     __tablename__ = "display_orders"
     __table_args__ = (UniqueConstraint("kind", "name", "faculty", name="uq_display_orders_kind_name_faculty"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 'classification' / 'faculty' の2値のみ。CHECK制約はdatabase.py init_db()側で管理。
     kind: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -203,7 +204,9 @@ class Review(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="RESTRICT"), nullable=False, index=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 1〜5の5段階評価。CHECK制約はdatabase.py init_db()側で管理。
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # 'SS'/'S'/'A'/'B'/'C'の5段階（楽単度）。CHECK制約はdatabase.py init_db()側で管理。
     ease_rating: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # 成績評価方法。2026-08-25以降はJSON配列文字列 [{"label","text"}, ...] で保存する
     # （core/grading_method.py参照）。それ以前に投稿された行は独自区切り文字列

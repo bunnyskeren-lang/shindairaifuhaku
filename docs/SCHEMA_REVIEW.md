@@ -264,7 +264,7 @@ instructors ──CASCADE──> course_sections
 ## 横断的な問題点
 
 ### 1. CHECK制約の適用が不均一
-`message_logs.direction` にはCHECK制約があるのに、同様に値集合が固定されている `reviews.rating`/`reviews.ease_rating`、`syllabi.academic_term`、`display_orders.kind` にはない。整備の優先順位が場当たり的になっている。
+`message_logs.direction` にはCHECK制約があるのに、同様に値集合が固定されている `syllabi.academic_term` にはない（`reviews.rating`/`reviews.ease_rating`/`display_orders.kind`は2026-08-25に追加済み）。整備の優先順位が場当たり的になっている。
 
 ### 2. `subjects.faculty` のNULL許容がUNIQUE制約を無効化（2026-08-25対応済み）
 `(name, faculty, department)` の複合UNIQUEはPostgreSQLのNULL非等価性により `faculty IS NULL` の行では機能しない問題があったが、`database.py` `init_db()` で既存NULL行（共通専門基礎科目2件→`教養教育院`、他は空文字）を補完した上で `faculty` をNOT NULL化した。
@@ -292,8 +292,8 @@ instructors ──CASCADE──> course_sections
 
 | # | 対象 | 問題 | 改善方針 |
 |---|---|---|---|
-| 2 | `reviews` | `rating`/`ease_rating` にCHECK制約なし | CHECK制約追加（既存データ確認後） |
-| 3 | `display_orders` | `kind` にCHECK制約なし・`parent_group` 自己参照FKなし | CHECK追加、自己参照FK検討 |
+| 2 | `reviews` | ~~`rating`/`ease_rating` にCHECK制約なし~~ → 2026-08-25対応済み | CHECK制約追加（既存データ確認後） |
+| 3 | `display_orders` | ~~`kind` にCHECK制約なし~~ → 2026-08-25対応済み・`parent_group` 自己参照FKなし | CHECK追加、自己参照FK検討 |
 
 ### P3（低優先度・品質向上）
 

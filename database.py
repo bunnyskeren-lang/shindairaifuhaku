@@ -530,3 +530,27 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE subjects ALTER COLUMN faculty SET DEFAULT ''"
         ))
+
+        # ── 2026-08-25: reviews.rating/ease_rating・display_orders.kindへのCHECK制約追加 ──
+        # SCHEMA_REVIEW.md P2: 値集合が固定されているのにCHECK制約が無く、アプリ層の検証を
+        # すり抜けた不正値が入り得た。dev DBで既存データに違反行が無いことを確認済み
+        # （本番DBは未確認のため、万一違反行があれば追加自体をスキップするようcheck_violationも許容する）
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE reviews ADD CONSTRAINT chk_reviews_rating CHECK (rating IS NULL OR rating BETWEEN 1 AND 5);
+            EXCEPTION WHEN duplicate_object OR check_violation THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE reviews ADD CONSTRAINT chk_reviews_ease_rating
+                CHECK (ease_rating IS NULL OR ease_rating IN ('SS', 'S', 'A', 'B', 'C'));
+            EXCEPTION WHEN duplicate_object OR check_violation THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE display_orders ADD CONSTRAINT chk_do_kind CHECK (kind IN ('classification', 'faculty'));
+            EXCEPTION WHEN duplicate_object OR check_violation THEN NULL;
+            END $$
+        """))
