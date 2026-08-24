@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 
 from core.config import EASE_ORDER, make_syllabus_url
 from database import AsyncSessionLocal
-from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus
+from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
 
 # 全キャッシュ共通のTTLポリシー(1時間)。用途別に名前を分けているが値は全て同じであるべきなので、
 # ここ1箇所を直せば全キャッシュに反映される(個別に変えたい場合のみ該当行だけ上書きする)
@@ -143,7 +143,7 @@ async def get_reviewed_cached() -> set[str]:
             select(Subject.name).distinct()
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == "approved")
+            .where(Review.status == ReviewStatus.APPROVED)
         )).scalars().all()
     _reviewed_cache = set(rows)
     _reviewed_cache_at = time.monotonic()
@@ -178,14 +178,14 @@ async def get_all_review_stats_cached() -> dict[str, tuple]:
             select(Subject.name, func.count(Review.id).label("cnt"))
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == "approved")
+            .where(Review.status == ReviewStatus.APPROVED)
             .group_by(Subject.name)
         )).all()
         ease_rows = (await s.execute(
             select(Subject.name, Review.ease_rating, func.count(Review.id).label("cnt"))
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == "approved", Review.ease_rating.isnot(None))
+            .where(Review.status == ReviewStatus.APPROVED, Review.ease_rating.isnot(None))
             .group_by(Subject.name, Review.ease_rating)
         )).all()
     ease_map: dict[str, list] = {}

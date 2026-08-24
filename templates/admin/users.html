@@ -19,8 +19,12 @@
         <details>
           <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--accent)">{{ rv.total }}件</summary>
           <ul style="margin:4px 0 0;padding-left:16px;font-size:11px;color:#6b7280;list-style:disc">
-            {% for course_name, instructor, cnt in rv.breakdown %}
-            <li>{{ course_name }}{% if instructor %}（{{ instructor }}）{% endif %}: {{ cnt }}件</li>
+            {% for course_name, instructor, status, cnt in rv.breakdown %}
+            <li>{{ course_name }}{% if instructor %}（{{ instructor }}）{% endif %}: {{ cnt }}件
+              {% if status == 'pending' %}<span style="color:#f59e0b">(待機中)</span>
+              {% elif status == 'rejected' %}<span style="color:#9ca3af">(却下)</span>
+              {% endif %}
+            </li>
             {% endfor %}
           </ul>
         </details>

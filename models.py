@@ -161,6 +161,13 @@ class Syllabus(TimestampMixin, Base):
     timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
 
 
+class ReviewStatus:
+    """Review.statusの取りうる値。CHECK制約はdatabase.py init_db()側で管理。"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class Review(TimestampMixin, Base):
     __tablename__ = "reviews"
 

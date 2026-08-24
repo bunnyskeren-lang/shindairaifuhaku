@@ -205,6 +205,8 @@
 </div>
 {% endmacro %}
 
+{% from "admin/base.html" import pager %}
+
 {% block content %}
 
 <div class="card">
@@ -228,7 +230,7 @@
           </form>
           <div class="review-footer">
             <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="margin:0"
-                  data-confirm="却下（削除）しますか？">
+                  data-confirm="却下しますか？">
               <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🗑 却下</button>
             </form>
             <button type="submit" form="approve-form-{{ r.id }}" class="btn btn-primary" style="font-size:12px;padding:5px 14px">✅ 保存して承認</button>
@@ -245,8 +247,8 @@
 </div>
 
 <div class="card">
-  <details class="section-details">
-    <summary>✅ 承認済み <span class="section-count">(直近{{ approved|length }}件)</span></summary>
+  <details class="section-details"{% if apage > 1 %} open{% endif %}>
+    <summary>✅ 承認済み <span class="section-count">(全{{ atotal }}件中 {{ approved|length }}件)</span></summary>
     <div class="section-body">
       {% if approved %}
       {% for r in approved %}
@@ -255,15 +257,19 @@
           <span class="review-course-name">📖 {{ r.course_name }}</span>
           <span class="review-date">{{ r.created_at | jst }}</span>
         </div>
-        {{ review_body(r) }}
+        <form method="post" action="/admin/reviews/update/{{ r.id }}" id="edit-form-{{ r.id }}">
+          {{ review_body(r, editable=True) }}
+        </form>
         <div class="review-footer">
           <form method="post" action="/admin/reviews/reject/{{ r.id }}"
                 data-confirm="このレビューを却下しますか？">
             <button class="btn btn-danger" style="font-size:12px;padding:5px 14px">🚫 却下</button>
           </form>
+          <button type="submit" form="edit-form-{{ r.id }}" class="btn btn-primary" style="font-size:12px;padding:5px 14px">💾 保存</button>
         </div>
       </div>
       {% endfor %}
+      {{ pager(apage, atotal_pages, atotal, "/admin/reviews?apage=") }}
       {% else %}
       <p style="color:#9ca3af;font-size:13px">承認済みレビューはありません</p>
       {% endif %}
@@ -272,8 +278,8 @@
 </div>
 
 <div class="card">
-  <details class="section-details">
-    <summary>🚫 却下 <span class="section-count">(直近{{ rejected|length }}件)</span></summary>
+  <details class="section-details"{% if rpage > 1 %} open{% endif %}>
+    <summary>🚫 却下 <span class="section-count">(全{{ rtotal }}件中 {{ rejected|length }}件)</span></summary>
     <div class="section-body">
       {% if rejected %}
       {% for r in rejected %}
@@ -282,7 +288,9 @@
           <span class="review-course-name">📖 {{ r.course_name }}</span>
           <span class="review-date">{{ r.created_at | jst }}</span>
         </div>
-        {{ review_body(r) }}
+        <form method="post" action="/admin/reviews/update/{{ r.id }}" id="edit-form-{{ r.id }}">
+          {{ review_body(r, editable=True) }}
+        </form>
         <div class="review-footer">
           <form method="post" action="/admin/reviews/restore/{{ r.id }}" style="margin:0">
             <button class="btn" style="font-size:12px;padding:5px 14px;background:#6b7280;color:#fff">↩ 待機中に戻す</button>
@@ -290,9 +298,11 @@
           <form method="post" action="/admin/reviews/approve/{{ r.id }}" style="margin:0">
             <button class="btn btn-primary" style="font-size:12px;padding:5px 14px">✅ 承認</button>
           </form>
+          <button type="submit" form="edit-form-{{ r.id }}" class="btn btn-primary" style="font-size:12px;padding:5px 14px">💾 保存</button>
         </div>
       </div>
       {% endfor %}
+      {{ pager(rpage, rtotal_pages, rtotal, "/admin/reviews?rpage=") }}
       {% else %}
       <p style="color:#9ca3af;font-size:13px">却下されたレビューはありません</p>
       {% endif %}

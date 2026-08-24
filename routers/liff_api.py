@@ -15,7 +15,7 @@ from core.config import (
 )
 from core.rate_limit import rate_limiter
 from database import AsyncSessionLocal
-from models import CourseSection, CourseSectionView, Instructor, Review, Subject, Syllabus
+from models import CourseSection, CourseSectionView, Instructor, Review, ReviewStatus, Subject, Syllabus
 
 router = APIRouter()
 
@@ -218,7 +218,7 @@ async def api_course(course_id: int):
                         Review.ease_rating, func.count(Review.id),
                         func.sum(Review.rating), func.count(Review.rating),
                     )
-                    .where(Review.course_section_id.in_(cs_ids), Review.status == "approved")
+                    .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
                     .group_by(Review.ease_rating)
                 )).all()
             ease_rows = [(ease, cnt) for ease, cnt, _, _ in rows]
@@ -233,7 +233,7 @@ async def api_course(course_id: int):
             async with AsyncSessionLocal() as s:
                 return (await s.execute(
                     select(Review)
-                    .where(Review.course_section_id.in_(cs_ids), Review.status == "approved")
+                    .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
                     .order_by(Review.selected_instructor.nulls_last(), Review.academic_year.desc())
                     .limit(20)
                 )).scalars().all()

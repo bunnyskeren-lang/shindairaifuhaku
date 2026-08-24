@@ -46,18 +46,19 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                     Review.student_id,
                     Subject.name,
                     Review.selected_instructor,
+                    Review.status,
                     func.count(Review.id),
                 )
                 .join(CourseSection, CourseSection.id == Review.course_section_id)
                 .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(Review.student_id.in_(student_ids))
-                .group_by(Review.student_id, Subject.name, Review.selected_instructor)
+                .group_by(Review.student_id, Subject.name, Review.selected_instructor, Review.status)
                 .order_by(Subject.name)
             )).all()
-            for sid, course_name, instructor, cnt in review_rows:
+            for sid, course_name, instructor, status, cnt in review_rows:
                 entry = review_map.setdefault(sid, {"total": 0, "breakdown": []})
                 entry["total"] += cnt
-                entry["breakdown"].append((course_name, instructor, cnt))
+                entry["breakdown"].append((course_name, instructor, status, cnt))
 
     total_pages = max(1, (total + per_page - 1) // per_page)
 

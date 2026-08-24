@@ -10,7 +10,7 @@ from core.push import send_push_notification
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Review, Subject, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
 
 router = APIRouter()
 
@@ -131,7 +131,7 @@ async def submit(
             nickname=nickname.strip()[:30] or None,
             academic_year=academic_year,
             student_id=sid or None,
-            status="pending",
+            status=ReviewStatus.PENDING,
         )
         session.add(review)
         await session.commit()

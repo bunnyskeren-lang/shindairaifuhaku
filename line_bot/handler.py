@@ -43,7 +43,7 @@ from line_bot.flex_builders import (
     make_registration_flex,
     make_variant_selection_bubble,
 )
-from models import CourseSection, Review, Subject, UserProfile
+from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
 
 
 async def _registration_incomplete(user_id: str) -> bool:
@@ -404,7 +404,7 @@ async def _get_popular_ranking() -> list:
             select(Subject.name, func.avg(Review.rating).label("avg"))
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == "approved")
+            .where(Review.status == ReviewStatus.APPROVED)
             .group_by(Subject.name)
             .order_by(func.avg(Review.rating).desc())
             .limit(5)
@@ -429,7 +429,7 @@ async def _get_rakutan_ranking() -> list:
             select(Subject.name, Review.ease_rating, func.count(Review.id))
             .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == "approved")
+            .where(Review.status == ReviewStatus.APPROVED)
             .group_by(Subject.name, Review.ease_rating)
         )).all()
     if not rows:

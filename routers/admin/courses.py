@@ -11,7 +11,7 @@ from core.config import escape_like, make_cls_sort, make_syllabus_url, reading, 
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, DisplayOrder, Instructor, Review, Subject, Syllabus
+from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
 from routers.admin._common import reorder_sort_order
 
 router = APIRouter()
@@ -112,7 +112,7 @@ async def admin_courses(
                 .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(CourseSection.subject_id.in_(course_ids))
                 .order_by(
-                    case((Review.status == "pending", 0), (Review.status == "approved", 1), else_=2),
+                    case((Review.status == ReviewStatus.PENDING, 0), (Review.status == ReviewStatus.APPROVED, 1), else_=2),
                     Review.created_at.desc(),
                 )
             )).all()
@@ -178,7 +178,7 @@ async def admin_courses(
         instructor_name = rev.selected_instructor or "未選択"
         bucket = _summary_tmp[subj_id].setdefault(
             instructor_name,
-            {"instructor_name": instructor_name, "total": 0, "pending": 0, "approved": 0, "rejected": 0},
+            {"instructor_name": instructor_name, "total": 0, ReviewStatus.PENDING: 0, ReviewStatus.APPROVED: 0, ReviewStatus.REJECTED: 0},
         )
         bucket["total"] += 1
         bucket[rev.status] += 1
