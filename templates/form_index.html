@@ -959,20 +959,20 @@
         const members = c.variantGroup ? byGroup.get(c.variantGroup) : null;
         if (!members || members.length < 2) { result.push(c); continue; }
         if (emitted.has(c.variantGroup)) continue;
+        // 同じ教員が複数の変種を担当していても、教員名は1回だけ表示する
+        // （最初に見つかった変種の科目へ解決する。表示済みのレビューは科目詳細ページ側で
+        // グループ全体分をまとめて見せているため、どの変種に紐づけても実害は無い）
         const mergedInstructors = [];
+        const seenNames = new Set();
         for (const m of members) {
-          const suffix = m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name;
           for (const inst of (m.instructors || [])) {
-            mergedInstructors.push({ ...inst, courseId: m.id, courseName: m.name, variantSuffix: suffix });
+            if (seenNames.has(inst.name)) continue;
+            seenNames.add(inst.name);
+            mergedInstructors.push({ ...inst, courseId: m.id, courseName: m.name });
           }
         }
         if (mergedInstructors.length === 0) { result.push(c); continue; } // 教員未登録で解決不能な場合は統合しない
         emitted.add(c.variantGroup);
-        const nameCounts = {};
-        mergedInstructors.forEach(i => { nameCounts[i.name] = (nameCounts[i.name] || 0) + 1; });
-        mergedInstructors.forEach(i => {
-          i.displayName = nameCounts[i.name] > 1 ? `${i.name}（${i.variantSuffix}）` : i.name;
-        });
         result.push({
           id: null,
           name: c.variantGroup,
@@ -1078,7 +1078,7 @@
           };
         });
         chipsEl.innerHTML = withReviewed.map(inst => {
-          const label = inst.displayName || inst.name;
+          const label = inst.name;
           const cidAttr = ` data-course-id="${inst._cid ?? ''}" data-course-name="${escapeHtml(inst._cname)}"`;
           if (inst.full) {
             return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.45;text-decoration:line-through;cursor:not-allowed">${escapeHtml(label)}</button>`;
