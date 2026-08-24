@@ -54,27 +54,24 @@ from linebot.v3.messaging import (
     URIAction,
 )
 
-# ── 画像サイズ（元画像の比率をそのまま使用）──────────────────────────────────
-W, H = 1736, 906
+# ── 画像サイズ（2026-08-24 新デザイン画像の実寸）──────────────────────────
+W, H = 1341, 800
 
-# ── レイアウト座標（元画像 1736×906 基準、リッチメニュー(7.14).png ピクセル実測値）──
-SIDE_X  = 1514   # 右サイドバー左端
-ROW2_Y  = 427    # Row1/2 境界
-ROW3_Y  = 665    # Row2/3 境界
-REV_W   = 472    # レビュー投稿 右端
-# 2026-07-30 My時間割機能廃止でボタンを削除。画像(assets/richmenu.png)側は
-# My時間割/教養/専門の3分割レイアウトのまま未更新のため、x=0〜COL2_Xは
-# クリック領域未定義（TODO: 画像を2分割レイアウトに再デザインしたらCOL2_Xも調整すること）
-COL2_X  = 610    # 教養 左端（旧: My時間割/教養 境界）
-COL3_X  = 1092   # 教養/専門 境界
-R3C1_X  = 426    # 生協メニュー/生協アプリ 境界（Row3）
-R3C2_X  = 736    # 生協アプリ/近隣飲食店 境界（Row3）
-R3C3_X  = 1091   # 近隣飲食店/バイト 境界（Row3）
+# ── レイアウト座標（assets/richmenu.png ピクセル実測値、境界は隣接領域の中間点）──
+# 画像上部（y:0〜TOP_Y）はタイトルバナー「神大ライフハック」でボタンなし
+# → クリック領域未定義（タップしても何も起きない）
+TOP_Y   = 190    # タイトルバナー下端 / Row1 上端
+ROW2_Y  = 440    # Row1(投稿/閲覧) / Row2(楽単/おみくじ/鬼単) 境界
+REV_W   = 564    # レビュー投稿 / レビュー閲覧 境界（Row1）
+SIDE_X  = 1033   # 右サイドバー左端
+COL_A   = 388    # 楽単5選 / 10連おみくじ 境界（Row2）
+COL_B   = 710    # 10連おみくじ / 鬼単5選 境界（Row2）
 
-# サイドバー行区切り
-SY1 = 245   # 図書館 / 市バス 境界
-SY2 = 480   # 市バス / うりぼーポータル 境界
-SY3 = 730   # うりぼーポータル / ヘルプ 境界
+# サイドバー行区切り（4段）
+SY1 = 314   # うりぼーポータル・BEEF+ / 食堂メニュー・生協アプリ 境界
+SY2 = 450   # 食堂メニュー・生協アプリ / 市バス・図書館 境界
+SY3 = 585   # 市バス・図書館 / 使い方・お問い合わせ 境界
+SIDE_MID = 1181  # サイドバー左右2列の境界
 
 
 def _review_action():
@@ -84,73 +81,70 @@ def _review_action():
 
 
 AREAS = [
-    # ── Row 1 ────────────────────────────────────────────────────
+    # ── Row 1（レビュー投稿・レビュー閲覧）─────────────────────────
     {
         "label": "レビュー投稿",
-        "x": 0, "y": 0, "w": REV_W, "h": ROW2_Y,
+        "x": 0, "y": TOP_Y, "w": REV_W, "h": ROW2_Y - TOP_Y,
         "action": _review_action(),
     },
     {
-        "label": "BEEF+バナー",
-        "x": REV_W, "y": 0, "w": SIDE_X - REV_W, "h": ROW2_Y,
-        "action": URIAction(label="BEEF+", uri="https://beefplus.center.kobe-u.ac.jp/login?openExternalBrowser=1"),
+        # 2026-08-24時点で「レビューを閲覧」専用の入り口は未実装のため、
+        # 既存の科目一覧（カテゴリ選択）フローを暫定で割り当てる
+        "label": "レビュー閲覧",
+        "x": REV_W, "y": TOP_Y, "w": SIDE_X - REV_W, "h": ROW2_Y - TOP_Y,
+        "action": PostbackAction(label="科目一覧", data="科目一覧"),
     },
-    # ── Row 2 ────────────────────────────────────────────────────
-    # x=0〜COL2_X（旧My時間割ボタン領域）はクリック領域未定義（上のTODO参照）
+    # ── Row 2（楽単5選・10連おみくじ・鬼単5選）─────────────────────
     {
-        "label": "教養",
-        "x": COL2_X, "y": ROW2_Y, "w": COL3_X - COL2_X, "h": ROW3_Y - ROW2_Y,
-        "action": PostbackAction(label="教養科目一覧", data="教養"),
+        "label": "楽単5選",
+        "x": 0, "y": ROW2_Y, "w": COL_A, "h": H - ROW2_Y,
+        "action": PostbackAction(label="楽単ランキング", data="楽単"),
     },
-    {
-        "label": "専門",
-        "x": COL3_X, "y": ROW2_Y, "w": SIDE_X - COL3_X, "h": ROW3_Y - ROW2_Y,
-        "action": PostbackAction(label="専門科目一覧", data="専門"),
-    },
-    # ── Row 3 ────────────────────────────────────────────────────
-    {
-        "label": "生協メニュー",
-        "x": 0, "y": ROW3_Y, "w": R3C1_X, "h": H - ROW3_Y,
-        "action": URIAction(label="生協メニュー", uri="https://west2-univ.jp/sp/kobe-univ.php"),
-    },
-    {
-        "label": "生協アプリ",
-        "x": R3C1_X, "y": ROW3_Y, "w": R3C2_X - R3C1_X, "h": H - ROW3_Y,
-        "action": URIAction(label="生協アプリ", uri=f"{REVIEW_FORM_URL}/coop"),
-    },
-    {
-        "label": "近隣飲食店",
-        "x": R3C2_X, "y": ROW3_Y, "w": R3C3_X - R3C2_X, "h": H - ROW3_Y,
-        "action": PostbackAction(label="近隣飲食店", data="近隣飲食店"),
-    },
-    {
-        "label": "バイト",
-        "x": R3C3_X, "y": ROW3_Y, "w": SIDE_X - R3C3_X, "h": H - ROW3_Y,
-        "action": PostbackAction(label="バイト", data="バイト"),
-    },
-    # ── 右サイドバー (4 段) ───────────────────────────────────────
-    {
-        "label": "図書館",
-        "x": SIDE_X, "y": 0, "w": W - SIDE_X, "h": SY1,
-        "action": URIAction(label="図書館", uri="https://lib.kobe-u.ac.jp/"),
-    },
-    {
-        "label": "市バス",
-        "x": SIDE_X, "y": SY1, "w": W - SIDE_X, "h": SY2 - SY1,
-        "action": URIAction(label="市バス", uri="https://kotsu.city.kobe.lg.jp/"),
-    },
+    # 「10連おみくじ」「鬼単5選」は未実装機能のため、誤った案内をしないよう
+    # クリック領域は定義しない（タップしても何も起きない。実装後に追加すること）
+    # ── 右サイドバー（4段 x 2列）────────────────────────────────
     {
         "label": "うりぼーポータル",
-        "x": SIDE_X, "y": SY2, "w": W - SIDE_X, "h": SY3 - SY2,
+        "x": SIDE_X, "y": TOP_Y, "w": SIDE_MID - SIDE_X, "h": SY1 - TOP_Y,
         "action": URIAction(
             label="うりぼーポータル",
             uri="https://www.uriboportal.ofc.kobe-u.ac.jp/?openExternalBrowser=1",
         ),
     },
     {
-        "label": "ヘルプ",
-        "x": SIDE_X, "y": SY3, "w": W - SIDE_X, "h": H - SY3,
-        "action": PostbackAction(label="ヘルプ", data="ヘルプ"),
+        "label": "BEEF+",
+        "x": SIDE_MID, "y": TOP_Y, "w": W - SIDE_MID, "h": SY1 - TOP_Y,
+        "action": URIAction(label="BEEF+", uri="https://beefplus.center.kobe-u.ac.jp/login?openExternalBrowser=1"),
+    },
+    {
+        "label": "食堂メニュー",
+        "x": SIDE_X, "y": SY1, "w": SIDE_MID - SIDE_X, "h": SY2 - SY1,
+        "action": URIAction(label="食堂メニュー", uri="https://west2-univ.jp/sp/kobe-univ.php"),
+    },
+    {
+        "label": "生協アプリ",
+        "x": SIDE_MID, "y": SY1, "w": W - SIDE_MID, "h": SY2 - SY1,
+        "action": URIAction(label="生協アプリ", uri=f"{REVIEW_FORM_URL}/coop"),
+    },
+    {
+        "label": "市バス",
+        "x": SIDE_X, "y": SY2, "w": SIDE_MID - SIDE_X, "h": SY3 - SY2,
+        "action": URIAction(label="市バス", uri="https://kotsu.city.kobe.lg.jp/"),
+    },
+    {
+        "label": "図書館",
+        "x": SIDE_MID, "y": SY2, "w": W - SIDE_MID, "h": SY3 - SY2,
+        "action": URIAction(label="図書館", uri="https://lib.kobe-u.ac.jp/"),
+    },
+    {
+        "label": "使い方",
+        "x": SIDE_X, "y": SY3, "w": SIDE_MID - SIDE_X, "h": H - SY3,
+        "action": PostbackAction(label="使い方", data="使い方"),
+    },
+    {
+        "label": "お問い合わせ",
+        "x": SIDE_MID, "y": SY3, "w": W - SIDE_MID, "h": H - SY3,
+        "action": URIAction(label="お問い合わせ", uri=f"{REVIEW_FORM_URL}/contact"),
     },
 ]
 
