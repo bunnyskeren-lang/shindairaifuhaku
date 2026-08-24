@@ -6,7 +6,6 @@ from linebot.v3.messaging import (
     FlexBubble,
     FlexButton,
     FlexMessage,
-    FlexSeparator,
     FlexText,
     MessageAction,
     PostbackAction,
@@ -317,62 +316,6 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                 ],
                 padding_all="md",
             ),
-        ),
-    )
-
-
-# ── Ranking bubble ──────────────────────────────────────────────
-
-RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
-
-
-def make_ranking_bubble(title: str, items: list[dict]) -> FlexBubble:
-    # items: [{"rank": int, "name": str, "stars": str}]
-    body_contents = []
-    for i, item in enumerate(items):
-        if i > 0:
-            body_contents.append(FlexSeparator(margin="sm"))
-        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
-        body_contents.append(
-            FlexBox(
-                layout="horizontal",
-                contents=[
-                    FlexText(text=medal, size="sm", flex=1, align="center", gravity="center"),
-                    FlexBox(
-                        layout="vertical",
-                        contents=[
-                            FlexText(
-                                text=item["name"],
-                                size="sm",
-                                wrap=True,
-                                weight="bold",
-                                color="#1e293b",
-                                action=MessageAction(
-                                    label=item["name"][:20],
-                                    text=item["name"],
-                                ),
-                            ),
-                            FlexText(text=item["stars"], size="xs", color="#f59e0b", margin="xs"),
-                        ],
-                        flex=5,
-                    ),
-                ],
-                spacing="md",
-                margin="sm",
-            )
-        )
-    return FlexBubble(
-        header=FlexBox(
-            layout="vertical",
-            contents=[FlexText(text=title, weight="bold", color="#ffffff", size="md")],
-            background_color="#6366f1",
-            padding_all="lg",
-        ),
-        body=FlexBox(layout="vertical", contents=body_contents, padding_all="lg"),
-        footer=FlexBox(
-            layout="vertical",
-            contents=[FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center")],
-            padding_all="md",
         ),
     )
 

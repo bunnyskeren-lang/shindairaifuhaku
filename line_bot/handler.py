@@ -1,5 +1,4 @@
 import asyncio
-import math
 import random
 import re as _re
 import time
@@ -32,7 +31,6 @@ from core.config import (
     is_profile_complete,
     make_cls_sort,
     make_register_url,
-    stars,
 )
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
@@ -44,7 +42,6 @@ from line_bot.flex_builders import (
     make_omikuji_card,
     make_onitan_card,
     make_rakutan_card,
-    make_ranking_bubble,
     make_registration_flex,
     make_variant_selection_bubble,
 )
@@ -398,32 +395,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
     return result
 
 
-# ── Ranking（起動時prewarm対象。1時間TTLキャッシュのミスを起動直後に埋めておく） ──
-
-async def _get_popular_ranking() -> list:
-    _cached = cache.get_ranking_cache("popular")
-    if _cached is not None:
-        return _cached
-    async with AsyncSessionLocal() as _s:
-        rows = (await _s.execute(
-            select(Subject.name, func.avg(Review.rating).label("avg"))
-            .join(CourseSection, CourseSection.subject_id == Subject.id)
-            .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == ReviewStatus.APPROVED)
-            .group_by(Subject.name)
-            .order_by(func.avg(Review.rating).desc())
-            .limit(5)
-        )).all()
-    if not rows:
-        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-    items = [
-        {"rank": i, "name": name, "stars": stars(math.floor(float(avg) + 0.5))}
-        for i, (name, avg) in enumerate(rows, 1)
-    ]
-    _res = [FlexMessage(alt_text="🏆 人気の授業 TOP5", contents=make_ranking_bubble("🏆 人気の授業 TOP5", items))]
-    cache.set_ranking_cache("popular", _res)
-    return _res
-
+# ── Ranking ──────────────────────────────────────────────────────
 
 async def _get_rakutan_ranking() -> list:
     # 「楽単度が最も高い」科目群からランダムに5件選ぶ。毎回結果を変えたいのでキャッシュしない
@@ -512,10 +484,6 @@ async def _get_omikuji() -> list:
         for sid, name, faculty in subj_rows
     ]
     return [make_omikuji_card(items)]
-
-
-async def prewarm_rankings() -> None:
-    await _get_popular_ranking()
 
 
 # ── Message handler ─────────────────────────────────────────────
@@ -855,9 +823,6 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
     if t in ["問い合わせ", "連絡", "contact", "お問い合わせ"]:
         return [make_help_flex()]
-
-    if t in ["人気の授業", "人気授業", "人気", "おすすめ"]:
-        return await _get_popular_ranking()
 
     if t in ["楽単ランキング", "楽単", "楽"]:
         return await _get_rakutan_ranking()

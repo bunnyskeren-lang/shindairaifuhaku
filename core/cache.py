@@ -13,7 +13,6 @@ _CLS_CACHE_TTL = _DEFAULT_CACHE_TTL
 _COURSE_CACHE_TTL = _DEFAULT_CACHE_TTL
 _COURSE_FLEX_TTL = _DEFAULT_CACHE_TTL
 _COURSE_LIST_TTL = _DEFAULT_CACHE_TTL
-_RANKING_TTL = _DEFAULT_CACHE_TTL
 
 # ── classification caches ───────────────────────────────────────
 _cls_order_map_cache: dict = {}
@@ -109,7 +108,6 @@ _reviewed_cache_init: bool = False
 
 _course_flex_cache: dict[int, tuple] = {}
 _course_list_cache: dict[str, tuple] = {}
-_ranking_cache: dict[str, tuple] = {}
 
 _syllabus_url_cache: dict[int, str] = {}
 _syllabus_url_cache_at: float = 0.0
@@ -262,7 +260,7 @@ async def get_syllabus_urls_cached() -> dict[int, str]:
 def invalidate_courses_cache():
     global _course_by_name, _course_list_all, _course_cache_at
     global _all_instructors_cache, _all_instructors_cache_at
-    global _course_flex_cache, _course_list_cache, _ranking_cache
+    global _course_flex_cache, _course_list_cache
     global _syllabus_url_cache, _syllabus_url_cache_at
     global _preload_cache, _preload_cache_at
     _course_by_name = {}
@@ -272,7 +270,6 @@ def invalidate_courses_cache():
     _all_instructors_cache_at = 0.0
     _course_flex_cache = {}
     _course_list_cache = {}
-    _ranking_cache = {}
     # 修正理由: シラバスURL(course_sections.syllabus_url)もcourses関連の派生データのため、
     # ここで一緒に無効化しないと管理画面での追加・変更が最大TTL(1時間)反映されなかった。
     _syllabus_url_cache = {}
@@ -284,14 +281,13 @@ def invalidate_courses_cache():
 def invalidate_review_cache():
     global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
     global _all_review_stats_cache, _all_review_stats_cache_at
-    global _course_flex_cache, _ranking_cache, _course_list_cache
+    global _course_flex_cache, _course_list_cache
     _reviewed_cache = set()
     _reviewed_cache_at = 0.0
     _reviewed_cache_init = False
     _all_review_stats_cache = {}
     _all_review_stats_cache_at = 0.0
     _course_flex_cache = {}
-    _ranking_cache = {}
     _course_list_cache = {}
     invalidate_full_pairs_cache()
 
@@ -318,17 +314,6 @@ def get_course_list_cache(key: str):
 
 def set_course_list_cache(key: str, value) -> None:
     _course_list_cache[key] = (value, time.monotonic())
-
-
-def get_ranking_cache(key: str):
-    entry = _ranking_cache.get(key)
-    if entry and time.monotonic() - entry[1] < _RANKING_TTL:
-        return entry[0]
-    return None
-
-
-def set_ranking_cache(key: str, value) -> None:
-    _ranking_cache[key] = (value, time.monotonic())
 
 
 # ── registration completeness cache（LINE bot応答パスの毎メッセージDB往復を回避） ──
