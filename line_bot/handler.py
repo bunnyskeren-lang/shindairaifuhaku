@@ -26,6 +26,7 @@ from core.config import (
     APP_URL,
     EASE_ORDER,
     EASE_STARS,
+    ONI_STARS,
     RICHMENU_ID_PREREGISTER,
     REVIEW_FORM_URL,
     is_profile_complete,
@@ -40,6 +41,7 @@ from line_bot.flex_builders import (
     make_classification_select_flex,
     make_help_flex,
     make_no_review_flex,
+    make_onitan_carousel,
     make_rakutan_carousel,
     make_ranking_bubble,
     make_registration_flex,
@@ -453,6 +455,37 @@ async def _get_rakutan_ranking() -> list:
     return [make_rakutan_carousel(items)]
 
 
+async def _get_onitan_ranking() -> list:
+    # 「鬼単度が最も高い」(=楽単度が最も低い)科目群からランダムに5件選ぶ。毎回結果を変えたいのでキャッシュしない
+    async with AsyncSessionLocal() as _s:
+        rows = (await _s.execute(
+            select(Subject.name, Review.ease_rating)
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.status == ReviewStatus.APPROVED)
+            .group_by(Subject.name, Review.ease_rating)
+        )).all()
+    if not rows:
+        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+    course_ease: dict[str, str] = {}
+    for name, ease in rows:
+        if name not in course_ease or EASE_ORDER.get(ease, -1) > EASE_ORDER.get(course_ease[name], -1):
+            course_ease[name] = ease
+    tiers = sorted({ease for ease in course_ease.values()}, key=lambda e: -EASE_ORDER.get(e, -1))
+    selected: list[tuple[str, str]] = []
+    for tier in tiers:
+        if len(selected) >= 5:
+            break
+        pool = [(name, ease) for name, ease in course_ease.items() if ease == tier]
+        random.shuffle(pool)
+        selected.extend(pool[:5 - len(selected)])
+    items = [
+        {"rank": i, "name": name, "stars": ONI_STARS.get(ease, "")}
+        for i, (name, ease) in enumerate(selected, 1)
+    ]
+    return [make_onitan_carousel(items)]
+
+
 async def prewarm_rankings() -> None:
     await _get_popular_ranking()
 
@@ -800,6 +833,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
 
     if t in ["楽単ランキング", "楽単", "楽"]:
         return await _get_rakutan_ranking()
+
+    if t in ["鬼単ランキング", "鬼単", "鬼"]:
+        return await _get_onitan_ranking()
 
     return await _handle_course_search(t, user_id)
 

@@ -426,6 +426,54 @@ def make_rakutan_carousel(items: list[dict]) -> FlexMessage:
     return FlexMessage(alt_text="😴 楽単5選", contents=FlexCarousel(contents=bubbles))
 
 
+def make_onitan_carousel(items: list[dict]) -> FlexMessage:
+    # items: [{"rank": int, "name": str, "stars": str}]
+    bubbles = []
+    for item in items:
+        medal = RANK_MEDAL.get(item["rank"], f"{item['rank']}位")
+        bubbles.append(
+            FlexBubble(
+                size="kilo",
+                header=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexText(text=medal, size="sm", color="#fecaca", weight="bold"),
+                        FlexText(text=item["name"], weight="bold", size="lg", color="#ffffff",
+                                  wrap=True, margin="sm"),
+                    ],
+                    background_color="#b91c1c",
+                    padding_all="lg",
+                ),
+                body=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexBox(
+                            layout="horizontal",
+                            contents=[
+                                FlexText(text="鬼単度", size="xs", color="#94a3b8", flex=0),
+                                FlexText(text=item["stars"], size="xl", color="#b91c1c", flex=0, margin="sm"),
+                            ],
+                            align_items="center",
+                        ),
+                        FlexText(text="タップして詳細・レビューを見る", size="xs", color="#94a3b8", margin="md"),
+                    ],
+                    padding_all="lg",
+                ),
+                footer=FlexBox(
+                    layout="vertical",
+                    contents=[
+                        FlexButton(
+                            action=MessageAction(label=item["name"][:20], text=item["name"]),
+                            style="primary", color="#b91c1c", height="sm",
+                        ),
+                    ],
+                    padding_all="md",
+                ),
+            )
+        )
+    return FlexMessage(alt_text="👹 鬼単5選", contents=FlexCarousel(contents=bubbles))
+
+
 # ── Course list carousel ────────────────────────────────────────
 
 

@@ -103,6 +103,7 @@ EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}
 EASE_LABEL = {"SS": "天国", "S": "楽々", "A": "標準", "B": "大変", "C": "修羅場"}
 EASE_COLOR = {"SS": "#10b981", "S": "#6366f1", "A": "#f59e0b", "B": "#f97316", "C": "#ef4444"}
 EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★☆☆", "B": "★★☆☆☆", "C": "★☆☆☆☆"}
+ONI_STARS = {"C": "★★★★★", "B": "★★★★☆", "A": "★★★☆☆", "S": "★★☆☆☆", "SS": "★☆☆☆☆"}
 
 # 以下、programing files/fetch_syllabus_info.pyのFACULTY_PATH/DEPARTMENT_PATH_OVERRIDE/
 # ENGINEERING_RANGES/MEDICINE_RANGES/MEDICINE_SUBLETTERSと同じ対応表。
