@@ -14,7 +14,7 @@ from linebot.v3.messaging import (
 )
 
 from core import cache
-from core.config import APP_URL, CONTACT_EMAIL, EASE_STARS, PRIVACY_URL, REVIEW_FORM_URL
+from core.config import APP_URL, CONTACT_URL, EASE_STARS, PRIVACY_URL, REVIEW_FORM_URL
 from models import Subject
 
 # ── FlexMessage builder ─────────────────────────────────────────
@@ -239,7 +239,7 @@ def make_help_flex() -> FlexMessage:
                 layout="vertical",
                 contents=[
                     FlexButton(
-                        action=URIAction(label="📬 お問い合わせ", uri=f"mailto:{CONTACT_EMAIL}"),
+                        action=URIAction(label="📬 お問い合わせ", uri=CONTACT_URL),
                         style="primary",
                         color="#6366f1",
                         height="sm",

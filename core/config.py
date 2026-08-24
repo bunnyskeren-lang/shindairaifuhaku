@@ -48,6 +48,9 @@ EMAIL_VERIFICATION_TTL_MINUTES = 30
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
+# 1科目×1担当教員（course_section）あたりのレビュー投稿受付上限（待機中+承認済みの合計）
+MAX_REVIEWS_PER_COURSE_SECTION = 3
+
 
 def student_email(student_id: str) -> str:
     """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""
@@ -92,7 +95,7 @@ ADMIN_COOKIE = "admin_tok"
 ADMIN_TOKEN_TTL = 4 * 3600
 
 PRIVACY_URL = APP_URL + "/privacy"
-CONTACT_EMAIL = "bunnyskeren@gmail.com"
+CONTACT_URL = APP_URL + "/contact"
 
 _CLS_ORDER_KEYS = ["基盤", "人文", "社会", "自然", "総合", "健康", "外国語"]
 
