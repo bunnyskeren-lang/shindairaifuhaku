@@ -432,11 +432,12 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
 
 
 def make_omikuji_card(items: list[dict]) -> FlexMessage:
-    # items: [{"name": str, "faculty": str, "stars": str}]  stars=""なら未レビュー
+    # items: [{"id": int, "name": str, "faculty": str, "stars": str}]  stars=""なら未レビュー
     rows = []
     for item in items:
         stars_text = item["stars"] or "評価なし"
         stars_color = "#f59e0b" if item["stars"] else "#94a3b8"
+        liff_url = f"{APP_URL}/liff/course?course_id={item['id']}"
         row_contents = [
             FlexBox(
                 layout="horizontal",
@@ -445,7 +446,7 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
                     FlexText(
                         text=item["name"], weight="bold", size="md", color="#1e293b",
                         wrap=True, flex=1,
-                        action=MessageAction(label=item["name"][:20], text=item["name"]),
+                        action=URIAction(label=item["name"][:20], uri=liff_url),
                     ),
                     FlexText(text=stars_text, size="sm", color=stars_color, flex=0,
                               align="end", gravity="center"),
@@ -454,6 +455,14 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
         ]
         if item.get("faculty"):
             row_contents.append(FlexText(text=item["faculty"], size="xs", color="#94a3b8", margin="sm"))
+        if not item["stars"]:
+            form_url = f"{REVIEW_FORM_URL}?course={_url_quote(item['name'])}"
+            row_contents.append(
+                FlexButton(
+                    action=URIAction(label="✏️ レビューを投稿する", uri=form_url),
+                    style="secondary", height="sm", margin="sm",
+                )
+            )
         rows.append(
             FlexBox(
                 layout="vertical",

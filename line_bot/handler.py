@@ -508,7 +508,7 @@ async def _get_omikuji() -> list:
         if sid not in best_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best_ease[sid], 99):
             best_ease[sid] = ease
     items = [
-        {"name": name, "faculty": faculty or "", "stars": EASE_STARS.get(best_ease.get(sid, ""), "")}
+        {"id": sid, "name": name, "faculty": faculty or "", "stars": EASE_STARS.get(best_ease.get(sid, ""), "")}
         for sid, name, faculty in subj_rows
     ]
     return [make_omikuji_card(items)]
