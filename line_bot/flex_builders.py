@@ -432,18 +432,14 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
 
 
 def make_omikuji_card(items: list[dict]) -> FlexMessage:
-    # items: [{"name": str, "stars": str}]  stars=""なら未レビュー
+    # items: [{"name": str, "faculty": str, "stars": str}]  stars=""なら未レビュー
     rows = []
     for item in items:
         stars_text = item["stars"] or "評価なし"
         stars_color = "#f59e0b" if item["stars"] else "#94a3b8"
-        rows.append(
+        row_contents = [
             FlexBox(
                 layout="horizontal",
-                background_color="#f5f3ff",
-                corner_radius="10px",
-                padding_all="md",
-                margin="sm",
                 spacing="sm",
                 contents=[
                     FlexText(
@@ -454,6 +450,18 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
                     FlexText(text=stars_text, size="sm", color=stars_color, flex=0,
                               align="end", gravity="center"),
                 ],
+            ),
+        ]
+        if item.get("faculty"):
+            row_contents.append(FlexText(text=item["faculty"], size="xs", color="#94a3b8", margin="sm"))
+        rows.append(
+            FlexBox(
+                layout="vertical",
+                background_color="#f5f3ff",
+                corner_radius="10px",
+                padding_all="md",
+                margin="sm",
+                contents=row_contents,
             )
         )
     title = "⛩️ 10連おみくじ"

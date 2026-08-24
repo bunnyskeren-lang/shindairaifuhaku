@@ -491,13 +491,13 @@ async def _get_omikuji() -> list:
     # 全科目からランダムに10件選ぶ。毎回結果を変えたいのでキャッシュしない
     async with AsyncSessionLocal() as _s:
         subj_rows = (await _s.execute(
-            select(Subject.id, Subject.name)
+            select(Subject.id, Subject.name, Subject.faculty)
             .order_by(func.random())
             .limit(10)
         )).all()
         if not subj_rows:
             return [TextMessage(text="科目データがまだありません。")]
-        ids = [sid for sid, _ in subj_rows]
+        ids = [sid for sid, _, _ in subj_rows]
         ease_rows = (await _s.execute(
             select(CourseSection.subject_id, Review.ease_rating)
             .join(Review, Review.course_section_id == CourseSection.id)
@@ -508,8 +508,8 @@ async def _get_omikuji() -> list:
         if sid not in best_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best_ease[sid], 99):
             best_ease[sid] = ease
     items = [
-        {"name": name, "stars": EASE_STARS.get(best_ease.get(sid, ""), "")}
-        for sid, name in subj_rows
+        {"name": name, "faculty": faculty or "", "stars": EASE_STARS.get(best_ease.get(sid, ""), "")}
+        for sid, name, faculty in subj_rows
     ]
     return [make_omikuji_card(items)]
 
