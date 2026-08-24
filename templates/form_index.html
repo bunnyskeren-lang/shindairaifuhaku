@@ -44,7 +44,7 @@
            検証済みの本人にのみ /api/profile/prefill 経由でJSからプリフィルする。 -->
       <div id="newUserNotice" class="hidden bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 mb-1 text-sm text-purple-700 items-start gap-2">
         <span class="text-lg leading-none mt-0.5">🎓</span>
-        <span>初めての投稿です。プロフィールを登録してください（管理者のみ確認できます）。送信後、大学メール宛に確認リンクをお送りする場合があります。</span>
+        <span>初めての投稿です。プロフィールを登録してください（管理者のみ確認できます）。</span>
       </div>
 
       <div id="regNameCard" class="hidden bg-white rounded-2xl shadow-sm p-5">
@@ -531,6 +531,7 @@
     // ID tokenをサーバー側でLINEのverifyエンドポイントに照会し、真正な
     // ユーザーIDのみを信用するように変更した。
     const LIFF_ID = "{{ liff_id }}";
+    const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
     let _liffInitPromise = null;
     function ensureLiffInit() {
       if (!_liffInitPromise) {
@@ -558,6 +559,10 @@
             sidInput.readOnly = true;
             sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
           }
+        } else if (EMAIL_VERIFICATION_ENABLED) {
+          // 修正理由: 初めての投稿者はプロフィール作成前に大学メールでの本人確認を
+          // 済ませる必要があるため、投稿フォームそのものを開かせずゲートページへ誘導する
+          location.replace('/verify-email');
         } else {
           document.getElementById('newUserNotice').classList.remove('hidden');
           document.getElementById('newUserNotice').classList.add('flex');

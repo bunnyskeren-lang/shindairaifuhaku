@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, Response
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, FACULTY_DEPARTMENTS, IS_DEV,
+    APP_URL, EMAIL_VERIFICATION_ENABLED, FACULTY_DEPARTMENTS, IS_DEV,
     LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, REVIEW_LIFF_ID,
 )
 from core.templates import templates
@@ -27,11 +27,28 @@ async def index(request: Request, uid: str = Query(default="")):
             "uid": uid,
             "liff_id": REVIEW_LIFF_ID,
             "IS_DEV": IS_DEV,
+            "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+    return response
+
+
+@router.get("/verify-email", response_class=HTMLResponse)
+async def verify_email_gate(request: Request):
+    """レビュー投稿フォームを開く前段のメール認証ページ。氏名・学籍番号のみを集め、
+    大学メール宛のマジックリンクで本人確認する（/api/email/request参照）。"""
+    response = templates.TemplateResponse(
+        "form_email_gate.html",
+        {
+            "request": request,
+            "liff_id": REVIEW_LIFF_ID,
+            "IS_DEV": IS_DEV,
+        },
+    )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
 

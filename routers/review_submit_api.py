@@ -4,15 +4,13 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import func, select
 
 from core.activity_log import save_error_log
-from core.config import APP_URL, EMAIL_VERIFICATION_ENABLED, REVIEW_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE, student_email
+from core.config import APP_URL, EMAIL_VERIFICATION_ENABLED, STUDENT_ID_RE, LINE_USER_ID_RE
 from core.liff_auth import verify_liff_id_token
-from core.mail import send_verification_email
 from core.push import send_push_notification
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
-from routers.email_verify_api import create_pending_verification
 
 router = APIRouter()
 
@@ -58,8 +56,6 @@ async def submit(
     if not uid or not LINE_USER_ID_RE.match(uid):
         return _form_error("LINEログインの確認に失敗しました。LINEアプリの「レビュー投稿」から開き直してください")
 
-    pending_token = None
-
     async with AsyncSessionLocal() as session:
         # 学部をまたいで同名科目が実在しうるため、ここでは存在確認のみ行い
         # .first()で1件だけ取得する（どの学部の科目かは後段の担当教員絞り込みで確定させる）
@@ -69,8 +65,41 @@ async def submit(
         if not subject:
             return _form_error("指定された科目が見つかりません")
 
-        # 担当教員に対応する course_section を探す（新規/既存プロフィールどちらの分岐でも
-        # 必要なため、プロフィール判定より先に解決しておく）
+        existing = (await session.execute(
+            select(UserProfile).where(UserProfile.line_user_id == uid)
+        )).scalar_one_or_none()
+        if existing is None:
+            # 修正理由: EMAIL_VERIFICATION_ENABLED時、新規ユーザーは投稿フォームを開く前に
+            # /verify-email でメール認証を済ませてからでないとここに到達しない
+            # (routers/pages.py index()・form_index.htmlのリダイレクト参照)。
+            # それでもここに来た場合は認証未完了とみなし拒否する(直接APIを叩く迂回策への防御)。
+            if EMAIL_VERIFICATION_ENABLED:
+                return _form_error("メール認証が完了していません。投稿フォームを開き直してください")
+            if not reg_name.strip():
+                return _form_error("お名前を入力してください")
+            taken = (await session.execute(
+                select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
+            )).scalars().first()
+            if taken is not None and taken != uid:
+                return _form_error("この学籍番号はすでに別のアカウントで登録されています")
+            submitter_name = reg_name.strip()[:100]
+            try:
+                session.add(UserProfile(
+                    line_user_id=uid,
+                    name=submitter_name,
+                    student_id=sid,
+                ))
+                await session.flush()
+            except Exception as exc:
+                await session.rollback()
+                await save_error_log(exc, user_id=uid, action="submit_profile_create")
+                return _form_error("プロフィールの保存に失敗しました")
+        else:
+            if existing.student_id != sid:
+                return _form_error("学籍番号が登録情報と一致しません")
+            submitter_name = existing.name
+
+        # 担当教員に対応する course_section を探す
         instr_name = selected_instructor.strip()[:100] or None
         cs_obj = None
         if instr_name:
@@ -97,83 +126,26 @@ async def submit(
         if cs_obj is None:
             return _form_error("この科目の担当教員情報が見つかりません")
 
-        existing = (await session.execute(
-            select(UserProfile).where(UserProfile.line_user_id == uid)
-        )).scalar_one_or_none()
-        if existing is None:
-            if not reg_name.strip():
-                return _form_error("お名前を入力してください")
-            taken = (await session.execute(
-                select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
-            )).scalars().first()
-            if taken is not None and taken != uid:
-                return _form_error("この学籍番号はすでに別のアカウントで登録されています")
-            submitter_name = reg_name.strip()[:100]
-
-            if EMAIL_VERIFICATION_ENABLED:
-                # LINEアカウント×学籍番号の組み合わせが初めての場合のみ、大学メール宛の
-                # マジックリンク確認が取れるまでプロフィール・レビューの作成を保留する
-                payload = {
-                    "name": submitter_name,
-                    "course_section_id": cs_obj.id,
-                    "subject_id": subject.id,
-                    "course_name": course_name.strip(),
-                    "content": comment.strip()[:500],
-                    "rating": rating,
-                    "ease_rating": ease_rating,
-                    "grading_method": grading_method.strip()[:500] or None,
-                    "selected_instructor": instr_name,
-                    "nickname": nickname.strip()[:30] or None,
-                    "academic_year": academic_year,
-                }
-                pending_token = await create_pending_verification(session, uid, sid, payload)
-            else:
-                try:
-                    session.add(UserProfile(
-                        line_user_id=uid,
-                        name=submitter_name,
-                        student_id=sid,
-                    ))
-                    await session.flush()
-                except Exception as exc:
-                    await session.rollback()
-                    await save_error_log(exc, user_id=uid, action="submit_profile_create")
-                    return _form_error("プロフィールの保存に失敗しました")
-        else:
-            if existing.student_id != sid:
-                return _form_error("学籍番号が登録情報と一致しません")
-            submitter_name = existing.name
-
-        if pending_token is None:
-            review = Review(
-                course_section_id=cs_obj.id,
-                submitter_name=submitter_name,
-                content=comment.strip()[:500],
-                rating=rating,
-                ease_rating=ease_rating,
-                grading_method=grading_method.strip()[:500] or None,
-                selected_instructor=instr_name,
-                nickname=nickname.strip()[:30] or None,
-                academic_year=academic_year,
-                student_id=sid or None,
-                status=ReviewStatus.PENDING,
-            )
-            session.add(review)
-            await session.commit()
-
-            review_count = (await session.execute(
-                select(func.count(Review.id)).where(Review.student_id == sid)
-            )).scalar_one()
-            course_id = subject.id
-
-    if pending_token is not None:
-        to_email = student_email(sid)
-        await send_verification_email(
-            to_email, f"{APP_URL}/api/email/verify?token={pending_token}", user_id=uid,
+        review = Review(
+            course_section_id=cs_obj.id,
+            submitter_name=submitter_name,
+            content=comment.strip()[:500],
+            rating=rating,
+            ease_rating=ease_rating,
+            grading_method=grading_method.strip()[:500] or None,
+            selected_instructor=instr_name,
+            nickname=nickname.strip()[:30] or None,
+            academic_year=academic_year,
+            student_id=sid or None,
+            status=ReviewStatus.PENDING,
         )
-        return templates.TemplateResponse(
-            "form_email_sent.html", {"request": request, "email": to_email, "liff_id": REVIEW_LIFF_ID}
-        )
+        session.add(review)
+        await session.commit()
+
+        review_count = (await session.execute(
+            select(func.count(Review.id)).where(Review.student_id == sid)
+        )).scalar_one()
+        course_id = subject.id
 
     # レビューは既にcommit済みのため、push通知はレスポンスを待たせず
     # バックグラウンドで送る（購読者数が増えても投稿完了レスポンスの速度に影響しないように）。
