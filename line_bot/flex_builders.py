@@ -12,7 +12,7 @@ from linebot.v3.messaging import (
 )
 
 from core import cache
-from core.config import APP_URL, CONTACT_URL, EASE_STARS, PRIVACY_URL, REVIEW_FORM_URL
+from core.config import CONTACT_URL, EASE_STARS, PRIVACY_URL, REVIEW_FORM_URL, make_course_liff_url
 from models import Subject
 
 # ── FlexMessage builder ─────────────────────────────────────────
@@ -27,7 +27,7 @@ def _build_course_flex(course: Subject, all_instrs: dict, all_stats: dict) -> Fl
     review_count, top_ease_flex = all_stats.get(course.name, (0, None))
 
     instructor_str = "・".join(i.name for i in instructors) or "未設定"
-    liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
+    liff_url = make_course_liff_url(course.id)
 
     meta_parts = []
     if getattr(course, "term_type", None):
@@ -108,7 +108,7 @@ def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
     form_url = f"{REVIEW_FORM_URL}?course={_url_quote(course.name)}"
     if user_id:
         form_url += f"&uid={user_id}"
-    liff_url = f"{APP_URL}/liff/course?course_id={course.id}"
+    liff_url = make_course_liff_url(course.id)
     return FlexMessage(
         alt_text=f"📖 {course.name}",
         contents=FlexBubble(
@@ -219,15 +219,19 @@ def make_help_flex() -> FlexMessage:
                 layout="vertical",
                 contents=[
                     section_label("📱  リッチメニュー"),
-                    card("📚", "教養", "教養科目を分類別に一覧表示", bg="#f5f3ff"),
-                    card("🎓", "専門", "学部・学科ごとに専門科目を一覧表示", bg="#f5f3ff"),
                     card("✏️", "レビュー投稿", "レビュー投稿フォームを開く", bg="#f5f3ff"),
+                    card("📖", "レビュー閲覧", "科目一覧からレビューをチェック", bg="#f5f3ff"),
+                    card("🏆", "楽単5選 / 鬼単5選", "楽単・鬼単科目ランキングTOP5を表示", bg="#f5f3ff"),
+                    card("🎴", "10連おみくじ", "ランダムに10科目をおみくじ形式で紹介", bg="#f5f3ff"),
+                    card("🔗", "外部サービス",
+                         "うりぼーポータル・BEEF+・食堂メニュー・\n生協アプリ・市バス・図書館へ移動",
+                         bg="#f5f3ff"),
                     section_label("💬  チャット"),
                     card("🔍", "科目名を送る",
                          "授業情報・レビューを表示\n例：「英語」「データサイエンス」",
                          bg="#eff6ff"),
-                    card("🏆", "人気 / 楽単",
-                         "「人気」→ 高評価 TOP5\n「楽単」→ 楽単 TOP5",
+                    card("🏆", "楽単 / 鬼単",
+                         "「楽単」→ 楽単ランキング\n「鬼単」→ 鬼単ランキング",
                          bg="#eff6ff"),
                 ],
                 padding_all="lg",
@@ -323,7 +327,7 @@ def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: st
     # items: [{"rank": int, "id": int, "name": str, "stars": str}]  rankは選出順の内部管理用で表示はしない
     rows = []
     for item in items:
-        liff_url = f"{APP_URL}/liff/course?course_id={item['id']}"
+        liff_url = make_course_liff_url(item['id'])
         rows.append(
             FlexBox(
                 layout="vertical",
@@ -372,7 +376,7 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
     for item in items:
         stars_text = item["stars"] or "評価なし"
         stars_color = "#f59e0b" if item["stars"] else "#94a3b8"
-        liff_url = f"{APP_URL}/liff/course?course_id={item['id']}"
+        liff_url = make_course_liff_url(item['id'])
         row_contents = [
             FlexBox(
                 layout="horizontal",

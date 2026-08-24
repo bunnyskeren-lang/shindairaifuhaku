@@ -208,6 +208,19 @@ def make_register_url(user_id: str) -> str:
     return f"{APP_URL}/register?uid={user_id}"
 
 
+def make_course_liff_url(course_id) -> str:
+    """科目詳細LIFFページのURL。LINEのFlexMessage等から「https://{APP_URL}/liff/course?...」の
+    ような生のHTTPS URLをそのまま開かせると、LINEの通常のアプリ内ブラウザで開かれるだけで
+    LIFFクライアントとしては認識されず、liff.isInClient()がfalseになりliff.isLoggedIn()も
+    自動ログインされない（2026-08-24、レビュー閲覧権チケットの解除ボタンが常に未ログイン扱いに
+    なる不具合として発覚。make_register_urlが同じ理由でLIFF URL形式を使っているのと同様の対応）。
+    必ず https://liff.line.me/{LIFF_ID}?course_id=... 形式で開かせ、LINE側にLIFFとして
+    認識させる。LIFF_ID未設定時（テスト環境等）は直URLにフォールバックする。"""
+    if LIFF_ID:
+        return f"https://liff.line.me/{LIFF_ID}?course_id={course_id}"
+    return f"{APP_URL}/liff/course?course_id={course_id}"
+
+
 def escape_like(s: str) -> str:
     """ILIKE検索語のワイルドカード(\\, %, _)をエスケープする。呼び出し側はescape="\\\\"を指定すること。"""
     return s.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")

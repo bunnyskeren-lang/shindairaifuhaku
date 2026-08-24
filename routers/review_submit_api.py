@@ -5,7 +5,10 @@ from sqlalchemy import func, select
 
 from core import cache
 from core.activity_log import save_error_log
-from core.config import APP_URL, EMAIL_VERIFICATION_ENABLED, MAX_REVIEWS_PER_COURSE_SECTION, STUDENT_ID_RE, LINE_USER_ID_RE
+from core.config import (
+    EMAIL_VERIFICATION_ENABLED, MAX_REVIEWS_PER_COURSE_SECTION,
+    STUDENT_ID_RE, LINE_USER_ID_RE, make_course_liff_url,
+)
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
 from core.rate_limit import rate_limiter
@@ -191,6 +194,6 @@ async def submit(
             "course_name": course_name,
             "course_id": course_id,
             "review_count": review_count,
-            "base_url": APP_URL,
+            "course_liff_url": make_course_liff_url(course_id),
         }
     )

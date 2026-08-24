@@ -30,6 +30,7 @@ from core.config import (
     REVIEW_FORM_URL,
     is_profile_complete,
     make_cls_sort,
+    make_course_liff_url,
     make_register_url,
 )
 from database import AsyncSessionLocal
@@ -203,7 +204,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
     # syllabus_url は全件キャッシュから取得（DBアクセスなし）
     _sv_by_id = await cache.get_syllabus_urls_cached()
     course_syllabus_urls: dict[str, str] = {c.name: _sv_by_id[c.id] for c in rows if c.id in _sv_by_id}
-    course_liff_urls: dict[str, str] = {c.name: f"{APP_URL}/liff/course?course_id={c.id}" for c in rows}
+    course_liff_urls: dict[str, str] = {c.name: make_course_liff_url(c.id) for c in rows}
     groups: dict[str, list[tuple[str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
     cls_faculty: dict[str, str] = {}
