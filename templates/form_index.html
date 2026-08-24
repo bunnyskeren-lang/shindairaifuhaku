@@ -943,6 +943,47 @@
 
     function _normStr(s) { return s.replace(/[・･（）()]/g, '').toLowerCase(); }
 
+    // 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）を
+    // 検索候補として1件にまとめ、担当教員は全変種分をマージした一覧として提示する。
+    // どの変種になるかは教員選択時に自動で解決する（変種そのものはユーザーに意識させない）。
+    function _groupCourseItems(items) {
+      const byGroup = new Map();
+      for (const c of items) {
+        if (!c.variantGroup) continue;
+        if (!byGroup.has(c.variantGroup)) byGroup.set(c.variantGroup, []);
+        byGroup.get(c.variantGroup).push(c);
+      }
+      const emitted = new Set();
+      const result = [];
+      for (const c of items) {
+        const members = c.variantGroup ? byGroup.get(c.variantGroup) : null;
+        if (!members || members.length < 2) { result.push(c); continue; }
+        if (emitted.has(c.variantGroup)) continue;
+        const mergedInstructors = [];
+        for (const m of members) {
+          const suffix = m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name;
+          for (const inst of (m.instructors || [])) {
+            mergedInstructors.push({ ...inst, courseId: m.id, courseName: m.name, variantSuffix: suffix });
+          }
+        }
+        if (mergedInstructors.length === 0) { result.push(c); continue; } // 教員未登録で解決不能な場合は統合しない
+        emitted.add(c.variantGroup);
+        const nameCounts = {};
+        mergedInstructors.forEach(i => { nameCounts[i.name] = (nameCounts[i.name] || 0) + 1; });
+        mergedInstructors.forEach(i => {
+          i.displayName = nameCounts[i.name] > 1 ? `${i.name}（${i.variantSuffix}）` : i.name;
+        });
+        result.push({
+          id: null,
+          name: c.variantGroup,
+          isGroup: true,
+          variantSuffixes: members.map(m => m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name),
+          instructors: mergedInstructors,
+        });
+      }
+      return result;
+    }
+
     function _showCourseDropdown(items, q) {
       if (items.length === 0) {
         dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">候補がありません</div>`;
@@ -953,7 +994,9 @@
         `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
           style="border-bottom:1px solid #f3f4f6;transition:background .1s"
           onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-          <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}</div>
+          <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}${
+            c.isGroup ? ` <span style="color:#94a3b8;font-weight:400">(${escapeHtml(c.variantSuffixes.join('/'))})</span>` : ''
+          }</div>
           ${c.instructors.length
             ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">担当教員 ${c.instructors.length}名</div>`
             : ''}
@@ -962,7 +1005,7 @@
       dropdown.classList.remove('hidden');
       dropdown.querySelectorAll('[data-idx]').forEach(el => {
         const c = items[parseInt(el.dataset.idx)];
-        el.addEventListener('click', () => selectCourse(c.name, c.instructors, c.id));
+        el.addEventListener('click', () => selectCourse(c.name, c.instructors, c.id, !!c.isGroup));
       });
     }
 
@@ -980,7 +1023,7 @@
             name.includes(tok) || reading.includes(tok) || normName.includes(normTokens[i])
           );
         });
-        _showCourseDropdown(items, q);
+        _showCourseDropdown(_groupCourseItems(items), q);
       } else {
         fetch(`/api/courses?q=${encodeURIComponent(q)}`)
           .then(r => r.json())
@@ -1001,10 +1044,12 @@
     let currentCourseId = null;
     const chipsEl = document.getElementById('instructorChips');
 
-    function selectCourse(name, instructors, courseId) {
+    function selectCourse(name, instructors, courseId, isGroup) {
       currentInstructors = instructors || [];
-      currentCourseId = courseId ?? null;
-      document.getElementById('courseNameHidden').value = name;
+      // 統合科目（isGroup）は教員を選ぶまでどの変種か確定しないため、courseNameHiddenは
+      // 一旦空にしておき（送信バリデーションで弾かれる）、教員選択時に実際の科目名へ差し替える
+      currentCourseId = isGroup ? null : (courseId ?? null);
+      document.getElementById('courseNameHidden').value = isGroup ? '' : name;
       document.getElementById('selectedCourseName').textContent = name;
       document.getElementById('selectedCourse').classList.remove('hidden');
       document.getElementById('courseNameLabelInstr').classList.remove('hidden');
@@ -1023,18 +1068,25 @@
       if (currentInstructors.length > 0) {
         chipsEl.classList.remove('hidden');
         document.getElementById('instructorHint').classList.remove('hidden');
-        const withReviewed = currentInstructors.map(inst => ({
-          ...inst,
-          reviewed: !inst.full && currentCourseId != null && _reviewedSet.has(currentCourseId + '::' + inst.name),
-        }));
+        const withReviewed = currentInstructors.map(inst => {
+          const cid = inst.courseId ?? currentCourseId;
+          return {
+            ...inst,
+            _cid: cid,
+            _cname: inst.courseName ?? name,
+            reviewed: !inst.full && cid != null && _reviewedSet.has(cid + '::' + inst.name),
+          };
+        });
         chipsEl.innerHTML = withReviewed.map(inst => {
+          const label = inst.displayName || inst.name;
+          const cidAttr = ` data-course-id="${inst._cid ?? ''}" data-course-name="${escapeHtml(inst._cname)}"`;
           if (inst.full) {
-            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}" style="opacity:.45;text-decoration:line-through;cursor:not-allowed">${escapeHtml(inst.name)}</button>`;
+            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.45;text-decoration:line-through;cursor:not-allowed">${escapeHtml(label)}</button>`;
           }
           if (inst.reviewed) {
-            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}" style="opacity:.5;cursor:not-allowed">${escapeHtml(inst.name)}（投稿済み）</button>`;
+            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.5;cursor:not-allowed">${escapeHtml(label)}（投稿済み）</button>`;
           }
-          return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}">${escapeHtml(inst.name)}</button>`;
+          return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr}>${escapeHtml(label)}</button>`;
         }).join('');
         if (withReviewed.some(inst => inst.full)) {
           document.getElementById('instructorFullNotice').classList.remove('hidden');
@@ -1047,6 +1099,15 @@
             chipsEl.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById('selectedInstructorHidden').value = btn.dataset.value;
+            // 統合科目（グループ）はどの教員を選んだかで実際の科目（変種）が確定するため、
+            // クリックのたびにdata-course-id/dataset-course-nameへ差し替える
+            // （非グループ選択時もchip生成時点で自分自身のcourseId/courseNameが入っているため無害）
+            if (btn.dataset.courseId) {
+              const cName = btn.dataset.courseName;
+              document.getElementById('courseNameHidden').value = cName;
+              document.getElementById('selectedCourseName').textContent = cName;
+              currentCourseId = parseInt(btn.dataset.courseId, 10);
+            }
             document.getElementById('instructorHint').classList.add('hidden');
             document.getElementById('instructorError').classList.add('hidden');
             saveData();

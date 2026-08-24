@@ -14,6 +14,7 @@ from core.config import (
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.rate_limit import rate_limiter
+from core.subject_variants import compute_variant_groups
 from database import AsyncSessionLocal
 from models import CourseSection, CourseSectionView, Instructor, Review, ReviewStatus, Subject, Syllabus
 
@@ -126,8 +127,12 @@ async def api_preload():
         for c in courses:
             for inst in insts_by_course.get(c.id, []):
                 inst_courses.setdefault(inst.name, {})[c.id] = c.name
+        # 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）は
+        # レビュー投稿フォームの科目検索でも1件にまとめて選べるようにする（LINE bot科目一覧と同じ統合規則）
+        variant_map = compute_variant_groups([(c.name, c.classification or "") for c in courses])
         course_list = [
             {"id": c.id, "name": c.name, "reading": c.reading or "",
+             "variantGroup": variant_map.get(c.name, ""),
              "instructors": [{"name": i.name} for i in insts_by_course.get(c.id, [])]}
             for c in courses
         ]
