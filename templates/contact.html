@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>お問い合わせ | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
 
@@ -22,7 +23,19 @@
       <p class="text-gray-500 text-sm mt-1">ご質問、情報の誤りのご指摘、新しい情報の追加提案、情報のアップデート、誤字脱字のご指摘など、お気軽にお寄せください</p>
     </div>
 
+    <div id="authNotice" class="hidden space-y-2 mb-4"></div>
+
     <form id="contactForm" action="/contact/submit" method="post" novalidate class="space-y-4">
+
+      <input type="hidden" name="id_token" id="idTokenHidden" value="">
+
+      <div id="studentIdCard" class="hidden bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          🎓 学籍番号
+        </label>
+        <input type="text" id="studentIdValue" readonly
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-500 cursor-not-allowed">
+      </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label for="category" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -62,9 +75,9 @@
         本お問い合わせについて、運営側からご連絡させていただくことがあります。メールアドレスは普段使うものをご入力ください。
       </div>
 
-      <button type="submit"
-        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm shadow-sm">
-        送信する
+      <button type="submit" id="submitBtn" disabled
+        class="w-full bg-gray-300 text-white font-bold py-3.5 rounded-2xl transition text-sm shadow-sm cursor-not-allowed">
+        確認中...
       </button>
     </form>
   </div>
@@ -87,10 +100,94 @@
       const emailOk = EMAIL_RE.test(emailInput.value);
       emailError.classList.toggle('hidden', emailOk);
 
-      if (!categoryInput.value || !contentInput.value || !emailOk) {
+      if (!categoryInput.value || !contentInput.value || !emailOk || !document.getElementById('idTokenHidden').value) {
         e.preventDefault();
       }
     });
+
+    // ── LIFF初期化と会員登録チェック ──
+    // 修正理由: お問い合わせは会員登録済みユーザーに限定するため、レビュー投稿フォームと
+    // 同様にLIFF ID token検証済みの本人のプロフィールから学籍番号を取得して表示し、
+    // 未登録の場合は送信をブロックして会員登録を促す
+    const LIFF_ID = "{{ liff_id }}";
+    const REGISTER_LIFF_ID = "{{ register_liff_id }}";
+
+    function showAuthNotice(html) {
+      const notice = document.getElementById('authNotice');
+      notice.innerHTML = html;
+      notice.classList.remove('hidden');
+    }
+
+    function enableSubmit() {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = false;
+      btn.textContent = '送信する';
+      btn.className = 'w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm shadow-sm';
+    }
+
+    async function initAuthCheck() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+      } catch (e) {
+        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+          ⚠️ LINEログインの確認に失敗しました。リッチメニューからこのページを開き直してください。</div>`);
+        return;
+      }
+
+      const isInClient = (() => { try { return liff.isInClient(); } catch (e) { return false; } })();
+      if (isInClient && !liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      if (!liff.isLoggedIn()) {
+        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+          📱 お問い合わせにはLINEログインが必要です。</div>
+          <button type="button" id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">LINEでログイン</button>`);
+        document.getElementById('loginBtn').onclick = () => liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      let idToken;
+      try {
+        idToken = await liff.getIDToken();
+      } catch (e) {
+        idToken = null;
+      }
+      if (!idToken) {
+        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+          ⚠️ ログイン情報の取得に失敗しました。もう一度お試しください。</div>`);
+        return;
+      }
+
+      let data;
+      try {
+        const res = await fetch('/api/profile/prefill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken }),
+        });
+        data = await res.json();
+      } catch (e) {
+        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+          ⚠️ 通信に失敗しました。もう一度お試しください。</div>`);
+        return;
+      }
+
+      if (!data.found) {
+        const registerUrl = REGISTER_LIFF_ID ? `https://liff.line.me/${REGISTER_LIFF_ID}` : '/register';
+        showAuthNotice(`<div class="bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 text-sm text-purple-700">
+          🎓 会員登録がまだのようです。お問い合わせには会員登録が必要です。</div>
+          <a href="${registerUrl}" class="block text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">今すぐ会員登録する</a>`);
+        return;
+      }
+
+      document.getElementById('idTokenHidden').value = idToken;
+      document.getElementById('studentIdValue').value = data.student_id;
+      document.getElementById('studentIdCard').classList.remove('hidden');
+      enableSubmit();
+    }
+    initAuthCheck();
   </script>
 </body>
 </html>

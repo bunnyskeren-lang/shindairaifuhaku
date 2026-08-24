@@ -464,6 +464,13 @@ async def init_db():
             "ALTER TABLE user_profiles DROP COLUMN IF EXISTS grade"
         ))
 
+        # ── 2026-08-25: お問い合わせフォームに学籍番号を追加 ──
+        # 会員登録済みユーザーのみ送信可能にするため必須化。既存行（公開直後の
+        # テストデータのみで実害なし）は空文字のまま残す
+        await conn.execute(text(
+            "ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS student_id VARCHAR(20) NOT NULL DEFAULT ''"
+        ))
+
         # ── 2026-08-25: reviews.grading_methodを旧区切り文字列からJSON配列形式へ移行 ──
         # parse_grading_method()（core/grading_method.py）は表示時に旧形式へフォールバックする
         # ため機能上は必須ではないが、フォールバック分岐を恒久的に残さないよう既存データも

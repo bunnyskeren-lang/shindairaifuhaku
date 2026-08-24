@@ -259,6 +259,8 @@ class Inquiry(TimestampMixin, Base):
     category: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str] = mapped_column(Text, nullable=False)
+    # 会員登録済みユーザーのみ送信可能なため必須（LIFF ID token検証済みの本人のプロフィールから取得）
+    student_id: Mapped[str] = mapped_column(String(20), nullable=False, default="")
     # 'pending'(未対応) / 'handled'(対応済み)。CHECK制約はdatabase.py init_db()側で管理。
     status: Mapped[str] = mapped_column(Text, nullable=False, default=InquiryStatus.PENDING)
     handled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

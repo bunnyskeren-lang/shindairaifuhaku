@@ -44,6 +44,9 @@
         </div>
         <div class="inquiry-body">
           <div class="inquiry-content">{{ i.content }}</div>
+          {% if i.student_id %}
+          <div class="inquiry-email">🎓 {{ i.student_id }}</div>
+          {% endif %}
           {% if i.email %}
           <div class="inquiry-email">📧 {{ i.email }}</div>
           {% endif %}
@@ -75,6 +78,9 @@
         </div>
         <div class="inquiry-body">
           <div class="inquiry-content">{{ i.content }}</div>
+          {% if i.student_id %}
+          <div class="inquiry-email">🎓 {{ i.student_id }}</div>
+          {% endif %}
           {% if i.email %}
           <div class="inquiry-email">📧 {{ i.email }}</div>
           {% endif %}
