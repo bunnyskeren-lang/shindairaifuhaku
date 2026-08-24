@@ -147,7 +147,7 @@ function esc(s) {
 
 const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★☆☆", S: "★★★★☆", SS: "★★★★★" };
 
-function buildLockCardHtml(data, userId) {
+function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   let html = `<div class="card" style="border:2px solid var(--accent)">`;
   html += `<div class="section-title">🔒 レビューを見るには解除が必要です</div>`;
   html += `<div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:14px">`
@@ -160,6 +160,12 @@ function buildLockCardHtml(data, userId) {
       html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
             + `今はチケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されると、チケットが5枚もらえます。</div>`;
     }
+  } else if (isInClient || profileFetchFailed) {
+    // LINEアプリ内で開いているのにログイン情報が取得できなかった異常系。
+    // 「LINEアプリから開いてください」は誤案内になるため、開き直しを促す
+    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6;margin-bottom:10px">`
+          + `ログイン状態を確認できませんでした。お手数ですが、リッチメニューや科目一覧からこのページをもう一度開き直してください。</div>`
+          + `<button id="btn-retry-login" class="btn btn-secondary">🔄 もう一度ログインする</button>`;
   } else {
     html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
           + `解除するにはLINEアプリ内からこのページを開いてください。</div>`;
@@ -169,9 +175,11 @@ function buildLockCardHtml(data, userId) {
 }
 
 async function main() {
+  let liffInitOk = true;
   try {
     await liff.init({ liffId: LIFF_ID });
   } catch(e) {
+    liffInitOk = false;
     console.warn("LIFF init failed", e);
   }
 
@@ -184,17 +192,37 @@ async function main() {
     return;
   }
 
+  // LINEアプリ内（liff.isInClient()）なのにliff.isLoggedIn()がfalseの場合は、
+  // 本来は自動ログインされているはずが何らかの理由で未ログイン状態になっている異常系。
+  // 「LINEアプリから開いてください」と誤案内しないよう、まずliff.login()での復旧を試みる
+  // （成功すると同じURLへリダイレクトされ、このmain()が再実行される）
+  const isInClient = liffInitOk && (() => { try { return liff.isInClient(); } catch(e) { return false; } })();
+  if (liffInitOk && isInClient) {
+    try {
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+    } catch(e) {
+      console.warn("LIFF login check failed", e);
+    }
+  }
+
   // レビュー閲覧権の判定にLINEログイン情報が必要なため、科目データ取得より先にidTokenを
   // 確定させる（未ログイン時は空のまま進み、閲覧権なしとして扱われる）
   let userId = null;
   let idToken = "";
+  let profileFetchFailed = false;
   try {
     if (liff.isLoggedIn()) {
       const profile = await liff.getProfile();
       userId = profile.userId;
       idToken = await liff.getIDToken();
     }
-  } catch(e) {}
+  } catch(e) {
+    profileFetchFailed = true;
+    console.warn("LIFF getProfile/getIDToken failed", e);
+  }
 
   const coursePromise = fetch(`${BASE_URL}/api/course/${courseId}?id_token=${encodeURIComponent(idToken)}`)
     .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
@@ -258,7 +286,7 @@ async function main() {
   // ── ロック中の解除カード（ページ最上部、ヘッダー直下に表示） ──
   const lockCard = document.getElementById("lock-card");
   if (data.locked) {
-    lockCard.innerHTML = buildLockCardHtml(data, userId);
+    lockCard.innerHTML = buildLockCardHtml(data, userId, isInClient, profileFetchFailed);
     const btn = document.getElementById("btn-unlock");
     if (btn) {
       btn.addEventListener("click", async () => {
@@ -283,6 +311,16 @@ async function main() {
           btn.disabled = false;
           btn.textContent = originalText;
           alert("解除に失敗しました。もう一度お試しください");
+        }
+      });
+    }
+    const retryBtn = document.getElementById("btn-retry-login");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => {
+        try {
+          liff.login({ redirectUri: location.href });
+        } catch(e) {
+          location.reload();
         }
       });
     }
