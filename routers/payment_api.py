@@ -55,12 +55,16 @@ async def payment_eligible(
 @router.post("/payment/apply/submit")
 async def payment_apply_submit(
     request: Request,
-    name: str = Form(...),
-    student_id: str = Form(...),
-    paypay_id: str = Form(...),
-    amount: int = Form(...),
+    name: str = Form(default=""),
+    student_id: str = Form(default=""),
+    paypay_id: str = Form(default=""),
+    amount: str = Form(default=""),
     _rl: None = Depends(_apply_rate_limit),
 ):
+    # 修正理由: name/student_id/paypay_id/amountをFastAPIのForm(...)必須指定にしていたため、
+    # 未入力や欠落時に本来表示したかったform_error.html（日本語の案内）より先に
+    # FastAPI標準の生JSON 422エラーが返っていた。review_submit_api.pyと同様、
+    # Form側は常に受理してから本関数内で検証しエラーページへ誘導する
     def _error(msg: str):
         return templates.TemplateResponse(
             "form_error.html", {"request": request, "message": msg}, status_code=400
@@ -78,10 +82,15 @@ async def payment_apply_submit(
     if not paypay:
         return _error("PayPay IDを入力してください")
 
-    if amount <= 0 or amount % _UNIT_YEN != 0:
+    try:
+        amount_val = int(amount)
+    except ValueError:
+        return _error("申請金額を正しく入力してください")
+
+    if amount_val <= 0 or amount_val % _UNIT_YEN != 0:
         return _error(f"申請金額は{_UNIT_YEN}円単位で入力してください")
 
-    required_reviews = amount // _YEN_PER_REVIEW
+    required_reviews = amount_val // _YEN_PER_REVIEW
 
     async with AsyncSessionLocal() as session:
         existing_pending = (await session.execute(
@@ -110,7 +119,7 @@ async def payment_apply_submit(
             name=name,
             student_id=sid,
             paypay_id=paypay,
-            amount=amount,
+            amount=amount_val,
             status=PaymentRequestStatus.PENDING,
         )
         session.add(payment_request)
@@ -124,5 +133,5 @@ async def payment_apply_submit(
         await session.commit()
 
     return templates.TemplateResponse(
-        "payment_apply_success.html", {"request": request, "amount": amount}
+        "payment_apply_success.html", {"request": request, "amount": amount_val}
     )

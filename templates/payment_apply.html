@@ -42,6 +42,7 @@
         <input type="text" name="name" id="name"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
           placeholder="例：神戸 太郎" required maxlength="50">
+        <p id="nameError" class="hidden mt-1 text-red-500 text-xs">お名前を入力してください</p>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -62,6 +63,7 @@
         <input type="text" name="paypay_id" id="paypay_id"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
           placeholder="PayPayアプリの「送る」画面で確認できるID" required maxlength="50">
+        <p id="paypayError" class="hidden mt-1 text-red-500 text-xs">PayPay IDを入力してください</p>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -127,6 +129,16 @@
     });
 
     document.getElementById('paymentForm').addEventListener('submit', function(e) {
+      const nameInput = document.getElementById('name');
+      const paypayInput = document.getElementById('paypay_id');
+      const nameError = document.getElementById('nameError');
+      const paypayError = document.getElementById('paypayError');
+      nameError.classList.toggle('hidden', !!nameInput.value.trim());
+      paypayError.classList.toggle('hidden', !!paypayInput.value.trim());
+      if (!nameInput.value.trim() || !paypayInput.value.trim()) {
+        e.preventDefault();
+        return;
+      }
       const sid = studentIdInput.value.trim().toUpperCase();
       if (!STUDENT_ID_RE.test(sid)) {
         e.preventDefault();
