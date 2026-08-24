@@ -61,7 +61,8 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 | `GET /api/courses` | `q`（検索語、空白区切りAND） | 科目名・よみがなをILIKE部分一致検索（記号除去した正規化検索へのフォールバック付き）。最大50件、教員一覧付き |
 | `GET /api/preload` | - | 全科目・全教員の軽量一覧（キャッシュ、`Cache-Control: public, max-age=300`）。フロントの検索インデックス用 |
 | `GET /api/instructors` | `q`（検索語） | 教員名の部分一致検索、担当科目一覧付き（最大50件） |
-| `GET /api/course/{course_id}` | - | 科目詳細（担当教員一覧・平均評価・楽単度分布・承認済みレビュー最大20件・最新シラバスURL）。閲覧時に`course_section_views`をインクリメント |
+| `GET /api/course/{course_id}` | `id_token`（query、任意） | 科目詳細（担当教員一覧・平均評価・楽単度分布・承認済みレビュー最大20件・最新シラバスURL）。閲覧時に`course_section_views`をインクリメント。レビューが1件以上ある科目はデフォルトで閲覧権が無く（`locked: true`）、`avg_rating`/`top_ease`/`reviews`は空で返す。`id_token`検証済みかつ解除済み（`subject_unlocks`に該当行あり）の場合のみ`locked: false`で内容を返す |
+| `POST /api/course/{course_id}/unlock` | LIFF token | ボディ`{id_token}`。閲覧権チケット（`user_profiles.unlock_credits`）を1枚消費し、当該科目（語尾バリアントグループはグループ全体）を解除する。チケット不足時は`{ok: false, reason: "insufficient_credits"}` |
 
 ## 会員登録・プロフィール（`routers/profile_api.py`）
 

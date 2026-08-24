@@ -46,6 +46,10 @@ class UserProfile(TimestampMixin, Base):
     # 大学メール({学籍番号を小文字化}@stu.kobe-u.ac.jp)のマジックリンク認証が完了した日時。
     # 初回のプロフィール作成時のみ検証し、以降の学籍番号変更を伴わない更新では再検証しない
     email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # レビュー閲覧権チケットの残数。承認された自分のレビュー1件につき
+    # REVIEW_APPROVAL_UNLOCK_CREDITS枚が付与され、任意の科目のレビュー閲覧解除（SubjectUnlock作成）に
+    # 1枚ずつ消費する
+    unlock_credits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
 
 
 class ErrorLog(TimestampMixin, Base):
@@ -213,6 +217,9 @@ class Review(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     # 支払い報酬の予約/支払い済み紐付け。NULL＝未払い（database.py init_db()でFK列を追加）
     payment_request_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("payment_requests.id", ondelete="SET NULL"), nullable=True, index=True)
+    # レビュー閲覧権チケットを付与済みかどうか（承認時に1度だけ付与するための冪等性チェック用）。
+    # 却下・待機中への差し戻し後に再承認しても二重付与しないよう、一度付与したら値は変更しない
+    credit_granted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class CourseSectionView(Base):
@@ -221,6 +228,18 @@ class CourseSectionView(Base):
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), primary_key=True)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SubjectUnlock(Base):
+    """LINEユーザーが特定の科目（subject単位）のレビュー閲覧権を解除済みであることを記録する。
+    語尾バリアントグループ（例: 生物学各論A1/A2）はレビュー閲覧・投稿フォームで1件にまとめて
+    表示されるため、解除時はグループ内の全subject_idに対してまとめて行を作成する
+    （routers/liff_api.py _group_subject_ids参照）。"""
+    __tablename__ = "subject_unlocks"
+
+    line_user_id: Mapped[str] = mapped_column(String(64), ForeignKey("user_profiles.line_user_id", ondelete="CASCADE"), primary_key=True)
+    subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), primary_key=True)
+    unlocked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class InquiryStatus:

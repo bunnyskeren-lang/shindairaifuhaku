@@ -161,22 +161,23 @@ async function main() {
     return;
   }
 
-  // 科目データはLIFF認証（ログイン確認・プロフィール完了チェック）と無関係なため、
-  // 認証処理を待たずに並行して取得を開始する（直列だと表示までに往復が4回積み重なっていた）
-  const coursePromise = fetch(`${BASE_URL}/api/course/${courseId}`)
-    .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
-
+  // レビュー閲覧権の判定にLINEログイン情報が必要なため、科目データ取得より先にidTokenを
+  // 確定させる（未ログイン時は空のまま進み、閲覧権なしとして扱われる）
   let userId = null;
+  let idToken = "";
   try {
     if (liff.isLoggedIn()) {
       const profile = await liff.getProfile();
       userId = profile.userId;
+      idToken = await liff.getIDToken();
     }
   } catch(e) {}
 
+  const coursePromise = fetch(`${BASE_URL}/api/course/${courseId}?id_token=${encodeURIComponent(idToken)}`)
+    .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
+
   if (userId) {
     try {
-      const idToken = await liff.getIDToken();
       const statusRes = await fetch(`${BASE_URL}/api/profile/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -206,7 +207,7 @@ async function main() {
   // 語尾バリアントグループ（例: 生物学各論A1/A2/C1/C2）に属する科目は、グループ名を
   // タイトルに表示し、レビューはグループ内の全科目分をまとめて表示する
   // （「レビューを投稿」ボタンのリンク先は元の科目名のまま、投稿フォーム側で解決する）
-  document.getElementById("name").textContent = data.group_label || data.name;
+  document.getElementById("name").textContent = (data.locked ? "🔒 " : "") + (data.group_label || data.name);
   document.getElementById("instructor").textContent = data.instructor
     ? "👨‍🏫 " + data.instructor : "";
 
@@ -232,7 +233,9 @@ async function main() {
   const EASE_LABELS  = { C: '修羅場', B: '大変', A: '標準', S: '楽々', SS: '天国' };
 
   const ratingsEl = document.getElementById("ratings");
-  if (data.avg_rating != null) {
+  if (data.locked) {
+    ratingsEl.innerHTML = `<div class="no-review">🔒 レビュー${data.review_count}件は閲覧権がありません</div>`;
+  } else if (data.avg_rating != null) {
     const rLabel = RATING_LABELS[Math.round(data.avg_rating)] || '';
     let ratingsHtml = '';
     if (data.top_ease) {
@@ -255,7 +258,51 @@ async function main() {
 
   // ── レビューカード（1件ずつ） ──
   const reviewsSection = document.getElementById("reviews-section");
-  if (data.reviews && data.reviews.length) {
+  if (data.locked) {
+    const box = document.createElement("div");
+    box.className = "card";
+    let html = `<div class="section-title">🔒 レビュー閲覧には解除が必要です</div>`;
+    html += `<div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:12px">この科目には${data.review_count}件のレビューがあります。レビューを1件投稿して承認されると、好きな科目5件分の閲覧権がもらえます。</div>`;
+    if (userId) {
+      if ((data.unlock_credits || 0) > 0) {
+        html += `<button id="btn-unlock" class="btn btn-primary" style="width:auto;padding:10px 18px">🔓 この科目を解除する（残りチケット ${data.unlock_credits}枚）</button>`;
+      } else {
+        html += `<div style="font-size:12px;color:#94a3b8">閲覧チケットがありません。レビューを投稿して承認されるとチケットがもらえます。</div>`;
+      }
+    } else {
+      html += `<div style="font-size:12px;color:#94a3b8">LINEアプリから開くと解除できます。</div>`;
+    }
+    box.innerHTML = html;
+    reviewsSection.appendChild(box);
+
+    const btn = document.getElementById("btn-unlock");
+    if (btn) {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "解除中...";
+        try {
+          const res = await fetch(`${BASE_URL}/api/course/${courseId}/unlock`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id_token: idToken }),
+          });
+          const result = await res.json();
+          if (result.ok) {
+            location.reload();
+          } else {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            alert("閲覧チケットが不足しています。");
+          }
+        } catch(e) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+          alert("解除に失敗しました。もう一度お試しください");
+        }
+      });
+    }
+  } else if (data.reviews && data.reviews.length) {
     data.reviews.forEach((r, i) => {
       const card = document.createElement("div");
       card.className = "card";

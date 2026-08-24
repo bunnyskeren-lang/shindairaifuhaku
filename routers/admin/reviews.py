@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Optional
 
@@ -6,10 +7,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, func, select
 
 from core import cache
+from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Review, ReviewStatus, Subject
+from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
 
 router = APIRouter()
 
@@ -153,6 +155,15 @@ async def admin_review_approve(
         if review:
             _apply_review_edits(review, content, rating, ease_rating, grading_method, selected_instructor, nickname)
             review.status = ReviewStatus.APPROVED
+            # レビュー閲覧権チケットの付与。credit_granted_atで一度きりに限定し、
+            # 却下→復元→再承認のようなステータス往復があっても二重付与しない
+            if review.credit_granted_at is None and review.student_id:
+                profile = (await session.execute(
+                    select(UserProfile).where(UserProfile.student_id == review.student_id)
+                )).scalar_one_or_none()
+                if profile:
+                    profile.unlock_credits += REVIEW_APPROVAL_UNLOCK_CREDITS
+                review.credit_granted_at = datetime.now(timezone.utc)
             await session.commit()
     cache.invalidate_review_cache()
     return RedirectResponse("/admin/reviews", status_code=303)

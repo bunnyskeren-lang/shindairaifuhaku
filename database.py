@@ -39,7 +39,7 @@ async def init_db():
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
         CourseSectionView, EmailVerification, PaymentRequest,
-        Inquiry,
+        Inquiry, SubjectUnlock,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:
@@ -446,4 +446,15 @@ async def init_db():
         ))
         await conn.execute(text(
             "ALTER TABLE inquiries ALTER COLUMN email SET NOT NULL"
+        ))
+
+        # ── 2026-08-24: レビュー閲覧の鍵システム ──
+        # デフォルトでは他人のレビューは閲覧できず、自分のレビューが1件承認されるたびに
+        # 任意の科目5件分の閲覧権（チケット）が付与される。subject_unlocksテーブル自体は
+        # create_all()で新規作成されるため、ここでは既存テーブルへのカラム追加のみ行う。
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS unlock_credits INTEGER NOT NULL DEFAULT 0"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS credit_granted_at TIMESTAMPTZ"
         ))

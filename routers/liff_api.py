@@ -2,9 +2,9 @@ import asyncio
 import re as _re
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache
@@ -13,10 +13,14 @@ from core.config import (
     EASE_ORDER,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
+from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.subject_variants import compute_variant_groups
 from database import AsyncSessionLocal
-from models import CourseSection, CourseSectionView, Instructor, Review, ReviewStatus, Subject, Syllabus
+from models import (
+    CourseSection, CourseSectionView, Instructor, Review, ReviewStatus,
+    Subject, SubjectUnlock, Syllabus, UserProfile,
+)
 
 router = APIRouter()
 
@@ -34,6 +38,8 @@ _SEARCH_RESULT_LIMIT = 50
 # 無制限だった。id_token検証には120秒のキャッシュ(core/liff_auth.py)があり、有効なトークン1つで
 # 検証をバイパスしてDB書き込みを連打できたため、同水準の制限を設ける
 _register_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
+# レビュー閲覧権の解除（チケット消費）はDB書き込みを伴うため、他の書き込み系と同水準に制限する
+_unlock_rate_limit = rate_limiter(max_requests=10, window_seconds=60)
 
 
 def _normalize_form_q(s: str) -> str:
@@ -231,8 +237,9 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
 
 
 @router.get("/api/course/{course_id}")
-async def api_course(course_id: int):
+async def api_course(course_id: int, request: Request, id_token: str = ""):
     try:
+        uid = await verify_liff_id_token(id_token, request) if id_token else None
         # 修正理由: subject取得とcs_instr取得は元々別々のAsyncSessionLocal()を開いており、
         # どちらもcourse_id確定後に順番に実行するだけの依存関係なので、DB接続の往復を
         # 1回分減らすため同じセッションにまとめる。
@@ -344,6 +351,23 @@ async def api_course(course_id: int):
         if ease_rows:
             top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
+        # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
+        # 任意の科目5件分の閲覧権が付与される。閲覧権はsubject単位・バリアントグループ内で共有）
+        review_count = sum(cnt for _, cnt in ease_rows)
+        unlock_credits = None
+        unlocked = review_count == 0
+        if not unlocked and uid:
+            async with AsyncSessionLocal() as s:
+                profile = await s.get(UserProfile, uid)
+                unlock_credits = profile.unlock_credits if profile else 0
+                unlocked = (await s.execute(
+                    select(SubjectUnlock.subject_id).where(
+                        SubjectUnlock.line_user_id == uid,
+                        SubjectUnlock.subject_id.in_(group_subject_ids),
+                    )
+                )).scalars().first() is not None
+        locked = not unlocked
+
         return {
             "id": subject.id,
             "name": subject.name,
@@ -355,8 +379,11 @@ async def api_course(course_id: int):
             "term_type": subject.term_type or "",
             "credits": float(subject.credits) if subject.credits else 0,
             "syllabus_url": syllabus_url or "",
-            "avg_rating": avg_rating,
-            "top_ease": top_ease,
+            "review_count": review_count,
+            "locked": locked,
+            "unlock_credits": unlock_credits,
+            "avg_rating": avg_rating if not locked else None,
+            "top_ease": top_ease if not locked else None,
             "reviews": [
                 {
                     "rating": r.rating,
@@ -368,10 +395,58 @@ async def api_course(course_id: int):
                     "academic_year": r.academic_year or 0,
                 }
                 for r in reviews_raw
-            ],
+            ] if not locked else [],
         }
     except HTTPException:
         raise
     except Exception as exc:
         await save_error_log(exc, action=f"api_course/{course_id}")
         raise
+
+
+@router.post("/api/course/{course_id}/unlock")
+async def unlock_course(course_id: int, request: Request, _rl=Depends(_unlock_rate_limit)):
+    """レビュー閲覧権チケットを1枚消費し、指定科目（バリアントグループがあればグループ全体）の
+    レビューを閲覧可能にする。"""
+    body = await request.json()
+    uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
+
+    async with AsyncSessionLocal() as session:
+        subject = await session.get(Subject, course_id)
+        if not subject:
+            raise HTTPException(status_code=404, detail="course not found")
+        profile = await session.get(UserProfile, uid)
+        if not profile:
+            raise HTTPException(status_code=403, detail="プロフィール未登録です")
+
+        _, group_subject_ids, _ = await _group_subject_ids(subject)
+
+        already = (await session.execute(
+            select(SubjectUnlock.subject_id).where(
+                SubjectUnlock.line_user_id == uid,
+                SubjectUnlock.subject_id.in_(group_subject_ids),
+            )
+        )).scalars().first() is not None
+        if already:
+            return {"ok": True, "already": True, "unlock_credits": profile.unlock_credits}
+
+        # UPDATE ... WHERE unlock_credits > 0 の原子性でチケット不足の二重解除を防ぐ
+        new_balance = (await session.execute(
+            update(UserProfile)
+            .where(UserProfile.line_user_id == uid, UserProfile.unlock_credits > 0)
+            .values(unlock_credits=UserProfile.unlock_credits - 1)
+            .returning(UserProfile.unlock_credits)
+        )).scalar_one_or_none()
+        if new_balance is None:
+            await session.rollback()
+            return {"ok": False, "reason": "insufficient_credits", "unlock_credits": profile.unlock_credits}
+
+        for sid_ in group_subject_ids:
+            await session.execute(
+                pg_insert(SubjectUnlock).values(line_user_id=uid, subject_id=sid_)
+                .on_conflict_do_nothing(index_elements=["line_user_id", "subject_id"])
+            )
+        await session.commit()
+        return {"ok": True, "already": False, "unlock_credits": new_balance}

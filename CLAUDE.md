@@ -325,16 +325,17 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `instructors` | 教員マスタ |
 | `course_sections` | 科目×教員のセクション |
 | `syllabi` | シラバス（年度・クォーター・時間割コード。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み、target_grades/subject_category列は2026-07-30に廃止済み） |
-| `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い） |
+| `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い。`credit_granted_at`は閲覧権チケット付与済みフラグ、承認時に一度だけ付与するための冪等性チェック用） |
 | `payment_requests` | レビュー報酬（1件10円、100円単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/10件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
 | `course_section_views` | 科目セクションの閲覧数 |
+| `subject_unlocks` | レビュー閲覧権の解除記録（line_user_id, subject_id）。デフォルトでは他人のレビューは閲覧できず、自分のレビューが1件承認されるたびに`user_profiles.unlock_credits`が5枚増え、任意の科目でチケットを1枚消費して解除する（`routers/liff_api.py` `/api/course/{id}/unlock`）。語尾バリアントグループはグループ内の全subject_idをまとめて解除する |
 
 共通・運用系:
 
 | テーブル | 用途 |
 |----------|------|
 | `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順） |
-| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み） |
+| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み。`unlock_credits`はレビュー閲覧権チケットの残数） |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
 | `error_logs` | サーバーエラーログ |

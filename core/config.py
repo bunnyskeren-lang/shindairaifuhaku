@@ -51,6 +51,9 @@ LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 # 1科目×1担当教員（course_section）あたりのレビュー投稿受付上限（待機中+承認済みの合計）
 MAX_REVIEWS_PER_COURSE_SECTION = 3
 
+# レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数
+REVIEW_APPROVAL_UNLOCK_CREDITS = 5
+
 
 def student_email(student_id: str) -> str:
     """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""
