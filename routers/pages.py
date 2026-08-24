@@ -95,6 +95,11 @@ async def privacy(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 
+@router.get("/terms", response_class=HTMLResponse)
+async def terms(request: Request):
+    return templates.TemplateResponse("terms.html", {"request": request})
+
+
 @router.get("/sw.js")
 async def service_worker():
     js = """
