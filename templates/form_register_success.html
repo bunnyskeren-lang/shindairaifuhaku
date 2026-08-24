@@ -12,6 +12,11 @@
     <div class="bg-white rounded-3xl shadow-sm p-8 text-center">
       <div class="text-6xl mb-4">🎉</div>
       <h1 class="text-xl font-bold text-gray-800 mb-2">登録が完了しました！</h1>
+      {% if welcome_credits %}
+      <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 mb-4 text-sm font-bold text-indigo-600">
+        🎁 レビュー閲覧権チケットを{{ welcome_credits }}枚プレゼントしました！
+      </div>
+      {% endif %}
       <p class="text-gray-500 text-sm mb-8">LINEのトーク画面に戻って、引き続きご利用ください。</p>
       {% if liff_id %}<button onclick="closeLiff()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">閉じる</button>{% endif %}
     </div>

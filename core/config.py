@@ -52,7 +52,10 @@ LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 MAX_REVIEWS_PER_COURSE_SECTION = 3
 
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数
-REVIEW_APPROVAL_UNLOCK_CREDITS = 5
+REVIEW_APPROVAL_UNLOCK_CREDITS = 3
+
+# 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
+REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
 
 
 def student_email(student_id: str) -> str:

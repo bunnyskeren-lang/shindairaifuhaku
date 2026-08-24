@@ -363,7 +363,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
         # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
-        # 任意の科目5件分の閲覧権が付与される。閲覧権はsubject単位・バリアントグループ内で共有）
+        # 任意の科目3件分の閲覧権が付与される。閲覧権はsubject単位・バリアントグループ内で共有）
         review_count = sum(cnt for _, cnt in ease_rows)
         unlock_credits = None
         unlocked = review_count == 0

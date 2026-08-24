@@ -7,7 +7,7 @@ from core import cache, line_client
 from core.activity_log import save_error_log
 from core.config import (
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, FACULTIES, FACULTY_DEPARTMENTS,
-    REGISTER_LIFF_ID, STUDENT_ID_RE, LINE_USER_ID_RE,
+    REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, STUDENT_ID_RE, LINE_USER_ID_RE,
     is_profile_complete,
 )
 from core.liff_auth import verify_liff_id_token
@@ -115,18 +115,21 @@ async def register_profile(
             return _form_error("この学籍番号はすでに別のアカウントで登録されています")
 
         profile = await session.get(UserProfile, uid)
+        is_new_registration = profile is None
         if profile:
             profile.name = name[:100]
             profile.student_id = sid
             profile.faculty = faculty
             profile.department = department
         else:
+            # 会員登録（UserProfile初回作成）した全員へ、レビュー閲覧権チケットをプレゼントする
             profile = UserProfile(
                 line_user_id=uid,
                 name=name[:100],
                 student_id=sid,
                 faculty=faculty,
                 department=department,
+                unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
             )
             session.add(profile)
         try:
@@ -144,7 +147,11 @@ async def register_profile(
         await save_error_log(exc, user_id=uid, action="register_richmenu_unlink")
 
     return templates.TemplateResponse(
-        "form_register_success.html", {"request": request, "liff_id": REGISTER_LIFF_ID}
+        "form_register_success.html", {
+            "request": request,
+            "liff_id": REGISTER_LIFF_ID,
+            "welcome_credits": REGISTRATION_WELCOME_UNLOCK_CREDITS if is_new_registration else 0,
+        }
     )
 
 

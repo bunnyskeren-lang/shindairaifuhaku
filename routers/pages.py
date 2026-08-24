@@ -7,7 +7,7 @@ from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     APP_URL, EMAIL_VERIFICATION_ENABLED, FACULTY_DEPARTMENTS, IS_DEV,
-    LIFF_ID, REGISTER_LIFF_ID, REVIEW_FORM_URL, REVIEW_LIFF_ID,
+    LIFF_ID, REGISTER_LIFF_ID, REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
 )
 from core.templates import templates
 
@@ -128,6 +128,7 @@ async def liff_course(request: Request):
             "review_form_url": REVIEW_FORM_URL,
             "base_url": APP_URL,
             "IS_DEV": IS_DEV,
+            "unlock_reward": REVIEW_APPROVAL_UNLOCK_CREDITS,
         })
     except Exception as exc:
         await save_error_log(exc, action="liff_course")

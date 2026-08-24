@@ -129,6 +129,7 @@
 const LIFF_ID = "{{ liff_id }}";
 const REVIEW_FORM_URL = "{{ review_form_url }}";
 const BASE_URL = "{{ base_url }}";
+const UNLOCK_REWARD = {{ unlock_reward }};
 
 function stars(n) {
   if (!n) return "";
@@ -152,13 +153,13 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   html += `<div class="section-title">🔒 レビューを見るには解除が必要です</div>`;
   html += `<div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:14px">`
         + `この科目には${data.review_count}件のレビューがあります。<b>「解除する」ボタンを押すとチケットを1枚使い、この科目のレビューがすぐに見られるようになります。</b>`
-        + `<br>チケットは、あなたのレビューが1件承認されるたびに5枚もらえます（好きな科目に使えます）。</div>`;
+        + `<br>チケットは、あなたのレビューが1件承認されるたびに${UNLOCK_REWARD}枚もらえます（好きな科目に使えます）。</div>`;
   if (userId) {
     if ((data.unlock_credits || 0) > 0) {
       html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケットを1枚使って解除する（残り${data.unlock_credits}枚）</button>`;
     } else {
       html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
-            + `今はチケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されると、チケットが5枚もらえます。</div>`;
+            + `今はチケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されると、チケットが${UNLOCK_REWARD}枚もらえます。</div>`;
     }
   } else if (isInClient || profileFetchFailed) {
     // LINEアプリ内で開いているのにログイン情報が取得できなかった異常系。
