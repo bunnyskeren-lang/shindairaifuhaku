@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import ErrorLog, MessageLog, UserProfile
+from models import CourseSection, ErrorLog, MessageLog, Review, Subject, UserProfile
 
 router = APIRouter()
 
@@ -34,11 +34,37 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
             .order_by(last_seen_subq.c.last_seen.desc())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()
+
+        # このページに表示するユーザーの学籍番号ぶんだけ、投稿レビューを
+        # 科目×担当教員で集計する（reviews.student_id はフォーム手入力の
+        # テキストのため、user_profiles.student_id との完全一致でのみ紐づく）
+        student_ids = [u.student_id for u in users if u.student_id]
+        review_map: dict[str, dict] = {}
+        if student_ids:
+            review_rows = (await session.execute(
+                select(
+                    Review.student_id,
+                    Subject.name,
+                    Review.selected_instructor,
+                    func.count(Review.id),
+                )
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
+                .where(Review.student_id.in_(student_ids))
+                .group_by(Review.student_id, Subject.name, Review.selected_instructor)
+                .order_by(Subject.name)
+            )).all()
+            for sid, course_name, instructor, cnt in review_rows:
+                entry = review_map.setdefault(sid, {"total": 0, "breakdown": []})
+                entry["total"] += cnt
+                entry["breakdown"].append((course_name, instructor, cnt))
+
     total_pages = max(1, (total + per_page - 1) // per_page)
 
     return templates.TemplateResponse("admin/users.html", {
         "request": request,
         "users": users,
+        "review_map": review_map,
         "page": page,
         "total_pages": total_pages,
         "total": total,

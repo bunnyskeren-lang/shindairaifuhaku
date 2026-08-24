@@ -6,16 +6,31 @@
 {% block content %}
 <div class="card">
   <table>
-    <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th></tr>
+    <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th><th>レビュー</th></tr>
     {% for u in users %}
+    {% set rv = review_map.get(u.student_id) if u.student_id else None %}
     <tr>
       <td>{{ u.name or "―" }}</td>
       <td style="font-size:12px">{{ u.student_id or "―" }}</td>
       <td style="font-size:11px;color:#9ca3af;word-break:break-all">{{ u.user_id if u.name else "―" }}</td>
       <td>{{ u.last_seen | jst }}</td>
+      <td>
+        {% if rv %}
+        <details>
+          <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--accent)">{{ rv.total }}件</summary>
+          <ul style="margin:4px 0 0;padding-left:16px;font-size:11px;color:#6b7280;list-style:disc">
+            {% for course_name, instructor, cnt in rv.breakdown %}
+            <li>{{ course_name }}{% if instructor %}（{{ instructor }}）{% endif %}: {{ cnt }}件</li>
+            {% endfor %}
+          </ul>
+        </details>
+        {% else %}
+        <span style="font-size:12px;color:#d1d5db">0件</span>
+        {% endif %}
+      </td>
     </tr>
     {% else %}
-    <tr><td colspan="4" class="empty">ユーザーなし</td></tr>
+    <tr><td colspan="5" class="empty">ユーザーなし</td></tr>
     {% endfor %}
   </table>
   {{ pager(page, total_pages, total, url_prefix) }}
