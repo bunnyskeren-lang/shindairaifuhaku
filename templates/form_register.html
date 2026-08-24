@@ -81,19 +81,6 @@
         </select>
       </div>
 
-      <div class="bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">
-          📅 学年 <span class="text-red-500">*</span>
-        </label>
-        <select name="grade" id="grade" required
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white">
-          <option value="">選択してください</option>
-          {% for g in range(1, 7) %}
-          <option value="{{ g }}">{{ g }}年</option>
-          {% endfor %}
-        </select>
-      </div>
-
       <button type="submit"
         class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">
         登録する
@@ -170,7 +157,6 @@
             facultySel.value = d.faculty;
             populateDepartments(d.faculty, d.department || '');
           }
-          if (d.grade) document.getElementById('grade').value = d.grade;
         } catch (e) {}
       })();
     }

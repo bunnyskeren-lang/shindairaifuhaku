@@ -69,7 +69,6 @@ async def profile_prefill(request: Request):
         "name": profile.name,
         "student_id": profile.student_id,
         "faculty": profile.faculty,
-        "grade": profile.grade,
         "department": profile.department,
         "reviewed_pairs": [[sid, name] for sid, name in reviewed_rows],
     }
@@ -82,7 +81,6 @@ async def register_profile(
     name: str = Form(...),
     student_id: str = Form(...),
     faculty: str = Form(...),
-    grade: int = Form(...),
     department: str = Form(...),
     _rl=Depends(_register_rate_limit),
 ):
@@ -102,8 +100,6 @@ async def register_profile(
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
     if faculty not in FACULTIES:
         return _form_error("学部を選択してください")
-    if not (1 <= grade <= 6):
-        return _form_error("学年を選択してください")
     # 2年次からコース分岐する学部（農学部等）は1年次に所属コースが無いため「コース未定」を許容し、
     # departmentはNULLで保存する
     if faculty in DEPARTMENT_UNDECIDED_FACULTIES and department == DEPARTMENT_UNDECIDED_VALUE:
@@ -123,7 +119,6 @@ async def register_profile(
             profile.name = name[:100]
             profile.student_id = sid
             profile.faculty = faculty
-            profile.grade = grade
             profile.department = department
         else:
             profile = UserProfile(
@@ -131,7 +126,6 @@ async def register_profile(
                 name=name[:100],
                 student_id=sid,
                 faculty=faculty,
-                grade=grade,
                 department=department,
             )
             session.add(profile)

@@ -196,8 +196,8 @@ def make_syllabus_url(timetable_code: str, department: str = "") -> str:
 
 
 def is_profile_complete(p) -> bool:
-    """UserProfile行が氏名・学籍番号・学部・学年・学科すべて入力済みか判定する。"""
-    return bool(p and p.name and p.student_id and p.faculty and p.grade and p.department)
+    """UserProfile行が氏名・学籍番号・学部・学科すべて入力済みか判定する。"""
+    return bool(p and p.name and p.student_id and p.faculty and p.department)
 
 
 def make_register_url(user_id: str) -> str:

@@ -40,7 +40,6 @@ class UserProfile(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     student_id: Mapped[str] = mapped_column(String(20), nullable=False)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # 大学メール({学籍番号を小文字化}@stu.kobe-u.ac.jp)のマジックリンク認証が完了した日時。

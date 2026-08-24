@@ -96,9 +96,6 @@ async def init_db():
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS faculty TEXT"
         ))
         await conn.execute(text(
-            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS grade INTEGER"
-        ))
-        await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS department TEXT"
         ))
         timetable_profiles_exists = (await conn.execute(text(
@@ -106,7 +103,7 @@ async def init_db():
         ))).scalar()
         if timetable_profiles_exists:
             await conn.execute(text("""
-                UPDATE user_profiles up SET faculty = tp.faculty, grade = tp.grade
+                UPDATE user_profiles up SET faculty = tp.faculty
                 FROM timetable_profiles tp
                 WHERE up.line_user_id = tp.line_user_id AND up.faculty IS NULL
             """))
@@ -457,4 +454,11 @@ async def init_db():
         ))
         await conn.execute(text(
             "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS credit_granted_at TIMESTAMPTZ"
+        ))
+
+        # ── 2026-08-24: 会員登録の学年入力を廃止 ──
+        # 学年を使う機能（旧・単位チェッカー等）は既に全廃止済みで、実質未使用の項目だったため
+        # 登録フォームから削除。既存ユーザーの値もユーザーの了承のもと削除する
+        await conn.execute(text(
+            "ALTER TABLE user_profiles DROP COLUMN IF EXISTS grade"
         ))

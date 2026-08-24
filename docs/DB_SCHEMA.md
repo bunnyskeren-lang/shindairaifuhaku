@@ -121,12 +121,11 @@ subjects ─┬─< course_sections >─┬─ instructors
 | `name` | String(100) | NOT NULL | |
 | `student_id` | String(20) | NOT NULL | |
 | `faculty` | Text | NULL可 | |
-| `grade` | Integer | NULL可 | |
 | `department` | Text | NULL可 | |
 | `updated_at` | DateTime(tz) | NULL可 | |
 | `created_at` | DateTime(tz) | NOT NULL | |
 
-友だち追加時の会員登録で氏名・学籍番号・学部・学年・学科すべての入力が必須（`core.config.is_profile_complete()`で判定）。`share_token_version`列は2026-07-30の大規模リニューアル（My時間割機能全廃止）で廃止済み。
+友だち追加時の会員登録で氏名・学籍番号・学部・学科すべての入力が必須（`core.config.is_profile_complete()`で判定）。`share_token_version`列は2026-07-30の大規模リニューアル（My時間割機能全廃止）で廃止済み。`grade`列は2026-08-24に廃止済み（学年を使う機能が既に無く実質未使用だったため、登録フォームから削除・既存データも削除）。
 
 ### `message_logs` — LINEメッセージ送受信ログ
 

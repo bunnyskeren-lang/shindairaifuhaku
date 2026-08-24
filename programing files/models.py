@@ -53,7 +53,6 @@ class UserProfile(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     student_id: Mapped[str] = mapped_column(String(20), nullable=False)
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    grade: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

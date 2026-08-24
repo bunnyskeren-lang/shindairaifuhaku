@@ -70,7 +70,7 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 |---|---|---|
 | `POST /api/profile/status` | LIFF token | ボディ`{id_token}`。会員登録が完了しているか（`{complete: bool}`） |
 | `POST /api/profile/prefill` | LIFF token | ボディ`{id_token}`。本人の既存プロフィールを返す（登録フォームのプリフィル用。IDOR対策でuid直指定は不可） |
-| `POST /api/register` | LIFF token（Form） | `id_token`/`name`/`student_id`/`faculty`/`grade`/`department`（Form）。会員登録。学籍番号の重複チェックあり。登録完了後、未登録者用リッチメニューの解除を行う |
+| `POST /api/register` | LIFF token（Form） | `id_token`/`name`/`student_id`/`faculty`/`department`（Form）。会員登録。学籍番号の重複チェックあり。登録完了後、未登録者用リッチメニューの解除を行う |
 | `POST /api/autofill` | LIFF token | ボディ`{id_token, student_id}`。過去のレビュー投稿から氏名を自動補完 |
 
 ## レビュー投稿（`routers/review_submit_api.py`）
