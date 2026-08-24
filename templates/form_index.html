@@ -264,6 +264,13 @@
             <div id="formatPercentList" class="mt-2 space-y-1"></div>
             <p id="formatPercentError" class="hidden mt-1.5 text-red-500 text-xs">割合を入力してください（合計100%になるように）</p>
           </div>
+
+          <!-- 補足 -->
+          <div class="mt-3 pt-3 border-t border-purple-200">
+            <label for="classFormatExtraInput" class="text-xs font-semibold text-purple-700 mb-1 block">💬 補足 <span class="font-normal text-purple-400">（任意）</span></label>
+            <input type="text" id="classFormatExtraInput" class="extra-input"
+              style="border-color:#e9d5ff" placeholder="例：ハイブリッドは週替わり" maxlength="40">
+          </div>
         </div>
 
         <!-- 出席確認 -->
@@ -275,6 +282,13 @@
             <button type="button" class="chip-btn single" data-group="attendance" data-value="なし">なし</button>
           </div>
           <p id="attendanceError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
+
+          <!-- 補足 -->
+          <div class="mt-3 pt-3 border-t border-teal-200">
+            <label for="attendanceExtraInput" class="text-xs font-semibold text-teal-700 mb-1 block">💬 補足 <span class="font-normal text-teal-400">（任意）</span></label>
+            <input type="text" id="attendanceExtraInput" class="extra-input"
+              style="border-color:#99f6e4" placeholder="例：出席は成績に加算されない" maxlength="40">
+          </div>
 
           <!-- 出席確認方法（毎回あり・たまにあり選択時のみ表示） -->
           <div id="attendanceMethodSection" class="hidden mt-3 pt-3 border-t border-teal-200">
@@ -290,6 +304,13 @@
               placeholder="例：教室で挙手確認など" maxlength="30">
             <p id="attendanceMethodCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
             <p id="attendanceMethodError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
+
+            <!-- 補足 -->
+            <div class="mt-3 pt-3 border-t border-teal-200">
+              <label for="attendanceMethodExtraInput" class="text-xs font-semibold text-teal-700 mb-1 block">💬 補足 <span class="font-normal text-teal-400">（任意）</span></label>
+              <input type="text" id="attendanceMethodExtraInput" class="extra-input"
+                style="border-color:#99f6e4" placeholder="例：小テストは月1回程度" maxlength="40">
+            </div>
           </div>
         </div>
 
@@ -302,6 +323,13 @@
             <button type="button" class="chip-btn single" data-group="homework_frequency" data-value="なし">なし</button>
           </div>
           <p id="homeworkFrequencyError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
+
+          <!-- 補足 -->
+          <div class="mt-3 pt-3 border-t border-amber-200">
+            <label for="homeworkFrequencyExtraInput" class="text-xs font-semibold text-amber-700 mb-1 block">💬 補足 <span class="font-normal text-amber-400">（任意）</span></label>
+            <input type="text" id="homeworkFrequencyExtraInput" class="extra-input"
+              style="border-color:#fde68a" placeholder="例：前半のみ毎回課題あり" maxlength="40">
+          </div>
         </div>
 
         <!-- 課題の量 -->
@@ -314,6 +342,13 @@
             <button type="button" class="chip-btn single" data-group="homework" data-value="なし">なし</button>
           </div>
           <p id="homeworkError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
+
+          <!-- 補足 -->
+          <div class="mt-3 pt-3 border-t border-orange-200">
+            <label for="homeworkExtraInput" class="text-xs font-semibold text-orange-700 mb-1 block">💬 補足 <span class="font-normal text-orange-400">（任意）</span></label>
+            <input type="text" id="homeworkExtraInput" class="extra-input"
+              style="border-color:#fed7aa" placeholder="例：グループ課題が多い" maxlength="40">
+          </div>
         </div>
 
         <!-- 評価方法 -->
@@ -344,6 +379,13 @@
             </div>
             <div id="evalPercentList" class="mt-2 space-y-1"></div>
             <p id="evalPercentError" class="hidden mt-1.5 text-red-500 text-xs">割合を入力してください（合計100%になるように）</p>
+          </div>
+
+          <!-- 補足 -->
+          <div class="mt-3 pt-3 border-t border-indigo-200">
+            <label for="evalExtraInput" class="text-xs font-semibold text-indigo-700 mb-1 block">💬 補足 <span class="font-normal text-indigo-400">（任意）</span></label>
+            <input type="text" id="evalExtraInput" class="extra-input"
+              style="border-color:#c7d2fe" placeholder="例：持ち込み可" maxlength="40">
           </div>
         </div>
 
@@ -443,6 +485,21 @@
       -webkit-tap-highlight-color: transparent;
     }
     .prompt-chip:active { transform: scale(0.95); background: #ede9fe; }
+
+    .extra-input {
+      width: 100%;
+      border-width: 1px;
+      border-style: solid;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      background: #fff;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .extra-input:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(99,102,241,0.25);
+    }
 
     .eval-slider-bar {
       position: relative;
@@ -728,6 +785,14 @@
       }
     });
 
+    ['classFormatExtraInput', 'attendanceExtraInput', 'attendanceMethodExtraInput',
+     'homeworkFrequencyExtraInput', 'homeworkExtraInput', 'evalExtraInput'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        updateGradingMethod();
+        saveData();
+      });
+    });
+
     document.getElementById('reviewForm').addEventListener('keydown', e => {
       if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.type !== 'submit') {
         e.preventDefault();
@@ -770,26 +835,31 @@
       }).filter(Boolean);
     }
 
+    function withExtra(base, extraInputId) {
+      const extra = document.getElementById(extraInputId).value.trim();
+      return extra ? `${base}(補足:${extra})` : base;
+    }
+
     function updateGradingMethod() {
       const parts = [];
       const formats = partsForGroup('class_format');
-      if (formats.length) parts.push(`形式:${formats.join('・')}`);
+      if (formats.length) parts.push(withExtra(`形式:${formats.join('・')}`, 'classFormatExtraInput'));
       const att = document.querySelector('[data-group="attendance"].active');
-      if (att) parts.push(`出席:${att.dataset.value}`);
+      if (att) parts.push(withExtra(`出席:${att.dataset.value}`, 'attendanceExtraInput'));
       if (att && att.dataset.value !== 'なし') {
         const attMethods = [...document.querySelectorAll('[data-group="attendance_method"].active')].map(b => {
           return b.dataset.value === '__attendance_method_custom__'
             ? (document.getElementById('attendanceMethodCustomInput').value.trim() || null)
             : b.dataset.value;
         }).filter(Boolean);
-        if (attMethods.length) parts.push(`出席確認方法:${attMethods.join('・')}`);
+        if (attMethods.length) parts.push(withExtra(`出席確認方法:${attMethods.join('・')}`, 'attendanceMethodExtraInput'));
       }
       const hw = document.querySelector('[data-group="homework"].active');
-      if (hw) parts.push(`課題:${hw.dataset.value}`);
+      if (hw) parts.push(withExtra(`課題:${hw.dataset.value}`, 'homeworkExtraInput'));
       const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
-      if (hwFreq) parts.push(`頻度:${hwFreq.dataset.value}`);
+      if (hwFreq) parts.push(withExtra(`頻度:${hwFreq.dataset.value}`, 'homeworkFrequencyExtraInput'));
       const evals = partsForGroup('eval');
-      if (evals.length) parts.push(`評価:${evals.join('・')}`);
+      if (evals.length) parts.push(withExtra(`評価:${evals.join('・')}`, 'evalExtraInput'));
       document.getElementById('gradingMethodHidden').value = parts.join(' / ');
     }
 
@@ -1439,6 +1509,12 @@
           evalCustom: document.getElementById('evalCustomInput').value,
           evalPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="eval"]')].map(i => [i.dataset.percentFor, i.value])),
           comment: document.getElementById('comment').value,
+          classFormatExtra: document.getElementById('classFormatExtraInput').value,
+          attendanceExtra: document.getElementById('attendanceExtraInput').value,
+          attendanceMethodExtra: document.getElementById('attendanceMethodExtraInput').value,
+          homeworkFrequencyExtra: document.getElementById('homeworkFrequencyExtraInput').value,
+          homeworkExtra: document.getElementById('homeworkExtraInput').value,
+          evalExtra: document.getElementById('evalExtraInput').value,
         }));
         document.getElementById('saveStatus').textContent = '自動保存済み ✓';
       }, 500);
@@ -1526,6 +1602,12 @@
           document.getElementById('comment').value = d.comment;
           updateCommentFeedback(d.comment.length);
         }
+        if (d.classFormatExtra) document.getElementById('classFormatExtraInput').value = d.classFormatExtra;
+        if (d.attendanceExtra) document.getElementById('attendanceExtraInput').value = d.attendanceExtra;
+        if (d.attendanceMethodExtra) document.getElementById('attendanceMethodExtraInput').value = d.attendanceMethodExtra;
+        if (d.homeworkFrequencyExtra) document.getElementById('homeworkFrequencyExtraInput').value = d.homeworkFrequencyExtra;
+        if (d.homeworkExtra) document.getElementById('homeworkExtraInput').value = d.homeworkExtra;
+        if (d.evalExtra) document.getElementById('evalExtraInput').value = d.evalExtra;
         updateGradingMethod();
       } catch (_) {}
     }
