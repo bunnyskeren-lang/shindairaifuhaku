@@ -194,7 +194,12 @@ async def autofill_profile(request: Request, _rl: None = Depends(_autofill_rate_
             return {"found": False}
         if not taken:
             try:
-                session.add(UserProfile(line_user_id=uid, name=row, student_id=sid))
+                # 修正理由: 会員登録画面(/api/register)を経由せずここでUserProfileが
+                # 初めて作られる経路でも、会員登録した全員へのウェルカムチケットを同様に付与する
+                session.add(UserProfile(
+                    line_user_id=uid, name=row, student_id=sid,
+                    unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
+                ))
                 await session.commit()
             except Exception as exc:
                 await session.rollback()

@@ -7,6 +7,7 @@ from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     EMAIL_VERIFICATION_ENABLED, MAX_REVIEWS_PER_COURSE_SECTION,
+    REGISTRATION_WELCOME_UNLOCK_CREDITS,
     STUDENT_ID_RE, LINE_USER_ID_RE, make_course_liff_url,
 )
 from core.liff_auth import verify_liff_id_token
@@ -88,10 +89,14 @@ async def submit(
                 return _form_error("この学籍番号はすでに別のアカウントで登録されています")
             submitter_name = reg_name.strip()[:100]
             try:
+                # 修正理由: 会員登録画面(/api/register)を経由せずここでUserProfileが
+                # 初めて作られる経路（先にレビュー投稿フォームを使った場合）でも、
+                # 会員登録した全員へのウェルカムチケットを同様に付与する
                 session.add(UserProfile(
                     line_user_id=uid,
                     name=submitter_name,
                     student_id=sid,
+                    unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
                 ))
                 await session.flush()
             except Exception as exc:
