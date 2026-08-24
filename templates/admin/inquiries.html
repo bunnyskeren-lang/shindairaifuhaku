@@ -1,0 +1,97 @@
+{% extends "admin/base.html" %}
+{% block title %}お問い合わせ管理{% endblock %}
+{% block heading %}✉️ お問い合わせ管理{% endblock %}
+
+{% block extra_style %}
+.inquiry-card {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.inquiry-header {
+  background: var(--accent);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.inquiry-header.handled { background: linear-gradient(135deg, #10b981, #34d399); }
+.inquiry-category { font-size: 13px; font-weight: 700; color: #fff; }
+.inquiry-date { font-size: 10px; color: rgba(255,255,255,.8); white-space: nowrap; }
+.inquiry-body { padding: 10px 14px; font-size: 13px; color: #374151; }
+.inquiry-content { white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+.inquiry-email { margin-top: 8px; font-size: 12px; color: #6b7280; }
+.inquiry-footer { padding: 10px 14px; border-top: 1px solid #f1f5f9; display: flex; gap: 8px; justify-content: flex-end; }
+{% endblock %}
+
+{% from "admin/base.html" import pager %}
+
+{% block content %}
+
+<div class="card">
+  <details class="section-details" open>
+    <summary>⏳ 未対応 <span class="section-count">({{ pending|length }}件)</span></summary>
+    <div class="section-body">
+      {% if pending %}
+      {% for i in pending %}
+      <div class="inquiry-card">
+        <div class="inquiry-header">
+          <span class="inquiry-category">📋 {{ i.category }}</span>
+          <span class="inquiry-date">{{ i.created_at | jst }}</span>
+        </div>
+        <div class="inquiry-body">
+          <div class="inquiry-content">{{ i.content }}</div>
+          {% if i.email %}
+          <div class="inquiry-email">📧 {{ i.email }}</div>
+          {% endif %}
+        </div>
+        <div class="inquiry-footer">
+          <form method="post" action="/admin/inquiries/handle/{{ i.id }}" style="margin:0">
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 14px">✅ 対応済みにする</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p style="color:#9ca3af;font-size:13px">未対応のお問い合わせはありません</p>
+      {% endif %}
+    </div>
+  </details>
+</div>
+
+<div class="card">
+  <details class="section-details"{% if hpage > 1 %} open{% endif %}>
+    <summary>✅ 対応済み <span class="section-count">(全{{ htotal }}件中 {{ handled|length }}件)</span></summary>
+    <div class="section-body">
+      {% if handled %}
+      {% for i in handled %}
+      <div class="inquiry-card">
+        <div class="inquiry-header handled">
+          <span class="inquiry-category">📋 {{ i.category }}</span>
+          <span class="inquiry-date">{{ i.handled_at | jst }}</span>
+        </div>
+        <div class="inquiry-body">
+          <div class="inquiry-content">{{ i.content }}</div>
+          {% if i.email %}
+          <div class="inquiry-email">📧 {{ i.email }}</div>
+          {% endif %}
+        </div>
+        <div class="inquiry-footer">
+          <form method="post" action="/admin/inquiries/reopen/{{ i.id }}" style="margin:0">
+            <button class="btn btn-icon" style="font-size:12px;padding:5px 14px">↩ 未対応に戻す</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {{ pager(hpage, htotal_pages, htotal, "/admin/inquiries?hpage=") }}
+      {% else %}
+      <p style="color:#9ca3af;font-size:13px">対応済みのお問い合わせはありません</p>
+      {% endif %}
+    </div>
+  </details>
+</div>
+
+{% endblock %}

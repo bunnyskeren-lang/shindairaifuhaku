@@ -39,6 +39,7 @@ async def init_db():
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
         CourseSectionView, EmailVerification, PaymentRequest,
+        Inquiry,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:
@@ -426,6 +427,15 @@ async def init_db():
             DO $$ BEGIN
               ALTER TABLE reviews ADD CONSTRAINT fk_reviews_payment_request
                 FOREIGN KEY (payment_request_id) REFERENCES payment_requests(id) ON DELETE SET NULL;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))
+
+        # ── 2026-08-24: お問い合わせフォーム（質問・情報の誤り指摘・新情報の追加提案等） ──
+        # inquiriesテーブル自体はcreate_all()で新規作成されるため、ここではCHECK制約の追加のみ行う
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE inquiries ADD CONSTRAINT chk_inquiries_status CHECK (status IN ('pending', 'handled'));
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$
         """))

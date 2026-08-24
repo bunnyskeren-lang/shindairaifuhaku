@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お問い合わせ | 神大ライフハック</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
+
+  <div class="max-w-md mx-auto px-4 pt-8">
+
+    {% if IS_DEV %}
+    <div class="bg-orange-500 text-white text-center text-sm font-bold py-2 px-4 rounded-2xl mb-4">
+      🚧 開発環境
+    </div>
+    {% endif %}
+
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-3">✉️</div>
+      <h1 class="text-2xl font-bold text-gray-800">お問い合わせ</h1>
+      <p class="text-gray-500 text-sm mt-1">ご質問、情報の誤りのご指摘、新しい情報の追加提案、情報のアップデート、誤字脱字のご指摘など、お気軽にお寄せください</p>
+    </div>
+
+    <form id="contactForm" action="/contact/submit" method="post" novalidate class="space-y-4">
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="category" class="block text-sm font-semibold text-gray-700 mb-2">
+          📋 お問い合わせの種類 <span class="text-red-500">*</span>
+        </label>
+        <select name="category" id="category" required
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition bg-white">
+          <option value="" disabled selected>選択してください</option>
+          {% for c in categories %}
+          <option value="{{ c }}">{{ c }}</option>
+          {% endfor %}
+        </select>
+        <p id="categoryError" class="hidden mt-1 text-red-500 text-xs">お問い合わせの種類を選択してください</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="content" class="block text-sm font-semibold text-gray-700 mb-2">
+          📝 お問い合わせ内容 <span class="text-red-500">*</span>
+        </label>
+        <textarea name="content" id="content" rows="6" maxlength="2000" required
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition resize-none"
+          placeholder="できるだけ具体的にご記入ください（対象のページ・科目名など）"></textarea>
+        <p id="contentError" class="hidden mt-1 text-red-500 text-xs">お問い合わせ内容を入力してください</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
+          📧 メールアドレス（任意）
+        </label>
+        <input type="email" name="email" id="email"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          placeholder="返信をご希望の場合はご入力ください" maxlength="200" autocomplete="email">
+        <p id="emailError" class="hidden mt-1 text-red-500 text-xs">メールアドレスの形式が正しくありません</p>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+        本お問い合わせについて、運営側からご連絡させていただくことがあります。
+      </div>
+
+      <button type="submit"
+        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm shadow-sm">
+        送信する
+      </button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('contactForm').addEventListener('submit', function(e) {
+      const categoryInput = document.getElementById('category');
+      const contentInput = document.getElementById('content');
+      const emailInput = document.getElementById('email');
+      const categoryError = document.getElementById('categoryError');
+      const contentError = document.getElementById('contentError');
+      const emailError = document.getElementById('emailError');
+      const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+      contentInput.value = contentInput.value.trim();
+      emailInput.value = emailInput.value.trim();
+
+      categoryError.classList.toggle('hidden', !!categoryInput.value);
+      contentError.classList.toggle('hidden', !!contentInput.value);
+      const emailOk = !emailInput.value || EMAIL_RE.test(emailInput.value);
+      emailError.classList.toggle('hidden', emailOk);
+
+      if (!categoryInput.value || !contentInput.value || !emailOk) {
+        e.preventDefault();
+      }
+    });
+  </script>
+</body>
+</html>

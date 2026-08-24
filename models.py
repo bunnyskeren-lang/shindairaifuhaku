@@ -223,6 +223,27 @@ class CourseSectionView(Base):
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class InquiryStatus:
+    """Inquiry.statusの取りうる値。CHECK制約はdatabase.py init_db()側で管理。"""
+    PENDING = "pending"
+    HANDLED = "handled"
+
+
+class Inquiry(TimestampMixin, Base):
+    """お問い合わせ（質問・情報の誤りの指摘・新情報の追加提案・情報のアップデート・誤字脱字の
+    指摘等）。フォーム送信時にそのまま作成する（メールアドレス認証は行わない）。"""
+    __tablename__ = "inquiries"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # 返信を希望する場合のみ入力される任意項目
+    email: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 'pending'(未対応) / 'handled'(対応済み)。CHECK制約はdatabase.py init_db()側で管理。
+    status: Mapped[str] = mapped_column(Text, nullable=False, default=InquiryStatus.PENDING)
+    handled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class EmailVerification(TimestampMixin, Base):
     """レビュー投稿フォームで初めてUserProfileを作る際のメール認証待ち情報。
     大学メール宛のマジックリンクをクリックするまでUserProfile/Reviewの作成を保留し、
