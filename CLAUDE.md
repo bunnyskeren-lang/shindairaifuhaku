@@ -281,11 +281,13 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── pages.py                  ← /, /register（会員登録必須ページ）, /privacy, /sw.js, /liff/course
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
 │   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /submit, /api/course/{id}
+│   ├── payment_api.py               ← /payment/apply（レビュー報酬支払い申請フォーム）, /api/payment/eligible, /payment/apply/submit
 │   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
 │       ├── auth.py                     ← /admin/login, /admin/logout
 │       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe
 │       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、教員/学部/分類の並び替え）
 │       ├── reviews.py                     ← /admin/reviews*
+│       ├── payments.py                     ← /admin/payments*（支払い申請の承認/支払い済み化/却下）
 │       ├── users_errors.py                 ← /admin/users, /admin/errors
 │       └── stats.py                         ← /admin/usage-stats
 ├── templates/
@@ -323,7 +325,8 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `instructors` | 教員マスタ |
 | `course_sections` | 科目×教員のセクション |
 | `syllabi` | シラバス（年度・クォーター・時間割コード。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み、target_grades/subject_category列は2026-07-30に廃止済み） |
-| `reviews` | 投稿レビュー（`is_approved` で承認管理） |
+| `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い） |
+| `payment_requests` | レビュー報酬（1件10円、500円単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/10件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
 | `course_section_views` | 科目セクションの閲覧数 |
 
 共通・運用系:
