@@ -112,7 +112,7 @@ class Subject(Base):
     # 先頭列プレフィックスとして完全に重複し検索速度に寄与せず書き込みコストだけ増やす
     name: Mapped[str] = mapped_column(Text, nullable=False)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    faculty: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
     # 学部内で学科・専攻ごとに卒業要件が異なる場合の学科名（工学部5学科・理学部5学科・
     # 医学部保健学科4専攻等）。user_profilesと同じ「faculty列+department列」のペア形式。
     # 学科の区別が無い学部では空文字（subjects.readingと同じプレースホルダ方式、UNIQUE制約で

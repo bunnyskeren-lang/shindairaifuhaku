@@ -8,6 +8,7 @@
 > 2026-07-06のスキーマ移行で完全に廃止済み。旧内容は git 履歴（このファイルの過去版）を参照。
 > **例外**: `course_sections.syllabus_url` は2026-07-18に本ドキュメントの指摘（旧P2「年度またぎURL変更を表現できない」）を
 > 踏まえて実際に廃止し、`syllabi.timetable_code`/`department`からの動的生成に変更済み（詳細は該当セクション参照）。
+> `subjects.faculty` のNOT NULL化（下記P1 #1）も2026-08-25に対応済み。
 > **2026-07-30**: My時間割・単位チェッカー（成績表PDF解析）・履修登録上限CAP制・必修科目自動登録の
 > 4機能を全廃止し、`credit_requirements`/`subject_credit_categories`/`registration_caps`/`required_subjects`/
 > `user_syllabi`/`user_custom_courses`/`user_seiseki_raw`/`schedules`の8テーブルと
@@ -265,8 +266,8 @@ instructors ──CASCADE──> course_sections
 ### 1. CHECK制約の適用が不均一
 `message_logs.direction` にはCHECK制約があるのに、同様に値集合が固定されている `reviews.rating`/`reviews.ease_rating`、`syllabi.academic_term`、`display_orders.kind` にはない。整備の優先順位が場当たり的になっている。
 
-### 2. `subjects.faculty` のNULL許容がUNIQUE制約を無効化
-`(name, faculty, department)` の複合UNIQUEはPostgreSQLのNULL非等価性により `faculty IS NULL` の行では機能しない。既知の欠陥として `sync_db_to_prod.py` にコメントで明記されているが未対応。
+### 2. `subjects.faculty` のNULL許容がUNIQUE制約を無効化（2026-08-25対応済み）
+`(name, faculty, department)` の複合UNIQUEはPostgreSQLのNULL非等価性により `faculty IS NULL` の行では機能しない問題があったが、`database.py` `init_db()` で既存NULL行（共通専門基礎科目2件→`教養教育院`、他は空文字）を補完した上で `faculty` をNOT NULL化した。
 
 ### 3. キャッシュ無効化がDBコミットと非トランザクショナル
 `core/cache.py` の各 `invalidate_*_cache()` はDB更新後に手動呼び出しする設計で、呼び出し忘れや例外発生時の未到達があると最大1時間（TTL）ステールデータが配信されるリスクが構造的に残る。
@@ -285,7 +286,7 @@ instructors ──CASCADE──> course_sections
 
 | # | 対象 | 問題 | 改善方針 |
 |---|---|---|---|
-| 1 | `subjects` | `(name, faculty, department)` UNIQUEが `faculty IS NULL` 行で機能しない | `faculty` を `NOT NULL DEFAULT ''` に統一 |
+| 1 | `subjects` | ~~`(name, faculty, department)` UNIQUEが `faculty IS NULL` 行で機能しない~~ → 2026-08-25対応済み | `faculty` を `NOT NULL DEFAULT ''` に統一 |
 
 ### P2（中優先度・将来の機能拡張に影響）
 

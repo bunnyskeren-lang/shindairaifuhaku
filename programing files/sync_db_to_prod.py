@@ -96,9 +96,8 @@ async def main():
         # 無警告に上書きされる事故が起こりうる（instructorsと同じく名前で名寄せする）。
         # 「卒業研究」等、学部をまたいで同名科目が実在するため、名寄せキーはnameだけでなく
         # (name, faculty, department)の組で行う（DB側もuq_subjects_name_faculty_departmentに変更済み）。
-        # 注意: faculty=NULLの行（共通専門基礎科目など2件）はPostgresの仕様上NULL同士が
-        # 一致しないため ON CONFLICT が発火せず、再同期のたびにINSERTが重複しうる。
-        # 該当は少数のためひとまず許容し、見つかった場合は手動で重複解消する。
+        # 2026-08-25にsubjects.facultyをNOT NULL化(database.py init_db())したため、
+        # 従来あったfaculty=NULL行によるON CONFLICT不発火の懸念は解消済み。
         # course_sections/subject_credit_categories は下でdev id→prod idに変換して同期する。
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, department, classification, "

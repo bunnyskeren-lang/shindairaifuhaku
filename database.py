@@ -511,3 +511,22 @@ async def init_db():
                         f"UPDATE reviews SET grading_method = v.g FROM (VALUES {values_sql}) AS v(id, g) "
                         f"WHERE reviews.id = v.id"
                     ), params)
+
+        # ── 2026-08-25: subjects.faculty をNOT NULL化 ──
+        # SCHEMA_REVIEW.md P1: (name, faculty, department)の複合UNIQUEはPostgreSQLのNULL非等価性に
+        # よりfaculty IS NULLの行では機能しない。既存のNULL行（classification='共通専門基礎科目'の
+        # 2件のみ、dev DBで確認済み・重複衝突なし）は教養教育院開講のためfaculty='教養教育院'を
+        # 補完し、それ以外のNULL行（理論上のみ）は空文字にフォールバックしてからNOT NULL化する
+        await conn.execute(text(
+            "UPDATE subjects SET faculty = '教養教育院' "
+            "WHERE faculty IS NULL AND classification = '共通専門基礎科目'"
+        ))
+        await conn.execute(text(
+            "UPDATE subjects SET faculty = '' WHERE faculty IS NULL"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE subjects ALTER COLUMN faculty SET NOT NULL"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE subjects ALTER COLUMN faculty SET DEFAULT ''"
+        ))

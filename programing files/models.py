@@ -64,7 +64,7 @@ class Subject(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    faculty: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="", index=True)
     department: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
     classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
