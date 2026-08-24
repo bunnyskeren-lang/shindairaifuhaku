@@ -310,9 +310,16 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             else:
                 liff_url = ""
 
+            if kind != "single" and liff_url:
+                # 統合表示（variant/numvariant）は科目名タップでバリアント個別選択を
+                # 挟まず、統合済みの科目詳細ページ（/liff/course、レビューもグループ全体で
+                # 統合表示される）に直接遷移させる
+                name_action = URIAction(label=display[:20], uri=liff_url)
+            else:
+                name_action = PostbackAction(label=display[:20], data=name)
             name_box = FlexBox(
                 layout="horizontal",
-                action=PostbackAction(label=display[:20], data=name),
+                action=name_action,
                 contents=[FlexText(text=display_text, wrap=True, size="sm", color=text_color, flex=1)],
             )
 
