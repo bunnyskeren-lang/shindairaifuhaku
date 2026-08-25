@@ -39,7 +39,7 @@ async def init_db():
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
         CourseSectionView, EmailVerification, PaymentRequest,
-        Inquiry, SubjectUnlock,
+        Inquiry, SubjectUnlock, AdminSession,
     )
     from sqlalchemy import text
     async with engine.begin() as conn:

@@ -53,6 +53,17 @@ def patch_async_session_local(monkeypatch, module, sessionmaker_):
 
 
 @pytest.fixture(autouse=True)
+def _reset_admin_revoke_cache():
+    """core.cache.get_admin_revoke_epoch_cached()はTTL(10秒)付きでモジュールグローバルに
+    キャッシュされる。テストごとに独立したSQLiteインメモリDBを使うため、前のテストで
+    キャッシュされた値が短時間残って別テストのDBに対する判定に混ざらないよう都度リセットする。"""
+    from core import cache
+    cache.invalidate_admin_revoke_cache()
+    yield
+    cache.invalidate_admin_revoke_cache()
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limit_buckets():
     """core.rate_limit._bucketsはIPアドレス単位のグローバル状態で、テストクライアントは
     毎回同一の疑似IPを使うため、レート制限テスト以外のE2Eテストが429で誤って
@@ -77,6 +88,11 @@ async def http_client_factory(test_sessionmaker):
 
     def _factory(router_module, monkeypatch):
         patch_async_session_local(monkeypatch, router_module, test_sessionmaker)
+        # core.security.check_admin は core.cache.get_admin_revoke_epoch_cached() 経由で
+        # DBを参照する(管理者トークンのサーバー側失効機構)。/admin/*系のrouterは全てこの
+        # 依存を持つため、router自身だけでなくcore.cacheのAsyncSessionLocalも差し替える
+        import core.cache as cache_module
+        patch_async_session_local(monkeypatch, cache_module, test_sessionmaker)
         app = FastAPI()
         app.include_router(router_module.router)
         transport = ASGITransport(app=app)

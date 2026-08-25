@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request
 
+from core import cache
 from core.config import ADMIN_COOKIE, ADMIN_PASSWORD, ADMIN_TOKEN_TTL, CHANNEL_SECRET
 
 _HMAC_KEY = hashlib.sha256((CHANNEL_SECRET + ADMIN_PASSWORD).encode()).digest()
@@ -33,8 +34,14 @@ def verify_admin_token(token: str) -> bool:
         return False
 
 
-def check_admin(request: Request):
-    if not verify_admin_token(request.cookies.get(ADMIN_COOKIE, "")):
+async def check_admin(request: Request):
+    token = request.cookies.get(ADMIN_COOKIE, "")
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=302, headers={"Location": f"/admin/login?next={request.url.path}"})
+    # サーバー側の一括ログアウト対応。トークン自体はTTL(4時間)いっぱい署名的には有効だが、
+    # ログアウト以前に発行されたトークンはrevoked_beforeより古いものとして拒否する
+    revoke_epoch = await cache.get_admin_revoke_epoch_cached()
+    if revoke_epoch and int(token.split(":", 1)[0]) < revoke_epoch:
         raise HTTPException(status_code=302, headers={"Location": f"/admin/login?next={request.url.path}"})
 
 

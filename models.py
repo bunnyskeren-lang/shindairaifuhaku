@@ -63,6 +63,18 @@ class ErrorLog(TimestampMixin, Base):
     traceback: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class AdminSession(Base):
+    """管理画面の一括ログアウト用。単一行(id=1)のrevoked_beforeより前に発行された管理者トークンを
+    一律で無効化する（core/security.pyのcheck_admin参照）。ADMIN_PASSWORDは全管理者が共有する
+    単一パスワードでトークンにセッションIDが無いため、個別セッションではなく「ログアウト時点以前に
+    発行された全トークン」をまとめて失効させる設計（漏洩・コピーされたトークンがログアウト後も
+    ADMIN_TOKEN_TTL(4時間)いっぱい有効なまま残る問題への対応、2026-08-25追加）。"""
+    __tablename__ = "admin_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    revoked_before: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class UserActivity(Base):
     __tablename__ = "user_activity"
     __table_args__ = (UniqueConstraint("user_id", "action"),)

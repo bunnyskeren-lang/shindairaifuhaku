@@ -380,6 +380,41 @@ async def get_variant_map_cached() -> dict[str, str]:
     return _variant_map_cache
 
 
+# ── admin session revocation（core/security.pyのcheck_admin用） ──────────────
+# TTLを他キャッシュ(1時間)より大幅に短くしているのは、ログアウト操作を他ワーカー
+# プロセスへ迅速に反映させるため（WEB_CONCURRENCY>1構成時、単一ログアウトが
+# 全ワーカーの管理者トークンを失効させるまでの遅延を許容範囲に抑える）
+_ADMIN_REVOKE_CACHE_TTL = 10
+_admin_revoke_epoch: float = 0.0
+_admin_revoke_epoch_at: float | None = None
+
+
+async def get_admin_revoke_epoch_cached() -> float:
+    global _admin_revoke_epoch, _admin_revoke_epoch_at
+    if _admin_revoke_epoch_at is not None and time.monotonic() - _admin_revoke_epoch_at < _ADMIN_REVOKE_CACHE_TTL:
+        return _admin_revoke_epoch
+    from models import AdminSession
+    try:
+        async with AsyncSessionLocal() as s:
+            row = (await s.execute(
+                select(AdminSession.revoked_before).where(AdminSession.id == 1)
+            )).scalar_one_or_none()
+    except Exception:
+        # 修正理由: 一括ログアウト機構はあくまで追加の安全策であり、DB一時障害時に
+        # 管理画面全体を巻き添えでログイン不能にしてはならない(フェイルオープン)。
+        # 直近の成功値を維持しつつ、次のTTL経過後に再試行する
+        _admin_revoke_epoch_at = time.monotonic()
+        return _admin_revoke_epoch
+    _admin_revoke_epoch = row.timestamp() if row else 0.0
+    _admin_revoke_epoch_at = time.monotonic()
+    return _admin_revoke_epoch
+
+
+def invalidate_admin_revoke_cache() -> None:
+    global _admin_revoke_epoch_at
+    _admin_revoke_epoch_at = None
+
+
 async def warm_query_caches() -> None:
     import asyncio
     await asyncio.gather(
