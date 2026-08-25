@@ -151,6 +151,12 @@ const UNLOCK_REWARD = {{ unlock_reward }};
 
 // 修正理由: レビュー閲覧には会員登録を必須にするため、未登録の間はページ本体を
 // ブラー＋オーバーレイで覆って触れなくし、会員登録へ誘導する
+// この機構（.blurredクラス・#authOverlay構造・showAuthOverlay/hideAuthOverlay）は
+// templates/form_index.html（showOverlay/hideOverlay）・templates/contact.htmlにも
+// 同種の実装が存在する。表示要素のID体系（本ファイルはcontent、form_index.htmlは
+// formWrapper）とCSS基盤（本ファイルは独自<style>、form_index.htmlはTailwind）が異なり
+// 共通部品化はしていないため、ゲートの見た目・文言・タイミングを変更する場合は
+// 他の2ファイルも合わせて確認すること
 function showAuthOverlay(html) {
   document.getElementById("authOverlayBox").innerHTML = html;
   document.getElementById("authOverlay").style.display = "flex";
@@ -458,7 +464,9 @@ async function main() {
   if (needsRegistration) {
     showAuthOverlay(`<div class="icon">🎓</div>
       <p>会員登録がまだのようです。レビュー閲覧には会員登録が必要です。</p>
-      <a href="${registerUrl}" class="btn btn-primary" style="display:block;text-decoration:none">今すぐ会員登録する</a>`);
+      <p style="font-size:11px;color:#94a3b8">入力は30秒ほどで完了します。</p>
+      <a href="${registerUrl}" class="btn btn-primary" style="display:block;text-decoration:none">今すぐ会員登録する</a>
+      <p style="font-size:11px;color:#94a3b8">登録することで<a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">利用規約</a>および<a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">プライバシーポリシー</a>に同意したものとします。</p>`);
   } else {
     hideAuthOverlay();
   }
