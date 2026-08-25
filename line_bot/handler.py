@@ -17,7 +17,7 @@ from linebot.v3.messaging import (
     URIAction,
 )
 from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from core import cache, line_client
 from core.activity_log import save_error_log, save_log_bg
@@ -44,6 +44,7 @@ from line_bot.flex_builders import (
     make_onitan_card,
     make_rakutan_card,
     make_registration_flex,
+    make_search_result_card,
 )
 from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
 
@@ -489,28 +490,27 @@ async def _get_onitan_ranking() -> list:
 
 
 async def _get_omikuji() -> list:
-    # 全科目からランダムに10件選ぶ。毎回結果を変えたいのでキャッシュしない
+    # 承認済みレビューがある科目からランダムに10件選ぶ(楽単度を表示)。毎回結果を変えたいのでキャッシュしない
     async with AsyncSessionLocal() as _s:
-        subj_rows = (await _s.execute(
-            select(Subject.id, Subject.name, Subject.faculty)
-            .order_by(func.random())
-            .limit(10)
-        )).all()
-        if not subj_rows:
-            return [TextMessage(text="科目データがまだありません。")]
-        ids = [sid for sid, _, _ in subj_rows]
-        ease_rows = (await _s.execute(
-            select(CourseSection.subject_id, Review.ease_rating)
+        rows = (await _s.execute(
+            select(Subject.id, Subject.name, Review.ease_rating)
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
             .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == ReviewStatus.APPROVED, CourseSection.subject_id.in_(ids))
+            .where(Review.status == ReviewStatus.APPROVED)
+            .group_by(Subject.id, Subject.name, Review.ease_rating)
         )).all()
-    best_ease: dict[int, str] = {}
-    for sid, ease in ease_rows:
-        if sid not in best_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best_ease[sid], 99):
-            best_ease[sid] = ease
+    if not rows:
+        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+    course_best: dict[int, tuple[str, str]] = {}
+    for sid, name, ease in rows:
+        if sid not in course_best or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_best[sid][1], 99):
+            course_best[sid] = (name, ease)
+    pool = list(course_best.items())
+    random.shuffle(pool)
+    selected = pool[:10]
     items = [
-        {"id": sid, "name": name, "faculty": faculty or "", "stars": EASE_STARS.get(best_ease.get(sid, ""), "")}
-        for sid, name, faculty in subj_rows
+        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, "")}
+        for i, (sid, (name, ease)) in enumerate(selected, 1)
     ]
     return [make_omikuji_card(items)]
 
@@ -775,7 +775,7 @@ async def _handle_course_search(t: str, user_id: str) -> list:
             "stars": EASE_STARS.get(best_ease, ""),
         })
 
-    return [make_omikuji_card(items, title=f"🔍「{t}」の検索結果")]
+    return [make_search_result_card(items, title=f"🔍「{t}」の検索結果")]
 
 
 async def handle_message(text: str, user_id: str = "") -> list:

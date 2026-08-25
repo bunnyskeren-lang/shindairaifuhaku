@@ -370,7 +370,12 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
     return _make_ranking_card("👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c")
 
 
-def make_omikuji_card(items: list[dict], title: str = "⛩️ 10連おみくじ") -> FlexMessage:
+def make_omikuji_card(items: list[dict]) -> FlexMessage:
+    # items: [{"rank": int, "id": int, "name": str, "stars": str}]  楽単5選/鬼単5選と同じ表記。stars=楽単度
+    return _make_ranking_card("⛩️ 10連おみくじ", items, header_bg="#7c3aed", row_bg="#f5f3ff", accent="#7c3aed")
+
+
+def make_search_result_card(items: list[dict], title: str) -> FlexMessage:
     # items: [{"id": int, "name": str, "faculty": str, "stars": str}]  stars=""なら未レビュー
     rows = []
     for item in items:
