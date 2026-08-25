@@ -17,6 +17,8 @@
     </div>
     {% endif %}
 
+    <div id="formWrapper" class="blurred">
+
     <!-- Header -->
     <div class="text-center mb-6">
       <div class="text-5xl mb-3">📚</div>
@@ -41,21 +43,11 @@
       <!-- 修正理由: 以前はサーバー側で ?uid= から直接DBを引いて氏名・学籍番号を
            テンプレートに埋め込んでいたため、任意のuidを指定するだけで他人の
            個人情報が閲覧できるIDOR/PII漏洩になっていた。現在はLIFF ID token
-           検証済みの本人にのみ /api/profile/prefill 経由でJSからプリフィルする。 -->
-      <div id="newUserNotice" class="hidden bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 mb-1 text-sm text-purple-700 items-start gap-2">
-        <span class="text-lg leading-none mt-0.5">🎓</span>
-        <span>初めての投稿です。プロフィールを登録してください（管理者のみ確認できます）。</span>
-      </div>
-
-      <div id="regNameCard" class="hidden bg-white rounded-2xl shadow-sm p-5">
-        <label for="reg_name" class="block text-sm font-semibold text-gray-700 mb-2">
-          🪪 お名前（漢字） <span class="text-red-500">*</span>
-        </label>
-        <input type="text" name="reg_name" id="reg_name"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          placeholder="例：神戸 太郎" maxlength="50">
-        <p id="regNameError" class="hidden mt-1 text-red-500 text-xs">記号は使用できません。正しく入力してください</p>
-      </div>
+           検証済みの本人にのみ /api/profile/prefill 経由でJSからプリフィルする。
+           修正理由: 以前はここで未登録ユーザーがその場で氏名(reg_name)を入力して
+           プロフィールを自動作成できたが、会員登録(/register)を必ず経由させる方針に
+           変更したため、フォームは会員登録済みユーザーのみ表示する(未登録者はオーバーレイで
+           ブロックし/registerへ誘導。initProfilePrefill参照)。 -->
 
       <input type="hidden" name="id_token" id="idTokenHidden" value="">
 
@@ -436,9 +428,18 @@
       </p>
 
     </form>
+    </div>
+  </div>
+
+  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div id="authOverlayBox" class="bg-white rounded-2xl shadow-xl p-6 max-w-xs w-full text-center space-y-3">
+      <div class="text-4xl">⏳</div>
+      <p class="text-sm text-gray-500">確認中...</p>
+    </div>
   </div>
 
   <style>
+    .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
     .chip-btn {
       padding: 7px 14px;
       border-radius: 999px;
@@ -591,6 +592,7 @@
     // ID tokenをサーバー側でLINEのverifyエンドポイントに照会し、真正な
     // ユーザーIDのみを信用するように変更した。
     const LIFF_ID = "{{ liff_id }}";
+    const REGISTER_LIFF_ID = "{{ register_liff_id }}";
     const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
     let _liffInitPromise = null;
     function ensureLiffInit() {
@@ -605,39 +607,94 @@
     // （実際の受付可否は/submit側で再確認するため、これはあくまで補助的なUI表示）
     let _reviewedSet = new Set();
 
+    function showOverlay(html) {
+      document.getElementById('authOverlayBox').innerHTML = html;
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('formWrapper').classList.add('blurred');
+    }
+
+    function hideOverlay() {
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('formWrapper').classList.remove('blurred');
+    }
+
+    // 修正理由: 以前は未登録ユーザーでもその場でreg_nameを入力してプロフィールを
+    // 自動作成できたが、会員登録(/register)を必ず経由させる方針に変更したため、
+    // 未登録・未ログインの間はフォームをブラー＋オーバーレイで覆い、会員登録へ誘導する
     async function initProfilePrefill() {
       try {
         await ensureLiffInit();
-        if (!liff.isLoggedIn()) return;
-        const idToken = await liff.getIDToken();
-        if (!idToken) return;
+      } catch (e) {
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">LINEログインの確認に失敗しました。リッチメニューからこのページを開き直してください。</p>`);
+        return;
+      }
+
+      const isInClient = (() => { try { return liff.isInClient(); } catch (e) { return false; } })();
+      if (isInClient && !liff.isLoggedIn()) {
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      if (!liff.isLoggedIn()) {
+        showOverlay(`<div class="text-4xl">📱</div>
+          <p class="text-sm text-gray-500">レビュー投稿にはLINEログインが必要です。</p>
+          <button type="button" id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">LINEでログイン</button>`);
+        document.getElementById('loginBtn').onclick = () => liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      let idToken;
+      try {
+        idToken = await liff.getIDToken();
+      } catch (e) {
+        idToken = null;
+      }
+      if (!idToken) {
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン情報の取得に失敗しました。もう一度お試しください。</p>`);
+        return;
+      }
+
+      let d;
+      try {
         const res = await fetch('/api/profile/prefill', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id_token: idToken }),
         });
-        const d = await res.json();
-        if (d.found) {
-          const sidInput = document.getElementById('student_id');
-          if (d.student_id) {
-            sidInput.value = d.student_id;
-            sidInput.readOnly = true;
-            sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
-          }
-          if (Array.isArray(d.reviewed_pairs)) {
-            _reviewedSet = new Set(d.reviewed_pairs.map(([cid, name]) => cid + '::' + name));
-          }
-        } else if (EMAIL_VERIFICATION_ENABLED) {
+        d = await res.json();
+      } catch (e) {
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">通信に失敗しました。もう一度お試しください。</p>`);
+        return;
+      }
+
+      if (!d.found) {
+        if (EMAIL_VERIFICATION_ENABLED) {
           // 修正理由: 初めての投稿者はプロフィール作成前に大学メールでの本人確認を
           // 済ませる必要があるため、投稿フォームそのものを開かせずゲートページへ誘導する
           location.replace('/verify-email');
-        } else {
-          document.getElementById('newUserNotice').classList.remove('hidden');
-          document.getElementById('newUserNotice').classList.add('flex');
-          document.getElementById('regNameCard').classList.remove('hidden');
-          document.getElementById('reg_name').setAttribute('required', 'required');
+          return;
         }
-      } catch (e) {}
+        const registerUrl = REGISTER_LIFF_ID ? `https://liff.line.me/${REGISTER_LIFF_ID}` : '/register';
+        showOverlay(`<div class="text-4xl">🎓</div>
+          <p class="text-sm text-gray-600">会員登録がまだのようです。レビュー投稿には会員登録が必要です。</p>
+          <a href="${registerUrl}" class="block text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">今すぐ会員登録する</a>`);
+        return;
+      }
+
+      const sidInput = document.getElementById('student_id');
+      if (d.student_id) {
+        sidInput.value = d.student_id;
+        sidInput.readOnly = true;
+        sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+      }
+      if (Array.isArray(d.reviewed_pairs)) {
+        _reviewedSet = new Set(d.reviewed_pairs.map(([cid, name]) => cid + '::' + name));
+      }
+      document.getElementById('idTokenHidden').value = idToken;
+      hideOverlay();
     }
     initProfilePrefill();
 
@@ -1432,53 +1489,9 @@
       if (el.value.trim()) el.classList.remove('ring-2', 'ring-red-400', 'border-red-400');
       saveData();
     });
-    function validateName(inputEl, errorEl) {
-      const v = inputEl.value.trim();
-      // 修正理由: `v && !NAME_RE.test(v)` は空文字だと常にfalse（=valid扱い）になり、
-      // 初回ユーザーの氏名必須入力（*マーク付き、required属性あり）を空欄のまま送信できてしまい、
-      // サーバー側で弾かれた時には既にlocalStorageの自動保存データが消去された後だった。
-      // required属性がある場合は空文字も不正値として扱う。
-      const invalid = inputEl.hasAttribute('required') ? (!v || !NAME_RE.test(v)) : (v && !NAME_RE.test(v));
-      errorEl.classList.toggle('hidden', !invalid);
-      inputEl.classList.toggle('border-red-400', invalid);
-      inputEl.classList.toggle('ring-2', invalid);
-      inputEl.classList.toggle('ring-red-300', invalid);
-      return !invalid;
-    }
-
-    const regNameInput = document.getElementById('reg_name');
-    const regNameError = document.getElementById('regNameError');
-    if (regNameInput) {
-      regNameInput.addEventListener('input', () => validateName(regNameInput, regNameError));
-    }
-
     const studentIdInput = document.getElementById('student_id');
     const studentIdError = document.getElementById('studentIdError');
     const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
-    const NAME_RE = /^[a-zA-Z0-9぀-ヿ一-鿿\s　]+$/;
-    let _autofillTimer;
-    async function tryAutofill(sid) {
-      try {
-        await ensureLiffInit();
-        if (!liff.isLoggedIn()) return;
-        const idToken = await liff.getIDToken();
-        if (!idToken) return;
-        const res = await fetch('/api/autofill', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id_token: idToken, student_id: sid }),
-        });
-        const d = await res.json();
-        if (!d.found || !d.name) return;
-        const regEl = document.getElementById('reg_name');
-        if (regEl) { regEl.value = d.name; regEl.removeAttribute('required'); }
-        if (studentIdInput && !studentIdInput.readOnly) {
-          studentIdInput.readOnly = true;
-          studentIdInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
-        }
-        try { localStorage.setItem('kobe_profile', JSON.stringify({ student_id: sid })); } catch(_) {}
-      } catch(_) {}
-    }
 
     if (studentIdInput) {
       studentIdInput.addEventListener('input', () => {
@@ -1489,10 +1502,6 @@
         studentIdInput.classList.toggle('ring-2', invalid);
         studentIdInput.classList.toggle('ring-red-300', invalid);
         if (!invalid) clearCardError('studentIdCard');
-        clearTimeout(_autofillTimer);
-        if (!invalid && STUDENT_ID_RE.test(v)) {
-          _autofillTimer = setTimeout(() => tryAutofill(v), 300);
-        }
       });
     }
 
@@ -1677,7 +1686,7 @@
         return;
       }
       // 全エラーを一旦リセット
-      ['regNameError','studentIdError','academicYearError',
+      ['studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
        'classFormatError','formatCustomError','attendanceError','attendanceSurpriseError','attendanceMethodError','attendanceMethodCustomError','homeworkError',
        'homeworkFrequencyError','evalError','evalCustomError','evalPercentError','formatPercentError'].forEach(id => {
@@ -1687,8 +1696,6 @@
       CARD_IDS.forEach(clearCardError);
 
       let valid = true;
-
-      if (regNameInput && !validateName(regNameInput, regNameError)) valid = false;
 
       if (studentIdInput) {
         studentIdInput.value = studentIdInput.value.trim().toUpperCase();

@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import select
 
 import routers.email_verify_api as email_verify_api
+import routers.profile_api as profile_api
 import routers.review_submit_api as review_submit_api
 from models import CourseSection, EmailVerification, Instructor, Review, Subject, UserProfile
 
@@ -21,6 +22,7 @@ def _fake_verify(monkeypatch, user_id: str = UID):
         return user_id if id_token == "valid-token" else None
     monkeypatch.setattr(review_submit_api, "verify_liff_id_token", _verify)
     monkeypatch.setattr(email_verify_api, "verify_liff_id_token", _verify)
+    monkeypatch.setattr(profile_api, "verify_liff_id_token", _verify)
 
 
 def _stub_push_notification(monkeypatch):
@@ -60,7 +62,6 @@ SUBMIT_FORM = {
     "ease_rating": "A",
     "comment": "とても勉強になりました",
     "id_token": "valid-token",
-    "reg_name": "神戸太郎",
     "student_id": "2345678S",
     "academic_year": "2026",
 }
@@ -121,8 +122,9 @@ async def test_verify_creates_profile_only_not_review(http_client_factory, monke
 
 
 @pytest.mark.asyncio
-async def test_full_flow_request_verify_then_submit_creates_review(http_client_factory, monkeypatch, test_sessionmaker):
-    monkeypatch.setattr(review_submit_api, "EMAIL_VERIFICATION_ENABLED", True)
+async def test_verify_then_submit_rejected_until_registration_completed(http_client_factory, monkeypatch, test_sessionmaker):
+    """メール認証は会員登録の一部（本人確認ステップ）であり、それ単体では会員登録
+    完了とみなさない。学部・学科未入力のままでは/submitは拒否される。"""
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     captured = _capture_mail(monkeypatch)
@@ -136,18 +138,56 @@ async def test_full_flow_request_verify_then_submit_creates_review(http_client_f
 
     submit_client = http_client_factory(review_submit_api, monkeypatch)
     resp = await submit_client.post("/submit", data=SUBMIT_FORM)
+    assert resp.status_code == 400
+
+    async with test_sessionmaker() as session:
+        assert (await session.execute(select(Review))).scalars().first() is None
+        profile = await session.get(UserProfile, UID)
+        assert profile is not None
+        assert profile.faculty is None
+
+
+@pytest.mark.asyncio
+async def test_verify_then_register_then_submit_creates_review(http_client_factory, monkeypatch, test_sessionmaker):
+    """メール認証→/api/register（学部・学科入力）で会員登録が完了して初めて/submitが通る。"""
+    async def _noop_unlink(user_id):
+        return None
+    monkeypatch.setattr(profile_api.line_client, "unlink_rich_menu", _noop_unlink)
+
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    captured = _capture_mail(monkeypatch)
+    await _seed_course(test_sessionmaker)
+
+    request_client = http_client_factory(email_verify_api, monkeypatch)
+    await request_client.post("/api/email/request", data=REQUEST_FORM)
+    verify_client = http_client_factory(email_verify_api, monkeypatch)
+    token = _extract_token(captured["verify_url"])
+    await verify_client.get(f"/api/email/verify?token={token}")
+
+    register_client = http_client_factory(profile_api, monkeypatch)
+    resp = await register_client.post("/api/register", data={
+        "id_token": "valid-token", "name": "神戸太郎", "student_id": "2345678S",
+        "faculty": "経営学部", "department": "経営学科",
+    })
+    assert resp.status_code == 200
+
+    submit_client = http_client_factory(review_submit_api, monkeypatch)
+    resp = await submit_client.post("/submit", data=SUBMIT_FORM)
     assert resp.status_code == 200
 
     async with test_sessionmaker() as session:
         review = (await session.execute(select(Review))).scalars().one()
         assert review.content == "とても勉強になりました"
         assert review.status == "pending"
+        profile = await session.get(UserProfile, UID)
+        assert profile.faculty == "経営学部"
+        assert profile.email_verified_at is not None
 
 
 @pytest.mark.asyncio
-async def test_submit_rejected_when_enabled_and_no_verified_profile(http_client_factory, monkeypatch, test_sessionmaker):
-    """ゲート(/verify-email)を経由せず直接/submitを叩く迂回策への防御を確認する。"""
-    monkeypatch.setattr(review_submit_api, "EMAIL_VERIFICATION_ENABLED", True)
+async def test_submit_without_any_profile_rejected(http_client_factory, monkeypatch, test_sessionmaker):
+    """/verify-email ゲートを経由せず直接/submitを叩く迂回策への防御を確認する。"""
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
@@ -162,13 +202,12 @@ async def test_submit_rejected_when_enabled_and_no_verified_profile(http_client_
 
 
 @pytest.mark.asyncio
-async def test_existing_profile_submit_unaffected_even_when_enabled(http_client_factory, monkeypatch, test_sessionmaker):
-    monkeypatch.setattr(review_submit_api, "EMAIL_VERIFICATION_ENABLED", True)
+async def test_fully_registered_profile_can_submit_regardless_of_email_verification(http_client_factory, monkeypatch, test_sessionmaker):
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
     async with test_sessionmaker() as session:
-        session.add(UserProfile(line_user_id=UID, name="神戸太郎", student_id="2345678S"))
+        session.add(UserProfile(line_user_id=UID, name="神戸太郎", student_id="2345678S", faculty="経営学部", department="経営学科"))
         await session.commit()
     client = http_client_factory(review_submit_api, monkeypatch)
 

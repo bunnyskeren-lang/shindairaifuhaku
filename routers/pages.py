@@ -26,6 +26,7 @@ async def index(request: Request, uid: str = Query(default="")):
             "request": request,
             "uid": uid,
             "liff_id": REVIEW_LIFF_ID,
+            "register_liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
             "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
         },
@@ -125,6 +126,7 @@ async def liff_course(request: Request):
         return templates.TemplateResponse("liff/course.html", {
             "request": request,
             "liff_id": LIFF_ID,
+            "register_liff_id": REGISTER_LIFF_ID,
             "review_form_url": REVIEW_FORM_URL,
             "base_url": APP_URL,
             "IS_DEV": IS_DEV,

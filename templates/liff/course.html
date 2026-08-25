@@ -61,6 +61,19 @@
 
   #loading { text-align: center; padding: 60px 16px; color: #94a3b8; font-size: 14px; }
   #error   { text-align: center; padding: 40px 16px; color: #ef4444; font-size: 14px; display: none; }
+
+  .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
+  #authOverlay {
+    display: none; position: fixed; inset: 0; z-index: 50;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(15,23,42,.55);
+  }
+  #authOverlay .box {
+    background: #fff; border-radius: 16px; padding: 24px 20px; max-width: 320px; width: 100%;
+    text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  #authOverlay .box .icon { font-size: 36px; margin-bottom: 10px; }
+  #authOverlay .box p { font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 14px; }
 </style>
 </head>
 <body>
@@ -68,6 +81,10 @@
 {% if IS_DEV %}<div style="background:#ea580c;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:bold">🚧 開発環境</div>{% endif %}
 <div id="loading">読み込み中...</div>
 <div id="error">科目情報を取得できませんでした。</div>
+<div id="authOverlay"><div class="box" id="authOverlayBox">
+  <div class="icon">⏳</div>
+  <p>確認中...</p>
+</div></div>
 <div id="content" style="display:none">
   <div class="header">
     <h1 id="name"></h1>
@@ -127,9 +144,23 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 const LIFF_ID = "{{ liff_id }}";
+const REGISTER_LIFF_ID = "{{ register_liff_id }}";
 const REVIEW_FORM_URL = "{{ review_form_url }}";
 const BASE_URL = "{{ base_url }}";
 const UNLOCK_REWARD = {{ unlock_reward }};
+
+// 修正理由: レビュー閲覧には会員登録を必須にするため、未登録の間はページ本体を
+// ブラー＋オーバーレイで覆って触れなくし、会員登録へ誘導する
+function showAuthOverlay(html) {
+  document.getElementById("authOverlayBox").innerHTML = html;
+  document.getElementById("authOverlay").style.display = "flex";
+  document.getElementById("content").classList.add("blurred");
+}
+
+function hideAuthOverlay() {
+  document.getElementById("authOverlay").style.display = "none";
+  document.getElementById("content").classList.remove("blurred");
+}
 
 function stars(n) {
   if (!n) return "";
@@ -228,6 +259,12 @@ async function main() {
   const coursePromise = fetch(`${BASE_URL}/api/course/${courseId}?id_token=${encodeURIComponent(idToken)}`)
     .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
 
+  // 修正理由: レビュー閲覧には会員登録を必須にするため、以前は未登録時に/registerへ
+  // 即リダイレクトしていたが、コンテンツをブラーした状態で背後に見せつつオーバーレイで
+  // 会員登録を促す方式に変更した（needsRegistrationがtrueのままmain()の最後まで進む）
+  let needsRegistration = false;
+  const registerUrl = REGISTER_LIFF_ID ? `https://liff.line.me/${REGISTER_LIFF_ID}` : `${BASE_URL}/register`;
+
   if (userId) {
     try {
       const statusRes = await fetch(`${BASE_URL}/api/profile/status`, {
@@ -237,12 +274,10 @@ async function main() {
       });
       const status = await statusRes.json();
       if (!status.complete) {
-        location.href = `${BASE_URL}/register?uid=${userId}`;
-        return;
+        needsRegistration = true;
       }
     } catch(e) {
-      location.href = `${BASE_URL}/register?uid=${userId}`;
-      return;
+      needsRegistration = true;
     }
   }
 
@@ -419,6 +454,14 @@ async function main() {
 
   document.getElementById("loading").style.display = "none";
   document.getElementById("content").style.display = "block";
+
+  if (needsRegistration) {
+    showAuthOverlay(`<div class="icon">🎓</div>
+      <p>会員登録がまだのようです。レビュー閲覧には会員登録が必要です。</p>
+      <a href="${registerUrl}" class="btn btn-primary" style="display:block;text-decoration:none">今すぐ会員登録する</a>`);
+  } else {
+    hideAuthOverlay();
+  }
 }
 
 main();

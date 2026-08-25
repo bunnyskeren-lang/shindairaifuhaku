@@ -8,8 +8,8 @@ from sqlalchemy import select
 
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, EMAIL_VERIFICATION_TTL_MINUTES, LINE_USER_ID_RE, REVIEW_FORM_URL, REVIEW_LIFF_ID,
-    STUDENT_ID_RE, student_email,
+    APP_URL, EMAIL_VERIFICATION_TTL_MINUTES, LINE_USER_ID_RE, REVIEW_LIFF_ID,
+    STUDENT_ID_RE, make_register_url, student_email,
 )
 from core.liff_auth import verify_liff_id_token
 from core.mail import send_verification_email
@@ -78,7 +78,7 @@ async def request_email_verification(
             # 既にプロフィールがある(通常はここに来ない。ゲートはプロフィール未作成時のみ表示される)
             return templates.TemplateResponse(
                 "form_email_verified.html",
-                {"request": request, "liff_id": REVIEW_LIFF_ID, "review_form_url": REVIEW_FORM_URL},
+                {"request": request, "liff_id": REVIEW_LIFF_ID, "register_url": make_register_url(uid)},
             )
         taken = (await session.execute(
             select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
@@ -146,9 +146,13 @@ async def verify_email(token: str, request: Request):
             await save_error_log(exc, user_id=ev.line_user_id, action="email_verify_finalize")
             return _err("認証の確定に失敗しました。もう一度お試しください")
 
+    # 修正理由: メール認証は会員登録の一部（本人確認ステップ）に位置づけたため、ここで作成する
+    # UserProfileはまだ氏名・学籍番号のみで学部・学科が未入力(=is_profile_complete()はFalse)。
+    # レビュー投稿にはfaculty/departmentまで揃った会員登録の完了が必須なため、
+    # 認証完了後は/registerに誘導して会員登録を完了させる（学籍番号は不変なので再入力不要）
     return templates.TemplateResponse(
         "form_email_verified.html",
-        {"request": request, "liff_id": REVIEW_LIFF_ID, "review_form_url": REVIEW_FORM_URL},
+        {"request": request, "liff_id": REVIEW_LIFF_ID, "register_url": make_register_url(ev.line_user_id)},
     )
 
 

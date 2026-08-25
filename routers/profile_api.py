@@ -19,8 +19,6 @@ from models import CourseSection, Instructor, Review, ReviewStatus, Subject, Use
 
 router = APIRouter()
 
-# 修正理由: student_idの総当たりによる他人の氏名取得を防ぐため、IPアドレス単位で1分あたり10回までに制限する
-_autofill_rate_limit = rate_limiter(max_requests=10, window_seconds=60)
 # 修正理由: /submit等の他の書き込み系エンドポイントにはレート制限があるのに/api/registerだけ
 # 無制限だった。id_token検証には120秒のキャッシュ(core/liff_auth.py)があり、有効なトークン1つで
 # 検証をバイパスしてDB書き込みを連打できたため、同水準の制限を設ける
@@ -164,44 +162,3 @@ async def register_profile(
     )
 
 
-@router.post("/api/autofill")
-async def autofill_profile(request: Request, _rl: None = Depends(_autofill_rate_limit)):
-    body = await request.json()
-    id_token = (body.get("id_token") or "").strip()
-    student_id = (body.get("student_id") or "")
-    uid = await verify_liff_id_token(id_token, request)
-    sid = student_id.strip().upper()
-    if not uid or not sid or not STUDENT_ID_RE.match(sid):
-        return {"found": False}
-    async with AsyncSessionLocal() as session:
-        existing = (await session.execute(
-            select(UserProfile).where(UserProfile.line_user_id == uid)
-        )).scalar_one_or_none()
-        if existing:
-            return {"found": True, "name": existing.name}
-        row = (await session.execute(
-            select(Review.submitter_name)
-            .where(Review.student_id == sid)
-            .order_by(Review.created_at.desc())
-            .limit(1)
-        )).scalar_one_or_none()
-        if not row:
-            return {"found": False}
-        taken = (await session.execute(
-            select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
-        )).scalars().first()
-        if taken is not None and taken != uid:
-            return {"found": False}
-        if not taken:
-            try:
-                # 修正理由: 会員登録画面(/api/register)を経由せずここでUserProfileが
-                # 初めて作られる経路でも、会員登録した全員へのウェルカムチケットを同様に付与する
-                session.add(UserProfile(
-                    line_user_id=uid, name=row, student_id=sid,
-                    unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
-                ))
-                await session.commit()
-            except Exception as exc:
-                await session.rollback()
-                await save_error_log(exc, user_id=uid, action="autofill_profile_create")
-        return {"found": True, "name": row}

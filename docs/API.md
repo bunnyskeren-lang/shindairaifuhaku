@@ -22,7 +22,6 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 |---|---|---|
 | `POST /submit` | 3回/分 | レビュー連投スパム・審査キュー圧迫防止 |
 | `POST /api/register` | 5回/分 | 無制限の書き込み連打防止 |
-| `POST /api/autofill` | 10回/分 | 学籍番号総当たりによる氏名取得防止 |
 | `GET /api/courses`, `GET /api/instructors` | 30回/分 | 無制限ILIKE全文検索の連打防止 |
 | `GET /r/{name}` | 20回/分 | ボタン名が予測可能なため無制限INSERT連打防止 |
 | `POST /admin/login` | （`routers/admin/auth.py`参照） | ログイン総当たり防止 |
@@ -71,13 +70,12 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 | `POST /api/profile/status` | LIFF token | ボディ`{id_token}`。会員登録が完了しているか（`{complete: bool}`） |
 | `POST /api/profile/prefill` | LIFF token | ボディ`{id_token}`。本人の既存プロフィールを返す（登録フォームのプリフィル用。IDOR対策でuid直指定は不可） |
 | `POST /api/register` | LIFF token（Form） | `id_token`/`name`/`student_id`/`faculty`/`department`（Form）。会員登録。学籍番号の重複チェックあり。登録完了後、未登録者用リッチメニューの解除を行う |
-| `POST /api/autofill` | LIFF token | ボディ`{id_token, student_id}`。過去のレビュー投稿から氏名を自動補完 |
 
 ## レビュー投稿（`routers/review_submit_api.py`）
 
 | メソッド/パス | 認証 | 説明 |
 |---|---|---|
-| `POST /submit` | LIFF token（Form） | `course_name`/`rating`(1-5)/`ease_rating`(SS,S,A,B,C)/`grading_method`/`comment`/`id_token`/`reg_name`/`student_id`/`selected_instructor`/`nickname`/`academic_year`。バリデーション後 `status='pending'` で保存し、管理画面の承認待ちに積む。投稿成功後、Web Push通知をバックグラウンド送信 |
+| `POST /submit` | LIFF token（Form） | `course_name`/`rating`(1-5)/`ease_rating`(SS,S,A,B,C)/`grading_method`/`comment`/`id_token`/`student_id`/`selected_instructor`/`nickname`/`academic_year`。会員登録済み（`/api/register`経由でfaculty/departmentまで入力済み）でなければ拒否する。バリデーション後 `status='pending'` で保存し、管理画面の承認待ちに積む。投稿成功後、Web Push通知をバックグラウンド送信 |
 
 ## 管理画面 API（`routers/admin/*`、要管理者Cookie認証）
 

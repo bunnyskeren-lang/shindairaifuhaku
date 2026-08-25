@@ -6,9 +6,8 @@ from sqlalchemy import func, select
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    EMAIL_VERIFICATION_ENABLED, MAX_REVIEWS_PER_COURSE_SECTION,
-    REGISTRATION_WELCOME_UNLOCK_CREDITS,
-    STUDENT_ID_RE, LINE_USER_ID_RE, make_course_liff_url,
+    MAX_REVIEWS_PER_COURSE_SECTION,
+    STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, make_course_liff_url,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -32,7 +31,6 @@ async def submit(
     grading_method: str = Form(default=""),
     comment: str = Form(...),
     id_token: str = Form(default=""),
-    reg_name: str = Form(default=""),
     student_id: str = Form(default=""),
     selected_instructor: str = Form(default=""),
     nickname: str = Form(default=""),
@@ -73,40 +71,15 @@ async def submit(
         existing = (await session.execute(
             select(UserProfile).where(UserProfile.line_user_id == uid)
         )).scalar_one_or_none()
-        if existing is None:
-            # 修正理由: EMAIL_VERIFICATION_ENABLED時、新規ユーザーは投稿フォームを開く前に
-            # /verify-email でメール認証を済ませてからでないとここに到達しない
-            # (routers/pages.py index()・form_index.htmlのリダイレクト参照)。
-            # それでもここに来た場合は認証未完了とみなし拒否する(直接APIを叩く迂回策への防御)。
-            if EMAIL_VERIFICATION_ENABLED:
-                return _form_error("メール認証が完了していません。投稿フォームを開き直してください")
-            if not reg_name.strip():
-                return _form_error("お名前を入力してください")
-            taken = (await session.execute(
-                select(UserProfile.line_user_id).where(UserProfile.student_id == sid)
-            )).scalars().first()
-            if taken is not None and taken != uid:
-                return _form_error("この学籍番号はすでに別のアカウントで登録されています")
-            submitter_name = reg_name.strip()[:100]
-            try:
-                # 修正理由: 会員登録画面(/api/register)を経由せずここでUserProfileが
-                # 初めて作られる経路（先にレビュー投稿フォームを使った場合）でも、
-                # 会員登録した全員へのウェルカムチケットを同様に付与する
-                session.add(UserProfile(
-                    line_user_id=uid,
-                    name=submitter_name,
-                    student_id=sid,
-                    unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
-                ))
-                await session.flush()
-            except Exception as exc:
-                await session.rollback()
-                await save_error_log(exc, user_id=uid, action="submit_profile_create")
-                return _form_error("プロフィールの保存に失敗しました")
-        else:
-            if existing.student_id != sid:
-                return _form_error("学籍番号が登録情報と一致しません")
-            submitter_name = existing.name
+        # 修正理由: 以前はここで未登録ユーザーのプロフィールをreg_name入力だけで
+        # その場作成できたが、会員登録(/register)を必ず経由させる方針に変更したため、
+        # 会員登録済み（faculty/departmentまで入力済み）でなければ投稿を拒否する
+        # (投稿フォーム側もオーバーレイで未登録者をブロックするが、直接APIを叩く迂回策への防御)
+        if not is_profile_complete(existing):
+            return _form_error("会員登録がまだのようです。先に会員登録を済ませてください")
+        if existing.student_id != sid:
+            return _form_error("学籍番号が登録情報と一致しません")
+        submitter_name = existing.name
 
         # 担当教員に対応する course_section を探す
         instr_name = selected_instructor.strip()[:100] or None

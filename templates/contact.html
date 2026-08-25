@@ -23,8 +23,7 @@
       <p class="text-gray-500 text-sm mt-1">ご質問、情報の誤りのご指摘、新しい情報の追加提案、情報のアップデート、誤字脱字のご指摘など、お気軽にお寄せください</p>
     </div>
 
-    <div id="authNotice" class="hidden space-y-2 mb-4"></div>
-
+    <div id="formWrapper" class="blurred">
     <form id="contactForm" action="/contact/submit" method="post" novalidate class="space-y-4">
 
       <input type="hidden" name="id_token" id="idTokenHidden" value="">
@@ -77,10 +76,22 @@
 
       <button type="submit" id="submitBtn" disabled
         class="w-full bg-gray-300 text-white font-bold py-3.5 rounded-2xl transition text-sm shadow-sm cursor-not-allowed">
-        確認中...
+        送信する
       </button>
     </form>
+    </div>
   </div>
+
+  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div id="authOverlayBox" class="bg-white rounded-2xl shadow-xl p-6 max-w-xs w-full text-center space-y-3">
+      <div class="text-4xl">⏳</div>
+      <p class="text-sm text-gray-500">確認中...</p>
+    </div>
+  </div>
+
+  <style>
+    .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
+  </style>
 
   <script>
     document.getElementById('contactForm').addEventListener('submit', function(e) {
@@ -106,16 +117,20 @@
     });
 
     // ── LIFF初期化と会員登録チェック ──
-    // 修正理由: お問い合わせは会員登録済みユーザーに限定するため、レビュー投稿フォームと
-    // 同様にLIFF ID token検証済みの本人のプロフィールから学籍番号を取得して表示し、
-    // 未登録の場合は送信をブロックして会員登録を促す
+    // 修正理由: お問い合わせは会員登録済みユーザーに限定するため、未登録・未ログインの間は
+    // フォーム本体をブラー＋オーバーレイで覆って触れなくし、会員登録を促す
     const LIFF_ID = "{{ liff_id }}";
     const REGISTER_LIFF_ID = "{{ register_liff_id }}";
 
-    function showAuthNotice(html) {
-      const notice = document.getElementById('authNotice');
-      notice.innerHTML = html;
-      notice.classList.remove('hidden');
+    function showOverlay(html) {
+      document.getElementById('authOverlayBox').innerHTML = html;
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('formWrapper').classList.add('blurred');
+    }
+
+    function hideOverlay() {
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('formWrapper').classList.remove('blurred');
     }
 
     function enableSubmit() {
@@ -129,8 +144,8 @@
       try {
         await liff.init({ liffId: LIFF_ID });
       } catch (e) {
-        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
-          ⚠️ LINEログインの確認に失敗しました。リッチメニューからこのページを開き直してください。</div>`);
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">LINEログインの確認に失敗しました。リッチメニューからこのページを開き直してください。</p>`);
         return;
       }
 
@@ -141,8 +156,8 @@
       }
 
       if (!liff.isLoggedIn()) {
-        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
-          📱 お問い合わせにはLINEログインが必要です。</div>
+        showOverlay(`<div class="text-4xl">📱</div>
+          <p class="text-sm text-gray-500">お問い合わせにはLINEログインが必要です。</p>
           <button type="button" id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">LINEでログイン</button>`);
         document.getElementById('loginBtn').onclick = () => liff.login({ redirectUri: location.href });
         return;
@@ -155,8 +170,8 @@
         idToken = null;
       }
       if (!idToken) {
-        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
-          ⚠️ ログイン情報の取得に失敗しました。もう一度お試しください。</div>`);
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン情報の取得に失敗しました。もう一度お試しください。</p>`);
         return;
       }
 
@@ -169,15 +184,15 @@
         });
         data = await res.json();
       } catch (e) {
-        showAuthNotice(`<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
-          ⚠️ 通信に失敗しました。もう一度お試しください。</div>`);
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">通信に失敗しました。もう一度お試しください。</p>`);
         return;
       }
 
       if (!data.found) {
         const registerUrl = REGISTER_LIFF_ID ? `https://liff.line.me/${REGISTER_LIFF_ID}` : '/register';
-        showAuthNotice(`<div class="bg-purple-50 border border-purple-200 rounded-2xl px-4 py-3 text-sm text-purple-700">
-          🎓 会員登録がまだのようです。お問い合わせには会員登録が必要です。</div>
+        showOverlay(`<div class="text-4xl">🎓</div>
+          <p class="text-sm text-gray-600">会員登録がまだのようです。お問い合わせには会員登録が必要です。</p>
           <a href="${registerUrl}" class="block text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">今すぐ会員登録する</a>`);
         return;
       }
@@ -185,6 +200,7 @@
       document.getElementById('idTokenHidden').value = idToken;
       document.getElementById('studentIdValue').value = data.student_id;
       document.getElementById('studentIdCard').classList.remove('hidden');
+      hideOverlay();
       enableSubmit();
     }
     initAuthCheck();

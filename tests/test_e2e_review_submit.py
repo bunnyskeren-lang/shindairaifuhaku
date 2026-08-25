@@ -1,8 +1,8 @@
 """review_submit_api.py /submit (レビュー投稿)のAPI経由E2Eテスト。
 
-フォーム投稿→バリデーション→初回プロフィール自動作成→レビュー保存という
-一連のフローと、主要な異常系(不正評価値・学籍番号形式・認証失敗・重複学籍番号)を
-実HTTPリクエスト経由で検証する。
+会員登録済み（/api/register経由でfaculty/departmentまで入力済み）のユーザーによる
+フォーム投稿→バリデーション→レビュー保存という一連のフローと、主要な異常系
+(未登録・不正評価値・学籍番号形式・認証失敗・登録情報との不一致)を実HTTPリクエスト経由で検証する。
 """
 import pytest
 from sqlalchemy import select
@@ -10,8 +10,10 @@ from sqlalchemy import select
 import routers.review_submit_api as review_submit_api
 from models import CourseSection, Instructor, Review, Subject, UserProfile
 
+UID = "U65326572657669657765723100000000"
 
-def _fake_verify(monkeypatch, user_id: str = "U65326572657669657765723100000000"):
+
+def _fake_verify(monkeypatch, user_id: str = UID):
     async def _verify(id_token, request=None):
         return user_id if id_token == "valid-token" else None
     monkeypatch.setattr(review_submit_api, "verify_liff_id_token", _verify)
@@ -35,23 +37,32 @@ async def _seed_course(test_sessionmaker, name="経営管理", instructor="山�
         await session.commit()
 
 
+async def _seed_profile(test_sessionmaker, user_id: str = UID, student_id: str = "2345678S", name: str = "神戸太郎"):
+    async with test_sessionmaker() as session:
+        session.add(UserProfile(
+            line_user_id=user_id, name=name, student_id=student_id,
+            faculty="経営学部", department="経営学科",
+        ))
+        await session.commit()
+
+
 VALID_FORM = {
     "course_name": "経営管理",
     "rating": "4",
     "ease_rating": "A",
     "comment": "とても勉強になりました",
     "id_token": "valid-token",
-    "reg_name": "神戸太郎",
     "student_id": "2345678S",
     "academic_year": "2026",
 }
 
 
 @pytest.mark.asyncio
-async def test_submit_creates_review_and_profile_for_new_user(http_client_factory, monkeypatch, test_sessionmaker):
+async def test_submit_creates_review_for_registered_user(http_client_factory, monkeypatch, test_sessionmaker):
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
     client = http_client_factory(review_submit_api, monkeypatch)
 
     resp = await client.post("/submit", data=VALID_FORM)
@@ -62,10 +73,37 @@ async def test_submit_creates_review_and_profile_for_new_user(http_client_factor
         assert len(reviews) == 1
         assert reviews[0].content == "とても勉強になりました"
         assert reviews[0].status == "pending"
+        assert reviews[0].submitter_name == "神戸太郎"
 
-        profile = await session.get(UserProfile, "U65326572657669657765723100000000")
-        assert profile is not None
-        assert profile.student_id == "2345678S"
+
+@pytest.mark.asyncio
+async def test_submit_without_registered_profile_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """会員登録(/register)を経由せず直接/submitを叩く迂回策への防御を確認する。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 400
+
+    async with test_sessionmaker() as session:
+        assert (await session.execute(select(Review))).scalars().first() is None
+
+
+@pytest.mark.asyncio
+async def test_submit_with_incomplete_profile_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """faculty/department未入力（学部・学科未選択のまま）の不完全なプロフィールでは拒否される。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    async with test_sessionmaker() as session:
+        session.add(UserProfile(line_user_id=UID, name="神戸太郎", student_id="2345678S"))
+        await session.commit()
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -104,17 +142,15 @@ async def test_submit_malformed_student_id_returns_400(http_client_factory, monk
 
 
 @pytest.mark.asyncio
-async def test_submit_duplicate_student_id_different_account_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
-    _fake_verify(monkeypatch, user_id="U6e657775736572320000000000000000")
+async def test_submit_student_id_mismatch_with_own_profile_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """フォームに入力した学籍番号が、自分の会員登録情報の学籍番号と食い違うケース。"""
+    _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
     await _seed_course(test_sessionmaker)
-    async with test_sessionmaker() as session:
-        session.add(UserProfile(line_user_id="U6578697374696e677573657200000000", name="既存ユーザー", student_id="2345678S"))
-        await session.commit()
+    await _seed_profile(test_sessionmaker, student_id="9999999S")
     client = http_client_factory(review_submit_api, monkeypatch)
 
-    # 別のLINEアカウント(U6e657775736572320000000000000000)が同じ学籍番号で新規投稿しようとするケース
-    resp = await client.post("/submit", data=VALID_FORM)
+    resp = await client.post("/submit", data=VALID_FORM)  # VALID_FORMのstudent_idは2345678S
     assert resp.status_code == 400
 
 
@@ -135,12 +171,15 @@ async def test_submit_empty_comment_returns_400(http_client_factory, monkeypatch
 @pytest.mark.asyncio
 async def test_submit_rating_boundary_values_accepted(http_client_factory, monkeypatch, test_sessionmaker):
     for rating in ("1", "5"):
-        _fake_verify(monkeypatch, user_id=f"U{rating}".ljust(33, "0"))
+        user_id = f"U{rating}".ljust(33, "0")
+        sid = f"234567{rating}S"
+        _fake_verify(monkeypatch, user_id=user_id)
         _stub_push_notification(monkeypatch)
         await _seed_course(test_sessionmaker, name=f"科目{rating}", instructor=f"講師{rating}")
+        await _seed_profile(test_sessionmaker, user_id=user_id, student_id=sid)
         client = http_client_factory(review_submit_api, monkeypatch)
 
-        form = dict(VALID_FORM, course_name=f"科目{rating}", rating=rating, student_id=f"234567{rating}S")
+        form = dict(VALID_FORM, course_name=f"科目{rating}", rating=rating, student_id=sid)
         resp = await client.post("/submit", data=form)
         assert resp.status_code == 200, f"rating={rating} should be accepted"
 
