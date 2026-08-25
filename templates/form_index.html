@@ -351,37 +351,35 @@
 
       <!-- 6. コメント -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
-        <label for="comment" class="block text-sm font-semibold text-gray-700 mb-1">
-          💬 コメント <span class="text-red-500">*</span>
-        </label>
-        <p class="text-sm font-bold text-indigo-600 bg-indigo-50 rounded-xl px-3 py-2 mb-3">これから履修登録する後輩に！ご自由にお書きください🙏</p>
+        <div class="flex flex-wrap items-baseline justify-between gap-x-2 mb-2">
+          <label for="comment" class="text-sm font-semibold text-gray-700">
+            💬 コメント <span class="text-red-500">*</span>
+          </label>
+          <span class="text-[11px] text-indigo-500 font-medium">後輩のためにご自由にどうぞ🙏</span>
+        </div>
 
         <!-- プロンプトチップ -->
-        <div class="mb-2">
-          <p class="text-xs text-gray-400 mb-2">タップして書くきっかけに</p>
-          <div class="flex flex-wrap gap-2">
-            <button type="button" class="prompt-chip" data-prompt="【テスト形式・難易度】">テスト形式や難易度</button>
-            <button type="button" class="prompt-chip" data-prompt="持ち込み可">持ち込み可</button>
-            <button type="button" class="prompt-chip" data-prompt="【要した手間】">要した手間</button>
-            <button type="button" class="prompt-chip" data-prompt="内職可">内職可</button>
-          </div>
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="text-xs text-gray-400 shrink-0">タップで挿入👇</span>
+          <button type="button" class="prompt-chip" data-prompt="【テスト形式・難易度】">テスト形式や難易度</button>
+          <button type="button" class="prompt-chip" data-prompt="持ち込み可">持ち込み可</button>
+          <button type="button" class="prompt-chip" data-prompt="【要した手間】">要した手間</button>
+          <button type="button" class="prompt-chip" data-prompt="内職可">内職可</button>
         </div>
 
         <textarea name="comment" id="comment" rows="5"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
           required maxlength="500"></textarea>
 
-        <!-- 文字数フィードバック -->
-        <div class="mt-2">
+        <!-- 文字数フィードバック + 保存状態 -->
+        <div class="flex items-center justify-between gap-2 mt-2">
           <span id="commentFeedback" class="text-xs font-medium text-gray-400"></span>
-          <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mt-1">
-            <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
-          </div>
+          <span class="flex items-center gap-1 text-xs text-green-600 font-medium shrink-0">
+            💾 <span id="saveStatus">自動保存済み ✓</span>
+          </span>
         </div>
-
-        <div class="flex items-center gap-1.5 text-xs text-green-600 font-medium mt-2">
-          <span>💾</span>
-          <span id="saveStatus">自動保存済み ✓</span>
+        <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mt-1">
+          <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
         </div>
       </div>
 
