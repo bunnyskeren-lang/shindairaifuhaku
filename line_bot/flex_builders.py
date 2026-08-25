@@ -370,7 +370,7 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
     return _make_ranking_card("👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c")
 
 
-def make_omikuji_card(items: list[dict]) -> FlexMessage:
+def make_omikuji_card(items: list[dict], title: str = "⛩️ 10連おみくじ") -> FlexMessage:
     # items: [{"id": int, "name": str, "faculty": str, "stars": str}]  stars=""なら未レビュー
     rows = []
     for item in items:
@@ -412,7 +412,6 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
                 contents=row_contents,
             )
         )
-    title = "⛩️ 10連おみくじ"
     bubble = FlexBubble(
         header=FlexBox(
             layout="vertical",
@@ -431,62 +430,6 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
 
 
 # ── Course list carousel ────────────────────────────────────────
-
-
-def _variant_suffix(base: str, full: str) -> str:
-    if full.startswith(base) and len(full) > len(base):
-        return full[len(base):]
-    for b_ch, f_ch in zip(base, full):
-        if b_ch != f_ch:
-            return f_ch
-    return full[-1] if full else ""
-
-
-def make_variant_selection_bubble(base_name: str, variant_names: list[str], reviewed_names: set[str] = frozenset()) -> FlexMessage:
-    suffix_str = " / ".join(_variant_suffix(base_name, n) for n in variant_names)
-    any_reviewed = any(n in reviewed_names for n in variant_names)
-    rows = []
-    for name in variant_names:
-        has_review = name in reviewed_names
-        color = "#4f46e5" if has_review else "#64748b"
-        display = f"✓ {name}" if has_review else name
-        rows.append(
-            FlexBox(
-                layout="vertical",
-                action=PostbackAction(label=name[:20], data=name),
-                contents=[FlexText(text=display, wrap=True, size="sm", color=color)],
-                padding_top="sm",
-                padding_bottom="sm",
-            )
-        )
-    footer = None
-    if any_reviewed:
-        footer = FlexBox(
-            layout="vertical",
-            contents=[FlexText(text="✓ = レビュー投稿済み", size="xxs", color="#94a3b8", align="center")],
-            padding_all="sm",
-        )
-    return FlexMessage(
-        alt_text=f"📚 {base_name} — {suffix_str} どれを見ますか？",
-        contents=FlexBubble(
-            size="kilo",
-            header=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexText(text=base_name, weight="bold", color="#ffffff", size="sm", wrap=True),
-                ],
-                background_color="#6366f1",
-                padding_all="md",
-            ),
-            body=FlexBox(
-                layout="vertical",
-                contents=rows,
-                spacing="xs",
-                padding_all="md",
-            ),
-            footer=footer,
-        ),
-    )
 
 
 def make_category_select_flex() -> FlexMessage:

@@ -44,7 +44,6 @@ from line_bot.flex_builders import (
     make_onitan_card,
     make_rakutan_card,
     make_registration_flex,
-    make_variant_selection_bubble,
 )
 from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
 
@@ -652,11 +651,15 @@ async def _handle_faculty_menu(t: str) -> list:
     return result
 
 
+_MSG_SEARCH_LIMIT = 10
+
+
 async def _handle_course_search(t: str, user_id: str) -> list:
     # 全操作をキャッシュから（DBアクセスなし）
-    _reviewed_names, (cbn, call) = await asyncio.gather(
+    _reviewed_names, (cbn, call), variant_map = await asyncio.gather(
         cache.get_reviewed_cached(),
         cache.get_courses_cached(),
+        cache.get_variant_map_cached(),
     )
 
     # Exact course name match
@@ -666,44 +669,65 @@ async def _handle_course_search(t: str, user_id: str) -> list:
             return [make_no_review_flex(exact, user_id)]
         return [await get_course_flex(exact, user_id)]
 
-    # Seminar group e.g. 外国語セミナー(英語) → 外国語セミナーA(英語), B(英語)...
-    _vsem_m = _re.match(r'^(.*?セミナー)(\([^)]+\))$', t)
-    if _vsem_m:
-        _sem_prefix, _sem_lang = _vsem_m.group(1), _vsem_m.group(2)
-        _sem_pat = _re.compile(
-            r'^' + _re.escape(_sem_prefix) + r'.+' + _re.escape(_sem_lang) + r'$', _re.IGNORECASE
-        )
-        _sem_courses = sorted([c for c in call if _sem_pat.match(c.name)], key=lambda c: c.name)
-        if len(_sem_courses) == 1:
-            return [await get_course_flex(_sem_courses[0], user_id)]
-        if len(_sem_courses) >= 2:
-            return [make_variant_selection_bubble(t, [c.name for c in _sem_courses], _reviewed_names)]
+    # バリアントグループ（末尾の数字/文字/セミナー言語のみが異なる科目、例:
+    # 生物学各論A1/A2/C1/C2、外国語セミナーA(英語)/B(英語)）は科目詳細ページ側で
+    # レビューを統合表示する([[project_review_view_variant_merge_20260824]])ため、
+    # どの変種を選んでも結果は同じになる。選択バブルは廃止し、検索結果ではグループを
+    # 1件（グループ内で名前が最も若い科目を代表）に集約して扱う。
+    # variant_map(compute_variant_groups)はベース名ラベルのみでfaculty/departmentを
+    # 区別しないため、同名ベースが学部違いで複数存在するケース（例: 工学部「制御工学Ⅰ/Ⅱ」と
+    # システム情報学部「制御工学1/2」）はここでfaculty+departmentも合わせてグループキーにする
+    # （routers/liff_api.py _group_subject_idsと同じ判定基準）。
+    _label_buckets: dict[str, list] = defaultdict(list)
+    for c in call:
+        label = variant_map.get(c.name, "")
+        if label:
+            _label_buckets[label].append(c)
 
-    # Variant group (A/B/C/D...)
-    _variant_names_set = {t + s for s in ('A', 'B', 'C', 'D')}
-    variant_courses = sorted([c for c in call if c.name in _variant_names_set], key=lambda c: c.name)
-    if len(variant_courses) >= 2:
-        return [make_variant_selection_bubble(t, [c.name for c in variant_courses], _reviewed_names)]
+    seen_group_keys: set[tuple[str, str, str]] = set()
+    search_rows = []
+    for c in call:
+        label = variant_map.get(c.name, "")
+        if label:
+            key = (label, c.faculty or "", c.department or "")
+            if key in seen_group_keys:
+                continue
+            seen_group_keys.add(key)
+            members = [
+                m for m in _label_buckets[label]
+                if (m.faculty or "") == (c.faculty or "") and (m.department or "") == (c.department or "")
+            ]
+            rep = min(members, key=lambda m: m.name)
+            display = label
+        else:
+            members = [c]
+            rep = c
+            display = c.name
+        text = display + "".join(m.name for m in members)
+        reading = "".join(m.reading or "" for m in members)
+        search_rows.append({
+            "display": display, "rep": rep, "members": members,
+            "faculty": c.faculty or "", "department": c.department or "",
+            "text": text.lower(), "reading": reading.lower(),
+        })
 
-    # Numeric variant group（ベースが同じでアルファベット・数字だけ違う科目をまとめる。例: 生物学各論A1/A2/C1/C2）
-    # 学部が異なれば別科目（例: 工学部「制御工学Ⅰ/Ⅱ」とシステム情報学部「制御工学1/2」）なので、
-    # ベース名だけでなく学部単位でグループを分ける
-    _num_candidates = [c for c in call if (_m := _vnum_match(c.name)) and _m[0] == t]
-    if len(_num_candidates) >= 2:
-        _num_by_faculty: dict[tuple[str, str], list] = defaultdict(list)
-        for _c in _num_candidates:
-            _num_by_faculty[(_c.faculty or "", _c.department or "")].append(_c)
-        _num_results = []
-        for (_fac, _dept), _cs in _num_by_faculty.items():
-            _cs_sorted = sorted(_cs, key=lambda c: c.name)
-            _fac_label = f"{_fac}{_dept}"
-            _label = f"{t}（{_fac_label}）" if len(_num_by_faculty) > 1 and _fac_label else t
-            if len(_cs_sorted) >= 2:
-                _num_results.append(make_variant_selection_bubble(_label, [c.name for c in _cs_sorted], _reviewed_names))
-            else:
-                _num_results.append(await get_course_flex(_cs_sorted[0], user_id))
-        if _num_results:
-            return _num_results
+    # 同名ベースのグループが学部違いで複数存在する場合、表示名だけでは区別できないため学部名を補う
+    _display_counts: dict[str, int] = defaultdict(int)
+    for r in search_rows:
+        _display_counts[r["display"]] += 1
+    for r in search_rows:
+        if _display_counts[r["display"]] > 1:
+            fac_label = f"{r['faculty']}{r['department']}"
+            if fac_label:
+                r["display"] = f"{r['display']}（{fac_label}）"
+
+    # グループのベース名が一意に1件だけ一致する場合は、通常の科目名完全一致と同様に詳細カードへ直行
+    _unique_exact = [r for r in search_rows if r["display"] == t]
+    if len(_unique_exact) == 1:
+        rep = _unique_exact[0]["rep"]
+        if rep.name not in _reviewed_names:
+            return [make_no_review_flex(rep, user_id)]
+        return [await get_course_flex(rep, user_id)]
 
     # インメモリキーワード検索（DBアクセスなし）
     _PUNCT = '・･、。「」『』【】（）()／/〜~'
@@ -715,76 +739,43 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     tokens = [tok for tok in _re.split(r'[\s　]+', t.strip()) if tok]
     _toks_lower = [tok.lower() for tok in tokens]
     # 修正理由: all(...) はトークンが空リストだと常にTrueを返すため、空白のみの
-    # メッセージ（全角スペース等はstrip()で""になる）だとキャッシュ先頭6件が
-    # 無条件でヒットし、意味不明な科目カードが返信されていた。
-    courses = [c for c in call if _toks_lower and all(
-        tok in (c.name or '').lower() or tok in (c.reading or '').lower()
-        for tok in _toks_lower
-    )][:6]
+    # メッセージ（全角スペース等はstrip()で""になる）だとキャッシュ先頭件が
+    # 無条件でヒットし、意味不明な検索結果が返信されていた。
+    matched = [r for r in search_rows if _toks_lower and all(
+        tok in r["text"] or tok in r["reading"] for tok in _toks_lower
+    )]
 
     # 句読点を除去した正規化検索（フォールバック）
-    if not courses:
+    if not matched:
         _norm_t = _normalize_q(t).lower()
-        courses = [c for c in call if _norm_t in _normalize_q(c.name or '').lower()][:6]
+        matched = [r for r in search_rows if _norm_t and _norm_t in _normalize_q(r["text"])]
 
-    if courses:
-        # Letter variants (A/B/C/D) - インメモリ
-        _all_names = {c.name for c in call}
-        potential_bases = {
-            c.name[:-1] for c in courses
-            if c.name and c.name[-1] in ('A', 'B', 'C', 'D') and len(c.name) > 1
-        }
-        base_variants: dict[str, list[str]] = defaultdict(list)
-        for _b in potential_bases:
-            for _s in ('A', 'B', 'C', 'D'):
-                if _b + _s in _all_names:
-                    base_variants[_b].append(_b + _s)
+    if not matched:
+        return [TextMessage(
+            text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
+        )]
 
-        # Numeric variants（文字違いが2種類以上あるベースだけを選択肢としてまとめる）
-        # 学部が異なれば別科目（例: 工学部「制御工学Ⅰ/Ⅱ」とシステム情報学部「制御工学1/2」）なので、
-        # ベース名だけでなく学部単位でグループを分ける
-        _kw_num_bases: dict[tuple[str, str], list[str]] = defaultdict(list)
-        _kw_num_facs: dict[str, set[str]] = defaultdict(set)
-        for c in courses:
-            _match = _vnum_match(c.name)
-            if _match:
-                _fac = f"{c.faculty or ''}{c.department or ''}"
-                _kw_num_bases[(_match[0], _fac)].append(c.name)
-                _kw_num_facs[_match[0]].add(_fac)
+    # 関連度順：科目名（グループはベース名）が入力語から始まるものを最優先
+    t_lower = t.lower()
+    matched.sort(key=lambda r: 0 if r["display"].lower().startswith(t_lower) else 1)
+    matched = matched[:_MSG_SEARCH_LIMIT]
 
-        seen_base: set[str] = set()
-        seen_num_base: set[tuple[str, str]] = set()
-        result = []
-        for c in courses:
-            name = c.name
-            if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
-                base = name[:-1]
-                if base in seen_base:
-                    continue
-                variants = base_variants.get(base, [])
-                if len(variants) >= 2:
-                    seen_base.add(base)
-                    result.append(make_variant_selection_bubble(base, variants, _reviewed_names))
-                    continue
-            _m2 = _vnum_match(name)
-            if _m2:
-                base = _m2[0]
-                fac = f"{c.faculty or ''}{c.department or ''}"
-                key = (base, fac)
-                if key in seen_num_base:
-                    continue
-                num_vs = _kw_num_bases.get(key, [])
-                if len(num_vs) >= 2:
-                    seen_num_base.add(key)
-                    label = f"{base}（{fac}）" if len(_kw_num_facs.get(base, set())) > 1 and fac else base
-                    result.append(make_variant_selection_bubble(label, sorted(num_vs), _reviewed_names))
-                    continue
-            result.append(await get_course_flex(c, user_id))
-        return result[:5]
+    all_stats = await cache.get_all_review_stats_cached()
+    items = []
+    for r in matched:
+        best_ease = None
+        for m in r["members"]:
+            _cnt, top_ease = all_stats.get(m.name, (0, None))
+            if top_ease and (best_ease is None or EASE_ORDER.get(top_ease, 99) < EASE_ORDER.get(best_ease, 99)):
+                best_ease = top_ease
+        items.append({
+            "id": r["rep"].id,
+            "name": r["display"],
+            "faculty": f"{r['faculty']}{r['department']}",
+            "stars": EASE_STARS.get(best_ease, ""),
+        })
 
-    return [TextMessage(
-        text=f"「{t}」に一致する科目が見つかりませんでした。\n\n「科目一覧」で登録科目を確認するか、「ヘルプ」で使い方をご確認ください。"
-    )]
+    return [make_omikuji_card(items, title=f"🔍「{t}」の検索結果")]
 
 
 async def handle_message(text: str, user_id: str = "") -> list:
