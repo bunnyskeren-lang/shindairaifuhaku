@@ -272,8 +272,9 @@ instructors ──CASCADE──> course_sections
 ### 3. キャッシュ無効化がDBコミットと非トランザクショナル
 `core/cache.py` の各 `invalidate_*_cache()` はDB更新後に手動呼び出しする設計で、呼び出し忘れや例外発生時の未到達があると最大1時間（TTL）ステールデータが配信されるリスクが構造的に残る。
 
-### 4. `programing files/models.py` とルート `models.py` の乖離
-`normalize_instructor_name`/`normalize_subject_name` が両ファイルに独立定義され手動同期する運用になっている。また `programing files/models.py` には `ErrorLog`/`UserActivity`/`RichMenuTap`/`PushSubscription`/`CourseSectionView` の定義がなく、スクリプト側からはこれらのテーブルを型安全に扱えない。
+### 4. `programing files/models.py` とルート `models.py` の乖離（2026-08-25調査・部分対応済み）
+`normalize_instructor_name`/`normalize_subject_name` が両ファイルに独立定義され手動同期する運用になっている。更新漏れを早期検知するため `tests/test_normalize_functions_sync.py` を新設し、2箇所の実装（関数本体+依存する変換テーブル）が完全一致していることをASTベースで機械的に検証するようにした（`programing files/models.py` は `database.py` のimportにDATABASE_URL等の環境変数を要求するため、実行はせずソースコード比較のみ行う）。
+`ErrorLog`/`UserActivity`/`RichMenuTap`/`PushSubscription`/`CourseSectionView` の定義が無い点は、`programing files/` 配下の全スクリプトを調査した結果これらのテーブルを実際に触っている箇所が皆無だったため、現状は実害なしと判断した（CLAUDE.mdの通り、このファイルはスクリプトが触るテーブルのみを対象とする設計）。将来これらのテーブルをスクリプト側で扱う必要が生じた時点で追加すればよい。
 
 ### 5. マイグレーションフレームワーク不在（旧版から継続）
 スキーマ管理は引き続き `database.py` の `init_db()` 内の逐次 `ALTER TABLE IF NOT EXISTS` / `DO $$ ... EXCEPTION` ブロックで行っている。変更の依存関係・実行順序が読みにくくなっている。Alembic等の導入は中長期的な課題として残る。
@@ -301,6 +302,6 @@ instructors ──CASCADE──> course_sections
 |---|---|---|---|
 | 4 | `reviews`削除チェック | 複数エンドポイントに同一ロジックがコピペ | 共通ヘルパー関数へ統一 |
 | 5 | `syllabi.academic_term` | 許容値がアプリ層に分散 | 1箇所に集約 |
-| 6 | `programing files/models.py` | ルート`models.py`とテーブル定義・正規化関数が乖離 | 定期的な同期、または共通モジュール化 |
+| 6 | `programing files/models.py` | ルート`models.py`とテーブル定義・正規化関数が乖離 → 2026-08-25、正規化関数は`tests/test_normalize_functions_sync.py`で同期検証を追加。未使用テーブルの型定義欠如は実害なしと確認済み | 定期的な同期、または共通モジュール化 |
 | 7 | 全体 | マイグレーション管理が `init_db()` の逐次ALTERのみで肥大化 | Alembic導入を中長期的に検討 |
 | 8 | `instructors` | 異体字等の表記ゆれが正規化されず重複が発生しうる | 優先度低・運用でのマージ対応を継続 |
