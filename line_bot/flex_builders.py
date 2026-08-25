@@ -4,6 +4,7 @@ from urllib.parse import quote as _url_quote
 from linebot.v3.messaging import (
     FlexBox,
     FlexBubble,
+    FlexCarousel,
     FlexButton,
     FlexMessage,
     FlexText,
@@ -378,63 +379,79 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
     return _make_ranking_card("⛩️ 10連おみくじ", items, header_bg="#7c3aed", row_bg="#f5f3ff", accent="#7c3aed")
 
 
-def make_search_result_card(items: list[dict], title: str) -> FlexMessage:
-    # items: [{"id": int, "name": str, "faculty": str, "stars": str}]  stars=""なら未レビュー
-    rows = []
-    for item in items:
-        stars_text = item["stars"] or "評価なし"
-        stars_color = "#f59e0b" if item["stars"] else "#94a3b8"
-        liff_url = make_course_liff_url(item['id'])
-        row_contents = [
-            FlexBox(
-                layout="horizontal",
-                spacing="sm",
-                contents=[
-                    FlexText(
-                        text=item["name"], weight="bold", size="md", color="#1e293b",
-                        wrap=True, flex=1,
-                        action=URIAction(label=item["name"][:20], uri=liff_url),
-                    ),
-                    FlexText(text=stars_text, size="sm", color=stars_color, flex=0,
-                              align="end", gravity="center"),
-                ],
-            ),
-        ]
-        if item.get("faculty"):
-            row_contents.append(FlexText(text=item["faculty"], size="xs", color="#94a3b8", margin="sm"))
-        if not item["stars"]:
-            form_url = f"{REVIEW_FORM_URL}?course={_url_quote(item['name'])}"
-            row_contents.append(
-                FlexButton(
-                    action=URIAction(label="✏️ レビューを投稿する", uri=form_url),
-                    style="link", height="sm", margin="sm", color="#7c3aed",
-                )
-            )
-        rows.append(
-            FlexBox(
-                layout="vertical",
-                background_color="#f5f3ff",
-                corner_radius="10px",
-                padding_all="md",
-                margin="sm",
-                contents=row_contents,
+def _make_search_result_row(item: dict) -> FlexBox:
+    stars_text = item["stars"] or "評価なし"
+    stars_color = "#f59e0b" if item["stars"] else "#94a3b8"
+    liff_url = make_course_liff_url(item['id'])
+    row_contents = [
+        FlexBox(
+            layout="horizontal",
+            spacing="sm",
+            contents=[
+                FlexText(
+                    text=item["name"], weight="bold", size="md", color="#1e293b",
+                    wrap=True, flex=1,
+                    action=URIAction(label=item["name"][:20], uri=liff_url),
+                ),
+                FlexText(text=stars_text, size="sm", color=stars_color, flex=0,
+                          align="end", gravity="center"),
+            ],
+        ),
+    ]
+    if item.get("faculty"):
+        row_contents.append(FlexText(text=item["faculty"], size="xs", color="#94a3b8", margin="sm"))
+    if not item["stars"]:
+        form_url = f"{REVIEW_FORM_URL}?course={_url_quote(item['name'])}"
+        row_contents.append(
+            FlexButton(
+                action=URIAction(label="✏️ レビューを投稿する", uri=form_url),
+                style="link", height="sm", margin="sm", color="#7c3aed",
             )
         )
-    bubble = FlexBubble(
-        header=FlexBox(
-            layout="vertical",
-            contents=[FlexText(text=title, weight="bold", color="#ffffff", size="md")],
-            background_color="#7c3aed",
-            padding_all="lg",
-        ),
-        body=FlexBox(layout="vertical", contents=rows, padding_all="lg"),
-        footer=FlexBox(
-            layout="vertical",
-            contents=[FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center")],
-            padding_all="md",
-        ),
+    return FlexBox(
+        layout="vertical",
+        background_color="#f5f3ff",
+        corner_radius="10px",
+        padding_all="md",
+        margin="sm",
+        contents=row_contents,
     )
-    return FlexMessage(alt_text=title, contents=bubble)
+
+
+# 1バブルに詰め込みすぎると縦長になりチャット上で見づらいため、
+# この件数ごとにバブルを分割し複数件はカルーセル（横スクロール）にする
+_SEARCH_RESULTS_PER_BUBBLE = 4
+
+
+def make_search_result_card(items: list[dict], title: str) -> FlexMessage:
+    # items: [{"id": int, "name": str, "faculty": str, "stars": str}]  stars=""なら未レビュー
+    chunks = [items[i:i + _SEARCH_RESULTS_PER_BUBBLE]
+              for i in range(0, len(items), _SEARCH_RESULTS_PER_BUBBLE)] or [[]]
+
+    bubbles = []
+    for i, chunk in enumerate(chunks):
+        header_text = title if len(chunks) == 1 else f"{title}（{i + 1}/{len(chunks)}）"
+        bubbles.append(FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[FlexText(text=header_text, weight="bold", color="#ffffff", size="md", wrap=True)],
+                background_color="#7c3aed",
+                padding_all="lg",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=[_make_search_result_row(item) for item in chunk],
+                padding_all="lg",
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center")],
+                padding_all="md",
+            ),
+        ))
+
+    contents = bubbles[0] if len(bubbles) == 1 else FlexCarousel(contents=bubbles)
+    return FlexMessage(alt_text=title, contents=contents)
 
 
 # ── Course list carousel ────────────────────────────────────────
