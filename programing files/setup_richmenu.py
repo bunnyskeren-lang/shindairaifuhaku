@@ -7,6 +7,7 @@
   LINE_CHANNEL_ACCESS_TOKEN
   REVIEW_FORM_URL
   REVIEW_LIFF_ID     (レビュー投稿ボタンのLIFF URL用)
+  CONTACT_LIFF_ID    (お問い合わせボタンのLIFF URL用)
 """
 import argparse
 import io
@@ -35,6 +36,7 @@ REVIEW_FORM_URL = os.environ.get(
 )
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
+CONTACT_LIFF_ID = os.environ.get("CONTACT_LIFF_ID", "")
 
 if args.env == "prod":
     confirm = input("⚠️  本番環境のリッチメニューを更新します。よろしいですか？ (yes/no): ")
@@ -152,7 +154,10 @@ AREAS = [
     {
         "label": "お問い合わせ",
         "x": SIDE_MID, "y": SY3, "w": W - SIDE_MID, "h": H - SY3,
-        "action": URIAction(label="お問い合わせ", uri=f"{REVIEW_FORM_URL}/contact"),
+        "action": URIAction(
+            label="お問い合わせ",
+            uri=f"https://liff.line.me/{CONTACT_LIFF_ID}" if CONTACT_LIFF_ID else f"{REVIEW_FORM_URL}/contact",
+        ),
     },
 ]
 

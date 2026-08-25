@@ -19,6 +19,7 @@ SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
+CONTACT_LIFF_ID = os.environ.get("CONTACT_LIFF_ID", "")
 RICHMENU_ID_PREREGISTER = os.environ.get("RICHMENU_ID_PREREGISTER", "")
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 IS_DEV = os.environ.get("ENV", "prod") == "dev"
