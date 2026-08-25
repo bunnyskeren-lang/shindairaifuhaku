@@ -106,71 +106,38 @@ def _reading_key(subj) -> str:
     return (subj.reading or "").strip() or (subj.name or "")
 
 
-async def handle_course_list(category: str = "", classification: str = "", faculty: str = "",
-                              department: str = "", reading_row: str = "") -> list:
-    _cl_key = f"{category}:{classification}:{faculty}:{department}:{reading_row}"
-    _cached = cache.get_course_list_cache(_cl_key)
-    if _cached is not None:
-        return _cached
+def _build_alpha_split_menu(rows: list, category: str, classification: str,
+                             faculty: str, department: str) -> list | None:
+    """rowsがよみがな順の均等分割メニューを挟むべき件数のとき、選択メニューのFlexMessageを
+    組み立てて返す。分割の絞り込み軸(row_prefix)が定まらない場合はNoneを返し、
+    呼び出し側は通常の一覧表示にフォールバックする。"""
+    if faculty and not classification:
+        row_prefix = f"専門F:{faculty}|{department}"
+    elif classification and category:
+        row_prefix = f"{category}:{classification}"
+    elif classification:
+        row_prefix = classification
+    else:
+        return None
+    by_reading = sorted(rows, key=_reading_key)
+    chunks = [by_reading[i:i + _ALPHA_CHUNK_SIZE] for i in range(0, len(by_reading), _ALPHA_CHUNK_SIZE)]
+    items = []
+    for i, chunk in enumerate(chunks):
+        first_ch = _reading_key(chunk[0])[:1] or "?"
+        last_ch = _reading_key(chunk[-1])[:1] or "?"
+        label = f"{first_ch}〜{last_ch}" if first_ch != last_ch else first_ch
+        items.append((f"{label}（{len(chunk)}件）", f"{row_prefix}::R:{i}"))
+    return [make_classification_select_flex(
+        items, set(),
+        title="📚 科目一覧",
+        subtitle=f"{len(rows)}件あります。よみがな順で絞り込んでください",
+        header_color="#6366f1",
+    )]
 
-    cls_map, (_, _all_c), reviewed_names = await asyncio.gather(
-        cache.get_cls_order_map(), cache.get_courses_cached(), cache.get_reviewed_cached()
-    )
-    _cls_sort = make_cls_sort(cls_map)
-    rows = [c for c in _all_c if
-            (not category or c.category == category) and
-            (not classification or c.classification == classification) and
-            (not faculty or c.faculty == faculty) and
-            (not department or (c.department or "") == department)]
 
-    if not reading_row and len(rows) > _ALPHA_SPLIT_THRESHOLD:
-        if faculty and not classification:
-            _row_prefix = f"専門F:{faculty}|{department}"
-        elif classification and category:
-            _row_prefix = f"{category}:{classification}"
-        elif classification:
-            _row_prefix = classification
-        else:
-            _row_prefix = None
-        if _row_prefix:
-            by_reading = sorted(rows, key=_reading_key)
-            chunks = [by_reading[i:i + _ALPHA_CHUNK_SIZE] for i in range(0, len(by_reading), _ALPHA_CHUNK_SIZE)]
-            items = []
-            for i, chunk in enumerate(chunks):
-                first_ch = _reading_key(chunk[0])[:1] or "?"
-                last_ch = _reading_key(chunk[-1])[:1] or "?"
-                label = f"{first_ch}〜{last_ch}" if first_ch != last_ch else first_ch
-                items.append((f"{label}（{len(chunk)}件）", f"{_row_prefix}::R:{i}"))
-            result = [make_classification_select_flex(
-                items, set(),
-                title="📚 科目一覧",
-                subtitle=f"{len(rows)}件あります。よみがな順で絞り込んでください",
-                header_color="#6366f1",
-            )]
-            cache.set_course_list_cache(_cl_key, result)
-            return result
-
-    if reading_row:
-        try:
-            _idx = int(reading_row)
-        except ValueError:
-            _idx = -1
-        by_reading = sorted(rows, key=_reading_key)
-        rows = by_reading[_idx * _ALPHA_CHUNK_SIZE:(_idx + 1) * _ALPHA_CHUNK_SIZE] if _idx >= 0 else []
-
-    rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
-
-    if not rows:
-        if faculty:
-            label = f"{faculty}の"
-        elif classification:
-            label = f"{classification}の"
-        elif category:
-            label = f"{category}の"
-        else:
-            label = ""
-        return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
-
+async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> list:
+    """絞り込み・ソート済みのSubject行から、末尾バリアント統合・シラバス/レビューURL付与済みの
+    FlexBubble一覧を組み立てる（8バブル単位のカルーセル分割は呼び出し側で行う）。"""
     course_name_set = {c.name for c in rows}
     seen_base: set[str] = set()
 
@@ -248,7 +215,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
     def _cat_order(cls: str) -> int:
         return 0 if cls_category.get(cls, "") == "教養" else 1
-    all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), _cls_sort(x[0])))
+    all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), cls_sort(x[0])))
 
     def _entry_has_review(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> bool:
         if kind == "single":
@@ -393,6 +360,55 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             _split_to_bubbles("教養(総合) GCP", gcps)
         else:
             _split_to_bubbles(cls, ents)
+
+    return bubbles
+
+
+async def handle_course_list(category: str = "", classification: str = "", faculty: str = "",
+                              department: str = "", reading_row: str = "") -> list:
+    _cl_key = f"{category}:{classification}:{faculty}:{department}:{reading_row}"
+    _cached = cache.get_course_list_cache(_cl_key)
+    if _cached is not None:
+        return _cached
+
+    cls_map, (_, _all_c), reviewed_names = await asyncio.gather(
+        cache.get_cls_order_map(), cache.get_courses_cached(), cache.get_reviewed_cached()
+    )
+    _cls_sort = make_cls_sort(cls_map)
+    rows = [c for c in _all_c if
+            (not category or c.category == category) and
+            (not classification or c.classification == classification) and
+            (not faculty or c.faculty == faculty) and
+            (not department or (c.department or "") == department)]
+
+    if not reading_row and len(rows) > _ALPHA_SPLIT_THRESHOLD:
+        split_menu = _build_alpha_split_menu(rows, category, classification, faculty, department)
+        if split_menu is not None:
+            cache.set_course_list_cache(_cl_key, split_menu)
+            return split_menu
+
+    if reading_row:
+        try:
+            _idx = int(reading_row)
+        except ValueError:
+            _idx = -1
+        by_reading = sorted(rows, key=_reading_key)
+        rows = by_reading[_idx * _ALPHA_CHUNK_SIZE:(_idx + 1) * _ALPHA_CHUNK_SIZE] if _idx >= 0 else []
+
+    rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
+
+    if not rows:
+        if faculty:
+            label = f"{faculty}の"
+        elif classification:
+            label = f"{classification}の"
+        elif category:
+            label = f"{category}の"
+        else:
+            label = ""
+        return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
+
+    bubbles = await _build_course_bubbles(rows, reviewed_names, _cls_sort)
 
     alt = f"📚 {category}一覧" if category else "📚 科目一覧"
     if not bubbles:

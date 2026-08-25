@@ -23,10 +23,11 @@ P1中心に実装した。実装できた項目はdevブランチにpush・dev�
    モデルを探して見つけられない命名の食い違いだが、リポジトリ全体に及ぶ大規模リネームで
    リスクが高いため見送った。
 
-3. **`handle_course_list`（`line_bot/handler.py`）の分割（P2）**
-   291行で300行の閾値に接近している複数責務関数。今回のレビュー時点で`line_bot/handler.py`は
-   別セッションが並行して編集中（未コミット変更あり）だったため、競合を避けて今回は
-   触らなかった。次回、当該ファイルが編集中でないタイミングで再検討すること。
+3. **`handle_course_list`（`line_bot/handler.py`）の分割（P2）→ 2026-08-25対応済み**
+   よみがな分割メニュー生成部分を`_build_alpha_split_menu()`に、バリアント統合・URL付与・
+   FlexBubble組み立て部分を`_build_course_bubbles()`にそれぞれ抽出し、`handle_course_list`
+   本体は305行→63行に縮小。ロジックは一切変更せず移動のみ（dev DBの実データで
+   リファクタ前後のFlexMessage出力が全パターン完全一致することを検証済み）。
 
 4. **`Subject.faculty` NOT NULL化（P2・DB migration）**
    `department`列はnullable=False+空文字プレースホルダ方式なのに対し、`faculty`列は
