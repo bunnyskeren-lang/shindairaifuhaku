@@ -12,7 +12,7 @@ from linebot.v3.messaging import (
 )
 
 from core import cache
-from core.config import CONTACT_URL, EASE_STARS, PRIVACY_URL, REVIEW_FORM_URL, make_course_liff_url
+from core.config import CONTACT_URL, EASE_STARS, PRIVACY_URL, REVIEW_FORM_URL, TERMS_URL, make_course_liff_url
 from models import Subject
 
 # ── FlexMessage builder ─────────────────────────────────────────
@@ -322,6 +322,29 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         style="primary",
                         color="#f97316",
                         height="md",
+                    ),
+                    FlexText(
+                        text="登録することで利用規約およびプライバシーポリシーに同意したものとします",
+                        size="xxs",
+                        color="#9ca3af",
+                        wrap=True,
+                        margin="md",
+                    ),
+                    FlexBox(
+                        layout="horizontal",
+                        margin="sm",
+                        contents=[
+                            FlexButton(
+                                action=URIAction(label="利用規約", uri=TERMS_URL),
+                                style="link",
+                                height="sm",
+                            ),
+                            FlexButton(
+                                action=URIAction(label="プライバシーポリシー", uri=PRIVACY_URL),
+                                style="link",
+                                height="sm",
+                            ),
+                        ],
                     ),
                 ],
                 padding_all="md",

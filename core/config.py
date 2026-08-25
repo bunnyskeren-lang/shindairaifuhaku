@@ -106,6 +106,7 @@ ADMIN_COOKIE = "admin_tok"
 ADMIN_TOKEN_TTL = 4 * 3600
 
 PRIVACY_URL = APP_URL + "/privacy"
+TERMS_URL = APP_URL + "/terms"
 CONTACT_URL = APP_URL + "/contact"
 
 _CLS_ORDER_KEYS = ["基盤", "人文", "社会", "自然", "総合", "健康", "外国語"]
