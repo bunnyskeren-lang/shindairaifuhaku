@@ -25,7 +25,6 @@ from core.config import (
     APP_URL,
     EASE_ORDER,
     EASE_STARS,
-    ONI_STARS,
     RICHMENU_ID_PREREGISTER,
     REVIEW_FORM_URL,
     is_profile_complete,
@@ -483,7 +482,7 @@ async def _get_onitan_ranking() -> list:
         random.shuffle(pool)
         selected.extend(pool[:5 - len(selected)])
     items = [
-        {"rank": i, "id": sid, "name": name, "stars": ONI_STARS.get(ease, "")}
+        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, "")}
         for i, (sid, name, ease) in enumerate(selected, 1)
     ]
     return [make_onitan_card(items)]

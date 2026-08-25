@@ -355,7 +355,10 @@ def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: st
         body=FlexBox(layout="vertical", contents=rows, padding_all="lg"),
         footer=FlexBox(
             layout="vertical",
-            contents=[FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center")],
+            contents=[
+                FlexText(text="★は楽単度を表します（多いほど楽単）", size="xs", color="#94a3b8", align="center"),
+                FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center"),
+            ],
             padding_all="md",
         ),
     )
