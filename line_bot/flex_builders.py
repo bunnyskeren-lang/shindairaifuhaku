@@ -303,7 +303,7 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                                 wrap=True,
                             ),
                             FlexText(
-                                text="お名前・学籍番号・学部・学年・学科を入力するだけ（30秒で完了）",
+                                text="お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）",
                                 size="xs",
                                 color="#9a3412",
                                 wrap=True,
