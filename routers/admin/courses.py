@@ -18,9 +18,6 @@ from routers.admin._common import reorder_sort_order
 router = APIRouter()
 
 
-_PAGE_SIZE = 50
-
-
 @router.get("/admin/courses", response_class=HTMLResponse)
 async def admin_courses(
     request: Request, _: str = Depends(check_admin), msg: str = "",
@@ -63,19 +60,11 @@ async def admin_courses(
         _cls_sort = make_cls_sort(cls_map)
         courses = sorted(courses, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
         total = len(courses)
-        # 修正理由: 「すべて」タブ(q・category未指定)は4000件超を毎回HTML/JSに全展開しており
-        # レスポンスサイズ・レンダリング時間が肥大化していた。分類の並び順（DisplayOrder由来の
-        # カスタム順）はDBのORDER BYだけでは再現できずPython側で全件ソートする必要があるため、
-        # DBクエリ自体の絞り込みではなく、ソート後にページ単位へスライスする形で表示量のみ削減する。
-        # 検索結果・大分類フィルタ時は件数が絞られ実害が小さいため従来通り全件表示のままにする。
+        # 「すべて」タブでもページネーションなしで全件を一度に表示する
+        # （以前は4000件超のレンダリング負荷対策で50件単位に分割していたが、
+        # 「次へ」を何度も押す必要があり不便なためユーザーの希望で撤廃した）
         total_pages = 1
-        if not q and not category:
-            total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-            page = min(page, total_pages)
-            start = (page - 1) * _PAGE_SIZE
-            courses = courses[start:start + _PAGE_SIZE]
-        else:
-            page = 1
+        page = 1
         class_counts_raw = dict((await session.execute(
             select(Subject.classification, func.count(Subject.id))
             .where(Subject.classification.isnot(None), Subject.classification != "")
