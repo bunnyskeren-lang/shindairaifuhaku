@@ -15,7 +15,6 @@ RICHMENU_URLS: dict[str, str] = {
     "shokudo":   "https://west2-univ.jp/sp/kobe-univ.php",
     "toshokan":  "https://lib.kobe-u.ac.jp/services/barcode/",
     "bus":       "https://kotsu.city.kobe.lg.jp/",
-    "kyoyoin":   "https://www.iphe.kobe-u.ac.jp/general-education-courses/",
 }
 
 # 修正理由: ボタン名は公開情報で誰でも予測可能なため、未認証かつ無制限のDB書き込み(INSERT)が
