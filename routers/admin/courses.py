@@ -45,7 +45,7 @@ async def admin_courses(
     )
     members_by_label: dict[str, list] = defaultdict(list)
     for c in all_courses_for_variant:
-        label = label_by_name.get(c.name)
+        label = label_by_name.get((c.name, c.classification or ""))
         if label:
             members_by_label[label].append(c)
 
@@ -92,7 +92,7 @@ async def admin_courses(
         seen_labels_for_query: set[str] = set()
         extra_ids: set[int] = set()
         for c in courses:
-            label = label_by_name.get(c.name)
+            label = label_by_name.get((c.name, c.classification or ""))
             if label and label not in seen_labels_for_query:
                 seen_labels_for_query.add(label)
                 extra_ids.update(m.id for m in members_by_label.get(label, []))
@@ -229,7 +229,7 @@ async def admin_courses(
     # 1つの一覧に集約表示する（ユーザー確認済みの管理画面統合表示の仕様）
     group_rows_by_label: dict = {}
     for c in courses:
-        label = label_by_name.get(c.name)
+        label = label_by_name.get((c.name, c.classification or ""))
         if not label or label in group_rows_by_label:
             continue
         members = members_by_label.get(label, [c])
@@ -295,7 +295,7 @@ async def admin_courses(
     seen_labels_rendered: set = set()
     for c in courses:
         cls = c.classification or "（未分類）"
-        label = label_by_name.get(c.name)
+        label = label_by_name.get((c.name, c.classification or ""))
         if label:
             if label in seen_labels_rendered:
                 continue

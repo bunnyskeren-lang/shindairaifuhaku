@@ -87,74 +87,81 @@ def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) 
     return result
 
 
-def compute_variant_display_groups(names_with_classification: list[tuple[str, str]]) -> dict[str, str]:
-    """(科目名, classification)のリストから、末尾のみが異なる2件以上の科目名をグループ化し、
-    科目名 → 表示用グループラベル（例: "生物学各論 (A1/A2/C1/C2)"）のマップを返す。
+def compute_variant_display_groups(
+    names_with_classification: list[tuple[str, str]],
+) -> dict[tuple[str, str], str]:
+    """(科目名, classification)のリストから、同一classification内で末尾のみが異なる2件以上の
+    科目名をグループ化し、(科目名, classification) → 表示用グループラベル
+    （例: "生物学各論 (A1/A2/C1/C2)"）のマップを返す。
     書式はLINE bot科目一覧（line_bot/handler.py _make_bubble の f"{name} ({suffix})"）に合わせる。
     管理画面での一括編集・一括削除に使うため、compute_variant_groups()と異なり
     文字バリアント・セミナー系も含め全パターンをclassification単位でグループ化する
     （同名科目が別学部・別分類に存在する場合の誤統合を避けるため）。
-    グループに属さない（バリアントが1件だけ、または該当パターンなし）科目名はマップに含めない。
+    戻り値のキーを(科目名, classification)のペアにしているのは、同じ科目名が複数の
+    classificationにまたがって別々のSubjectとして存在するケース（例:「病理学Ⅰ」が
+    理学療法学専攻・検査技術科学専攻・作業療法学専攻でそれぞれ別科目として存在する）を
+    区別するため。科目名だけをキーにすると同名別科目のclassificationが1つに潰れ、
+    本来別グループのバリアントが誤って1グループに結合される
+    （2026-08-28、「病理学 (Ⅰ/Ⅰ/Ⅰ/Ⅱ/Ⅱ/Ⅱ)」のような重複ラベルが出るバグとして発覚し修正）。
+    グループに属さない（バリアントが1件だけ、または該当パターンなし）科目はマップに含めない。
     """
-    result: dict[str, str] = {}
-    assigned: set[str] = set()
-    names = [n for n, _ in names_with_classification]
-    name_set = set(names)
-    cls_by_name = dict(names_with_classification)
-
-    def _cls_of(name: str) -> str:
-        return cls_by_name.get(name) or "その他"
+    result: dict[tuple[str, str], str] = {}
+    assigned: set[tuple[str, str]] = set()
+    items = list(dict.fromkeys((n, c or "") for n, c in names_with_classification))
+    item_set = set(items)
 
     # 1) セミナー系（外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)）
-    sem_bases: dict[tuple[str, str], list[tuple[str, str]]] = {}
-    for name in names:
+    sem_bases: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
+    for name, cls in items:
         m = _VSEM.match(name)
         if m:
-            sem_bases.setdefault((m.group(1) + m.group(3), _cls_of(name)), []).append((name, m.group(2)))
+            sem_bases.setdefault((m.group(1) + m.group(3), cls), []).append((name, cls, m.group(2)))
     for (base, _cls), members in sem_bases.items():
         if len(members) < 2:
             continue
-        members_sorted = sorted(members, key=lambda x: x[1])
-        label = f"{base} ({'/'.join(sk for _, sk in members_sorted)})"
-        for n, _sk in members_sorted:
-            result[n] = label
-            assigned.add(n)
+        members_sorted = sorted(members, key=lambda x: x[2])
+        label = f"{base} ({'/'.join(sk for _, _, sk in members_sorted)})"
+        for n, c, _sk in members_sorted:
+            result[(n, c)] = label
+            assigned.add((n, c))
 
     # 2) 文字バリアント（末尾がA/B/C/Dのみ、数字を伴わないもの）
     letter_bases: dict[tuple[str, str], list[str]] = {}
-    for name in names:
-        if name in assigned or not name or len(name) <= 1:
+    for name, cls in items:
+        if (name, cls) in assigned or not name or len(name) <= 1 or (name, cls) not in item_set:
             continue
         if name[-1] in ('A', 'B', 'C', 'D'):
             base = name[:-1]
-            key = (base, _cls_of(name))
-            variants = [s for s in 'ABCD' if base + s in name_set and _cls_of(base + s) == key[1]]
+            key = (base, cls)
+            if key in letter_bases:
+                continue
+            variants = [s for s in 'ABCD' if (base + s, cls) in item_set]
             if len(variants) >= 2:
                 letter_bases[key] = variants
-    for (base, _cls), variants in letter_bases.items():
+    for (base, cls), variants in letter_bases.items():
         label = f"{base} ({'/'.join(variants)})"
         for s in variants:
-            result[base + s] = label
-            assigned.add(base + s)
+            result[(base + s, cls)] = label
+            assigned.add((base + s, cls))
 
     # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化）
     num_bases: dict[tuple[str, str], list[tuple[str, str, int, str]]] = {}
-    for name in names:
-        if name in assigned:
+    for name, cls in items:
+        if (name, cls) in assigned:
             continue
         m = _vnum_match(name)
         if m:
             base, letter, sk, disp = m
-            key = (base, _cls_of(name))
+            key = (base, cls)
             num_bases.setdefault(key, []).append((name, letter, sk, disp))
-    for (base, _cls), members in num_bases.items():
+    for (base, cls), members in num_bases.items():
         if len(members) < 2:
             continue
         members_sorted = sorted(members, key=lambda x: (x[1], x[2]))
         suffix = "/".join(f"{letter}{disp}" for _, letter, _sk, disp in members_sorted)
         label = f"{base} ({suffix})"
         for n, _letter, _sk, _disp in members_sorted:
-            result[n] = label
-            assigned.add(n)
+            result[(n, cls)] = label
+            assigned.add((n, cls))
 
     return result
