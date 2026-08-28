@@ -32,6 +32,7 @@ from core.config import (
     make_course_liff_url,
     make_register_url,
 )
+from core.subject_variants import _VSEM, _vnum_match
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
@@ -59,34 +60,9 @@ async def _registration_incomplete(user_id: str) -> bool:
     return not complete
 
 # ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
-# アルファベットや数字のみが異なる科目（ベースの漢字部分が完全一致するもの）は
-# 1行にまとめて選択バブル表示する。全角文字（Ｄ等）はASCIIに正規化して判定する。
-# 専門科目は末尾が全角ローマ数字（Ⅰ/Ⅱ/Ⅲ...）の命名が主流なため、数字と同様に扱う。
-_FULLWIDTH_UPPER = str.maketrans(
-    "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ",
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-)
-_ROMAN_VAL = {chr(0x2160 + i): i + 1 for i in range(12)}  # Ⅰ→1 ... Ⅻ→12
-_VNUM = _re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])$')
-
-
-def _vnum_match(name: str) -> tuple[str, str, int, str] | None:
-    """戻り値: (base, letter, sort_key, disp) の4-tuple。
-    disp は表示用の末尾テキスト（ローマ数字はそのまま、数字はASCIIに正規化）。"""
-    m = _VNUM.match(name)
-    if not m:
-        return None
-    base = m.group(1).strip()
-    letter = (m.group(2) or "").translate(_FULLWIDTH_UPPER)
-    raw = m.group(3)
-    if raw in _ROMAN_VAL:
-        sk = _ROMAN_VAL[raw]
-        disp = raw
-    else:
-        sk = int(raw)
-        disp = str(sk)
-    return base, letter, sk, disp
-
+# _vnum_match()・_VSEM は core/subject_variants.py と共有（2026-08-25、byte単位で
+# 手動同期していた複製をimportに統一。判定規則を変える場合はcore/subject_variants.py
+# 側を編集すればここにも自動的に反映される）。
 
 # ── Course list carousel ────────────────────────────────────────
 
@@ -159,7 +135,6 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
     seen_num_base: set[tuple[str, str, str]] = set()
 
     # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
-    _VSEM = _re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
     _sem_bases: dict[str, list] = defaultdict(list)
     for _c in rows:
         _m = _VSEM.match(_c.name)
@@ -489,27 +464,36 @@ async def _get_onitan_ranking() -> list:
 
 
 async def _get_omikuji() -> list:
-    # 承認済みレビューがある科目からランダムに10件選ぶ(楽単度を表示)。毎回結果を変えたいのでキャッシュしない
-    async with AsyncSessionLocal() as _s:
-        rows = (await _s.execute(
-            select(Subject.id, Subject.name, Review.ease_rating)
-            .join(CourseSection, CourseSection.subject_id == Subject.id)
-            .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == ReviewStatus.APPROVED)
-            .group_by(Subject.id, Subject.name, Review.ease_rating)
-        )).all()
-    if not rows:
+    # 承認済みレビューがある科目からランダムに10件選ぶ(楽単度を表示)。抽選結果は毎回変えたいので
+    # キャッシュしないが、抽選対象の絞り込みはキャッシュ済みの科目名セットで行い(DBアクセスなし)、
+    # 実際にDBへ問い合わせるのは抽選で選ばれた10件の楽単度取得のみにする。
+    # 修正理由(2026-08-25): 一時的に、承認済みレビューがある全科目分のSubject×CourseSection×Review
+    # を毎回DBから全件取得してからPython側でシャッフルする実装になっていたが、レビュー件数が
+    # 増えるほどクエリ・メモリ負荷が線形に増える設計だった。2026-08-25以前の
+    # func.random() LIMIT 10方式と同じく、DBに触れる範囲を抽選後の10件だけに絞り戻す。
+    reviewed_names, (cbn, _call) = await asyncio.gather(
+        cache.get_reviewed_cached(),
+        cache.get_courses_cached(),
+    )
+    if not reviewed_names:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
-    course_best: dict[int, tuple[str, str]] = {}
-    for sid, name, ease in rows:
-        if sid not in course_best or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_best[sid][1], 99):
-            course_best[sid] = (name, ease)
-    pool = list(course_best.items())
+    pool = [cbn[name] for name in reviewed_names if name in cbn]
     random.shuffle(pool)
-    selected = pool[:10]
+    selected_subjects = pool[:10]
+    ids = [s.id for s in selected_subjects]
+    async with AsyncSessionLocal() as _s:
+        ease_rows = (await _s.execute(
+            select(CourseSection.subject_id, Review.ease_rating)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.status == ReviewStatus.APPROVED, CourseSection.subject_id.in_(ids))
+        )).all()
+    best_ease: dict[int, str] = {}
+    for sid, ease in ease_rows:
+        if sid not in best_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best_ease[sid], 99):
+            best_ease[sid] = ease
     items = [
-        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, "")}
-        for i, (sid, (name, ease)) in enumerate(selected, 1)
+        {"rank": i, "id": s.id, "name": s.name, "stars": EASE_STARS.get(best_ease.get(s.id, ""), "")}
+        for i, s in enumerate(selected_subjects, 1)
     ]
     return [make_omikuji_card(items)]
 
@@ -702,8 +686,13 @@ async def _handle_course_search(t: str, user_id: str) -> list:
             members = [c]
             rep = c
             display = c.name
-        text = display + "".join(m.name for m in members)
-        reading = "".join(m.reading or "" for m in members)
+        # 修正理由: 区切り文字なしで連結すると、境界をまたぐ検索語が意図せずマッチしうる
+        # （例: display末尾+先頭member名の一部が偶然一致する場合）。科目名には出現しない
+        # 制御文字を区切りに挟み、単一科目の場合は名前を二重連結しないようdisplay自体を
+        # membersに含めない
+        _parts = [display] if not label else [display] + [m.name for m in members]
+        text = "\x1f".join(_parts)
+        reading = "\x1f".join(m.reading or "" for m in members)
         search_rows.append({
             "display": display, "rep": rep, "members": members,
             "faculty": c.faculty or "", "department": c.department or "",

@@ -1,12 +1,17 @@
-"""科目名の末尾バリアント統合ロジック（レビュー投稿フォーム・管理画面用）。
+"""科目名の末尾バリアント統合ロジック（レビュー投稿フォーム・LINE bot・管理画面用）。
 
-line_bot/handler.py の _vnum_match()・variant/numvariant 判定ロジックと同じ規則
-（文字A/B/C/Dとセミナー系はfaculty/department非依存、数字・ローマ数字はfaculty+department単位。
-2026-08-25以前はclassification単位だったが、classificationは学部をまたいで共有されうる
-表示カテゴリでしかなく、subjects.nameの実際の識別単位（UNIQUE制約 name+faculty+department）
-と食い違うことがあったため、handler.pyの_handle_course_search()と同じfaculty+department単位に
-統一した）をレビュー投稿フォーム（/api/preload）向けに複製したもの。Flex Message構築に密結合した
-handler.py側のロジックとは独立させているため、判定規則を変更する場合は両方を更新すること。
+_vnum_match()・_VSEM（文字A/B/C/Dとセミナー系はfaculty/department非依存、数字・ローマ数字は
+faculty+department単位。2026-08-25以前はclassification単位だったが、classificationは学部を
+またいで共有されうる表示カテゴリでしかなく、subjects.nameの実際の識別単位（UNIQUE制約
+name+faculty+department）と食い違うことがあったため統一した）はここが唯一の定義で、
+line_bot/handler.py はこのモジュールからimportして使う（2026-08-25以前は同一ロジックを
+手動で複製していたが、byte単位の同期漏れリスクをなくすため一本化した）。
+
+compute_variant_groups()（レビュー投稿フォーム/api/preload・LINE botメッセージ検索向け）に対し、
+グループ化そのものの手順（seenの積み上げ方・グループラベルの組み立て）はline_bot/handler.py
+_build_course_bubbles()内にFlex Message構築と密結合した形で別途実装されている。
+「どの科目名同士が同じグループになるか」の判定規則自体（上記_vnum_match/_VSEM）は共有済みだが、
+グループの束ね方の手順を変更する場合は_build_course_bubbles()側も合わせて確認すること。
 
 compute_variant_display_groups() は管理画面の科目一覧（routers/admin/courses.py）向けに
 別途追加したもので、一括編集・一括削除という破壊的操作の誤爆を避けるため、文字バリアント・
