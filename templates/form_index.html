@@ -119,6 +119,7 @@
             <p class="text-sm font-semibold text-gray-700 mb-2">📖 科目名 <span class="text-red-500">*</span></p>
             <p class="text-xs text-gray-500 mb-2" id="instructorCourseLabel"></p>
             <div id="instructorCourseItems" class="flex flex-wrap gap-2"></div>
+            <p id="instructorCourseUnregistered" class="hidden text-xs text-gray-400">この科目は授業レビューを募集していません。</p>
             <p id="instructorCourseFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの科目はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
             <p id="instructorCourseReviewedNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの科目はこの学籍番号で投稿済みのため、選択できません</p>
           </div>
@@ -146,7 +147,7 @@
           <p class="text-sm font-semibold text-gray-700 mb-2">👨‍🏫 担当教員 <span class="text-red-500">*</span></p>
           <p id="instructorHint" class="hidden text-xs font-medium text-indigo-500 mb-2">👆 担当教員をタップして選択してください</p>
           <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
-          <p id="instructorUnregistered" class="hidden text-xs text-gray-400">この科目は担当教員が登録されていません</p>
+          <p id="instructorUnregistered" class="hidden text-xs text-gray-400">この科目は授業レビューを募集していません。</p>
           <p id="instructorFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの教員はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
           <p id="instructorReviewedNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの教員はこの学籍番号で投稿済みのため、選択できません</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
@@ -1339,6 +1340,7 @@
     function clearInstrSearch() {
       instrSearchDropdown.classList.add('hidden');
       document.getElementById('instructorCourseList').classList.add('hidden');
+      document.getElementById('instructorCourseUnregistered').classList.add('hidden');
       document.getElementById('instructorCourseFullNotice').classList.add('hidden');
       document.getElementById('instructorCourseReviewedNotice').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
@@ -1398,6 +1400,17 @@
       document.getElementById('selectedInstructorHidden').value = inst.name;
       const courseLabel = document.getElementById('instructorCourseLabel');
       const courseItems = document.getElementById('instructorCourseItems');
+      const courseUnregistered = document.getElementById('instructorCourseUnregistered');
+      if (inst.courses.length === 0) {
+        courseLabel.textContent = '';
+        courseItems.innerHTML = '';
+        courseUnregistered.classList.remove('hidden');
+        document.getElementById('instructorCourseFullNotice').classList.add('hidden');
+        document.getElementById('instructorCourseReviewedNotice').classList.add('hidden');
+        document.getElementById('instructorCourseList').classList.remove('hidden');
+        return;
+      }
+      courseUnregistered.classList.add('hidden');
       courseLabel.textContent = `${inst.name} の担当科目（${inst.courses.length}件）`;
       const coursesWithReviewed = inst.courses.map(c => ({
         ...c,
