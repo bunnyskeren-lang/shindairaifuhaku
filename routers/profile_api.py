@@ -6,7 +6,8 @@ from sqlalchemy import select
 from core import cache, line_client
 from core.activity_log import save_error_log
 from core.config import (
-    DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, FACULTIES, FACULTY_DEPARTMENTS,
+    DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, EMAIL_VERIFICATION_ENABLED,
+    FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, STUDENT_ID_RE, LINE_USER_ID_RE,
     WELCOME_PROMO_SUBJECT_ID,
     is_profile_complete, make_course_liff_url,
@@ -115,6 +116,11 @@ async def register_profile(
 
         profile = await session.get(UserProfile, uid)
         is_new_registration = profile is None
+        if is_new_registration and EMAIL_VERIFICATION_ENABLED:
+            # 会員登録はメール認証(本人確認)を経た上で行う必要がある。ここでUserProfileが
+            # 無いまま新規作成を許すと、/verify-emailを経由せずメール認証をすり抜けて
+            # 登録できてしまう([[project_review_email_verification_20260824]]参照)。
+            return _form_error("先にメールアドレス認証が必要です。お手数ですが投稿フォームまたはお問い合わせフォームから開き直してください")
         promo_subject_name = None
         if is_new_registration:
             # 会員登録直後、もらったチケットの使い方を体験してもらうための案内科目

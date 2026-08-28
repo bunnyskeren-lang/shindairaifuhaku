@@ -216,6 +216,16 @@ def make_register_url(user_id: str) -> str:
     return f"{APP_URL}/register?uid={user_id}"
 
 
+def make_email_verify_url() -> str:
+    """メール認証ゲート画面(/verify-email)のURL。生URLだとLINEの「アプリ内ブラウザ」で
+    開かれるだけでliff.isInClient()がfalseになり自動ログインできないため
+    ([[feedback_liff_links_must_use_liffline_me]]と同じ理由)、REVIEW_LIFF_IDのエンドポイントURL
+    (投稿フォーム=/)の後ろに/verify-emailパスを付与するLIFF URL形式で返す。"""
+    if REVIEW_LIFF_ID:
+        return f"https://liff.line.me/{REVIEW_LIFF_ID}/verify-email"
+    return f"{APP_URL}/verify-email"
+
+
 def make_course_liff_url(course_id) -> str:
     """科目詳細LIFFページのURL。LINEのFlexMessage等から「https://{APP_URL}/liff/course?...」の
     ような生のHTTPS URLをそのまま開かせると、LINEの通常のアプリ内ブラウザで開かれるだけで
