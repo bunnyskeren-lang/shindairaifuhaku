@@ -8,6 +8,7 @@ from core.activity_log import save_error_log
 from core.config import (
     APP_URL, EMAIL_VERIFICATION_ENABLED, FACULTY_DEPARTMENTS, IS_DEV,
     LIFF_ID, REGISTER_LIFF_ID, REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
+    make_email_verify_url,
 )
 from core.templates import templates
 
@@ -131,6 +132,8 @@ async def liff_course(request: Request):
             "base_url": APP_URL,
             "IS_DEV": IS_DEV,
             "unlock_reward": REVIEW_APPROVAL_UNLOCK_CREDITS,
+            "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
+            "email_verify_url": make_email_verify_url(),
         })
     except Exception as exc:
         await save_error_log(exc, action="liff_course")

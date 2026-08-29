@@ -3,7 +3,7 @@ import re as _re
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
-from core.config import CONTACT_LIFF_ID, IS_DEV, REGISTER_LIFF_ID
+from core.config import CONTACT_LIFF_ID, EMAIL_VERIFICATION_ENABLED, IS_DEV, REGISTER_LIFF_ID, make_email_verify_url
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.templates import templates
@@ -29,6 +29,8 @@ async def contact_page(request: Request):
             "categories": _CATEGORIES,
             "liff_id": CONTACT_LIFF_ID,
             "register_liff_id": REGISTER_LIFF_ID,
+            "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
+            "email_verify_url": make_email_verify_url(),
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

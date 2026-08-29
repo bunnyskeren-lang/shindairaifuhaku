@@ -31,10 +31,13 @@ async def profile_status(request: Request):
     body = await request.json()
     uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     if not uid:
-        return {"complete": False}
+        return {"complete": False, "found": False}
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
-        return {"complete": is_profile_complete(profile)}
+        # foundはUserProfile自体の有無（メール認証済みかどうか）を区別するために追加。
+        # completeだけだと「未認証で未登録」と「認証済みだが学部学科未入力」を区別できず、
+        # 前者をメール認証ゲートへ、後者を会員登録画面へ、と誘導先を出し分けられない
+        return {"complete": is_profile_complete(profile), "found": profile is not None}
 
 
 @router.post("/api/profile/prefill")

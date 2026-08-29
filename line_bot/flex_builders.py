@@ -12,7 +12,10 @@ from linebot.v3.messaging import (
 )
 
 from core import cache
-from core.config import CONTACT_URL, EASE_STARS, PRIVACY_URL, REVIEW_FORM_URL, TERMS_URL, make_course_liff_url
+from core.config import (
+    CONTACT_URL, EASE_STARS, EMAIL_VERIFICATION_ENABLED, PRIVACY_URL, REVIEW_FORM_URL, TERMS_URL,
+    make_course_liff_url,
+)
 from models import Subject
 
 # ── FlexMessage builder ─────────────────────────────────────────
@@ -267,6 +270,32 @@ def make_help_flex() -> FlexMessage:
 
 
 def make_registration_flex(register_url: str) -> FlexMessage:
+    _notice_contents = [
+        FlexText(
+            text="⚠️ ご利用には会員登録が必要です",
+            weight="bold",
+            size="sm",
+            color="#c2410c",
+            wrap=True,
+        ),
+        FlexText(
+            text="お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）",
+            size="xs",
+            color="#9a3412",
+            wrap=True,
+            margin="sm",
+        ),
+    ]
+    if EMAIL_VERIFICATION_ENABLED:
+        # 修正理由: 事前の説明なくメール認証を求められるとユーザーが驚くため、
+        # タップする前の時点で大学メールアドレスによる本人確認があることを明示する
+        _notice_contents.append(FlexText(
+            text="📧 大学メールアドレスによるメール認証を行います",
+            size="xs",
+            color="#9a3412",
+            wrap=True,
+            margin="sm",
+        ))
     return FlexMessage(
         alt_text="🎓 神大ライフハックへようこそ！会員登録をお願いします",
         contents=FlexBubble(
@@ -294,22 +323,7 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         padding_all="md",
                         background_color="#fff7ed",
                         corner_radius="md",
-                        contents=[
-                            FlexText(
-                                text="⚠️ ご利用には会員登録が必要です",
-                                weight="bold",
-                                size="sm",
-                                color="#c2410c",
-                                wrap=True,
-                            ),
-                            FlexText(
-                                text="お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）",
-                                size="xs",
-                                color="#9a3412",
-                                wrap=True,
-                                margin="sm",
-                            ),
-                        ],
+                        contents=_notice_contents,
                     ),
                 ],
                 padding_all="lg",

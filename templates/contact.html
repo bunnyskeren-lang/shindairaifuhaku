@@ -121,6 +121,8 @@
     // フォーム本体をブラー＋オーバーレイで覆って触れなくし、会員登録を促す
     const LIFF_ID = "{{ liff_id }}";
     const REGISTER_LIFF_ID = "{{ register_liff_id }}";
+    const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
+    const EMAIL_VERIFY_URL = "{{ email_verify_url }}";
 
     function showOverlay(html) {
       document.getElementById('authOverlayBox').innerHTML = html;
@@ -190,6 +192,12 @@
       }
 
       if (!data.found) {
+        if (EMAIL_VERIFICATION_ENABLED) {
+          // 修正理由: 初めての利用者はプロフィール作成前に大学メールでの本人確認を
+          // 済ませる必要があるため、/registerへ直接誘導せずゲートページへ誘導する
+          location.replace(EMAIL_VERIFY_URL);
+          return;
+        }
         const registerUrl = REGISTER_LIFF_ID ? `https://liff.line.me/${REGISTER_LIFF_ID}` : '/register';
         showOverlay(`<div class="text-4xl">🎓</div>
           <p class="text-sm text-gray-600">⚠️ お問い合わせには会員登録が必要です</p>
