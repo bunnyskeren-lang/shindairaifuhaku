@@ -109,6 +109,37 @@ async def test_register_existing_user_allowed_when_email_verification_enabled(ht
 
 
 @pytest.mark.asyncio
+async def test_register_missing_faculty_field_shows_friendly_error(http_client_factory, monkeypatch, test_sessionmaker):
+    """54a0821の回帰テスト。/api/registerのForm引数が全てForm(...)(必須)だった頃は、
+    POSTボディにfaculty自体が含まれないと生の{"detail":[...]}バリデーションエラーが
+    そのまま表示されていた。Form("")化により、既存の日本語エラーメッセージ分岐へ
+    流れることを固定する。"""
+    _fake_verify(monkeypatch)
+    _stub_unlink_rich_menu(monkeypatch)
+    client = http_client_factory(profile_api, monkeypatch)
+
+    form = {k: v for k, v in VALID_FORM.items() if k != "faculty"}
+    resp = await client.post("/api/register", data=form)
+    assert resp.status_code == 400
+    assert "detail" not in resp.text
+    assert "学部を選択してください" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_register_missing_department_field_shows_friendly_error(http_client_factory, monkeypatch, test_sessionmaker):
+    """54a0821の回帰テスト。departmentがPOSTボディに含まれない場合も同様。"""
+    _fake_verify(monkeypatch)
+    _stub_unlink_rich_menu(monkeypatch)
+    client = http_client_factory(profile_api, monkeypatch)
+
+    form = {k: v for k, v in VALID_FORM.items() if k != "department"}
+    resp = await client.post("/api/register", data=form)
+    assert resp.status_code == 400
+    assert "detail" not in resp.text
+    assert "学科を選択してください" in resp.text
+
+
+@pytest.mark.asyncio
 async def test_register_new_user_sees_promo_course_link(http_client_factory, monkeypatch, test_sessionmaker):
     _fake_verify(monkeypatch)
     _stub_unlink_rich_menu(monkeypatch)
