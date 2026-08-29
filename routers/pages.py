@@ -83,6 +83,24 @@ async def liff_review(request: Request):
             "request": request,
             "liff_id": REVIEW_LIFF_ID,
             "base_url": APP_URL,
+            "redirect_path": "/",
+        },
+    )
+
+
+@router.get("/liff/review/verify-email", response_class=HTMLResponse)
+async def liff_review_verify_email(request: Request):
+    # REVIEW_LIFF_IDのLINE Developersコンソール側エンドポイントURLが/liff/reviewの
+    # ため、make_email_verify_url()が生成する https://liff.line.me/{REVIEW_LIFF_ID}/verify-email
+    # は実際には /liff/review/verify-email に展開される。このパスで/verify-emailへ
+    # 中継する(2026-08-29、この不整合により404になっていた不具合の修正)。
+    return templates.TemplateResponse(
+        "liff/review_redirect.html",
+        {
+            "request": request,
+            "liff_id": REVIEW_LIFF_ID,
+            "base_url": APP_URL,
+            "redirect_path": "/verify-email",
         },
     )
 

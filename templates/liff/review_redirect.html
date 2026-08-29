@@ -37,6 +37,7 @@
   <script>
     const LIFF_ID = "{{ liff_id }}";
     const BASE_URL = "{{ base_url }}";
+    const REDIRECT_PATH = "{{ redirect_path }}";
 
     async function main() {
       try {
@@ -48,7 +49,7 @@
         }
         const params = new URLSearchParams(location.search);
         if (userId) params.set('uid', userId);
-        location.replace(`${BASE_URL}/?${params.toString()}`);
+        location.replace(`${BASE_URL}${REDIRECT_PATH}?${params.toString()}`);
       } catch (e) {
         document.getElementById('msg').textContent = 'LINEアプリから開いてください';
       }
