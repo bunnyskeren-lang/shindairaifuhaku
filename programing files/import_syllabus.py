@@ -74,10 +74,28 @@ _HALFWIDTH_TO_FULLWIDTH_ALNUM = str.maketrans({
 _PAREN_F2H = str.maketrans("（）", "()")
 _PAREN_H2F = str.maketrans("()", "（）")
 
+_CROSSLIST_RE = re.compile(r'\((?P<kind>副|主)[：:][^)]+\)')
+
+
 def clean_name(name: str) -> str:
-    name = re.sub(r'\((?:副|主)：[^)]+\)', '', name)
+    name = _CROSSLIST_RE.sub('', name)
     name = re.sub(r'【[^】]*】', '', name)
     return name.strip()
+
+
+def is_crosslist_secondary(raw_name: str) -> bool:
+    """シラバス生データの科目名が「(副：〜)」注記付き（大学側のクロスリストで、別の
+    「(主：〜)」科目と同一の物理授業を指す）かどうかを判定する。
+
+    「(主：〜)」「(副：〜)」は同一授業に対して大学が便宜上2つの科目名を発行している
+    印で、両方をそのままsubjectsに投入すると同一授業がLINE bot上で別科目として
+    二重表示されてしまう（2026-08-29、国際人間科学部「衣環境論」等の調査で発覚。
+    全学で調査したところ経済学部の「（編入生）」科目を中心に60件以上の重複が
+    見つかり、手動で整理した）。再発防止のため、「(副：〜)」側は科目名として
+    登録せずスキップし、「(主：〜)」側だけをsubjectsに登録する。
+    """
+    m = _CROSSLIST_RE.search(raw_name)
+    return bool(m) and m.group('kind') == '副'
 
 def parse_slots(slot_str: str) -> list[tuple[str, int]]:
     slot_str = slot_str.strip()
@@ -349,7 +367,12 @@ def parse_file(filepath: str) -> list[dict]:
         year = int(year_str)
         term = parts[2].strip()
         department = parts[3].strip()
-        name = normalize_alnum(clean_name(parts[4].strip()))
+        raw_name = parts[4].strip()
+        if is_crosslist_secondary(raw_name):
+            # 「(副：〜)」側は「(主：〜)」側と同一の物理授業を指すクロスリストのため、
+            # 別科目として二重登録しない（clean_name/is_crosslist_secondaryのdocstring参照）
+            continue
+        name = normalize_alnum(clean_name(raw_name))
         instructor = parts[5].strip()
         slot_str = parts[6].strip()
         timetable_code = parts[7].strip()
