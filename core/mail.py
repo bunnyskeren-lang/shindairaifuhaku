@@ -23,7 +23,6 @@ async def send_verification_email(to_email: str, verify_url: str, user_id: str |
                     "to": [{"email": to_email}],
                     "subject": "【神大ライフハック】メールアドレス確認のお願い",
                     "htmlContent": (
-                        "<p>神大ライフハックへのレビュー投稿ありがとうございます。</p>"
                         "<p>なりすまし防止のため、以下のリンクをタップして本人確認を完了してください"
                         "（30分以内、他の方には転送しないでください）。</p>"
                         f'<p><a href="{verify_url}">{verify_url}</a></p>'
