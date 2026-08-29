@@ -74,6 +74,10 @@ async def profile_prefill(request: Request):
         "faculty": profile.faculty,
         "department": profile.department,
         "reviewed_pairs": [[sid, name] for sid, name in reviewed_rows],
+        # レビュー投稿フォーム(form_index.html)がこのフラグでオーバーレイブロックする。
+        # お問い合わせフォーム(contact.html)は意図的にこのフラグを見ず、BAN中でも
+        # 学籍番号等プリフィルは通常通り行う(BANされたユーザーの異議申立て手段のため)
+        "banned": profile.banned_at is not None,
     }
 
 

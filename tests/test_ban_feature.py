@@ -176,6 +176,35 @@ async def test_banned_user_cannot_edit_profile(http_client_factory, monkeypatch,
 
 
 @pytest.mark.asyncio
+async def test_prefill_reports_banned_flag_for_review_form_gating(http_client_factory, monkeypatch, test_sessionmaker):
+    """form_index.html(レビュー投稿フォーム)は/api/profile/prefillのbannedフラグを見て
+    フォームをオーバーレイでブロックする。student_id等の他フィールドは変えず、フラグだけ
+    追加すること(contact.htmlは同じレスポンスを見るがbannedを見ずBAN中でも学籍番号表示を
+    続けるため、既存フィールドを欠落させると壊れる)。"""
+    await _seed_profile(test_sessionmaker, BANNED_UID, banned=True)
+    _fake_verify(monkeypatch, [profile_api])
+    client = http_client_factory(profile_api, monkeypatch)
+
+    resp = await client.post("/api/profile/prefill", json={"id_token": "valid-token"})
+    data = resp.json()
+    assert data["found"] is True
+    assert data["banned"] is True
+    assert data["student_id"] == "2345678S"
+
+
+@pytest.mark.asyncio
+async def test_prefill_reports_not_banned_for_normal_user(http_client_factory, monkeypatch, test_sessionmaker):
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False)
+    _fake_verify(monkeypatch, [profile_api], user_id=OTHER_UID)
+    client = http_client_factory(profile_api, monkeypatch)
+
+    resp = await client.post("/api/profile/prefill", json={"id_token": "valid-token"})
+    data = resp.json()
+    assert data["found"] is True
+    assert data["banned"] is False
+
+
+@pytest.mark.asyncio
 async def test_non_banned_user_unaffected(http_client_factory, monkeypatch, test_sessionmaker):
     """BANチェックの追加が、通常ユーザーの正常系を巻き込んでいないことを確認する。"""
     await _seed_profile(test_sessionmaker, OTHER_UID, banned=False, complete=True)

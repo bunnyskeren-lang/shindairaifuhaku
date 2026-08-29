@@ -662,6 +662,13 @@
         return;
       }
 
+      if (d.banned) {
+        // BAN中はフォームを開かせず、そのままブロックし続ける（hideOverlayを呼ばない）
+        showOverlay(`<div class="text-4xl">🚫</div>
+          <p class="text-sm text-gray-500">現在、このアカウントはご利用を停止しております。心当たりがある場合は<a href="/contact" class="underline hover:text-indigo-500">お問い合わせフォーム</a>よりご連絡ください。</p>`);
+        return;
+      }
+
       if (!d.found) {
         if (EMAIL_VERIFICATION_ENABLED) {
           // 修正理由: 初めての投稿者はプロフィール作成前に大学メールでの本人確認を
