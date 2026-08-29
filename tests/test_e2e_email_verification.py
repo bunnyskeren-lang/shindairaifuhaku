@@ -102,7 +102,12 @@ async def test_request_rejects_student_id_taken_by_another_account(http_client_f
 
 
 @pytest.mark.asyncio
-async def test_verify_creates_profile_only_not_review(http_client_factory, monkeypatch, test_sessionmaker):
+async def test_verify_get_shows_confirm_page_without_consuming_token(http_client_factory, monkeypatch, test_sessionmaker):
+    """GETはトークンを消費しない(確認画面を表示するだけ)。実際の確定はPOSTで行う。
+
+    修正理由: 大学メールのセキュリティシステムと思われる自動アクセスが、ユーザー本人が
+    タップする前にGETでこのURLへアクセスし、ワンタイムトークンを消費してしまう事故が
+    実際に発生した(2026-08-29)。GETでは副作用を起こさないことをここで固定する。"""
     _fake_verify(monkeypatch)
     captured = _capture_mail(monkeypatch)
     request_client = http_client_factory(email_verify_api, monkeypatch)
@@ -110,8 +115,16 @@ async def test_verify_creates_profile_only_not_review(http_client_factory, monke
 
     verify_client = http_client_factory(email_verify_api, monkeypatch)
     token = _extract_token(captured["verify_url"])
-    resp = await verify_client.get(f"/api/email/verify?token={token}")
-    assert resp.status_code == 200
+    get_resp = await verify_client.get(f"/api/email/verify?token={token}")
+    assert get_resp.status_code == 200
+
+    async with test_sessionmaker() as session:
+        assert await session.get(UserProfile, UID) is None
+        pending = (await session.execute(select(EmailVerification))).scalars().one()
+        assert pending.consumed_at is None
+
+    post_resp = await verify_client.post("/api/email/verify", data={"token": token})
+    assert post_resp.status_code == 200
 
     async with test_sessionmaker() as session:
         profile = await session.get(UserProfile, UID)
@@ -134,7 +147,7 @@ async def test_verify_then_submit_rejected_until_registration_completed(http_cli
     await request_client.post("/api/email/request", data=REQUEST_FORM)
     verify_client = http_client_factory(email_verify_api, monkeypatch)
     token = _extract_token(captured["verify_url"])
-    await verify_client.get(f"/api/email/verify?token={token}")
+    await verify_client.post("/api/email/verify", data={"token": token})
 
     submit_client = http_client_factory(review_submit_api, monkeypatch)
     resp = await submit_client.post("/submit", data=SUBMIT_FORM)
@@ -163,7 +176,7 @@ async def test_verify_then_register_then_submit_creates_review(http_client_facto
     await request_client.post("/api/email/request", data=REQUEST_FORM)
     verify_client = http_client_factory(email_verify_api, monkeypatch)
     token = _extract_token(captured["verify_url"])
-    await verify_client.get(f"/api/email/verify?token={token}")
+    await verify_client.post("/api/email/verify", data={"token": token})
 
     register_client = http_client_factory(profile_api, monkeypatch)
     resp = await register_client.post("/api/register", data={
@@ -228,10 +241,12 @@ async def test_verify_rejects_already_consumed_token(http_client_factory, monkey
 
     verify_client = http_client_factory(email_verify_api, monkeypatch)
     token = _extract_token(captured["verify_url"])
-    resp1 = await verify_client.get(f"/api/email/verify?token={token}")
+    resp1 = await verify_client.post("/api/email/verify", data={"token": token})
     assert resp1.status_code == 200
-    resp2 = await verify_client.get(f"/api/email/verify?token={token}")
+    resp2 = await verify_client.post("/api/email/verify", data={"token": token})
     assert resp2.status_code == 400
+    resp3 = await verify_client.get(f"/api/email/verify?token={token}")
+    assert resp3.status_code == 400
 
 
 @pytest.mark.asyncio

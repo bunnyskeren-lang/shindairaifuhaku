@@ -97,33 +97,67 @@ async def request_email_verification(
     )
 
 
+async def _validate_token(session, token: str):
+    """トークンを検証する（DBへの書き込みは行わない）。有効ならEmailVerification行を、
+    無効なら(None, エラーメッセージ)を返す。"""
+    token_hash = _hash_token(token)
+    ev = (await session.execute(
+        select(EmailVerification).where(EmailVerification.token_hash == token_hash)
+    )).scalar_one_or_none()
+    if not ev:
+        return None, "認証リンクが無効です。お手数ですが投稿フォームからやり直してください"
+    if ev.consumed_at is not None:
+        return None, "このリンクはすでに使用されています"
+    expires_at = ev.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        return None, "認証リンクの有効期限が切れています。お手数ですが投稿フォームからもう一度お試しください"
+
+    taken = (await session.execute(
+        select(UserProfile.line_user_id).where(UserProfile.student_id == ev.student_id)
+    )).scalars().first()
+    if taken is not None and taken != ev.line_user_id:
+        return None, "この学籍番号はすでに別のアカウントで登録されています"
+    return ev, None
+
+
 @router.get("/api/email/verify")
-async def verify_email(token: str, request: Request):
+async def verify_email_confirm_page(token: str, request: Request):
+    """メール内リンクの着地点。ここではまだトークンを消費せず、確認ボタン付きの
+    画面を表示するだけにする。実際の確定はPOST /api/email/verify（ボタン押下）で行う。
+
+    修正理由: 大学メールのセキュリティシステムと思われる自動アクセスが、ユーザーが
+    実際にリンクをタップする前にGETでこのURLへアクセスし、ワンタイムトークンを
+    本人の意図なく消費してしまう事故が発生した(2026-08-29、Renderログで異なる
+    IPアドレスから同一トークンへの複数アクセスを確認)。GETでは副作用を起こさず、
+    ユーザーの明示的な操作(フォームPOST)でのみ消費するよう変更した。
+    """
     def _err(msg: str):
         return templates.TemplateResponse(
             "form_error.html", {"request": request, "message": msg}, status_code=400
         )
 
-    token_hash = _hash_token(token)
     async with AsyncSessionLocal() as session:
-        ev = (await session.execute(
-            select(EmailVerification).where(EmailVerification.token_hash == token_hash)
-        )).scalar_one_or_none()
-        if not ev:
-            return _err("認証リンクが無効です。お手数ですが投稿フォームからやり直してください")
-        if ev.consumed_at is not None:
-            return _err("このリンクはすでに使用されています")
-        expires_at = ev.expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if expires_at < datetime.now(timezone.utc):
-            return _err("認証リンクの有効期限が切れています。お手数ですが投稿フォームからもう一度お試しください")
+        _ev, err = await _validate_token(session, token)
+        if err:
+            return _err(err)
 
-        taken = (await session.execute(
-            select(UserProfile.line_user_id).where(UserProfile.student_id == ev.student_id)
-        )).scalars().first()
-        if taken is not None and taken != ev.line_user_id:
-            return _err("この学籍番号はすでに別のアカウントで登録されています")
+    return templates.TemplateResponse("form_email_confirm.html", {"request": request, "token": token})
+
+
+@router.post("/api/email/verify")
+async def verify_email_confirm(request: Request, token: str = Form(...)):
+    """確認画面のボタン押下でトークンを実際に消費し、UserProfileを作成/更新する。"""
+    def _err(msg: str):
+        return templates.TemplateResponse(
+            "form_error.html", {"request": request, "message": msg}, status_code=400
+        )
+
+    async with AsyncSessionLocal() as session:
+        ev, err = await _validate_token(session, token)
+        if err:
+            return _err(err)
 
         payload = json.loads(ev.payload)
         now = datetime.now(timezone.utc)
