@@ -1,0 +1,42 @@
+{% if reviews %}
+<div class="table-wrap">
+<table style="margin:0;border-radius:0;font-size:12px">
+  <tr style="background:#e5e7eb">
+    {% if show_course_name %}<th style="background:#e5e7eb;color:#374151;padding:6px 12px">科目</th>{% endif %}
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">担当教員</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">成績評価</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
+    <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
+  </tr>
+  {% for r in reviews %}
+  <tr style="background:{{ {'pending': '#fffbeb', 'approved': '#fff', 'rejected': '#f3f4f6'}[r.status] }}">
+    {% if show_course_name %}<td style="padding:6px 12px;white-space:nowrap;color:#6b7280;font-size:11px">{{ r.course_name }}</td>{% endif %}
+    <td style="padding:6px 12px">
+      {% if r.status == 'approved' %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
+      {% elif r.status == 'rejected' %}<span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
+      {% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>{% endif %}
+    </td>
+    <td style="padding:6px 12px">{{ r.selected_instructor or "未選択" }}</td>
+    <td style="padding:6px 12px">{{ r.submitter_name }}</td>
+    <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
+    {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
+    <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method|grading_summary }}</td>
+    <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
+    <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
+    <td style="padding:6px 12px;white-space:nowrap">
+      {% if r.status != 'approved' %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
+      {% if r.status != 'rejected' %}<form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" data-confirm="却下しますか？"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">却下</button></form>{% endif %}
+      {% if r.status == 'rejected' %}<form method="post" action="/admin/reviews/restore/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn" style="padding:3px 10px;font-size:11px;background:#6b7280;color:#fff">待機中に戻す</button></form>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}
+<p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
+{% endif %}

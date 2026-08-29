@@ -87,52 +87,26 @@ async def admin_courses(
                 extra_ids.update(m.id for m in members_by_label.get(label, []))
         query_ids = sorted(set(course_ids) | extra_ids)
 
-        cs_instr_rows = []
+        # 担当教員・レビューの中身（教員URL・レビュー本文）は科目管理画面を開いた時点では
+        # 描画せず、「担当教員」「レビュー」ボタンを押した時にAjaxで取得する（lazy load）。
+        # 全科目分を毎回埋め込むと科目数3000件超で1万行超のDOM生成になり画面が重くなっていたため。
+        # ここでは件数バッジ表示に必要な軽量な集計のみ行う
+        instr_ids_by_subject: dict[int, set[int]] = defaultdict(set)
         if query_ids:
-            cs_instr_rows = (await session.execute(
-                select(CourseSection, Instructor)
-                .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            cs_pairs = (await session.execute(
+                select(CourseSection.subject_id, CourseSection.instructor_id)
                 .where(CourseSection.subject_id.in_(query_ids))
             )).all()
+            for subj_id, instr_id in cs_pairs:
+                instr_ids_by_subject[subj_id].add(instr_id)
 
-        # course_sectionごとに最新年度のsyllabus_urlをtimetable_code/departmentから動的生成
-        # （departmentはSyllabusではなくSubject.faculty/departmentから再構成。coursesは既に
-        # ロード済みなので追加JOIN不要）
-        subj_by_id = {c.id: c for c in courses}
-        for label in seen_labels_for_query:
-            for m in members_by_label.get(label, []):
-                subj_by_id.setdefault(m.id, m)
-        cs_subject_map = {cs.id: cs.subject_id for cs, _ in cs_instr_rows}
-        cs_url_map: dict[int, str] = {}
-        cs_ids_all = [cs.id for cs, _ in cs_instr_rows]
-        if cs_ids_all:
-            syl_rows = (await session.execute(
-                select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.year)
-                .where(Syllabus.course_section_id.in_(cs_ids_all), Syllabus.timetable_code.isnot(None))
-            )).all()
-            _latest_year: dict[int, int] = {}
-            for cs_id, code, year in syl_rows:
-                if cs_id in _latest_year and year <= _latest_year[cs_id]:
-                    continue
-                subj = subj_by_id.get(cs_subject_map.get(cs_id))
-                dept = syllabus_department_key(subj) if subj else ""
-                url = make_syllabus_url(code, dept)
-                if not url:
-                    continue
-                _latest_year[cs_id] = year
-                cs_url_map[cs_id] = url
-
-        reviews_data = []
+        review_agg_rows = []
         if query_ids:
-            reviews_data = (await session.execute(
-                select(Review, CourseSection.subject_id, Subject.name.label("subj_name"))
+            review_agg_rows = (await session.execute(
+                select(CourseSection.subject_id, Review.selected_instructor, Review.status, func.count(Review.id))
                 .join(CourseSection, CourseSection.id == Review.course_section_id)
-                .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(CourseSection.subject_id.in_(query_ids))
-                .order_by(
-                    case((Review.status == ReviewStatus.PENDING, 0), (Review.status == ReviewStatus.APPROVED, 1), else_=2),
-                    Review.created_at.desc(),
-                )
+                .group_by(CourseSection.subject_id, Review.selected_instructor, Review.status)
             )).all()
 
         all_instructors = [] if q or category else (await session.execute(
@@ -147,10 +121,8 @@ async def admin_courses(
         json.dumps({
             c.id: {
                 "name": c.name,
-                "instructor": "",
                 "classification": c.classification or "",
                 "category": c.category or "",
-                "syllabus_url": "",
                 "faculty": c.faculty or "",
                 "term_type": c.term_type or "",
                 "credits": float(c.credits) if c.credits is not None else 0,
@@ -162,50 +134,35 @@ async def admin_courses(
         .replace(">", "\\u003e")
     )
 
-    instructors_by_course: dict = defaultdict(list)
-    for cs, inst in sorted(cs_instr_rows, key=lambda x: (x[1].sort_order, x[1].name)):
-        instructors_by_course[cs.subject_id].append(
-            SimpleNamespace(id=inst.id, name=inst.name, url=cs_url_map.get(cs.id, ""))
-        )
+    instructor_count_by_course: dict[int, int] = {
+        subj_id: len(ids) for subj_id, ids in instr_ids_by_subject.items()
+    }
 
+    # 科目カードのレビューボタンを教員ごとに分割表示するための集計（担当教員未選択は「未選択」にまとめる）。
     # 修正理由: Subject.nameにはUNIQUE制約が無く同名科目が複数存在しうるため、
     # 科目名でキーイングすると別レコードのレビューが同名科目のカードに混在して表示される。
-    # instructors_by_courseと同様にSubject.id（subject_id）でキーイングする。
-    reviews_by_course: dict = defaultdict(list)
-    for rev, subj_id, subj_name in reviews_data:
-        reviews_by_course[subj_id].append(SimpleNamespace(
-            id=rev.id,
-            course_name=subj_name,
-            comment=rev.content,
-            content=rev.content,
-            rating=rev.rating,
-            ease_rating=rev.ease_rating,
-            grading_method=rev.grading_method,
-            status=rev.status,
-            selected_instructor=rev.selected_instructor,
-            created_at=rev.created_at,
-            submitter_name=rev.submitter_name,
-            nickname=rev.nickname,
-            academic_year=rev.academic_year,
-            student_id=rev.student_id,
-        ))
-
-    # 科目カードのレビューボタンを教員ごとに分割表示するための集計（担当教員未選択は「未選択」にまとめる）
+    # Subject.id（subject_id）でキーイングする。
     _summary_tmp: dict = defaultdict(dict)
-    for rev, subj_id, _subj_name in reviews_data:
-        instructor_name = rev.selected_instructor or "未選択"
+    for subj_id, selected_instructor, status, cnt in review_agg_rows:
+        instructor_name = selected_instructor or "未選択"
         bucket = _summary_tmp[subj_id].setdefault(
             instructor_name,
             {"instructor_name": instructor_name, "total": 0, ReviewStatus.PENDING: 0, ReviewStatus.APPROVED: 0, ReviewStatus.REJECTED: 0},
         )
-        bucket["total"] += 1
-        bucket[rev.status] += 1
+        bucket["total"] += cnt
+        bucket[status] += cnt
     review_summary_by_course: dict = {
         subj_id: sorted(
             (SimpleNamespace(**v) for v in by_instructor.values()),
             key=lambda s: (s.instructor_name == "未選択", s.instructor_name),
         )
         for subj_id, by_instructor in _summary_tmp.items()
+    }
+    review_total_by_course: dict[int, int] = {
+        subj_id: sum(s.total for s in summary) for subj_id, summary in review_summary_by_course.items()
+    }
+    pending_count_by_course: dict[int, int] = {
+        subj_id: sum(getattr(s, ReviewStatus.PENDING) for s in summary) for subj_id, summary in review_summary_by_course.items()
     }
 
     # groupby順を保持するため事前グループ化
@@ -223,43 +180,28 @@ async def admin_courses(
             continue
         members = members_by_label.get(label, [c])
         ids = [m.id for m in members]
-        member_id_set = set(ids)
 
-        combined_instructors = []
-        seen_inst_ids: set = set()
+        combined_instr_ids: set = set()
         for mid in ids:
-            for inst in instructors_by_course.get(mid, []):
-                if inst.id in seen_inst_ids:
-                    continue
-                seen_inst_ids.add(inst.id)
-                combined_instructors.append(inst)
+            combined_instr_ids |= instr_ids_by_subject.get(mid, set())
 
-        combined_reviews = []
-        pending_count = 0
         summary_tmp_grp: dict = {}
-        for rev, subj_id, subj_name in reviews_data:
-            if subj_id not in member_id_set:
-                continue
-            combined_reviews.append(SimpleNamespace(
-                id=rev.id, course_name=subj_name, comment=rev.content, content=rev.content,
-                rating=rev.rating, ease_rating=rev.ease_rating, grading_method=rev.grading_method,
-                status=rev.status, selected_instructor=rev.selected_instructor, created_at=rev.created_at,
-                submitter_name=rev.submitter_name, nickname=rev.nickname, academic_year=rev.academic_year,
-                student_id=rev.student_id,
-            ))
-            if rev.status == ReviewStatus.PENDING:
-                pending_count += 1
-            instructor_name = rev.selected_instructor or "未選択"
-            bucket = summary_tmp_grp.setdefault(
-                instructor_name,
-                {"instructor_name": instructor_name, "total": 0, ReviewStatus.PENDING: 0, ReviewStatus.APPROVED: 0, ReviewStatus.REJECTED: 0},
-            )
-            bucket["total"] += 1
-            bucket[rev.status] += 1
+        for mid in ids:
+            for s in review_summary_by_course.get(mid, []):
+                bucket = summary_tmp_grp.setdefault(
+                    s.instructor_name,
+                    {"instructor_name": s.instructor_name, "total": 0, ReviewStatus.PENDING: 0, ReviewStatus.APPROVED: 0, ReviewStatus.REJECTED: 0},
+                )
+                bucket["total"] += s.total
+                bucket[ReviewStatus.PENDING] += getattr(s, ReviewStatus.PENDING)
+                bucket[ReviewStatus.APPROVED] += getattr(s, ReviewStatus.APPROVED)
+                bucket[ReviewStatus.REJECTED] += getattr(s, ReviewStatus.REJECTED)
         review_summary = sorted(
             (SimpleNamespace(**v) for v in summary_tmp_grp.values()),
             key=lambda s: (s.instructor_name == "未選択", s.instructor_name),
         )
+        pending_count = sum(getattr(s, ReviewStatus.PENDING) for s in review_summary)
+        review_total = sum(s.total for s in review_summary)
 
         primary = members[0]
         group_rows_by_label[label] = SimpleNamespace(
@@ -268,9 +210,9 @@ async def admin_courses(
             label=label,
             members=members,
             ids=ids,
-            instructors=combined_instructors,
-            reviews=combined_reviews,
+            instructor_count=len(combined_instr_ids),
             review_summary=review_summary,
+            review_total=review_total,
             pending_count=pending_count,
             category=primary.category or "",
             classification=primary.classification or "",
@@ -335,9 +277,10 @@ async def admin_courses(
         "class_counts": class_counts,
         "courses_data": courses_data,
         "groups_data": groups_data,
-        "reviews_by_course": reviews_by_course,
         "review_summary_by_course": review_summary_by_course,
-        "instructors_by_course": instructors_by_course,
+        "review_total_by_course": review_total_by_course,
+        "pending_count_by_course": pending_count_by_course,
+        "instructor_count_by_course": instructor_count_by_course,
         "all_instructors": all_instructors,
         "all_faculties": all_faculties,
         "error": msg,
@@ -347,6 +290,91 @@ async def admin_courses(
         "total_pages": total_pages,
         "url_prefix": "/admin/courses?page=",
     })
+
+
+@router.get("/admin/courses/panel/instructors")
+async def admin_courses_panel_instructors(
+    ids: str = Query(...), editable: int = Query(0), _: str = Depends(check_admin),
+):
+    id_list = _parse_group_ids(ids)
+    if not id_list:
+        return JSONResponse({"ok": True, "html": ""})
+
+    async with AsyncSessionLocal() as session:
+        cs_instr_rows = (await session.execute(
+            select(CourseSection, Instructor)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .where(CourseSection.subject_id.in_(id_list))
+        )).all()
+        subjects = (await session.execute(
+            select(Subject).where(Subject.id.in_(id_list))
+        )).scalars().all()
+        subj_by_id = {c.id: c for c in subjects}
+        cs_subject_map = {cs.id: cs.subject_id for cs, _ in cs_instr_rows}
+        cs_url_map: dict[int, str] = {}
+        cs_ids_all = [cs.id for cs, _ in cs_instr_rows]
+        if cs_ids_all:
+            syl_rows = (await session.execute(
+                select(Syllabus.course_section_id, Syllabus.timetable_code, Syllabus.year)
+                .where(Syllabus.course_section_id.in_(cs_ids_all), Syllabus.timetable_code.isnot(None))
+            )).all()
+            _latest_year: dict[int, int] = {}
+            for cs_id, code, year in syl_rows:
+                if cs_id in _latest_year and year <= _latest_year[cs_id]:
+                    continue
+                subj = subj_by_id.get(cs_subject_map.get(cs_id))
+                dept = syllabus_department_key(subj) if subj else ""
+                url = make_syllabus_url(code, dept)
+                if not url:
+                    continue
+                _latest_year[cs_id] = year
+                cs_url_map[cs_id] = url
+
+    instructors = []
+    seen_inst_ids: set = set()
+    for cs, inst in sorted(cs_instr_rows, key=lambda x: (x[1].sort_order, x[1].name)):
+        if inst.id in seen_inst_ids:
+            continue
+        seen_inst_ids.add(inst.id)
+        instructors.append(SimpleNamespace(id=inst.id, name=inst.name, url=cs_url_map.get(cs.id, "")))
+
+    html = templates.env.get_template("admin/_instructor_chips.html").render(
+        instructors=instructors,
+        editable=bool(editable),
+        course_id=id_list[0] if len(id_list) == 1 else None,
+    )
+    return JSONResponse({"ok": True, "html": html})
+
+
+@router.get("/admin/courses/panel/reviews")
+async def admin_courses_panel_reviews(ids: str = Query(...), _: str = Depends(check_admin)):
+    id_list = _parse_group_ids(ids)
+    reviews = []
+    if id_list:
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(
+                select(Review, CourseSection.subject_id, Subject.name.label("subj_name"))
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
+                .where(CourseSection.subject_id.in_(id_list))
+                .order_by(
+                    case((Review.status == ReviewStatus.PENDING, 0), (Review.status == ReviewStatus.APPROVED, 1), else_=2),
+                    Review.created_at.desc(),
+                )
+            )).all()
+        for rev, subj_id, subj_name in rows:
+            reviews.append(SimpleNamespace(
+                id=rev.id, course_name=subj_name, comment=rev.content, content=rev.content,
+                rating=rev.rating, ease_rating=rev.ease_rating, grading_method=rev.grading_method,
+                status=rev.status, selected_instructor=rev.selected_instructor, created_at=rev.created_at,
+                submitter_name=rev.submitter_name, nickname=rev.nickname, academic_year=rev.academic_year,
+                student_id=rev.student_id,
+            ))
+
+    html = templates.env.get_template("admin/_review_table.html").render(
+        reviews=reviews, show_course_name=len(id_list) != 1,
+    )
+    return JSONResponse({"ok": True, "html": html})
 
 
 @router.post("/admin/courses/{course_id}/move")

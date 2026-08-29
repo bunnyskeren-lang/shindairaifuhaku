@@ -28,12 +28,12 @@
   <td style="white-space:nowrap;width:64px;color:#9ca3af;font-size:11px">統合</td>
   <td class="actions">
     <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
-            onclick="event.stopPropagation();toggleRow('inst-{{ row.key }}')">
-      👨‍🏫 担当教員{% if row.instructors %} {{ row.instructors | length }}人{% endif %}
+            onclick="event.stopPropagation();toggleRow('inst-{{ row.key }}','{{ row.ids | join(',') }}',false)">
+      👨‍🏫 担当教員{% if row.instructor_count %} {{ row.instructor_count }}人{% endif %}
     </button>
     <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
-            onclick="event.stopPropagation();toggleReviews('rv-{{ row.key }}')">
-      レビュー {{ row.reviews | length }}件{% if row.pending_count %} <span class="badge-pending">待機中{{ row.pending_count }}</span>{% endif %}
+            onclick="event.stopPropagation();toggleReviews('rv-{{ row.key }}','{{ row.ids | join(',') }}')">
+      レビュー {{ row.review_total }}件{% if row.pending_count %} <span class="badge-pending">待機中{{ row.pending_count }}</span>{% endif %}
     </button>
     {% if row.review_summary %}
     <div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">
@@ -58,62 +58,15 @@
 <tr id="inst-{{ row.key }}" {{ sub_attrs|safe }} style="display:none">
   <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
     <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員（統合科目{{ row.members | length }}件の合計）</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-      {% for inst in row.instructors %}
-      <span class="chip">
-        {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
-      </span>
-      {% else %}
-      <span style="color:#9ca3af;font-size:12px">まだ登録なし</span>
-      {% endfor %}
+    <div class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <span style="color:#9ca3af;font-size:12px">読み込み中...</span>
     </div>
     <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">統合科目のため教員の追加・削除はできません。個別に操作したい場合は科目名で検索してください。</p>
   </td>
 </tr>
 <tr id="rv-{{ row.key }}" {{ sub_attrs_rv|safe }} style="display:none">
-  <td colspan="4" style="padding:0;background:#f9fafb">
-    {% if row.reviews %}
-    <div class="table-wrap">
-    <table style="margin:0;border-radius:0;font-size:12px">
-      <tr style="background:#e5e7eb">
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">科目</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">担当教員</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">成績評価</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
-        <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
-      </tr>
-      {% for r in row.reviews %}
-      <tr style="background:{{ {'pending': '#fffbeb', 'approved': '#fff', 'rejected': '#f3f4f6'}[r.status] }}">
-        <td style="padding:6px 12px;white-space:nowrap;color:#6b7280;font-size:11px">{{ r.course_name }}</td>
-        <td style="padding:6px 12px">
-          {% if r.status == 'approved' %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
-          {% elif r.status == 'rejected' %}<span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
-          {% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>{% endif %}
-        </td>
-        <td style="padding:6px 12px">{{ r.selected_instructor or "未選択" }}</td>
-        <td style="padding:6px 12px">{{ r.submitter_name }}</td>
-        <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
-        {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
-        <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method|grading_summary }}</td>
-        <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
-        <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
-        <td style="padding:6px 12px;white-space:nowrap">
-          {% if r.status != 'approved' %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
-          {% if r.status != 'rejected' %}<form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" data-confirm="却下しますか？"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">却下</button></form>{% endif %}
-          {% if r.status == 'rejected' %}<form method="post" action="/admin/reviews/restore/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn" style="padding:3px 10px;font-size:11px;background:#6b7280;color:#fff">待機中に戻す</button></form>{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-    </div>
-    {% else %}
-    <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
-    {% endif %}
+  <td colspan="4" style="padding:0;background:#f9fafb" class="review-panel-body">
+    <p style="padding:12px 16px;color:#9ca3af;margin:0">読み込み中...</p>
   </td>
 </tr>
 {% endmacro %}
@@ -282,8 +235,7 @@
   {{ group_row(row, sgid, pgid) }}
   {% else %}
   {% set c = row.course %}
-  {% set reviews = reviews_by_course[c.id] %}
-  {% set pending_count = reviews | selectattr("status", "equalto", "pending") | list | length %}
+  {% set pending_count = pending_count_by_course.get(c.id, 0) %}
   <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
     <td>
       {{ c.name }}
@@ -297,12 +249,12 @@
     </td>
     <td class="actions">
       <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
-              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
-        👨‍🏫 担当教員{% if instructors_by_course[c.id] %} {{ instructors_by_course[c.id] | length }}人{% endif %}
+              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}','{{ c.id }}',true)">
+        👨‍🏫 担当教員{% if instructor_count_by_course.get(c.id) %} {{ instructor_count_by_course.get(c.id) }}人{% endif %}
       </button>
       <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
-              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
-        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
+              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}','{{ c.id }}')">
+        レビュー {{ review_total_by_course.get(c.id, 0) }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
       </button>
       {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
@@ -316,16 +268,8 @@
   <tr id="inst-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="inst-row" style="display:none">
     <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
       <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員</div>
-      <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        {% for inst in instructors_by_course[c.id] %}
-        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" class="chip">
-          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
-          <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
-                  style="background:none;border:none;cursor:pointer;color:var(--accent-light);font-size:12px;padding:0;line-height:1" title="削除">✕</button>
-        </span>
-        {% else %}
-        <span id="inst-empty-{{ c.id }}" style="color:#9ca3af;font-size:12px">まだ登録なし</span>
-        {% endfor %}
+      <div id="inst-list-{{ c.id }}" class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="color:#9ca3af;font-size:12px">読み込み中...</span>
       </div>
       <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
@@ -337,47 +281,8 @@
     </td>
   </tr>
   <tr id="rv-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="review-row" style="display:none">
-    <td colspan="4" style="padding:0;background:#f9fafb">
-      {% if reviews %}
-      <div class="table-wrap">
-      <table style="margin:0;border-radius:0;font-size:12px">
-        <tr style="background:#e5e7eb">
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">担当教員</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">成績評価</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
-        </tr>
-        {% for r in reviews %}
-        <tr style="background:{{ {'pending': '#fffbeb', 'approved': '#fff', 'rejected': '#f3f4f6'}[r.status] }}">
-          <td style="padding:6px 12px">
-            {% if r.status == 'approved' %}<span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
-            {% elif r.status == 'rejected' %}<span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
-            {% else %}<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>{% endif %}
-          </td>
-          <td style="padding:6px 12px">{{ r.selected_instructor or "未選択" }}</td>
-          <td style="padding:6px 12px">{{ r.submitter_name }}</td>
-          <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
-          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
-          <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method|grading_summary }}</td>
-          <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
-          <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
-          <td style="padding:6px 12px;white-space:nowrap">
-            {% if r.status != 'approved' %}<form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button></form>{% endif %}
-            {% if r.status != 'rejected' %}<form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0" data-confirm="却下しますか？"><button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">却下</button></form>{% endif %}
-            {% if r.status == 'rejected' %}<form method="post" action="/admin/reviews/restore/{{ r.id }}" style="display:inline;margin:0"><button type="submit" class="btn" style="padding:3px 10px;font-size:11px;background:#6b7280;color:#fff">待機中に戻す</button></form>{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
-      </div>
-      {% else %}
-      <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
-      {% endif %}
+    <td colspan="4" style="padding:0;background:#f9fafb" class="review-panel-body">
+      <p style="padding:12px 16px;color:#9ca3af;margin:0">読み込み中...</p>
     </td>
   </tr>
   {% endif %}
@@ -400,8 +305,7 @@
   {{ group_row(row, gid=gid) }}
   {% else %}
   {% set c = row.course %}
-  {% set reviews = reviews_by_course[c.id] %}
-  {% set pending_count = reviews | selectattr("status", "equalto", "pending") | list | length %}
+  {% set pending_count = pending_count_by_course.get(c.id, 0) %}
   <tr class="{{ gid }}" style="display:none">
     <td>
       {{ c.name }}
@@ -417,12 +321,12 @@
     </td>
     <td class="actions">
       <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
-              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}')">
-        👨‍🏫 担当教員{% if instructors_by_course[c.id] %} {{ instructors_by_course[c.id] | length }}人{% endif %}
+              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}','{{ c.id }}',true)">
+        👨‍🏫 担当教員{% if instructor_count_by_course.get(c.id) %} {{ instructor_count_by_course.get(c.id) }}人{% endif %}
       </button>
       <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
-              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}')">
-        レビュー {{ reviews | length }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
+              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}','{{ c.id }}')">
+        レビュー {{ review_total_by_course.get(c.id, 0) }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
       </button>
       {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
@@ -437,16 +341,8 @@
   <tr id="inst-{{ c.id }}" class="{{ gid }} inst-row" style="display:none">
     <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
       <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員</div>
-      <div id="inst-list-{{ c.id }}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        {% for inst in instructors_by_course[c.id] %}
-        <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" class="chip">
-          {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
-          <button type="button" onclick="deleteInstructor({{ c.id }}, {{ inst.id }}, this)"
-                  style="background:none;border:none;cursor:pointer;color:var(--accent-light);font-size:12px;padding:0;line-height:1" title="削除">✕</button>
-        </span>
-        {% else %}
-        <span id="inst-empty-{{ c.id }}" style="color:#9ca3af;font-size:12px">まだ登録なし</span>
-        {% endfor %}
+      <div id="inst-list-{{ c.id }}" class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="color:#9ca3af;font-size:12px">読み込み中...</span>
       </div>
       <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
@@ -458,64 +354,8 @@
     </td>
   </tr>
   <tr id="rv-{{ c.id }}" class="{{ gid }} review-row" style="display:none">
-    <td colspan="4" style="padding:0;background:#f9fafb">
-      <!-- レビュー -->
-      {% if reviews %}
-      <table style="margin:0;border-radius:0;font-size:12px">
-        <tr style="background:#e5e7eb">
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">状態</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">担当教員</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">投稿者</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">評価</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">楽単</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">成績評価</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">コメント</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px">日時</th>
-          <th style="background:#e5e7eb;color:#374151;padding:6px 12px"></th>
-        </tr>
-        {% for r in reviews %}
-        <tr style="background:{{ {'pending': '#fffbeb', 'approved': '#fff', 'rejected': '#f3f4f6'}[r.status] }}">
-          <td style="padding:6px 12px">
-            {% if r.status == 'approved' %}
-            <span style="background:#10b981;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">承認済</span>
-            {% elif r.status == 'rejected' %}
-            <span style="background:#6b7280;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">却下</span>
-            {% else %}
-            <span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">待機中</span>
-            {% endif %}
-          </td>
-          <td style="padding:6px 12px">{{ r.selected_instructor or "未選択" }}</td>
-          <td style="padding:6px 12px">{{ r.submitter_name }}</td>
-          <td style="padding:6px 12px;white-space:nowrap;color:#f59e0b">{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
-          {% set _e = {'C':1,'B':2,'A':3,'S':4,'SS':5}.get(r.ease_rating, 0) %}<td style="padding:6px 12px;white-space:nowrap;color:var(--accent-light)">{{ "★" * _e }}{{ "☆" * (5 - _e) }}</td>
-          <td style="padding:6px 12px;max-width:180px;word-break:break-word;color:#6b7280;font-size:11px">{{ r.grading_method|grading_summary }}</td>
-          <td style="padding:6px 12px;max-width:240px;word-break:break-word">{{ r.comment }}</td>
-          <td style="padding:6px 12px;white-space:nowrap;color:#9ca3af">{{ r.created_at | jst }}</td>
-          <td style="padding:6px 12px;white-space:nowrap">
-            {% if r.status != 'approved' %}
-            <form method="post" action="/admin/reviews/approve/{{ r.id }}" style="display:inline;margin:0">
-              <button type="submit" class="btn btn-primary" style="padding:3px 10px;font-size:11px">承認</button>
-            </form>
-            {% endif %}
-            {% if r.status != 'rejected' %}
-            <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="display:inline;margin:0"
-                  data-confirm="却下しますか？">
-              <button type="submit" class="btn btn-danger" style="padding:3px 10px;font-size:11px">却下</button>
-            </form>
-            {% endif %}
-            {% if r.status == 'rejected' %}
-            <form method="post" action="/admin/reviews/restore/{{ r.id }}" style="display:inline;margin:0">
-              <button type="submit" class="btn" style="padding:3px 10px;font-size:11px;background:#6b7280;color:#fff">待機中に戻す</button>
-            </form>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
-      </div>
-      {% else %}
-      <p style="padding:12px 16px;color:#9ca3af;margin:0">レビューなし</p>
-      {% endif %}
+    <td colspan="4" style="padding:0;background:#f9fafb" class="review-panel-body">
+      <p style="padding:12px 16px;color:#9ca3af;margin:0">読み込み中...</p>
     </td>
   </tr>
   {% endif %}
@@ -628,13 +468,27 @@ function toggleGroup(id, headerTr) {
   var arrow = headerTr.querySelector('.grp-arrow');
   if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
 }
-function toggleReviews(id) {
+function toggleReviews(id, ids) {
   const tr = document.getElementById(id);
-  tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+  const willShow = tr.style.display === 'none';
+  if (willShow && ids && tr.dataset.loaded !== '1') {
+    const body = tr.querySelector('.review-panel-body');
+    fetchJson('/admin/courses/panel/reviews?ids=' + encodeURIComponent(ids))
+      .then(function(data) { body.innerHTML = data.html; tr.dataset.loaded = '1'; })
+      .catch(function() { body.innerHTML = '<p style="padding:12px 16px;color:#dc2626;margin:0">読み込みに失敗しました</p>'; });
+  }
+  tr.style.display = willShow ? 'table-row' : 'none';
 }
-function toggleRow(id) {
+function toggleRow(id, ids, editable) {
   const tr = document.getElementById(id);
-  tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+  const willShow = tr.style.display === 'none';
+  if (willShow && ids && tr.dataset.loaded !== '1') {
+    const list = tr.querySelector('.inst-chip-list');
+    fetchJson('/admin/courses/panel/instructors?ids=' + encodeURIComponent(ids) + '&editable=' + (editable ? 1 : 0))
+      .then(function(data) { list.innerHTML = data.html; tr.dataset.loaded = '1'; })
+      .catch(function() { list.innerHTML = '<span style="color:#dc2626;font-size:12px">読み込みに失敗しました</span>'; });
+  }
+  tr.style.display = willShow ? 'table-row' : 'none';
 }
 function toggleCard(id, headerEl) {
   const el = document.getElementById(id);
