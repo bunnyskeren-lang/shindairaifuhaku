@@ -266,8 +266,8 @@ _KYOYO_PATTERN_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r'^化学実験[12]$'), "教養(自然)"),
     (re.compile(r'^基礎地学[12]$'), "教養(自然)"),
     (re.compile(r'^基礎(有機化学|無機化学|物理化学)[12]$'), "教養(自然)"),
-    (re.compile(r'^微分積分(入門)?[1234]'), "教養(自然)"),
-    (re.compile(r'^線形代数(入門)?[1234]'), "教養(自然)"),
+    (re.compile(r'^微分積分(入門)?[1234]'), "共通専門基礎科目"),
+    (re.compile(r'^線形代数(入門)?[1234]'), "共通専門基礎科目"),
     (re.compile(r'^数理統計[12]'), "教養(自然)"),
     (re.compile(r'^熱力学基礎'), "教養(自然)"),
     (re.compile(r'^物理学(入門|実験)'), "教養(自然)"),
@@ -279,7 +279,7 @@ _KYOYO_PATTERN_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r'^量子力学基礎$'), "教養(自然)"),
     (re.compile(r'^電磁気学基礎[12]$'), "教養(自然)"),
     (re.compile(r'^放射線科学$'), "教養(自然)"),
-    (re.compile(r'^情報科学[12]$'), "教養(自然)"),
+    (re.compile(r'^情報科学[12]$'), "共通専門基礎科目"),
     (re.compile(r'^第三外国語（(ドイツ語|フランス語)）T[1234]$'), "教養(外国語第2)"),
     (re.compile(r'^外国語セミナー[A-F]（(ドイツ語|フランス語|英語)）$'), "教養(外国語第3)"),
     (re.compile(r'^多言語セミナー[1234]（(ウクライナ語|ハンガリー語|モンゴル語|ラテン語)）$'), "教養(外国語第3)"),
@@ -298,6 +298,9 @@ _KYOYO_PATTERN_MAP: list[tuple[re.Pattern, str]] = [
 
 KYOYO_FACULTY = "教養教育院"
 KYOYO_UNCLASSIFIED = "教養(未分類)"
+# 教養教育院が開講するが理系学部の必修科目として「専門」扱いする分類
+# （微分積分・線形代数・情報科学など。教養(自然)と違いcategory="専門"になる）
+KYOYO_KYOTSU_SENMON_KISO = "共通専門基礎科目"
 
 
 def is_kyoyo_department(department: str) -> bool:
@@ -461,10 +464,11 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             if subj is None:
                 if also_courses:
                     if is_kyoyo:
+                        kyoyo_cls = classify_kyoyo(c["name"]) or KYOYO_UNCLASSIFIED
                         subj = Subject(
                             name=c["name"],
-                            classification=classify_kyoyo(c["name"]) or KYOYO_UNCLASSIFIED,
-                            category="教養",
+                            classification=kyoyo_cls,
+                            category="専門" if kyoyo_cls == KYOYO_KYOTSU_SENMON_KISO else "教養",
                             faculty=KYOYO_FACULTY,
                             reading="",
                             term_type=normalize_term_type(c["term"]),
