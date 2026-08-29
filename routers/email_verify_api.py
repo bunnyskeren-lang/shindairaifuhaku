@@ -89,9 +89,13 @@ async def request_email_verification(
         token = await create_pending_verification(session, uid, sid, {"name": name})
 
     to_email = student_email(sid)
-    await send_verification_email(
+    sent = await send_verification_email(
         to_email, f"{APP_URL}/api/email/verify?token={token}", user_id=uid,
     )
+    if not sent:
+        # 修正理由: 送信失敗（Brevo API障害・レート上限等）を握りつぶして常に「送信しました」画面を
+        # 返していたため、ユーザーは実際には届かないメールをいつまでも待つことになっていた
+        return _err("確認メールの送信に失敗しました。時間をおいて再度お試しいただくか、お問い合わせフォームからご連絡ください")
     return templates.TemplateResponse(
         "form_email_sent.html", {"request": request, "email": to_email, "liff_id": REVIEW_LIFF_ID}
     )
@@ -210,7 +214,7 @@ async def resend_verification(request: Request, _rl: None = Depends(_resend_rate
         sid = ev.student_id
         await session.commit()
 
-    await send_verification_email(
+    sent = await send_verification_email(
         student_email(sid), f"{APP_URL}/api/email/verify?token={new_token}", user_id=uid,
     )
-    return {"ok": True}
+    return {"ok": sent}

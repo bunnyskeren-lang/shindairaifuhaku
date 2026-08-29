@@ -89,6 +89,22 @@ async def test_request_creates_pending_verification_without_profile(http_client_
 
 
 @pytest.mark.asyncio
+async def test_request_shows_error_when_mail_send_fails(http_client_factory, monkeypatch, test_sessionmaker):
+    """Brevo API障害等でsend_verification_email()がFalseを返した場合、握りつぶして
+    「送信しました」画面を返さず、エラー画面を返すことを固定する(2026-08-29修正)。"""
+    _fake_verify(monkeypatch)
+
+    async def _fake_send_failure(to_email, verify_url, user_id=None):
+        return False
+    monkeypatch.setattr(email_verify_api, "send_verification_email", _fake_send_failure)
+    client = http_client_factory(email_verify_api, monkeypatch)
+
+    resp = await client.post("/api/email/request", data=REQUEST_FORM)
+    assert resp.status_code == 400
+    assert "送信に失敗" in resp.text
+
+
+@pytest.mark.asyncio
 async def test_request_rejects_student_id_taken_by_another_account(http_client_factory, monkeypatch, test_sessionmaker):
     _fake_verify(monkeypatch)
     _capture_mail(monkeypatch)
@@ -293,3 +309,22 @@ async def test_resend_reissues_token_for_pending_verification(http_client_factor
     assert resp_old.status_code == 400
     resp_new = await verify_client.get(f"/api/email/verify?token={second_token}")
     assert resp_new.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_resend_reports_failure_when_mail_send_fails(http_client_factory, monkeypatch, test_sessionmaker):
+    """再送信時もsend_verification_email()の結果をそのまま{"ok": ...}へ反映することを固定する
+    (2026-08-29修正、以前は送信失敗時も常にok:Trueを返しフロント側の失敗表示が出せなかった)。"""
+    _fake_verify(monkeypatch)
+    captured = _capture_mail(monkeypatch)
+    request_client = http_client_factory(email_verify_api, monkeypatch)
+    await request_client.post("/api/email/request", data=REQUEST_FORM)
+    assert captured
+
+    async def _fake_send_failure(to_email, verify_url, user_id=None):
+        return False
+    monkeypatch.setattr(email_verify_api, "send_verification_email", _fake_send_failure)
+    resend_client = http_client_factory(email_verify_api, monkeypatch)
+    resp = await resend_client.post("/api/email/resend", json={"id_token": "valid-token"})
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
