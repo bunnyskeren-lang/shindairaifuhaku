@@ -80,11 +80,11 @@ async def profile_prefill(request: Request):
 @router.post("/api/register")
 async def register_profile(
     request: Request,
-    id_token: str = Form(...),
-    name: str = Form(...),
-    student_id: str = Form(...),
-    faculty: str = Form(...),
-    department: str = Form(...),
+    id_token: str = Form(""),
+    name: str = Form(""),
+    student_id: str = Form(""),
+    faculty: str = Form(""),
+    department: str = Form(""),
     _rl=Depends(_register_rate_limit),
 ):
     def _form_error(msg: str):
