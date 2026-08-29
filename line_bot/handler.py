@@ -134,8 +134,7 @@ def _build_alpha_split_menu(rows: list, category: str, classification: str,
 async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> list:
     """絞り込み・ソート済みのSubject行から、末尾バリアント統合・シラバス/レビューURL付与済みの
     FlexBubble一覧を組み立てる（8バブル単位のカルーセル分割は呼び出し側で行う）。"""
-    course_name_set = {c.name for c in rows}
-    seen_base: set[str] = set()
+    name_fd_set = {(c.name, c.faculty or "", c.department or "") for c in rows}
 
     # Pre-compute numeric variant groups: ベースの漢字部分が同じで、末尾のアルファベット・
     # 数字だけが違う科目（例: 生物学各論A1/A2/C1/C2、微分積分1/2/3/4）を1行にまとめる。
@@ -155,23 +154,46 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
     _num_base_for = {n: _key for _key, _items in _num_bases.items() if len(_items) >= 2 for n, _, _, _ in _items}
     seen_num_base: set[tuple[str, str, str]] = set()
 
+    # Pre-compute letter variant groups (末尾A/B/C/D)。numvariantと同じくfaculty+department単位で
+    # グループを分ける（2026-08-29以前はcourse_name_setによる科目名のみの判定で、別学部・別学科の
+    # 同名A/B/C/Dバリアントを誤統合するバグがあった。core/subject_variants.pyのcompute_variant_groups()は
+    # 767d6beで先に修正済みだったが、LINE bot一覧を実描画するこちらの複製実装は追随していなかった）
+    _letter_bases: dict[tuple[str, str, str], list[str]] = {}
+    for _c in rows:
+        _name = _c.name
+        if not _name or len(_name) <= 1 or _name[-1] not in ('A', 'B', 'C', 'D'):
+            continue
+        _base = _name[:-1]
+        _key = (_base, _c.faculty or "", _c.department or "")
+        if _key in _letter_bases:
+            continue
+        _variants = [s for s in 'ABCD' if (_base + s, _key[1], _key[2]) in name_fd_set]
+        if len(_variants) >= 2:
+            _letter_bases[_key] = _variants
+    _letter_base_for: dict[str, tuple[str, str, str]] = {
+        _key[0] + s: _key for _key, _variants in _letter_bases.items() for s in _variants
+    }
+    seen_letter_base: set[tuple[str, str, str]] = set()
+
     # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
-    _sem_bases: dict[str, list] = defaultdict(list)
+    # （letter variantと同じ理由でfaculty+department単位に統一）
+    _sem_bases: dict[tuple[str, str, str], list] = defaultdict(list)
     for _c in rows:
         _m = _VSEM.match(_c.name)
         if _m:
             _base_lang = _m.group(1) + _m.group(3)
-            _sem_bases[_base_lang].append((_c.name, _m.group(2)))
-    _sem_variant_names = {n for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
-    _sem_base_for = {n: _b for _b, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
-    seen_sem_base: set[str] = set()
+            _sem_bases[(_base_lang, _c.faculty or "", _c.department or "")].append((_c.name, _m.group(2)))
+    _sem_variant_names = {n for _items in _sem_bases.values() if len(_items) >= 2 for n, _ in _items}
+    _sem_base_for = {n: _key for _key, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
+    seen_sem_base: set[tuple[str, str, str]] = set()
 
     # syllabus_url は全件キャッシュから取得（DBアクセスなし）
     _sv_by_id = await cache.get_syllabus_urls_cached()
     course_syllabus_urls: dict[str, str] = {c.name: _sv_by_id[c.id] for c in rows if c.id in _sv_by_id}
     course_liff_urls: dict[str, str] = {c.name: make_course_liff_url(c.id) for c in rows}
-    # entries内タプルの末尾2要素は、numvariant種別の科目のみ(faculty, department)を保持する
-    # （_num_basesの正しいキーをclassificationからだけでは復元できないため。他の種別では""）
+    # entries内タプルの末尾2要素は、variant/numvariant種別の科目は(faculty, department)を保持する
+    # （_num_bases/_letter_bases/_sem_basesの正しいキーをclassificationからだけでは復元できないため。
+    # singleでは""）
     groups: dict[str, list[tuple[str, str, str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
     cls_faculty: dict[str, str] = {}
@@ -187,17 +209,15 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                 seen_sem_base.add(base)
                 items_sorted = sorted(_sem_bases[base], key=lambda x: x[1])
                 suffix = "/".join(sk for _, sk in items_sorted)
-                groups[cls].append((base, f"variant:{suffix}", "", ""))
+                groups[cls].append((base[0], f"variant:{suffix}", base[1], base[2]))
             continue
-        if name and name[-1] in ('A', 'B', 'C', 'D') and len(name) > 1:
-            base = name[:-1]
-            variants = [s for s in 'ABCD' if base + s in course_name_set]
-            if len(variants) >= 2:
-                if base not in seen_base:
-                    seen_base.add(base)
-                    suffix = "/".join(variants)
-                    groups[cls].append((base, f"variant:{suffix}", "", ""))
-                continue
+        if name in _letter_base_for:
+            key = _letter_base_for[name]
+            if key not in seen_letter_base:
+                seen_letter_base.add(key)
+                suffix = "/".join(_letter_bases[key])
+                groups[cls].append((key[0], f"variant:{suffix}", key[1], key[2]))
+            continue
         if name in _num_variant_names:
             key = _num_base_for[name]
             if key not in seen_num_base:
@@ -219,8 +239,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
             suffixes = kind.split(":", 1)[1].split("/")
             if any(name + s in reviewed_names for s in suffixes):
                 return True
-            if name in _sem_bases:
-                return any(n in reviewed_names for n, _ in _sem_bases[name])
+            key = (name, fd[0], fd[1])
+            if key in _sem_bases:
+                return any(n in reviewed_names for n, _ in _sem_bases[key])
             return False
         if kind.startswith("numvariant:"):
             key = (name, fd[0], fd[1])
@@ -236,8 +257,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
         if kind == "single":
             return course_syllabus_urls.get(name, "")
         if kind.startswith("variant:"):
-            if name in _sem_bases:
-                for n, _ in sorted(_sem_bases[name], key=lambda x: x[1]):
+            key = (name, fd[0], fd[1])
+            if key in _sem_bases:
+                for n, _ in sorted(_sem_bases[key], key=lambda x: x[1]):
                     url = course_syllabus_urls.get(n, "")
                     if url:
                         return url

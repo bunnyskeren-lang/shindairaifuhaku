@@ -13,7 +13,10 @@ compute_variant_groups()（レビュー投稿フォーム/api/preload・LINE bot
 グループ化そのものの手順（seenの積み上げ方・グループラベルの組み立て）はline_bot/handler.py
 _build_course_bubbles()内にFlex Message構築と密結合した形で別途実装されている。
 「どの科目名同士が同じグループになるか」の判定規則自体（上記_vnum_match/_VSEM）は共有済みだが、
-グループの束ね方の手順を変更する場合は_build_course_bubbles()側も合わせて確認すること。
+グループの束ね方の手順を変更する場合は_build_course_bubbles()側も合わせて確認すること
+（2026-08-29、この関数側の手順は文字バリアント・セミナー系の判定基準がfaculty/department
+非依存のまま追随できておらず、compute_variant_groups()側だけ先に修正されていた状態で
+1日近く残っていた。修正の際は判定規則だけでなく、束ね方の手順側の同期漏れも都度確認すること）。
 
 compute_variant_display_groups() は管理画面の科目一覧（routers/admin/courses.py）向けに
 別途追加したもので、一括編集・一括削除という破壊的操作の誤爆を避けるため、文字バリアント・
