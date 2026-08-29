@@ -6,7 +6,7 @@
 {% block content %}
 <div class="card">
   <table>
-    <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th><th>レビュー</th><th>閲覧権チケット</th></tr>
+    <tr><th>名前</th><th>学籍番号</th><th>LINE ID</th><th>最終アクセス</th><th>レビュー</th><th>閲覧権チケット</th><th>利用状況</th></tr>
     {% for u in users %}
     {% set rv = review_map.get(u.student_id) if u.student_id else None %}
     {% set tk = ticket_map.get(u.user_id) %}
@@ -50,9 +50,30 @@
         <span style="font-size:12px;color:#d1d5db">―</span>
         {% endif %}
       </td>
+      <td>
+        {% if u.banned_at %}
+        <div style="font-size:11px;color:#ef4444;font-weight:700;margin-bottom:4px">🚫 利用停止中</div>
+        {% if u.ban_reason %}
+        <div style="font-size:10px;color:#9ca3af;margin-bottom:4px">{{ u.ban_reason }}</div>
+        {% endif %}
+        <form method="post" action="/admin/users/unban/{{ u.user_id }}"
+              data-confirm="このユーザーの利用停止を解除しますか？" data-confirm-ok="解除する" style="margin:0">
+          <input type="hidden" name="next" value="/admin/users?page={{ page }}">
+          <button class="btn btn-xs">解除する</button>
+        </form>
+        {% else %}
+        <form method="post" action="/admin/users/ban/{{ u.user_id }}"
+              data-confirm="このユーザーのLINE bot利用を永久に停止しますか？" data-confirm-ok="停止する"
+              style="margin:0;display:flex;flex-direction:column;gap:4px">
+          <input type="hidden" name="next" value="/admin/users?page={{ page }}">
+          <input type="text" name="reason" placeholder="停止理由（内部メモ・任意）" style="font-size:11px;padding:4px 6px">
+          <button class="btn btn-xs btn-danger">利用停止にする</button>
+        </form>
+        {% endif %}
+      </td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="empty">ユーザーなし</td></tr>
+    <tr><td colspan="7" class="empty">ユーザーなし</td></tr>
     {% endfor %}
   </table>
   {{ pager(page, total_pages, total, url_prefix) }}

@@ -91,6 +91,13 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
         ))
+        # 虚偽投稿等を理由にLINE bot利用を永久停止する機能用（banned_at:NULL=有効、値あり=停止中）
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS ban_reason TEXT"
+        ))
         # user_profiles / timetable_profiles 統合（学部・学年・学科を登録必須項目としてuser_profilesに集約）
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS faculty TEXT"

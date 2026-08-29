@@ -135,6 +135,10 @@
 
   <div id="reviews-section"></div>
 
+  <p style="font-size:11px;color:#94a3b8;text-align:center;margin:8px 0 0">
+    掲載内容に問題があれば<a href="/contact" target="_blank" style="color:#6366f1;text-decoration:underline">お問い合わせフォーム</a>までご連絡ください
+  </p>
+
   <div class="actions">
     <a id="btn-review" class="btn btn-primary" href="#">✏️ レビューを投稿</a>
     <a id="btn-syllabus" class="btn btn-secondary" href="#" style="display:none">📄 シラバスを見る</a>
@@ -148,6 +152,8 @@ const REGISTER_LIFF_ID = "{{ register_liff_id }}";
 const REVIEW_FORM_URL = "{{ review_form_url }}";
 const BASE_URL = "{{ base_url }}";
 const UNLOCK_REWARD = {{ unlock_reward }};
+const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
+const EMAIL_VERIFY_URL = "{{ email_verify_url }}";
 
 // 修正理由: レビュー閲覧には会員登録を必須にするため、未登録の間はページ本体を
 // ブラー＋オーバーレイで覆って触れなくし、会員登録へ誘導する
@@ -279,6 +285,12 @@ async function main() {
         body: JSON.stringify({ id_token: idToken }),
       });
       const status = await statusRes.json();
+      if (!status.found && EMAIL_VERIFICATION_ENABLED) {
+        // 修正理由: UserProfileが全く無い(=大学メール認証が未済)場合は、
+        // /registerへ直接誘導せずメール認証ゲートへ誘導する
+        location.replace(EMAIL_VERIFY_URL);
+        return;
+      }
       if (!status.complete) {
         needsRegistration = true;
       }

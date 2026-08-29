@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from core import cache
+from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
     EASE_ORDER,
@@ -437,6 +437,7 @@ async def unlock_course(course_id: int, request: Request, _rl=Depends(_unlock_ra
     uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     if not uid:
         raise HTTPException(status_code=401, detail="LINEログインの確認に失敗しました")
+    await moderation.raise_if_banned(uid)
 
     async with AsyncSessionLocal() as session:
         subject = await session.get(Subject, course_id)

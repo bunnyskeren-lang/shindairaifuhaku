@@ -50,6 +50,11 @@ class UserProfile(TimestampMixin, Base):
     # REVIEW_APPROVAL_UNLOCK_CREDITS枚が付与され、任意の科目のレビュー閲覧解除（SubjectUnlock作成）に
     # 1枚ずつ消費する
     unlock_credits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+    # 虚偽投稿等を理由にLINE bot利用を永久停止した日時。NULL＝有効、値あり＝停止中。
+    # 解除時はNULLに戻す（core/moderation.py・routers/admin/users_errors.py参照）
+    banned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # BAN時の管理者向け内部メモ。ユーザーには開示しない
+    ban_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class ErrorLog(TimestampMixin, Base):

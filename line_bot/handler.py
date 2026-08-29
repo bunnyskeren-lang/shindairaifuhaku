@@ -19,10 +19,11 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
 from sqlalchemy import select
 
-from core import cache, line_client
+from core import cache, line_client, moderation
 from core.activity_log import save_error_log, save_log_bg
 from core.config import (
     APP_URL,
+    BAN_MESSAGE_TEXT,
     EASE_ORDER,
     EASE_STARS,
     EMAIL_VERIFICATION_ENABLED,
@@ -49,6 +50,10 @@ from line_bot.flex_builders import (
     make_search_result_card,
 )
 from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
+
+
+async def _user_banned(user_id: str) -> bool:
+    return await moderation.is_banned(user_id)
 
 
 async def _registration_incomplete(user_id: str) -> bool:
@@ -890,6 +895,10 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
     log_text は受信ログに残す生テキスト。"""
     try:
         asyncio.create_task(save_log_bg(user_id, "in", log_text))
+        if await _user_banned(user_id):
+            await line_client.reply(event.reply_token, [TextMessage(text=BAN_MESSAGE_TEXT)])
+            _log_reply_timing(f"{label}:banned", t0)
+            return
         if await _registration_incomplete(user_id):
             register_url = await _registration_entry_url(user_id)
             await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
@@ -923,6 +932,14 @@ async def process_events(events) -> None:
 
             if isinstance(event, FollowEvent):
                 user_id = event.source.user_id
+                if await _user_banned(user_id):
+                    try:
+                        await line_client.reply(event.reply_token, [TextMessage(text=BAN_MESSAGE_TEXT)])
+                        asyncio.create_task(save_log_bg(user_id, "in", "[follow:banned]"))
+                    except Exception as exc:
+                        await save_error_log(exc, user_id=user_id, action="follow_banned")
+                    _log_reply_timing("follow:banned", _t0)
+                    continue
                 try:
                     register_url = await _registration_entry_url(user_id)
                     await line_client.reply(event.reply_token, [make_registration_flex(register_url)])

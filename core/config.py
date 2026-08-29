@@ -62,6 +62,9 @@ REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
 # 「データサイエンス基礎学」（教養教育院）
 WELCOME_PROMO_SUBJECT_ID = 2
 
+# 虚偽投稿等でLINE bot利用を永久停止（UserProfile.banned_at）されたユーザーへの定型応答
+BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止しております。心当たりがある場合は、お問い合わせフォームよりご連絡ください。"
+
 
 def student_email(student_id: str) -> str:
     """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""

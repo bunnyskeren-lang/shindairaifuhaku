@@ -335,7 +335,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | テーブル | 用途 |
 |----------|------|
 | `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順） |
-| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み。`unlock_credits`はレビュー閲覧権チケットの残数） |
+| `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み。`unlock_credits`はレビュー閲覧権チケットの残数。`banned_at`は虚偽投稿等を理由にLINE bot利用を永久停止した日時（NULL＝有効）、`ban_reason`は管理者向け内部メモでユーザーには非公開。停止・解除は`/admin/users`から操作し`core/moderation.py`が判定を仲介する） |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
 | `error_logs` | サーバーエラーログ |

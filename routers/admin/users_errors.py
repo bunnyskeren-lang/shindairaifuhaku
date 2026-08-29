@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
+from core import cache
 from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
 from core.security import check_admin
 from core.templates import templates
@@ -35,6 +38,8 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 UserProfile.name,
                 UserProfile.student_id,
                 UserProfile.unlock_credits,
+                UserProfile.banned_at,
+                UserProfile.ban_reason,
             )
             .outerjoin(last_seen_subq, last_seen_subq.c.user_id == UserProfile.line_user_id)
             .order_by(last_seen_subq.c.last_seen.desc().nulls_last())
@@ -145,3 +150,41 @@ async def admin_errors(request: Request, _: str = Depends(check_admin), page: in
         "total": total,
         "url_prefix": "/admin/errors?page=",
     })
+
+
+def _safe_admin_redirect(next_path: str) -> str:
+    # オープンリダイレクト防止。管理画面配下のパスのみ許可する
+    return next_path if next_path.startswith("/admin/") else "/admin/users"
+
+
+@router.post("/admin/users/ban/{line_user_id}")
+async def admin_user_ban(
+    line_user_id: str,
+    reason: str = Form(default=""),
+    next: str = Form(default="/admin/users"),
+    _: str = Depends(check_admin),
+):
+    async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, line_user_id)
+        if profile and profile.banned_at is None:
+            profile.banned_at = datetime.now(timezone.utc)
+            profile.ban_reason = reason.strip()[:500] or None
+            await session.commit()
+    cache.invalidate_ban_cache(line_user_id)
+    return RedirectResponse(_safe_admin_redirect(next), status_code=303)
+
+
+@router.post("/admin/users/unban/{line_user_id}")
+async def admin_user_unban(
+    line_user_id: str,
+    next: str = Form(default="/admin/users"),
+    _: str = Depends(check_admin),
+):
+    async with AsyncSessionLocal() as session:
+        profile = await session.get(UserProfile, line_user_id)
+        if profile and profile.banned_at is not None:
+            profile.banned_at = None
+            profile.ban_reason = None
+            await session.commit()
+    cache.invalidate_ban_cache(line_user_id)
+    return RedirectResponse(_safe_admin_redirect(next), status_code=303)

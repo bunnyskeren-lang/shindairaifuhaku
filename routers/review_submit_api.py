@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import func, select
 
-from core import cache
+from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
     MAX_REVIEWS_PER_COURSE_SECTION,
@@ -58,6 +58,8 @@ async def submit(
     uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
         return _form_error("LINEログインの確認に失敗しました。LINEアプリの「レビュー投稿」から開き直してください")
+    if await moderation.is_banned(uid):
+        return _form_error("現在、このアカウントはご利用を停止しております。心当たりがある場合はお問い合わせフォームよりご連絡ください")
 
     async with AsyncSessionLocal() as session:
         # 学部をまたいで同名科目が実在しうるため、ここでは存在確認のみ行い

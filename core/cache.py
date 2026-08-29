@@ -415,6 +415,33 @@ def invalidate_admin_revoke_cache() -> None:
     _admin_revoke_epoch_at = None
 
 
+# ── BAN状態キャッシュ（core/moderation.py用） ──────────────────────────
+# registration_completeとは異なりBAN→解除の双方向遷移があるため、片方向の
+# 「一度Trueなら覚え続ける」パターンは使えない。TTLを短くし、かつ管理画面での
+# BAN/解除操作の直後にinvalidate_ban_cache()を呼んで反映遅延を抑える設計にする
+_BAN_STATUS_CACHE_TTL = 60
+_ban_status_cache: dict[str, tuple[bool, float]] = {}
+
+
+async def get_ban_status_cached(line_user_id: str) -> bool:
+    cached = _ban_status_cache.get(line_user_id)
+    if cached is not None:
+        banned, at = cached
+        if time.monotonic() - at < _BAN_STATUS_CACHE_TTL:
+            return banned
+    from models import UserProfile
+    async with AsyncSessionLocal() as s:
+        profile = await s.get(UserProfile, line_user_id)
+    banned = bool(profile and profile.banned_at is not None)
+    _ban_status_cache[line_user_id] = (banned, time.monotonic())
+    return banned
+
+
+def invalidate_ban_cache(line_user_id: str) -> None:
+    """管理画面のBAN/解除操作の直後に呼ぶ。呼び忘れると最大_BAN_STATUS_CACHE_TTL秒古い状態が使われる。"""
+    _ban_status_cache.pop(line_user_id, None)
+
+
 async def warm_query_caches() -> None:
     import asyncio
     await asyncio.gather(
