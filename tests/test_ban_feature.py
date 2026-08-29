@@ -123,6 +123,31 @@ async def test_banned_user_cannot_submit_review(http_client_factory, monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_banned_user_cannot_view_course_reviews(http_client_factory, monkeypatch, test_sessionmaker):
+    """BANはunlock/submitだけでなく、リッチメニュー経由のレビュー閲覧そのものも封じること
+    (2026-08-29、閲覧だけは素通りしていた不備の修正)を検証する。"""
+    await _seed_profile(test_sessionmaker, BANNED_UID, banned=True)
+    course_id = await _seed_course(test_sessionmaker)
+    _fake_verify(monkeypatch, [liff_api])
+    client = http_client_factory(liff_api, monkeypatch)
+
+    resp = await client.get(f"/api/course/{course_id}", params={"id_token": "valid-token"})
+    assert resp.status_code == 403
+    assert "利用を停止" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_non_banned_user_can_view_course_reviews(http_client_factory, monkeypatch, test_sessionmaker):
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False)
+    course_id = await _seed_course(test_sessionmaker)
+    _fake_verify(monkeypatch, [liff_api], user_id=OTHER_UID)
+    client = http_client_factory(liff_api, monkeypatch)
+
+    resp = await client.get(f"/api/course/{course_id}", params={"id_token": "valid-token"})
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_banned_user_cannot_unlock_course(http_client_factory, monkeypatch, test_sessionmaker):
     await _seed_profile(test_sessionmaker, BANNED_UID, banned=True)
     course_id = await _seed_course(test_sessionmaker)

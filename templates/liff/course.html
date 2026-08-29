@@ -269,7 +269,18 @@ async function main() {
   }
 
   const coursePromise = fetch(`${BASE_URL}/api/course/${courseId}?id_token=${encodeURIComponent(idToken)}`)
-    .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
+    .then(async res => {
+      if (!res.ok) {
+        let detail = "";
+        if (res.status === 403) {
+          try { detail = (await res.json()).detail || ""; } catch(e) {}
+        }
+        const err = new Error(detail || String(res.status));
+        err.detail = detail;
+        throw err;
+      }
+      return res.json();
+    });
 
   // 修正理由: レビュー閲覧には会員登録を必須にするため、以前は未登録時に/registerへ
   // 即リダイレクトしていたが、コンテンツをブラーした状態で背後に見せつつオーバーレイで
@@ -304,7 +315,9 @@ async function main() {
     data = await coursePromise;
   } catch(e) {
     document.getElementById("loading").style.display = "none";
-    document.getElementById("error").style.display = "block";
+    const errEl = document.getElementById("error");
+    if (e && e.detail) errEl.textContent = e.detail;
+    errEl.style.display = "block";
     return;
   }
 

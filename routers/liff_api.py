@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
-    EASE_ORDER,
+    BAN_MESSAGE_TEXT, EASE_ORDER,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.grading_method import parse_grading_method
@@ -262,6 +262,10 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
 async def api_course(course_id: int, request: Request, id_token: str = ""):
     try:
         uid = await verify_liff_id_token(id_token, request) if id_token else None
+        # BANされたユーザーは書き込み系(unlock/submit)だけでなく、リッチメニュー経由の
+        # レビュー閲覧そのものも封じる(2026-08-29、閲覧だけは素通りしていた不備の修正)
+        if uid and await moderation.is_banned(uid):
+            raise HTTPException(status_code=403, detail=BAN_MESSAGE_TEXT)
         # 修正理由: subject取得とcs_instr取得は元々別々のAsyncSessionLocal()を開いており、
         # どちらもcourse_id確定後に順番に実行するだけの依存関係なので、DB接続の往復を
         # 1回分減らすため同じセッションにまとめる。
