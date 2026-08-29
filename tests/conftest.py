@@ -64,6 +64,18 @@ def _reset_admin_revoke_cache():
 
 
 @pytest.fixture(autouse=True)
+def _reset_ban_status_cache():
+    """core.cache._ban_status_cacheはline_user_id単位でTTL付きモジュールグローバルに
+    キャッシュされる。テストごとに独立したSQLiteインメモリDBを使うため、同じuidを
+    複数テストで使い回すとBAN状態のキャッシュが古いDBの結果のまま次のテストへ
+    漏れて誤判定を起こす(2026-08-29、tests/test_ban_feature.py追加時に発覚)。"""
+    from core import cache
+    cache._ban_status_cache.clear()
+    yield
+    cache._ban_status_cache.clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limit_buckets():
     """core.rate_limit._bucketsはIPアドレス単位のグローバル状態で、テストクライアントは
     毎回同一の疑似IPを使うため、レート制限テスト以外のE2Eテストが429で誤って
