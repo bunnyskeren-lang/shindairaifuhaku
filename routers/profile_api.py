@@ -3,7 +3,7 @@ import re as _re
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import select
 
-from core import cache, line_client
+from core import cache, line_client, moderation
 from core.activity_log import save_error_log
 from core.config import (
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, EMAIL_VERIFICATION_ENABLED,
@@ -95,6 +95,8 @@ async def register_profile(
     uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
         return _form_error("LINEログインの確認に失敗しました。LINEアプリから開き直してください")
+    if await moderation.is_banned(uid):
+        return _form_error("現在、このアカウントはご利用を停止しております。心当たりがある場合はお問い合わせフォームよりご連絡ください")
     name = _re.sub(r'[\s　]+', '', name)
     if not name:
         return _form_error("お名前を入力してください")
