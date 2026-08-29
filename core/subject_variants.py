@@ -1,9 +1,11 @@
 """科目名の末尾バリアント統合ロジック（レビュー投稿フォーム・LINE bot・管理画面用）。
 
-_vnum_match()・_VSEM（文字A/B/C/Dとセミナー系はfaculty/department非依存、数字・ローマ数字は
-faculty+department単位。2026-08-25以前はclassification単位だったが、classificationは学部を
-またいで共有されうる表示カテゴリでしかなく、subjects.nameの実際の識別単位（UNIQUE制約
-name+faculty+department）と食い違うことがあったため統一した）はここが唯一の定義で、
+_vnum_match()・_VSEM（文字A/B/C/D・セミナー系・数字/ローマ数字のいずれもfaculty+department単位で
+グループ化する。2026-08-25以前はclassification単位だったが、classificationは学部をまたいで
+共有されうる表示カテゴリでしかなく、subjects.nameの実際の識別単位（UNIQUE制約
+name+faculty+department）と食い違うことがあったため統一した。文字バリアント・セミナー系は
+2026-08-29以前はfaculty/department非依存で判定しており、別学部の同名バリアントを誤統合する
+バグがあったため数字バリアントと同じ基準に揃えた）はここが唯一の定義で、
 line_bot/handler.py はこのモジュールからimportして使う（2026-08-25以前は同一ロジックを
 手動で複製していたが、byte単位の同期漏れリスクをなくすため一本化した）。
 
@@ -48,28 +50,32 @@ def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) 
     科目名はマップに含めない。
     """
     names = [n for n, _, _ in names_with_faculty_dept]
-    name_set = set(names)
     fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
+    name_fd_set = set(names_with_faculty_dept)
     result: dict[str, str] = {}
 
-    # 1) セミナー系（外国語セミナーA(英語) → 外国語セミナー(英語)）
-    sem_bases: dict[str, list[str]] = {}
+    # 1) セミナー系（外国語セミナーA(英語) → 外国語セミナー(英語)、同一faculty+department単位）
+    sem_bases: dict[tuple[str, str, str], list[str]] = {}
     for name in names:
         m = _VSEM.match(name)
         if m:
-            sem_bases.setdefault(m.group(1) + m.group(3), []).append(name)
-    for base_lang, members in sem_bases.items():
+            fac, dept = fd_by_name.get(name, ("", ""))
+            sem_bases.setdefault((m.group(1) + m.group(3), fac, dept), []).append(name)
+    for (base_lang, _fac, _dept), members in sem_bases.items():
         if len(members) >= 2:
             for n in members:
                 result[n] = base_lang
 
-    # 2) 文字バリアント（末尾がA/B/C/Dのみ、数字を伴わないもの）
+    # 2) 文字バリアント（末尾がA/B/C/Dのみ、数字を伴わないもの、同一faculty+department単位でグループ化。
+    # 2026-08-29以前はfaculty/department非依存で判定しており、別学部の同名バリアントを誤統合しうる
+    # バグがあった（数字バリアントの3)は元からfaculty+department単位）。
     for name in names:
         if name in result or not name or len(name) <= 1:
             continue
         if name[-1] in ('A', 'B', 'C', 'D'):
             base = name[:-1]
-            variants = [s for s in 'ABCD' if base + s in name_set]
+            fac, dept = fd_by_name.get(name, ("", ""))
+            variants = [s for s in 'ABCD' if (base + s, fac, dept) in name_fd_set]
             if len(variants) >= 2:
                 result[name] = base
 
