@@ -224,6 +224,17 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
     if (credits > 0) {
       html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケットを1枚使って解除する</button>`;
     } else {
+      // チケット0枚のときは、静的な内訳表だけでなく「次のゴール」として
+      // 視覚的に動機づける（進捗バーは常に0%固定。承認は都度+${UNLOCK_REWARD}枚で
+      // 累積式ではないため、実データに基づく途中経過ではなく行動喚起として表示する）
+      html += `<div style="background:#f5f3ff;border-radius:10px;padding:12px 14px;margin-bottom:14px">`
+            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">`
+            + `<span style="font-size:12px;font-weight:700;color:#6d28d9">🎫 次の解除チケットまで</span>`
+            + `<span style="font-size:11px;font-weight:700;color:#7c3aed">あと1件の投稿</span></div>`
+            + `<div style="width:100%;background:#ede9fe;border-radius:999px;height:7px;overflow:hidden">`
+            + `<div style="width:0%;height:7px;border-radius:999px;background:#8b5cf6"></div></div>`
+            + `<div style="font-size:10.5px;color:#a78bfa;margin-top:6px">レビューを1件投稿して承認されると、+${UNLOCK_REWARD}枚もらえます</div>`
+            + `</div>`;
       html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
             + `今はチケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されると、チケットが${UNLOCK_REWARD}枚もらえます。</div>`;
     }
@@ -510,7 +521,16 @@ async function main() {
   const reviewUrl = REVIEW_LIFF_ID
     ? `https://liff.line.me/${REVIEW_LIFF_ID}?${reviewParams}`
     : `${REVIEW_FORM_URL}?${reviewParams}`;
-  document.getElementById("btn-review").href = reviewUrl;
+  const btnReview = document.getElementById("btn-review");
+  btnReview.href = reviewUrl;
+  // レビュー0件の科目は投稿ボタンの見た目を特別扱いし、供給が足りない科目への
+  // 投稿を後押しする（review_count===0の科目はunlocked扱いなので必ずlocked===false）
+  if (!data.locked && data.review_count === 0) {
+    btnReview.insertAdjacentHTML("beforebegin",
+      `<div style="text-align:center"><span style="font-size:11.5px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:999px;padding:5px 14px;display:inline-block">🌟 初レビューでチケット+${UNLOCK_REWARD}枚もらえます</span></div>`);
+    btnReview.textContent = "✏️ 最初のレビューを書く";
+    btnReview.style.boxShadow = "0 0 0 4px #e0e7ff, 0 6px 16px rgba(99,102,241,.35)";
+  }
 
   if (data.syllabus_url) {
     const sylBtn = document.getElementById("btn-syllabus");
@@ -522,9 +542,24 @@ async function main() {
   document.getElementById("content").style.display = "block";
 
   if (needsRegistration) {
+    // 登録ボタンだけを見せる文言のみの構成だと、登録する理由が伝わらず離脱しやすい。
+    // 登録前に得られる3つの価値を先に見せてから登録導線に進ませる（[[project_liff_ux_improvements_20260830]]参照）
     showAuthOverlay(`<div class="icon">🎓</div>
       <p>⚠️ レビュー閲覧には会員登録が必要です</p>
-      <p style="font-size:11px;color:#94a3b8">お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;text-align:left">
+        <div style="display:flex;align-items:center;gap:10px;background:#eef2ff;border-radius:10px;padding:9px 12px">
+          <span style="font-size:16px">🔓</span>
+          <span style="font-size:12.5px;color:#3730a3;font-weight:600">先輩たちのレビューがすぐ見られる</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;background:#eef2ff;border-radius:10px;padding:9px 12px">
+          <span style="font-size:16px">✏️</span>
+          <span style="font-size:12.5px;color:#3730a3;font-weight:600">レビューを書くとチケットが貯まる</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;background:#eef2ff;border-radius:10px;padding:9px 12px">
+          <span style="font-size:16px">🎓</span>
+          <span style="font-size:12.5px;color:#3730a3;font-weight:600">神戸大生なら誰でも30秒で完了</span>
+        </div>
+      </div>
       <a href="${registerUrl}" class="btn btn-primary" style="display:block;text-decoration:none">📝 今すぐ登録する（30秒）</a>
       <p style="font-size:11px;color:#94a3b8">登録することで<a href="/terms" target="_blank" style="color:#94a3b8;text-decoration:underline">利用規約</a>および<a href="/privacy" target="_blank" style="color:#94a3b8;text-decoration:underline">プライバシーポリシー</a>に同意したものとします。</p>`);
   } else {
