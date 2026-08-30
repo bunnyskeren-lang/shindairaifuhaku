@@ -29,24 +29,28 @@
         </a>
       </div>
       {% else %}
-      <p class="text-gray-500 text-sm mb-8">LINEのトーク画面に戻って、引き続きご利用ください。</p>
+      <p class="text-gray-500 text-sm mb-8">レビュー投稿フォームに戻ります。</p>
       {% endif %}
-      {% if liff_id %}<button onclick="closeLiff()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">{{ "あとで見る（閉じる）" if promo_course_url else "閉じる" }}</button>{% endif %}
+      {% if liff_id %}<button onclick="goToReviewForm()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">{{ "あとで見る（投稿フォームに戻る）" if promo_course_url else "レビュー投稿に戻る" }}</button>{% endif %}
     </div>
   </div>
   {% if liff_id %}
   <script>
-    function closeLiff() {
-      try { liff.closeWindow(); } catch (e) {}
+    const REVIEW_LIFF_URL = "{{ review_liff_url }}";
+    function goToReviewForm() {
+      location.href = REVIEW_LIFF_URL;
     }
     (async () => {
       try {
         await liff.init({ liffId: "{{ liff_id }}" });
-        // 通常は登録完了後すぐLINEのトーク画面へ自動で戻すが、初回登録直後は
-        // チケットの使い方を体験してもらう案内を読んでもらいたいため自動では閉じない
+        // 修正理由: 以前はここでliff.closeWindow()しLINEのトーク画面へ戻していたが、
+        // 会員登録はレビュー投稿フォームを開こうとしてメール認証ゲートに誘導された流れの
+        // 最終ステップであることがほとんどのため、トーク画面を経由させず投稿フォームへ
+        // 直接戻すよう変更した（2026-08-31）。初回登録直後は促進案内を読んでもらいたいため
+        // 自動遷移はせず、ボタン操作を待つ
         {% if not promo_course_url %}
         if (liff.isInClient()) {
-          setTimeout(closeLiff, 1200);
+          setTimeout(goToReviewForm, 1200);
         }
         {% endif %}
       } catch (e) {}

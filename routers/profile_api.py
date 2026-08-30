@@ -11,7 +11,7 @@ from core.config import (
     FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, STUDENT_ID_RE, LINE_USER_ID_RE,
     WELCOME_PROMO_SUBJECT_ID,
-    is_profile_complete, make_course_liff_url,
+    is_profile_complete, make_course_liff_url, make_review_liff_url,
 )
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
@@ -174,6 +174,10 @@ async def register_profile(
             "welcome_credits": REGISTRATION_WELCOME_UNLOCK_CREDITS if is_new_registration else 0,
             "promo_course_name": promo_subject_name,
             "promo_course_url": make_course_liff_url(WELCOME_PROMO_SUBJECT_ID) if promo_subject_name else "",
+            # 会員登録は「レビュー投稿フォームを開こうとしてメール認証ゲートに誘導された」流れの
+            # 最終ステップとして辿り着くのがほとんどのため、登録完了後はLINEのトーク画面を挟まず
+            # 直接レビュー投稿フォームへ戻す([[project_review_email_verification_20260824]]参照)
+            "review_liff_url": make_review_liff_url(user_id=uid),
         }
     )
 
