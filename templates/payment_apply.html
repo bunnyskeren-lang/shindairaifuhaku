@@ -92,6 +92,10 @@
         <label class="block text-sm font-semibold text-gray-700 mb-1">承認済み（未払い）レビュー数</label>
         <p id="eligibleCount" class="text-2xl font-bold text-indigo-600 mb-1">学籍番号を入力してください</p>
         <p id="eligibleAmount" class="text-xs text-gray-400 mb-4"></p>
+        <p id="eligibleZeroNotice" class="hidden text-xs text-gray-500 mb-4 leading-relaxed">
+          承認済み（未払い）のレビューが見つかりませんでした。学籍番号を投稿時と同じもので入力しているかご確認のうえ、
+          ご不明な点は<a href="/contact" class="text-indigo-500 underline">お問い合わせフォーム</a>からご連絡ください。
+        </p>
 
         <label for="amount" class="block text-sm font-semibold text-gray-700 mb-2">
           💴 申請金額（円） <span class="text-red-500">*</span>
@@ -120,6 +124,7 @@
     const studentIdError = document.getElementById('studentIdError');
     const eligibleCount = document.getElementById('eligibleCount');
     const eligibleAmount = document.getElementById('eligibleAmount');
+    const eligibleZeroNotice = document.getElementById('eligibleZeroNotice');
     const amountInput = document.getElementById('amount');
     const amountError = document.getElementById('amountError');
     const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
@@ -128,6 +133,7 @@
     async function refreshEligibility() {
       const sid = studentIdInput.value.trim().toUpperCase();
       studentIdInput.value = sid;
+      eligibleZeroNotice.classList.add('hidden');
       if (!STUDENT_ID_RE.test(sid)) {
         eligibleCount.textContent = '学籍番号を入力してください';
         eligibleAmount.textContent = '';
@@ -145,10 +151,17 @@
         }
         eligibleCount.textContent = data.count + '件';
         maxAmount = data.max_amount;
-        eligibleAmount.textContent = '申請可能な最大金額：' + maxAmount + '円（端数は次回に繰越）';
+        if (data.count === 0) {
+          eligibleAmount.textContent = '';
+          eligibleZeroNotice.classList.remove('hidden');
+        } else {
+          eligibleAmount.textContent = '申請可能な最大金額：' + maxAmount + '円（端数は次回に繰越）';
+        }
         amountInput.max = maxAmount || '';
       } catch (e) {
         eligibleCount.textContent = '取得に失敗しました';
+        eligibleAmount.textContent = '';
+        maxAmount = 0;
       }
     }
     studentIdInput.addEventListener('blur', refreshEligibility);
