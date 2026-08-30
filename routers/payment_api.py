@@ -16,7 +16,7 @@ _eligible_rate_limit = rate_limiter(max_requests=20, window_seconds=60)
 _apply_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
 _UNIT_YEN = 100
-_YEN_PER_REVIEW = 10
+_YEN_PER_REVIEW = 20
 
 
 async def _unpaid_count(session, sid: str) -> int:
