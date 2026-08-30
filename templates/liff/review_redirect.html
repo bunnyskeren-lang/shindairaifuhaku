@@ -51,7 +51,9 @@
         if (userId) params.set('uid', userId);
         location.replace(`${BASE_URL}${REDIRECT_PATH}?${params.toString()}`);
       } catch (e) {
-        document.getElementById('msg').textContent = 'LINEアプリから開いてください';
+        console.error('[liff/review] liff.init failed', e);
+        document.getElementById('msg').textContent =
+          '読み込みに失敗しました: ' + (e && (e.message || e.code || String(e)));
       }
     }
     main();
