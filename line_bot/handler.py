@@ -28,14 +28,14 @@ from core.config import (
     EASE_STARS,
     EMAIL_VERIFICATION_ENABLED,
     RICHMENU_ID_PREREGISTER,
-    REVIEW_FORM_URL,
     is_profile_complete,
     make_cls_sort,
     make_course_liff_url,
     make_email_verify_url,
     make_register_url,
+    make_review_liff_url,
 )
-from core.subject_variants import _VSEM, _vnum_match
+from core.subject_variants import compute_variant_bases
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
@@ -81,9 +81,10 @@ async def _registration_entry_url(user_id: str) -> str:
     return make_register_url(user_id)
 
 # ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
-# _vnum_match()・_VSEM は core/subject_variants.py と共有（2026-08-25、byte単位で
-# 手動同期していた複製をimportに統一。判定規則を変える場合はcore/subject_variants.py
-# 側を編集すればここにも自動的に反映される）。
+# バリアント判定・束ね方の手順はcore.subject_variants.compute_variant_bases()に一本化済み
+# （2026-08-25に判定規則の正規表現だけ共有したが、束ね方の手順自体は2026-08-30まで
+# ここに手動複製されたままで同期漏れが繰り返し起きていた。以後は
+# core/subject_variants.py側を編集すればここにも自動的に反映される）。
 
 # ── Course list carousel ────────────────────────────────────────
 
@@ -134,57 +135,22 @@ def _build_alpha_split_menu(rows: list, category: str, classification: str,
 async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> list:
     """絞り込み・ソート済みのSubject行から、末尾バリアント統合・シラバス/レビューURL付与済みの
     FlexBubble一覧を組み立てる（8バブル単位のカルーセル分割は呼び出し側で行う）。"""
-    name_fd_set = {(c.name, c.faculty or "", c.department or "") for c in rows}
+    # バリアント判定・束ね方の実体はcore.subject_variants.compute_variant_bases()に一本化済み
+    # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
+    names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows]
+    _sem_bases, _letter_bases, _num_bases = compute_variant_bases(names_with_fd)
 
-    # Pre-compute numeric variant groups: ベースの漢字部分が同じで、末尾のアルファベット・
-    # 数字だけが違う科目（例: 生物学各論A1/A2/C1/C2、微分積分1/2/3/4）を1行にまとめる。
-    # faculty/departmentが異なれば別学部・別学科の同名ベース科目（例: 工学部「制御工学Ⅰ/Ⅱ」と
-    # システム情報学部「制御工学1/2」）である可能性が高いため、base名だけでなく
-    # faculty+department単位（subjects.nameのUNIQUE制約と同じ識別単位、
-    # 2026-08-25に_handle_course_search()と同じ基準へ統一。classificationは学部を
-    # またいで共有されうる表示カテゴリでしかなく識別単位としては不正確だったため）で
-    # グループを分ける
-    _num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str]]] = defaultdict(list)
-    for _c in rows:
-        _match = _vnum_match(_c.name)
-        if _match:
-            _b, _letter, _sk, _disp = _match
-            _num_bases[(_b, _c.faculty or "", _c.department or "")].append((_c.name, _letter, _sk, _disp))
-    _num_variant_names = {n for _items in _num_bases.values() if len(_items) >= 2 for n, _, _, _ in _items}
-    _num_base_for = {n: _key for _key, _items in _num_bases.items() if len(_items) >= 2 for n, _, _, _ in _items}
+    _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _ in _items}
+    _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _ in _items}
     seen_num_base: set[tuple[str, str, str]] = set()
 
-    # Pre-compute letter variant groups (末尾A/B/C/D)。numvariantと同じくfaculty+department単位で
-    # グループを分ける（2026-08-29以前はcourse_name_setによる科目名のみの判定で、別学部・別学科の
-    # 同名A/B/C/Dバリアントを誤統合するバグがあった。core/subject_variants.pyのcompute_variant_groups()は
-    # 767d6beで先に修正済みだったが、LINE bot一覧を実描画するこちらの複製実装は追随していなかった）
-    _letter_bases: dict[tuple[str, str, str], list[str]] = {}
-    for _c in rows:
-        _name = _c.name
-        if not _name or len(_name) <= 1 or _name[-1] not in ('A', 'B', 'C', 'D'):
-            continue
-        _base = _name[:-1]
-        _key = (_base, _c.faculty or "", _c.department or "")
-        if _key in _letter_bases:
-            continue
-        _variants = [s for s in 'ABCD' if (_base + s, _key[1], _key[2]) in name_fd_set]
-        if len(_variants) >= 2:
-            _letter_bases[_key] = _variants
     _letter_base_for: dict[str, tuple[str, str, str]] = {
         _key[0] + s: _key for _key, _variants in _letter_bases.items() for s in _variants
     }
     seen_letter_base: set[tuple[str, str, str]] = set()
 
-    # Pre-compute seminar variant groups e.g. 外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)
-    # （letter variantと同じ理由でfaculty+department単位に統一）
-    _sem_bases: dict[tuple[str, str, str], list] = defaultdict(list)
-    for _c in rows:
-        _m = _VSEM.match(_c.name)
-        if _m:
-            _base_lang = _m.group(1) + _m.group(3)
-            _sem_bases[(_base_lang, _c.faculty or "", _c.department or "")].append((_c.name, _m.group(2)))
-    _sem_variant_names = {n for _items in _sem_bases.values() if len(_items) >= 2 for n, _ in _items}
-    _sem_base_for = {n: _key for _key, _items in _sem_bases.items() if len(_items) >= 2 for n, _ in _items}
+    _sem_variant_names = {n for _items in _sem_bases.values() for n, _ in _items}
+    _sem_base_for = {n: _key for _key, _items in _sem_bases.items() for n, _ in _items}
     seen_sem_base: set[tuple[str, str, str]] = set()
 
     # syllabus_url は全件キャッシュから取得（DBアクセスなし）
@@ -455,7 +421,7 @@ async def _get_rakutan_ranking() -> list:
             .group_by(Subject.id, Subject.name, Review.ease_rating)
         )).all()
     if not rows:
-        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     course_best: dict[int, tuple[str, str]] = {}
     for sid, name, ease in rows:
         if sid not in course_best or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_best[sid][1], 99):
@@ -486,7 +452,7 @@ async def _get_onitan_ranking() -> list:
             .group_by(Subject.id, Subject.name, Review.ease_rating)
         )).all()
     if not rows:
-        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     course_best: dict[int, tuple[str, str]] = {}
     for sid, name, ease in rows:
         if sid not in course_best or EASE_ORDER.get(ease, -1) > EASE_ORDER.get(course_best[sid][1], -1):
@@ -519,7 +485,7 @@ async def _get_omikuji() -> list:
         cache.get_courses_cached(),
     )
     if not reviewed_names:
-        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{REVIEW_FORM_URL}")]
+        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     pool = [cbn[name] for name in reviewed_names if name in cbn]
     random.shuffle(pool)
     selected_subjects = pool[:10]
@@ -851,7 +817,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await _handle_faculty_menu(t)
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
-        url = f"{REVIEW_FORM_URL}?uid={user_id}" if user_id else REVIEW_FORM_URL
+        url = make_review_liff_url(user_id=user_id)
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 
     if t in ["生協", "生協アプリ", "coop"]:

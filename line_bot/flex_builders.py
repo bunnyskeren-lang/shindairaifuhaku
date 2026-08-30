@@ -1,5 +1,4 @@
 import asyncio
-from urllib.parse import quote as _url_quote
 
 from linebot.v3.messaging import (
     FlexBox,
@@ -13,8 +12,8 @@ from linebot.v3.messaging import (
 
 from core import cache
 from core.config import (
-    CONTACT_URL, EASE_STARS, EMAIL_VERIFICATION_ENABLED, PRIVACY_URL, REVIEW_FORM_URL, TERMS_URL,
-    make_course_liff_url,
+    CONTACT_URL, EASE_STARS, EMAIL_VERIFICATION_ENABLED, PRIVACY_URL, TERMS_URL,
+    make_course_liff_url, make_review_liff_url,
 )
 from models import Subject
 
@@ -108,9 +107,7 @@ async def prewarm_flex_cache() -> None:
 
 
 def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
-    form_url = f"{REVIEW_FORM_URL}?course={_url_quote(course.name)}"
-    if user_id:
-        form_url += f"&uid={user_id}"
+    form_url = make_review_liff_url(course.name, user_id)
     liff_url = make_course_liff_url(course.id)
     return FlexMessage(
         alt_text=f"📖 {course.name}",
@@ -447,7 +444,7 @@ def _make_search_result_row(item: dict) -> FlexBox:
         ),
     ]
     if not item["stars"]:
-        form_url = f"{REVIEW_FORM_URL}?course={_url_quote(item['name'])}"
+        form_url = make_review_liff_url(item['name'])
         row_contents.append(
             FlexText(
                 text="✏️ レビューを投稿する", size="xxs", color="#7c3aed", margin="xs",

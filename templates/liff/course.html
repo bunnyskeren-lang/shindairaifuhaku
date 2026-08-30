@@ -150,6 +150,7 @@
 const LIFF_ID = "{{ liff_id }}";
 const REGISTER_LIFF_ID = "{{ register_liff_id }}";
 const REVIEW_FORM_URL = "{{ review_form_url }}";
+const REVIEW_LIFF_ID = "{{ review_liff_id }}";
 const BASE_URL = "{{ base_url }}";
 const UNLOCK_REWARD = {{ unlock_reward }};
 const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
@@ -472,9 +473,15 @@ async function main() {
   }
 
   // ── ボタン ──
-  const reviewUrl = userId
-    ? `${REVIEW_FORM_URL}?uid=${userId}&course=${encodeURIComponent(data.name)}`
-    : `${REVIEW_FORM_URL}?course=${encodeURIComponent(data.name)}`;
+  // 生のREVIEW_FORM_URLで開くとLINEの通常アプリ内ブラウザ扱いになりliff.isInClient()が
+  // falseになるため、他のボタン（会員登録・科目詳細等）と同様にhttps://liff.line.me/{LIFF_ID}
+  // 形式で開かせる（[[feedback_liff_links_must_use_liffline_me]]）。
+  const reviewParams = userId
+    ? `uid=${userId}&course=${encodeURIComponent(data.name)}`
+    : `course=${encodeURIComponent(data.name)}`;
+  const reviewUrl = REVIEW_LIFF_ID
+    ? `https://liff.line.me/${REVIEW_LIFF_ID}?${reviewParams}`
+    : `${REVIEW_FORM_URL}?${reviewParams}`;
   document.getElementById("btn-review").href = reviewUrl;
 
   if (data.syllabus_url) {

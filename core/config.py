@@ -1,6 +1,7 @@
 import os
 import re as _re
 from datetime import timedelta, timezone
+from urllib.parse import quote as _urllib_quote
 
 from dotenv import load_dotenv
 
@@ -227,6 +228,22 @@ def make_email_verify_url() -> str:
     if REVIEW_LIFF_ID:
         return f"https://liff.line.me/{REVIEW_LIFF_ID}/verify-email"
     return f"{APP_URL}/verify-email"
+
+
+def make_review_liff_url(course_name: str = "", user_id: str = "") -> str:
+    """レビュー投稿フォーム（/、REVIEW_LIFF_IDのエンドポイントURL）へのURL。
+    生のHTTPS URLで開かせるとLINEの通常のアプリ内ブラウザ扱いになりliff.isInClient()が
+    falseになって自動ログインできない（[[feedback_liff_links_must_use_liffline_me]]と同じ理由）。
+    必ず https://liff.line.me/{REVIEW_LIFF_ID}?course=...&uid=... 形式で開かせる。
+    REVIEW_LIFF_ID未設定時は直URLにフォールバックする。"""
+    parts = []
+    if course_name:
+        parts.append(f"course={_urllib_quote(course_name)}")
+    if user_id:
+        parts.append(f"uid={user_id}")
+    params = "&".join(parts)
+    base = f"https://liff.line.me/{REVIEW_LIFF_ID}" if REVIEW_LIFF_ID else REVIEW_FORM_URL
+    return f"{base}?{params}" if params else base
 
 
 def make_course_liff_url(course_id) -> str:
