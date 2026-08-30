@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
+    BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
     STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, make_course_liff_url,
 )
@@ -37,7 +38,17 @@ async def submit(
     academic_year: int = Form(default=0),
     _rl: None = Depends(_submit_rate_limit),
 ):
+    uid: str | None = None
+
     def _form_error(msg: str):
+        # 修正理由: バリデーション拒否は例外を投げずTemplateResponseを直接返すため、
+        # main.pyのHTTPException/Exceptionハンドラを一切通らずerror_logsに何も残らなかった。
+        # 400を返す理由を追跡できるよう明示的に記録する（レスポンスは待たせずfire-and-forget）。
+        asyncio.create_task(save_error_log(
+            RuntimeError(msg),
+            user_id=uid,
+            action=f"submit_rejected:{course_name.strip()[:150]}",
+        ))
         return templates.TemplateResponse(
             "form_error.html", {"request": request, "message": msg}, status_code=400
         )
@@ -59,7 +70,7 @@ async def submit(
     if not uid or not LINE_USER_ID_RE.match(uid):
         return _form_error("LINEログインの確認に失敗しました。LINEアプリの「レビュー投稿」から開き直してください")
     if await moderation.is_banned(uid):
-        return _form_error("現在、このアカウントはご利用を停止しております。心当たりがある場合はお問い合わせフォームよりご連絡ください")
+        return _form_error(BAN_MESSAGE_TEXT)
 
     async with AsyncSessionLocal() as session:
         # 学部をまたいで同名科目が実在しうるため、ここでは存在確認のみ行い

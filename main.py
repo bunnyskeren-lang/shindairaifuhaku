@@ -172,7 +172,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
-    if exc.status_code >= 500:
+    # 修正理由: 400番台のHTTPExceptionが一切error_logsに残らず、/submit等で
+    # クライアントが400を受け取っても管理画面から原因調査できなかった。
+    # 401/403/404/429は正規のアクセス制御・NotFoundとして日常的に大量発生するため
+    # 除外し、それ以外の4xx/5xxは記録する（302リダイレクト等はそもそも対象外）。
+    if exc.status_code >= 500 or (exc.status_code >= 400 and exc.status_code not in (401, 403, 404, 429)):
         await save_error_log(exc, action=f"HTTP{exc.status_code} {request.method} {request.url.path}")
     return await http_exception_handler(request, exc)
 
