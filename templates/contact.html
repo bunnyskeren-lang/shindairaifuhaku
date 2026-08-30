@@ -174,13 +174,11 @@
       }
     });
 
-    // ── LIFF初期化と会員登録チェック ──
-    // 修正理由: お問い合わせは会員登録済みユーザーに限定するため、未登録・未ログインの間は
-    // フォーム本体をブラー＋オーバーレイで覆って触れなくし、会員登録を促す
+    // ── LIFF初期化とログインチェック ──
+    // 修正理由: お問い合わせは会員登録(メール認証)が完了していない状態でも送信できる必要が
+    // ある(メール認証で詰まったユーザーの問い合わせ手段として案内しているため、ここで会員登録を
+    // 要求すると詰まったまま問い合わせもできない詰み状態になる)。LINEログインのみを必須とする。
     const LIFF_ID = "{{ liff_id }}";
-    const REGISTER_LIFF_ID = "{{ register_liff_id }}";
-    const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
-    const EMAIL_VERIFY_URL = "{{ email_verify_url }}";
 
     function showOverlay(html) {
       document.getElementById('authOverlayBox').innerHTML = html;
@@ -249,25 +247,11 @@
         return;
       }
 
-      if (!data.found) {
-        if (EMAIL_VERIFICATION_ENABLED) {
-          // 修正理由: 初めての利用者はプロフィール作成前に大学メールでの本人確認を
-          // 済ませる必要があるため、/registerへ直接誘導せずゲートページへ誘導する
-          location.replace(EMAIL_VERIFY_URL);
-          return;
-        }
-        const registerUrl = REGISTER_LIFF_ID ? `https://liff.line.me/${REGISTER_LIFF_ID}` : '/register';
-        showOverlay(`<div class="text-4xl">🎓</div>
-          <p class="text-sm text-gray-600">⚠️ お問い合わせには会員登録が必要です</p>
-          <p class="text-xs text-gray-400">お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）</p>
-          <a href="${registerUrl}" class="block text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">📝 今すぐ登録する（30秒）</a>
-          <p class="text-xs text-gray-400">登録することで<a href="/terms" target="_blank" class="underline hover:text-indigo-500">利用規約</a>および<a href="/privacy" target="_blank" class="underline hover:text-indigo-500">プライバシーポリシー</a>に同意したものとします。</p>`);
-        return;
-      }
-
       document.getElementById('idTokenHidden').value = idToken;
-      document.getElementById('studentIdValue').textContent = data.student_id;
-      document.getElementById('studentIdCard').classList.remove('hidden');
+      if (data.found) {
+        document.getElementById('studentIdValue').textContent = data.student_id;
+        document.getElementById('studentIdCard').classList.remove('hidden');
+      }
       hideOverlay();
       enableSubmit();
     }

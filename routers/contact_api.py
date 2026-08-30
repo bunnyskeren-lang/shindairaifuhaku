@@ -3,7 +3,7 @@ import re as _re
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
-from core.config import CONTACT_LIFF_ID, EMAIL_VERIFICATION_ENABLED, IS_DEV, REGISTER_LIFF_ID, make_email_verify_url
+from core.config import CONTACT_LIFF_ID, IS_DEV
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.templates import templates
@@ -28,9 +28,6 @@ async def contact_page(request: Request):
             "IS_DEV": IS_DEV,
             "categories": _CATEGORIES,
             "liff_id": CONTACT_LIFF_ID,
-            "register_liff_id": REGISTER_LIFF_ID,
-            "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
-            "email_verify_url": make_email_verify_url(),
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -51,16 +48,15 @@ async def contact_submit(
             "form_error.html", {"request": request, "message": msg}, status_code=400
         )
 
-    # 修正理由: お問い合わせは会員登録済みユーザーに限定するため、LIFF ID token検証済みの
-    # 本人のプロフィールから学籍番号を取得する（クライアント指定の値は信用しない）
+    # 修正理由: お問い合わせは会員登録(メール認証)が未完了でも送信できる必要があるため、
+    # LIFF ID tokenでのLINEログインのみを必須とする。プロフィールがあれば学籍番号を添える
+    # (クライアント指定の値は信用せず、あればLIFF ID token検証済みの本人のものを使う)
     uid = await verify_liff_id_token(id_token.strip(), request)
     if not uid:
         return _error("LINEログインの確認に失敗しました。LINEアプリから開き直してください")
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
-        if not profile:
-            return _error("会員登録がまだのようです。先に会員登録を済ませてください")
-        sid = profile.student_id
+        sid = profile.student_id if profile else ""
 
         cat = category.strip()
         if cat not in _CATEGORIES:
