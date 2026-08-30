@@ -20,7 +20,7 @@
 {% set sub_attrs = 'class="' ~ gid ~ ' inst-row"' %}
 {% set sub_attrs_rv = 'class="' ~ gid ~ ' review-row"' %}
 {% endif %}
-<tr {{ main_attrs|safe }} style="display:none">
+<tr id="group-row-{{ row.key }}" {{ main_attrs|safe }} style="display:none">
   <td>
     🔗 {{ row.label }}
   </td>
@@ -48,11 +48,8 @@
     {% endif %}
     <button type="button" class="btn btn-primary" style="padding:4px 10px"
             onclick="event.stopPropagation();openEditGroup('{{ row.key }}')">編集</button>
-    <form method="post" action="/admin/courses/group/delete" style="display:inline;margin:0"
-          data-confirm="統合されている{{ row.members | length }}件（{{ row.label }}）をまとめて削除しますか？">
-      <input type="hidden" name="ids" value="{{ row.ids | join(',') }}">
-      <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
-    </form>
+    <button type="button" class="btn btn-danger" style="padding:4px 10px"
+            onclick="event.stopPropagation();deleteGroup('{{ row.key }}',this)">削除</button>
   </td>
 </tr>
 <tr id="inst-{{ row.key }}" {{ sub_attrs|safe }} style="display:none">
@@ -236,7 +233,7 @@
   {% else %}
   {% set c = row.course %}
   {% set pending_count = pending_count_by_course.get(c.id, 0) %}
-  <tr data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
+  <tr id="course-row-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
     <td>
       {{ c.name }}
       {% if c.term_type %}<span class="badge-term" style="margin-left:4px">{{ c.term_type }}</span>{% endif %}
@@ -259,10 +256,8 @@
       {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
-      <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
-            data-confirm="削除しますか？">
-        <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
-      </form>
+      <button type="button" class="btn btn-danger" style="padding:4px 10px"
+              onclick="event.stopPropagation();deleteCourse({{ c.id }},this)">削除</button>
     </td>
   </tr>
   <tr id="inst-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="inst-row" style="display:none">
@@ -306,7 +301,7 @@
   {% else %}
   {% set c = row.course %}
   {% set pending_count = pending_count_by_course.get(c.id, 0) %}
-  <tr class="{{ gid }}" style="display:none">
+  <tr id="course-row-{{ c.id }}" class="{{ gid }}" style="display:none">
     <td>
       {{ c.name }}
       {% if c.term_type %}<span class="badge-term" style="margin-left:4px">{{ c.term_type }}</span>{% endif %}
@@ -331,10 +326,8 @@
       {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
-      <form method="post" action="/admin/courses/delete/{{ c.id }}" style="display:inline;margin:0"
-            data-confirm="削除しますか？">
-        <button type="submit" class="btn btn-danger" style="padding:4px 10px">削除</button>
-      </form>
+      <button type="button" class="btn btn-danger" style="padding:4px 10px"
+              onclick="event.stopPropagation();deleteCourse({{ c.id }},this)">削除</button>
     </td>
   </tr>
   <!-- 教員管理トグル行 -->
@@ -613,6 +606,53 @@ function deleteInstructor(courseId, instId, btn) {
       }
     }
   }).catch(function() { showErrorToast(); });
+}
+
+function deleteCourse(id, btn) {
+  askConfirm('削除しますか？').then(function(ok) {
+    if (!ok) return;
+    btn.disabled = true;
+    fetchJson('/admin/courses/delete/' + id, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function(data) {
+      if (data.ok) {
+        ['course-row-', 'inst-', 'rv-'].forEach(function(prefix) {
+          const row = document.getElementById(prefix + id);
+          if (row) row.remove();
+        });
+      } else if (data.error === 'has_reviews') {
+        btn.disabled = false;
+        showErrorToast('レビューが紐づいているため削除できません');
+      }
+    }).catch(function() { btn.disabled = false; showErrorToast(); });
+  });
+}
+
+function deleteGroup(key, btn) {
+  const g = GROUPS[key];
+  askConfirm('統合されている' + g.ids.length + '件（' + g.label + '）をまとめて削除しますか？').then(function(ok) {
+    if (!ok) return;
+    btn.disabled = true;
+    fetchJson('/admin/courses/group/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: 'ids=' + encodeURIComponent(g.ids.join(','))
+    }).then(function(data) {
+      if (data.ok) {
+        ['group-row-', 'inst-', 'rv-'].forEach(function(prefix) {
+          const row = document.getElementById(prefix + key);
+          if (row) row.remove();
+        });
+      } else if (data.error === 'has_reviews') {
+        btn.disabled = false;
+        showErrorToast('レビューが紐づいているため削除できません');
+      }
+    }).catch(function() { btn.disabled = false; showErrorToast(); });
+  });
 }
 
 function moveCls(name, dir) {

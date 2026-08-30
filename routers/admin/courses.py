@@ -433,7 +433,8 @@ async def admin_courses_update(
 
 
 @router.post("/admin/courses/delete/{course_id}")
-async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
+async def admin_courses_delete(course_id: int, request: Request, _: str = Depends(check_admin)):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Subject).where(Subject.id == course_id))).scalar_one_or_none()
         if course:
@@ -447,11 +448,15 @@ async def admin_courses_delete(course_id: int, _: str = Depends(check_admin)):
                     )
                 )).scalar()
                 if has_reviews:
+                    if is_ajax:
+                        return JSONResponse({"ok": False, "error": "has_reviews"})
                     return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
             await session.delete(course)
             await session.commit()
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
+    if is_ajax:
+        return JSONResponse({"ok": True})
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -489,9 +494,10 @@ async def admin_courses_group_update(
 
 
 @router.post("/admin/courses/group/delete")
-async def admin_courses_group_delete(_: str = Depends(check_admin), ids: str = Form(...)):
+async def admin_courses_group_delete(request: Request, _: str = Depends(check_admin), ids: str = Form(...)):
     # 統合表示行の削除はグループ内の全科目を一括削除する。いずれか1件でもレビューが
     # 紐づいていれば（単独削除と同じ保護ルールで）全体をブロックする
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     id_list = _parse_group_ids(ids)
     async with AsyncSessionLocal() as session:
         cs_ids = (await session.execute(
@@ -502,6 +508,8 @@ async def admin_courses_group_delete(_: str = Depends(check_admin), ids: str = F
                 select(func.count(Review.id)).where(Review.course_section_id.in_(cs_ids))
             )).scalar()
             if has_reviews:
+                if is_ajax:
+                    return JSONResponse({"ok": False, "error": "has_reviews"})
                 return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
         member_courses = (await session.execute(
             select(Subject).where(Subject.id.in_(id_list))
@@ -511,4 +519,6 @@ async def admin_courses_group_delete(_: str = Depends(check_admin), ids: str = F
         await session.commit()
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
+    if is_ajax:
+        return JSONResponse({"ok": True})
     return RedirectResponse(url="/admin/courses", status_code=303)
