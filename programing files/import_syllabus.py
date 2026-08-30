@@ -245,22 +245,23 @@ _KYOYO_NAME_TO_CLASSIFICATION: dict[str, str] = {
 # 完全一致リストに無い科目名向けのパターンフォールバック
 # （学籍番号条件・偶奇・T機械等のサフィックスが付いた科目名を吸収する）
 _KYOYO_PATTERN_MAP: list[tuple[re.Pattern, str]] = [
-    (re.compile(r'^力学基礎[12]'), "教養(自然)"),
-    (re.compile(r'^化学実験[12]$'), "教養(自然)"),
-    (re.compile(r'^基礎地学[12]$'), "教養(自然)"),
-    (re.compile(r'^基礎(有機化学|無機化学|物理化学)[12]$'), "教養(自然)"),
+    (re.compile(r'^力学基礎[12]'), "共通専門基礎科目"),
+    (re.compile(r'^化学実験[12]$'), "共通専門基礎科目"),
+    (re.compile(r'^基礎地学[12]$'), "共通専門基礎科目"),
+    (re.compile(r'^基礎(有機化学|無機化学|物理化学)[12]$'), "共通専門基礎科目"),
     (re.compile(r'^微分積分(入門)?[1234]'), "共通専門基礎科目"),
     (re.compile(r'^線形代数(入門)?[1234]'), "共通専門基礎科目"),
-    (re.compile(r'^数理統計[12]'), "教養(自然)"),
+    (re.compile(r'^数理統計[12]'), "共通専門基礎科目"),
     (re.compile(r'^熱力学基礎'), "教養(自然)"),
-    (re.compile(r'^物理学(入門|実験)'), "教養(自然)"),
-    (re.compile(r'^生物学(各論|実験|概論)'), "教養(自然)"),
+    (re.compile(r'^物理学入門$'), "共通専門基礎科目"),
+    (re.compile(r'^物理学実験'), "教養(自然)"),
+    (re.compile(r'^生物学(各論|実験|概論)'), "共通専門基礎科目"),
     (re.compile(r'^生物資源と農業'), "教養(自然)"),
     (re.compile(r'^相対論基礎$'), "教養(自然)"),
     (re.compile(r'^科学技術と社会'), "教養(自然)"),
     (re.compile(r'^連続体力学基礎$'), "教養(自然)"),
     (re.compile(r'^量子力学基礎$'), "教養(自然)"),
-    (re.compile(r'^電磁気学基礎[12]$'), "教養(自然)"),
+    (re.compile(r'^電磁気学基礎[12]$'), "共通専門基礎科目"),
     (re.compile(r'^放射線科学$'), "教養(自然)"),
     (re.compile(r'^情報科学[12]$'), "共通専門基礎科目"),
     (re.compile(r'^第三外国語（(ドイツ語|フランス語)）T[1234]$'), "教養(外国語第3)"),
@@ -274,7 +275,7 @@ _KYOYO_PATTERN_MAP: list[tuple[re.Pattern, str]] = [
     (re.compile(r'^カタチの(文化学|自然学)'), "教養(総合)"),
     (re.compile(r'^食と健康[AB]$'), "教養(健康・スポーツ)"),
     (re.compile(r'^大学教育論$'), "教養(人文)"),
-    (re.compile(r'^心と行動$'), "教養(人文)"),
+    (re.compile(r'^心と行動$'), "共通専門基礎科目"),
 ]
 
 KYOYO_FACULTY = "教養教育院"
@@ -328,8 +329,11 @@ def classify_kyoyo(name: str) -> str | None:
     } - {name}:
         if alt in _KYOYO_NAME_TO_CLASSIFICATION:
             return _KYOYO_NAME_TO_CLASSIFICATION[alt]
+    # パターンはすべて半角数字で書かれているため、全角数字の科目名（過去に手動投入された
+    # ものが一部残る）も拾えるよう半角化してから照合する
+    normalized_name = normalize_alnum(name)
     for pattern, cls in _KYOYO_PATTERN_MAP:
-        if pattern.match(name):
+        if pattern.match(name) or pattern.match(normalized_name):
             return cls
     return None
 
