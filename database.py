@@ -523,17 +523,32 @@ async def init_db():
         # SCHEMA_REVIEW.md P1: (name, faculty, department)の複合UNIQUEはPostgreSQLのNULL非等価性に
         # よりfaculty IS NULLの行では機能しない。既存のNULL行（classification='共通専門基礎科目'の
         # 2件のみ、dev DBで確認済み・重複衝突なし）は教養教育院開講のためfaculty='教養教育院'を
-        # 補完し、それ以外のNULL行（理論上のみ）は空文字にフォールバックしてからNOT NULL化する
-        await conn.execute(text(
-            "UPDATE subjects SET faculty = '教養教育院' "
-            "WHERE faculty IS NULL AND classification = '共通専門基礎科目'"
-        ))
-        await conn.execute(text(
-            "UPDATE subjects SET faculty = '' WHERE faculty IS NULL"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE subjects ALTER COLUMN faculty SET NOT NULL"
-        ))
+        # 補完し、それ以外のNULL行（理論上のみ）は空文字にフォールバックしてからNOT NULL化する。
+        # 2026-08-30、本番DBに(name, faculty, department)がNULL補完後の値と重複する行
+        # （「力学基礎１」の教養教育院版とfaculty=NULL版の2重登録）が実在し、一括UPDATEのまま
+        # だとUNIQUE制約違反でinit_db()全体のトランザクションがロールバックされ、以降の全
+        # マイグレーション（banned_at列追加等）が長期間未適用のままになる実障害が発生した。
+        # 1行ずつSAVEPOINTで保護し、重複行はfaculty=NULLのまま残してスキップする
+        # （NOT NULL化自体も同じ理由で失敗しうるためSAVEPOINTで保護し、他マイグレーションを止めない）
+        _null_faculty_rows = (await conn.execute(text(
+            "SELECT id, classification FROM subjects WHERE faculty IS NULL"
+        ))).fetchall()
+        for _row in _null_faculty_rows:
+            _new_faculty = '教養教育院' if _row.classification == '共通専門基礎科目' else ''
+            try:
+                async with conn.begin_nested():
+                    await conn.execute(text(
+                        "UPDATE subjects SET faculty = :fac WHERE id = :id"
+                    ), {"fac": _new_faculty, "id": _row.id})
+            except Exception:
+                pass
+        try:
+            async with conn.begin_nested():
+                await conn.execute(text(
+                    "ALTER TABLE subjects ALTER COLUMN faculty SET NOT NULL"
+                ))
+        except Exception:
+            pass
         await conn.execute(text(
             "ALTER TABLE subjects ALTER COLUMN faculty SET DEFAULT ''"
         ))
