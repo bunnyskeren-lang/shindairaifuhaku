@@ -176,24 +176,40 @@
         <p id="academicYearError" class="hidden mt-1 text-red-500 text-xs">受講年度を選択してください</p>
       </div>
 
-      <!-- 3. 楽単度（行選択形式） -->
+      <!-- 3. 楽単度（星形式） -->
       <div id="easeCard" class="bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-3">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
           😴 楽単度 <span class="text-red-500">*</span>
         </label>
-        <div class="flex flex-col gap-2" id="easeRows"></div>
+        <div class="mb-4 grid grid-cols-5 gap-1 rounded-xl border border-gray-100 bg-gray-50 px-2 py-2 text-center text-[11px]">
+          <div><span class="block text-yellow-400 tracking-tighter">★</span><span class="text-gray-500">修羅場</span></div>
+          <div><span class="block text-yellow-400 tracking-tighter">★★</span><span class="text-gray-500">大変</span></div>
+          <div><span class="block text-yellow-400 tracking-tighter">★★★</span><span class="text-gray-500">標準</span></div>
+          <div><span class="block text-yellow-400 tracking-tighter">★★★★</span><span class="text-gray-500">楽々</span></div>
+          <div><span class="block text-yellow-400 tracking-tighter">★★★★★</span><span class="text-gray-500">天国</span></div>
+        </div>
+        <div class="flex justify-center gap-2" id="easeStarContainer"></div>
         <input type="hidden" name="ease_rating" id="easeHidden">
-        <p id="easeError" class="hidden mt-2 text-red-500 text-xs text-center">楽単度を選んでください</p>
+        <p id="easeLabel" class="text-center text-sm text-gray-500 mt-3 min-h-5 font-medium"></p>
+        <p id="easeError" class="hidden mt-1 text-red-500 text-xs text-center">楽単度を選んでください</p>
       </div>
 
-      <!-- 4. 充実度（行選択形式） -->
+      <!-- 4. 充実度 -->
       <div id="ratingCard" class="bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-3">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
           ⭐ 充実度 <span class="text-red-500">*</span>
         </label>
-        <div class="flex flex-col gap-2" id="ratingRows"></div>
+        <div class="mb-4 grid grid-cols-5 gap-1 rounded-xl border border-gray-100 bg-gray-50 px-2 py-2 text-center text-[11px]">
+          <div><span class="block text-purple-400 tracking-tighter">★</span><span class="text-gray-500">学びなし</span></div>
+          <div><span class="block text-purple-400 tracking-tighter">★★</span><span class="text-gray-500">ちょい学び</span></div>
+          <div><span class="block text-purple-400 tracking-tighter">★★★</span><span class="text-gray-500">まあまあ</span></div>
+          <div><span class="block text-purple-400 tracking-tighter">★★★★</span><span class="text-gray-500">かなり学べた</span></div>
+          <div><span class="block text-purple-400 tracking-tighter">★★★★★</span><span class="text-gray-500">学びまくり</span></div>
+        </div>
+        <div class="flex justify-center gap-2" id="starContainer"></div>
         <input type="hidden" name="rating" id="ratingHidden">
-        <p id="ratingError" class="hidden mt-2 text-red-500 text-xs text-center">評価を選んでください</p>
+        <p id="ratingLabel" class="text-center text-sm text-gray-500 mt-3 min-h-5 font-medium"></p>
+        <p id="ratingError" class="hidden mt-1 text-red-500 text-xs text-center">評価を選んでください</p>
       </div>
 
       <!-- 5. 成績評価方法 -->
@@ -418,26 +434,6 @@
     .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
     #academicYearOld > summary { list-style: none; }
     #academicYearOld > summary::-webkit-details-marker { display: none; }
-    .rating-row-btn {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      min-height: 44px;
-      padding: 10px 16px;
-      border: 2px solid #e5e7eb;
-      border-radius: 12px;
-      background: #fff;
-      color: #374151;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .rating-row-btn:active { transform: scale(0.98); }
-    .rating-row-btn.active { border-color: #6366f1; background: #eef2ff; }
     .chip-btn {
       padding: 7px 14px;
       border-radius: 999px;
@@ -718,42 +714,50 @@
     let currentRating = 0;
     let currentEase = 0;
 
-    // 楽単度・充実度は「言葉＋★」を左右併記した行のリストから1行選ぶ形式にする
-    // （以前は5段階の凡例グリッド＋別枠の★タップ式セレクターの二段構成だったが、
-    // 選択肢そのものに言葉と★を併記することで凡例を廃止する）
-    function buildRatingRows(containerId, labels, starColor, current, onSelect) {
-      const c = document.getElementById(containerId);
+    function buildStars() {
+      const c = document.getElementById('starContainer');
       c.innerHTML = '';
       for (let i = 1; i <= 5; i++) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'rating-row-btn' + (i === current ? ' active' : '');
-        btn.innerHTML = `<span>${labels[i]}</span>` +
-          `<span style="letter-spacing:-1px"><span style="color:${starColor}">${'★'.repeat(i)}</span>` +
-          `<span style="color:#e5e7eb">${'☆'.repeat(5 - i)}</span></span>`;
-        btn.onclick = () => onSelect(i);
+        btn.textContent = i <= currentRating ? '★' : '☆';
+        btn.className = 'text-5xl transition-all hover:scale-110 active:scale-95 ' +
+          (i <= currentRating ? 'text-purple-400' : 'text-gray-200');
+        btn.style.touchAction = 'manipulation';
+        btn.style.webkitTapHighlightColor = 'transparent';
+        btn.onclick = () => {
+          currentRating = i;
+          document.getElementById('ratingHidden').value = i;
+          document.getElementById('ratingLabel').textContent = RATING_LABELS[i];
+          document.getElementById('ratingError').classList.add('hidden');
+          buildStars();
+          saveData();
+        };
         c.appendChild(btn);
       }
     }
 
-    function buildStars() {
-      buildRatingRows('ratingRows', RATING_LABELS, '#c084fc', currentRating, (i) => {
-        currentRating = i;
-        document.getElementById('ratingHidden').value = i;
-        document.getElementById('ratingError').classList.add('hidden');
-        buildStars();
-        saveData();
-      });
-    }
-
     function buildEaseStars() {
-      buildRatingRows('easeRows', EASE_LABELS, '#facc15', currentEase, (i) => {
-        currentEase = i;
-        document.getElementById('easeHidden').value = EASE_VALS[i];
-        document.getElementById('easeError').classList.add('hidden');
-        buildEaseStars();
-        saveData();
-      });
+      const c = document.getElementById('easeStarContainer');
+      c.innerHTML = '';
+      for (let i = 1; i <= 5; i++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = i <= currentEase ? '★' : '☆';
+        btn.className = 'text-5xl transition-all hover:scale-110 active:scale-95 ' +
+          (i <= currentEase ? 'text-yellow-400' : 'text-gray-200');
+        btn.style.touchAction = 'manipulation';
+        btn.style.webkitTapHighlightColor = 'transparent';
+        btn.onclick = () => {
+          currentEase = i;
+          document.getElementById('easeHidden').value = EASE_VALS[i];
+          document.getElementById('easeLabel').textContent = EASE_LABELS[i];
+          document.getElementById('easeError').classList.add('hidden');
+          buildEaseStars();
+          saveData();
+        };
+        c.appendChild(btn);
+      }
     }
 
     document.querySelectorAll('.chip-btn').forEach(btn => {
@@ -1683,11 +1687,13 @@
         if (d.rating) {
           currentRating = d.rating;
           document.getElementById('ratingHidden').value = d.rating;
+          document.getElementById('ratingLabel').textContent = RATING_LABELS[d.rating];
           buildStars();
         }
         if (d.ease) {
           currentEase = d.ease;
           document.getElementById('easeHidden').value = EASE_VALS[d.ease];
+          document.getElementById('easeLabel').textContent = EASE_LABELS[d.ease];
           buildEaseStars();
         }
         if (d.classFormats?.length) {
