@@ -74,6 +74,17 @@
   }
   #authOverlay .box .icon { font-size: 36px; margin-bottom: 10px; }
   #authOverlay .box p { font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 14px; }
+
+  .legend { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
+  .legend > summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; color: #64748b;
+  }
+  .legend > summary::-webkit-details-marker { display: none; }
+  .legend > summary::after { content: "▾"; color: #94a3b8; font-size: 12px; }
+  .legend[open] > summary::after { content: "▴"; }
+  .legend .legend-body { margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -95,42 +106,48 @@
   <div id="lock-card"></div>
 
   <div class="card" id="summary-card">
-    <div class="section-title">総合評価</div>
-    <div id="ratings"></div>
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #f1f5f9">
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);font-size:11px;text-align:center">
-        <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px"></div>
-        <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px">楽単度</div>
-        <div style="color:#a78bfa;font-weight:700;font-size:10px;padding-bottom:6px">充実度</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:3px;font-size:11px">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
-          <div style="font-size:12px;color:#e2e8f0">★☆☆☆☆</div>
-          <div style="color:#64748b">修羅場</div>
-          <div style="color:#64748b">ほぼ学びなし</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;padding:5px 8px;text-align:center">
-          <div style="font-size:12px"><span style="color:#fbbf24">★★</span><span style="color:#e2e8f0">☆☆☆</span></div>
-          <div style="color:#64748b">大変</div>
-          <div style="color:#64748b">ちょい学び</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
-          <div style="font-size:12px"><span style="color:#f59e0b">★★★</span><span style="color:#e2e8f0">☆☆</span></div>
-          <div style="color:#64748b">標準</div>
-          <div style="color:#64748b">まあまあ学びあり</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;padding:5px 8px;text-align:center">
-          <div style="font-size:12px"><span style="color:#f59e0b">★★★★</span><span style="color:#e2e8f0">☆</span></div>
-          <div style="color:#64748b">楽々</div>
-          <div style="color:#64748b">かなり学べた</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
-          <div style="font-size:12px;color:#f59e0b">★★★★★</div>
-          <div style="color:#64748b">天国</div>
-          <div style="color:#64748b">めちゃくちゃ学べた</div>
-        </div>
-      </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="section-title" style="margin-bottom:0">総合評価</div>
+      <div id="review-count" style="font-size:11px;color:#94a3b8"></div>
     </div>
+    <div id="ratings"></div>
+    <details class="legend">
+      <summary>★の意味を見る</summary>
+      <div class="legend-body">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);font-size:11px;text-align:center">
+          <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px"></div>
+          <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px">楽単度</div>
+          <div style="color:#a78bfa;font-weight:700;font-size:10px;padding-bottom:6px">充実度</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;font-size:11px">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
+            <div style="font-size:12px;color:#e2e8f0">★☆☆☆☆</div>
+            <div style="color:#64748b">修羅場</div>
+            <div style="color:#64748b">ほぼ学びなし</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;padding:5px 8px;text-align:center">
+            <div style="font-size:12px"><span style="color:#fbbf24">★★</span><span style="color:#e2e8f0">☆☆☆</span></div>
+            <div style="color:#64748b">大変</div>
+            <div style="color:#64748b">ちょい学び</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
+            <div style="font-size:12px"><span style="color:#f59e0b">★★★</span><span style="color:#e2e8f0">☆☆</span></div>
+            <div style="color:#64748b">標準</div>
+            <div style="color:#64748b">まあまあ学びあり</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;padding:5px 8px;text-align:center">
+            <div style="font-size:12px"><span style="color:#f59e0b">★★★★</span><span style="color:#e2e8f0">☆</span></div>
+            <div style="color:#64748b">楽々</div>
+            <div style="color:#64748b">かなり学べた</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);align-items:center;background:#f8fafc;border-radius:8px;padding:5px 8px;text-align:center">
+            <div style="font-size:12px;color:#f59e0b">★★★★★</div>
+            <div style="color:#64748b">天国</div>
+            <div style="color:#64748b">めちゃくちゃ学べた</div>
+          </div>
+        </div>
+      </div>
+    </details>
   </div>
 
   <div id="reviews-section"></div>
@@ -196,11 +213,16 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   let html = `<div class="card" style="border:2px solid var(--accent)">`;
   html += `<div class="section-title">🔒 レビューを見るには解除が必要です</div>`;
   html += `<div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:14px">`
-        + `この科目には${data.review_count}件のレビューがあります。<b>「解除する」ボタンを押すとチケットを1枚使い、この科目のレビューがすぐに見られるようになります。</b>`
-        + `<br>チケットは、あなたのレビューが1件承認されるたびに${UNLOCK_REWARD}枚もらえます（好きな科目に使えます）。</div>`;
+        + `この科目には${data.review_count}件のレビューがあります。</div>`;
   if (userId) {
-    if ((data.unlock_credits || 0) > 0) {
-      html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケットを1枚使って解除する（残り${data.unlock_credits}枚）</button>`;
+    const credits = data.unlock_credits || 0;
+    html += `<div style="border:1px solid #e9ecf0;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:7px">`
+          + `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#64748b">所持チケット</span><span style="font-weight:700;color:#1f2937">${credits}枚</span></div>`
+          + `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#64748b">この科目の解除に必要</span><span style="font-weight:700;color:#1f2937">1枚</span></div>`
+          + `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#64748b">レビュー1件が承認されると</span><span style="font-weight:700;color:#1f2937">+${UNLOCK_REWARD}枚</span></div>`
+          + `</div>`;
+    if (credits > 0) {
+      html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケットを1枚使って解除する</button>`;
     } else {
       html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
             + `今はチケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されると、チケットが${UNLOCK_REWARD}枚もらえます。</div>`;
@@ -392,6 +414,12 @@ async function main() {
         }
       });
     }
+  }
+
+  // ── レビュー件数（総合評価の信頼度が一目でわかるよう★の横に件数を出す） ──
+  const reviewCountEl = document.getElementById("review-count");
+  if (!data.locked && data.review_count > 0) {
+    reviewCountEl.textContent = `${data.review_count}件のレビュー`;
   }
 
   const ratingsEl = document.getElementById("ratings");
