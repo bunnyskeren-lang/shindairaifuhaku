@@ -224,19 +224,13 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
     if (credits > 0) {
       html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケットを1枚使って解除する</button>`;
     } else {
-      // チケット0枚のときは、静的な内訳表だけでなく「次のゴール」として
-      // 視覚的に動機づける（進捗バーは常に0%固定。承認は都度+${UNLOCK_REWARD}枚で
-      // 累積式ではないため、実データに基づく途中経過ではなく行動喚起として表示する）
+      // チケット0枚のときは「次のゴール」として視覚的に動機づける。
+      // 承認は都度+${UNLOCK_REWARD}枚で累積式ではなく実データの途中経過が無いため、
+      // 進捗バーではなく行動喚起の文言のみで表示する
       html += `<div style="background:#f5f3ff;border-radius:10px;padding:12px 14px;margin-bottom:14px">`
-            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">`
-            + `<span style="font-size:12px;font-weight:700;color:#6d28d9">🎫 次の解除チケットまで</span>`
-            + `<span style="font-size:11px;font-weight:700;color:#7c3aed">あと1件の投稿</span></div>`
-            + `<div style="width:100%;background:#ede9fe;border-radius:999px;height:7px;overflow:hidden">`
-            + `<div style="width:0%;height:7px;border-radius:999px;background:#8b5cf6"></div></div>`
-            + `<div style="font-size:10.5px;color:#a78bfa;margin-top:6px">レビューを1件投稿して承認されると、+${UNLOCK_REWARD}枚もらえます</div>`
+            + `<div style="font-size:12px;font-weight:700;color:#6d28d9;margin-bottom:6px">🎫 今はチケットが0枚です</div>`
+            + `<div style="font-size:11.5px;color:#7c3aed;line-height:1.6">下の「レビューを投稿」からレビューを書いて承認されると、+${UNLOCK_REWARD}枚もらえます</div>`
             + `</div>`;
-      html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
-            + `今はチケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されると、チケットが${UNLOCK_REWARD}枚もらえます。</div>`;
     }
   } else if (isInClient || profileFetchFailed) {
     // LINEアプリ内で開いているのにログイン情報が取得できなかった異常系。
