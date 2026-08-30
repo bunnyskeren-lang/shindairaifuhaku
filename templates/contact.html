@@ -28,25 +28,21 @@
 
       <input type="hidden" name="id_token" id="idTokenHidden" value="">
 
-      <div id="studentIdCard" class="hidden bg-white rounded-2xl shadow-sm p-5">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">
-          🎓 学籍番号
-        </label>
-        <input type="text" id="studentIdValue" readonly
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-500 cursor-not-allowed">
+      <div id="studentIdCard" class="hidden bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2">
+        <span class="text-[11px] font-bold text-green-600 bg-green-50 rounded-full px-2.5 py-1 shrink-0">登録済み</span>
+        <span class="text-sm text-gray-600"><span id="studentIdValue"></span> として送信されます</span>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
-        <label for="category" class="block text-sm font-semibold text-gray-700 mb-2">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
           📋 お問い合わせの種類 <span class="text-red-500">*</span>
         </label>
-        <select name="category" id="category" required
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition bg-white">
-          <option value="" disabled selected>選択してください</option>
+        <input type="hidden" name="category" id="category">
+        <div class="flex flex-wrap gap-2">
           {% for c in categories %}
-          <option value="{{ c }}">{{ c }}</option>
+          <button type="button" class="chip-btn single" data-group="category" data-value="{{ c }}">{{ c }}</button>
           {% endfor %}
-        </select>
+        </div>
         <p id="categoryError" class="hidden mt-1 text-red-500 text-xs">お問い合わせの種類を選択してください</p>
       </div>
 
@@ -54,6 +50,11 @@
         <label for="content" class="block text-sm font-semibold text-gray-700 mb-2">
           📝 お問い合わせ内容 <span class="text-red-500">*</span>
         </label>
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="text-xs text-gray-400 shrink-0">タップで挿入👇</span>
+          <button type="button" class="prompt-chip" data-prompt="【対象の科目名：　】">科目名を入れる</button>
+          <button type="button" class="prompt-chip" data-prompt="【該当ページ：　】">該当ページ</button>
+        </div>
         <textarea name="content" id="content" rows="6" maxlength="2000" required
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition resize-none"
           placeholder="できるだけ具体的にご記入ください（対象のページ・科目名など）"></textarea>
@@ -91,9 +92,66 @@
 
   <style>
     .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
+    .chip-btn {
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 2px solid #e5e7eb;
+      color: #6b7280;
+      background: white;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .chip-btn:active { transform: scale(0.95); }
+    .chip-btn.active {
+      border-color: #6366f1;
+      color: #6366f1;
+      background: #eef2ff;
+    }
+    .prompt-chip {
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1.5px solid #e0e7ff;
+      color: #6366f1;
+      background: #f5f3ff;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .prompt-chip:active { transform: scale(0.95); background: #ede9fe; }
   </style>
 
   <script>
+    document.querySelectorAll('[data-group="category"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-group="category"]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('category').value = btn.dataset.value;
+        document.getElementById('categoryError').classList.add('hidden');
+      });
+    });
+
+    document.querySelectorAll('.prompt-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const el = document.getElementById('content');
+        const prompt = chip.dataset.prompt;
+        const cur = el.value;
+        if (cur && !cur.endsWith('\n') && !cur.endsWith(' ') && !cur.endsWith('、')) el.value = cur + '\n';
+        el.value += prompt;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+        document.getElementById('contentError').classList.add('hidden');
+      });
+    });
+
     document.getElementById('contactForm').addEventListener('submit', function(e) {
       const categoryInput = document.getElementById('category');
       const contentInput = document.getElementById('content');
@@ -208,7 +266,7 @@
       }
 
       document.getElementById('idTokenHidden').value = idToken;
-      document.getElementById('studentIdValue').value = data.student_id;
+      document.getElementById('studentIdValue').textContent = data.student_id;
       document.getElementById('studentIdCard').classList.remove('hidden');
       hideOverlay();
       enableSubmit();
