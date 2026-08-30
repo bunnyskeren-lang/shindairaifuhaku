@@ -8,15 +8,17 @@ BAN中のユーザーが各書き込み系エンドポイント(レビュー投�
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import func, select
 
 import routers.admin.users_errors as admin_users
 import routers.liff_api as liff_api
+import routers.payment_api as payment_api
 import routers.profile_api as profile_api
 import routers.review_submit_api as review_submit_api
 from core import moderation
 from core.config import ADMIN_COOKIE
 from core.security import make_admin_token
-from models import CourseSection, Instructor, Subject, UserProfile
+from models import CourseSection, Instructor, PaymentRequest, Review, ReviewStatus, Subject, UserProfile
 
 BANNED_UID = "U" + "1" * 32
 OTHER_UID = "U" + "2" * 32
@@ -202,6 +204,67 @@ async def test_prefill_reports_not_banned_for_normal_user(http_client_factory, m
     data = resp.json()
     assert data["found"] is True
     assert data["banned"] is False
+
+
+@pytest.mark.asyncio
+async def test_banned_student_cannot_submit_payment_request(http_client_factory, monkeypatch, test_sessionmaker):
+    """支払い申請フォームはLINE識別子を持たず学籍番号のみで動くため、
+    user_profiles.student_id経由でBAN状態を判定する(2026-08-30、支払い申請だけ
+    BANチェックが漏れていた不備の修正)。"""
+    await _seed_profile(test_sessionmaker, BANNED_UID, banned=True)
+    course_id = await _seed_course(test_sessionmaker)
+    async with test_sessionmaker() as session:
+        cs_id = (await session.execute(
+            select(CourseSection.id).where(CourseSection.subject_id == course_id)
+        )).scalars().first()
+        session.add(Review(
+            course_section_id=cs_id, student_id="2345678S",
+            status=ReviewStatus.APPROVED, rating=4, ease_rating="A",
+        ))
+        await session.commit()
+
+    client = http_client_factory(payment_api, monkeypatch)
+    resp = await client.post("/payment/apply/submit", data={
+        "name": "太郎", "student_id": "2345678S", "paypay_id": "taro123", "amount": "100",
+    })
+    assert resp.status_code == 400
+    assert "利用を停止" in resp.text
+
+    async with test_sessionmaker() as session:
+        count = (await session.execute(select(func.count()).select_from(PaymentRequest))).scalar_one()
+        assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_banned_student_gets_ineligible_for_payment(http_client_factory, monkeypatch, test_sessionmaker):
+    await _seed_profile(test_sessionmaker, BANNED_UID, banned=True)
+    client = http_client_factory(payment_api, monkeypatch)
+
+    resp = await client.get("/api/payment/eligible", params={"student_id": "2345678S"})
+    assert resp.json() == {"valid": False}
+
+
+@pytest.mark.asyncio
+async def test_non_banned_student_can_submit_payment_request(http_client_factory, monkeypatch, test_sessionmaker):
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False)
+    course_id = await _seed_course(test_sessionmaker)
+    async with test_sessionmaker() as session:
+        cs_id = (await session.execute(
+            select(CourseSection.id).where(CourseSection.subject_id == course_id)
+        )).scalars().first()
+        # amount=100円(_UNIT_YEN)には10件(_YEN_PER_REVIEW=10円/件)の承認済みレビューが必要
+        for _ in range(10):
+            session.add(Review(
+                course_section_id=cs_id, student_id="2345678S",
+                status=ReviewStatus.APPROVED, rating=4, ease_rating="A",
+            ))
+        await session.commit()
+
+    client = http_client_factory(payment_api, monkeypatch)
+    resp = await client.post("/payment/apply/submit", data={
+        "name": "花子", "student_id": "2345678S", "paypay_id": "hanako123", "amount": "100",
+    })
+    assert resp.status_code == 200
 
 
 @pytest.mark.asyncio

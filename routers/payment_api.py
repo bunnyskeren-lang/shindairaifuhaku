@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, select
 
-from core.config import IS_DEV, STUDENT_ID_RE
+from core.config import BAN_MESSAGE_TEXT, IS_DEV, STUDENT_ID_RE
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import PaymentRequest, PaymentRequestStatus, Review, ReviewStatus
+from models import PaymentRequest, PaymentRequestStatus, Review, ReviewStatus, UserProfile
 
 router = APIRouter()
 
@@ -29,6 +29,15 @@ async def _unpaid_count(session, sid: str) -> int:
     )).scalar_one()
 
 
+async def _is_banned_student(session, sid: str) -> bool:
+    """このフォームはLINE識別子を持たず学籍番号のみで動くため、user_profiles.student_idで
+    引いてBAN状態を判定する（2026-08-30、支払い申請だけBANチェックが無かった漏れを修正）。"""
+    rows = (await session.execute(
+        select(UserProfile.banned_at).where(UserProfile.student_id == sid)
+    )).scalars().all()
+    return any(b is not None for b in rows)
+
+
 @router.get("/payment/apply", response_class=HTMLResponse)
 async def payment_apply_page(request: Request):
     response = templates.TemplateResponse(
@@ -47,6 +56,8 @@ async def payment_eligible(
     if not STUDENT_ID_RE.match(sid):
         return JSONResponse({"valid": False})
     async with AsyncSessionLocal() as session:
+        if await _is_banned_student(session, sid):
+            return JSONResponse({"valid": False})
         count = await _unpaid_count(session, sid)
     max_amount = (count // (_UNIT_YEN // _YEN_PER_REVIEW)) * _UNIT_YEN
     return JSONResponse({"valid": True, "count": count, "max_amount": max_amount})
@@ -93,6 +104,9 @@ async def payment_apply_submit(
     required_reviews = amount_val // _YEN_PER_REVIEW
 
     async with AsyncSessionLocal() as session:
+        if await _is_banned_student(session, sid):
+            return _error(BAN_MESSAGE_TEXT)
+
         existing_pending = (await session.execute(
             select(PaymentRequest.id).where(
                 PaymentRequest.student_id == sid,

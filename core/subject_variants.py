@@ -46,56 +46,88 @@ def _vnum_match(name: str) -> tuple[str, str, int, str] | None:
     return base, letter, int(raw), raw
 
 
+def compute_variant_bases(
+    names_with_faculty_dept: list[tuple[str, str, str]],
+) -> tuple[
+    dict[tuple[str, str, str], list[tuple[str, str]]],
+    dict[tuple[str, str, str], list[str]],
+    dict[tuple[str, str, str], list[tuple[str, str, int, str]]],
+]:
+    """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/文字(A-D)/
+    数字・ローマ数字の3種のバリアントグループを (base[+言語], faculty, department) キーで
+    束ねた辞書(sem_bases, letter_bases, num_bases)を返す（メンバーが2件未満のキーは含めない）。
+
+    compute_variant_groups()（フラットなname→labelマップ、レビュー投稿フォーム/api/preload用）と
+    line_bot.handler._build_course_bubbles()（Flex Message構築、シラバス/レビューURL等メンバーの
+    詳細情報が必要）の両方はこの関数の結果から必要な形に組み立てる。
+    （2026-08-30、判定規則(_vnum_match/_VSEM)はimportで共有済みだったが「束ね方の手順」自体が
+    line_bot/handler.py側に別途手動複製されており、同期漏れが繰り返し起きていた反省から
+    実体をここに一本化した。セミナー系・文字(A-D)・数字/ローマ数字の3パターンは正規表現の
+    形（セミナーは丸括弧付き、文字は末尾に数字を伴わない、数字/ローマ数字は末尾が必ず
+    数字かローマ数字）から互いに排他的なので、構築順序（先に確定した種別を後の判定から
+    除外する等）を気にせず独立に計算してよい。）
+    """
+    names = [n for n, _, _ in names_with_faculty_dept]
+    fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
+    name_fd_set = set(names_with_faculty_dept)
+
+    sem_bases: dict[tuple[str, str, str], list[tuple[str, str]]] = {}
+    for name in names:
+        m = _VSEM.match(name)
+        if m:
+            fac, dept = fd_by_name.get(name, ("", ""))
+            key = (m.group(1) + m.group(3), fac, dept)
+            sem_bases.setdefault(key, []).append((name, m.group(2)))
+    sem_bases = {k: v for k, v in sem_bases.items() if len(v) >= 2}
+
+    letter_bases: dict[tuple[str, str, str], list[str]] = {}
+    for name in names:
+        if not name or len(name) <= 1 or name[-1] not in ('A', 'B', 'C', 'D'):
+            continue
+        base = name[:-1]
+        fac, dept = fd_by_name.get(name, ("", ""))
+        key = (base, fac, dept)
+        if key in letter_bases:
+            continue
+        variants = [s for s in 'ABCD' if (base + s, fac, dept) in name_fd_set]
+        if len(variants) >= 2:
+            letter_bases[key] = variants
+
+    num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str]]] = {}
+    for name in names:
+        m = _vnum_match(name)
+        if m:
+            base, letter, sk, disp = m
+            fac, dept = fd_by_name.get(name, ("", ""))
+            key = (base, fac, dept)
+            num_bases.setdefault(key, []).append((name, letter, sk, disp))
+    num_bases = {k: v for k, v in num_bases.items() if len(v) >= 2}
+
+    return sem_bases, letter_bases, num_bases
+
+
 def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) -> dict[str, str]:
     """(科目名, faculty, department)のリストから、末尾のアルファベット/数字/ローマ数字/セミナー言語
     だけが異なる2件以上の科目名をグループ化し、科目名→表示用グループラベル（ベース名）の
     マップを返す。グループに属さない（＝バリアントが1件だけ、または該当パターンなし）
     科目名はマップに含めない。
     """
-    names = [n for n, _, _ in names_with_faculty_dept]
-    fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
-    name_fd_set = set(names_with_faculty_dept)
+    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
     result: dict[str, str] = {}
 
-    # 1) セミナー系（外国語セミナーA(英語) → 外国語セミナー(英語)、同一faculty+department単位）
-    sem_bases: dict[tuple[str, str, str], list[str]] = {}
-    for name in names:
-        m = _VSEM.match(name)
-        if m:
-            fac, dept = fd_by_name.get(name, ("", ""))
-            sem_bases.setdefault((m.group(1) + m.group(3), fac, dept), []).append(name)
     for (base_lang, _fac, _dept), members in sem_bases.items():
-        if len(members) >= 2:
-            for n in members:
-                result[n] = base_lang
+        for n, _sk in members:
+            result[n] = base_lang
 
-    # 2) 文字バリアント（末尾がA/B/C/Dのみ、数字を伴わないもの、同一faculty+department単位でグループ化。
-    # 2026-08-29以前はfaculty/department非依存で判定しており、別学部の同名バリアントを誤統合しうる
-    # バグがあった（数字バリアントの3)は元からfaculty+department単位）。
-    for name in names:
-        if name in result or not name or len(name) <= 1:
-            continue
-        if name[-1] in ('A', 'B', 'C', 'D'):
-            base = name[:-1]
-            fac, dept = fd_by_name.get(name, ("", ""))
-            variants = [s for s in 'ABCD' if (base + s, fac, dept) in name_fd_set]
-            if len(variants) >= 2:
+    for (base, _fac, _dept), variants in letter_bases.items():
+        for s in variants:
+            name = base + s
+            if name not in result:
                 result[name] = base
 
-    # 3) 数字・ローマ数字バリアント（同一faculty+department単位でグループ化）
-    num_bases: dict[tuple[str, str, str], list[str]] = {}
-    for name in names:
-        if name in result:
-            continue
-        m = _vnum_match(name)
-        if m:
-            base, _letter, _sk, _disp = m
-            fac, dept = fd_by_name.get(name, ("", ""))
-            key = (base, fac, dept)
-            num_bases.setdefault(key, []).append(name)
     for (base, _fac, _dept), members in num_bases.items():
-        if len(members) >= 2:
-            for n in members:
+        for n, _letter, _sk, _disp in members:
+            if n not in result:
                 result[n] = base
 
     return result
