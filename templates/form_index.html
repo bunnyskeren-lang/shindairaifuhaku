@@ -198,6 +198,10 @@
 
       <!-- 5. 成績評価方法 -->
       <div id="gradingCard" class="bg-white rounded-2xl shadow-sm p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-semibold text-gray-700">📋 成績評価方法 <span class="text-red-500">*</span></span>
+          <span id="gradingProgressCount" class="text-xs font-bold text-gray-400">0 / 5</span>
+        </div>
         <input type="hidden" name="grading_method" id="gradingMethodHidden">
 
         <!-- 授業形式 -->
@@ -1523,7 +1527,10 @@
     // ── 入力状況（7項目）の進捗計算 ──
     // 送信時の厳密なバリデーション（reviewForm submit内）とは別の、表示専用の簡易チェック。
     // 既存の送信時バリデーションはそのまま残し、これは進捗カード・送信ボタンのラベル切り替えにのみ使う。
-    function isGradingMethodComplete() {
+    // 成績評価方法カードの5小問（授業形式・出席確認・課題の頻度・課題の量・評価方法）
+    // それぞれの充足判定。isGradingMethodComplete()（進捗カードの1項目としての判定）と
+    // gradingProgressCountの「◯/5」表示の両方でこの5関数を共有する。
+    function classFormatDone() {
       const fmtActives = [...document.querySelectorAll('[data-group="class_format"].active')];
       if (fmtActives.length === 0) return false;
       if (fmtActives.some(b => b.dataset.value === '__format_custom__') &&
@@ -1533,7 +1540,9 @@
         const total = inputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
         if (inputs.length !== fmtActives.length || total !== 100) return false;
       }
-
+      return true;
+    }
+    function attendanceDone() {
       const attActive = document.querySelector('[data-group="attendance"].active');
       if (!attActive) return false;
       if (attActive.dataset.value === 'たまにあり' && !document.querySelector('[data-group="attendance_surprise"].active')) return false;
@@ -1543,10 +1552,11 @@
         if (methodActives.some(b => b.dataset.value === '__attendance_method_custom__') &&
             !document.getElementById('attendanceMethodCustomInput').value.trim()) return false;
       }
-
-      if (!document.querySelector('[data-group="homework"].active')) return false;
-      if (!document.querySelector('[data-group="homework_frequency"].active')) return false;
-
+      return true;
+    }
+    function homeworkDone() { return !!document.querySelector('[data-group="homework"].active'); }
+    function homeworkFrequencyDone() { return !!document.querySelector('[data-group="homework_frequency"].active'); }
+    function evalDone() {
       const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
       if (evalActives.length === 0) return false;
       if (evalActives.some(b => b.dataset.value === '__custom__') &&
@@ -1557,6 +1567,17 @@
         if (inputs.length !== evalActives.length || total !== 100) return false;
       }
       return true;
+    }
+
+    function isGradingMethodComplete() {
+      return classFormatDone() && attendanceDone() && homeworkDone() && homeworkFrequencyDone() && evalDone();
+    }
+
+    function updateGradingProgress() {
+      const count = [classFormatDone(), attendanceDone(), homeworkDone(), homeworkFrequencyDone(), evalDone()]
+        .filter(Boolean).length;
+      const el = document.getElementById('gradingProgressCount');
+      if (el) el.textContent = `${count} / 5`;
     }
 
     const PROGRESS_ITEMS = [
@@ -1600,6 +1621,7 @@
     function saveData() {
       document.getElementById('saveStatus').textContent = '保存中...';
       updateProgressUI();
+      updateGradingProgress();
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -1936,6 +1958,7 @@
     buildEaseStars();
     loadData();
     updateProgressUI();
+    updateGradingProgress();
 
     // 学籍番号キャッシュの読み書き（uid なしでアクセスされた場合の保険）
     (function() {
