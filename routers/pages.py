@@ -7,7 +7,8 @@ from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     APP_URL, EMAIL_VERIFICATION_ENABLED, FACULTY_DEPARTMENTS, IS_DEV,
-    LIFF_ID, REGISTER_LIFF_ID, REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
+    LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
+    REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
     make_email_verify_url,
 )
 from core.templates import templates
@@ -30,6 +31,7 @@ async def index(request: Request, uid: str = Query(default="")):
             "register_liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
             "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
+            "max_reviews_per_course_section": MAX_REVIEWS_PER_COURSE_SECTION,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -147,6 +149,7 @@ async def liff_course(request: Request):
             "liff_id": LIFF_ID,
             "register_liff_id": REGISTER_LIFF_ID,
             "review_form_url": REVIEW_FORM_URL,
+            "review_liff_id": REVIEW_LIFF_ID,
             "base_url": APP_URL,
             "IS_DEV": IS_DEV,
             "unlock_reward": REVIEW_APPROVAL_UNLOCK_CREDITS,

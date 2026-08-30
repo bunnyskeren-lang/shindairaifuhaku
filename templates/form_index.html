@@ -27,16 +27,16 @@
       <p class="text-gray-500 text-sm mt-1">みんなの声が後輩の授業選びをサポート！</p>
     </div>
 
-    <!-- Notice（自動保存＋公開までの流れをまとめて1枚に） -->
-    <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 space-y-1.5">
-      <div class="flex items-start gap-2">
-        <span class="text-lg leading-none mt-0.5">💾</span>
-        <span>入力内容は自動保存。閉じても続きから入力できます</span>
+    <!-- 入力状況カード（自動保存＋公開までの流れの案内もここに統合） -->
+    <div class="bg-white rounded-2xl shadow-sm p-4 mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-gray-700">📊 入力状況</span>
+        <span id="progressCount" class="text-sm font-bold {% if IS_DEV %}text-orange-500{% else %}text-indigo-600{% endif %}">0 / 7 項目</span>
       </div>
-      <div class="flex items-start gap-2">
-        <span class="text-lg leading-none mt-0.5">✋</span>
-        <span>送信後、内容を確認してから公開されます</span>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+        <div id="progressBar" class="h-1.5 rounded-full transition-all duration-300 {% if IS_DEV %}bg-orange-500{% else %}bg-indigo-500{% endif %}" style="width:0%"></div>
       </div>
+      <p class="text-[11px] text-gray-400 mt-2">💾 入力内容は自動保存。閉じても続きから入力できます／送信後は内容を確認してから公開されます</p>
     </div>
 
     <form id="reviewForm" action="/submit" method="post" novalidate class="space-y-4">
@@ -121,8 +121,7 @@
             <p class="text-xs text-gray-500 mb-2" id="instructorCourseLabel"></p>
             <div id="instructorCourseItems" class="flex flex-wrap gap-2"></div>
             <p id="instructorCourseUnregistered" class="hidden text-xs text-gray-400">{{ no_review_msg }}</p>
-            <p id="instructorCourseFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの科目はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
-            <p id="instructorCourseReviewedNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの科目はこの学籍番号で投稿済みのため、選択できません</p>
+            <p id="instructorCourseLimitNotice" class="hidden mt-1.5 text-[11px] text-gray-400">レビューの募集は1科目の先生1人あたり3件までです。投稿済みの組み合わせも選べません。</p>
           </div>
         </div>
 
@@ -149,8 +148,7 @@
           <p id="instructorHint" class="hidden text-xs font-medium text-indigo-500 mb-2">👆 担当教員をタップして選択してください</p>
           <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
           <p id="instructorUnregistered" class="hidden text-xs text-gray-400">{{ no_review_msg }}</p>
-          <p id="instructorFullNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの教員はレビュー投稿数が上限（3件）に達したため、募集を締め切りました</p>
-          <p id="instructorReviewedNotice" class="hidden mt-1.5 text-xs text-gray-400">グレーの教員はこの学籍番号で投稿済みのため、選択できません</p>
+          <p id="instructorLimitNotice" class="hidden mt-1.5 text-[11px] text-gray-400">レビューの募集は1科目の先生1人あたり3件までです。投稿済みの組み合わせも選べません。</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
         </div>
       </div>
@@ -580,6 +578,7 @@
     const LIFF_ID = "{{ liff_id }}";
     const REGISTER_LIFF_ID = "{{ register_liff_id }}";
     const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
+    const MAX_REVIEWS_PER_COURSE_SECTION = {{ max_reviews_per_course_section }};
     let _liffInitPromise = null;
     function ensureLiffInit() {
       if (!_liffInitPromise) {
@@ -1118,6 +1117,15 @@
     const searchInput = document.getElementById('courseSearchInput');
     const dropdown = document.getElementById('courseDropdown');
 
+    // 残り枠バッジ（募集締切の理由を検索結果の行ごとに一目でわかるようにする）
+    function remainingBadgeHtml(remaining) {
+      if (remaining == null) return '';
+      if (remaining <= 0) {
+        return `<span style="font-size:11px;font-weight:700;border-radius:999px;padding:4px 10px;margin-left:6px;background:#f3f4f6;color:#9ca3af;white-space:nowrap">募集終了</span>`;
+      }
+      return `<span style="font-size:11px;font-weight:700;border-radius:999px;padding:4px 10px;margin-left:6px;background:#eef2ff;color:#4f46e5;white-space:nowrap">残り${remaining}枠</span>`;
+    }
+
     function escapeHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
@@ -1251,8 +1259,7 @@
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('instructorError').classList.add('hidden');
       document.getElementById('instructorUnregistered').classList.add('hidden');
-      document.getElementById('instructorFullNotice').classList.add('hidden');
-      document.getElementById('instructorReviewedNotice').classList.add('hidden');
+      document.getElementById('instructorLimitNotice').classList.add('hidden');
 
       if (currentInstructors.length > 0) {
         chipsEl.classList.remove('hidden');
@@ -1270,19 +1277,14 @@
           const label = inst.name;
           const cidAttr = ` data-course-id="${inst._cid ?? ''}" data-course-name="${escapeHtml(inst._cname)}"`;
           if (inst.full) {
-            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.45;text-decoration:line-through;cursor:not-allowed">${escapeHtml(label)}</button>`;
+            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.45;text-decoration:line-through;cursor:not-allowed;display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
           }
           if (inst.reviewed) {
             return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.5;cursor:not-allowed">${escapeHtml(label)}（投稿済み）</button>`;
           }
-          return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr}>${escapeHtml(label)}</button>`;
+          return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
         }).join('');
-        if (withReviewed.some(inst => inst.full)) {
-          document.getElementById('instructorFullNotice').classList.remove('hidden');
-        }
-        if (withReviewed.some(inst => inst.reviewed)) {
-          document.getElementById('instructorReviewedNotice').classList.remove('hidden');
-        }
+        document.getElementById('instructorLimitNotice').classList.remove('hidden');
         chipsEl.querySelectorAll('.chip-btn:not([disabled])').forEach(btn => {
           btn.onclick = () => {
             chipsEl.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
@@ -1320,7 +1322,7 @@
       chipsEl.innerHTML = '';
       document.getElementById('instructorHint').classList.add('hidden');
       document.getElementById('instructorUnregistered').classList.add('hidden');
-      document.getElementById('instructorFullNotice').classList.add('hidden');
+      document.getElementById('instructorLimitNotice').classList.add('hidden');
       currentInstructors = [];
       if (searchMode === 'course') {
         searchInput.classList.remove('hidden');
@@ -1355,8 +1357,7 @@
       instrSearchDropdown.classList.add('hidden');
       document.getElementById('instructorCourseList').classList.add('hidden');
       document.getElementById('instructorCourseUnregistered').classList.add('hidden');
-      document.getElementById('instructorCourseFullNotice').classList.add('hidden');
-      document.getElementById('instructorCourseReviewedNotice').classList.add('hidden');
+      document.getElementById('instructorCourseLimitNotice').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
     }
 
@@ -1419,8 +1420,7 @@
         courseLabel.textContent = '';
         courseItems.innerHTML = '';
         courseUnregistered.classList.remove('hidden');
-        document.getElementById('instructorCourseFullNotice').classList.add('hidden');
-        document.getElementById('instructorCourseReviewedNotice').classList.add('hidden');
+        document.getElementById('instructorCourseLimitNotice').classList.add('hidden');
         document.getElementById('instructorCourseList').classList.remove('hidden');
         return;
       }
@@ -1432,18 +1432,17 @@
       }));
       courseItems.innerHTML = coursesWithReviewed.map(c => {
         if (c.full) {
-          return `<button type="button" class="chip-btn" disabled style="opacity:.45;text-decoration:line-through;cursor:not-allowed"
-            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`;
+          return `<button type="button" class="chip-btn" disabled style="opacity:.45;text-decoration:line-through;cursor:not-allowed;display:inline-flex;align-items:center"
+            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}${remainingBadgeHtml(c.remaining)}</button>`;
         }
         if (c.reviewed) {
           return `<button type="button" class="chip-btn" disabled style="opacity:.5;cursor:not-allowed"
             data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}（投稿済み）</button>`;
         }
-        return `<button type="button" class="chip-btn"
-          data-course-name="${escapeHtml(c.name)}" data-course-id="${c.id}">${escapeHtml(c.name)}</button>`;
+        return `<button type="button" class="chip-btn" style="display:inline-flex;align-items:center"
+          data-course-name="${escapeHtml(c.name)}" data-course-id="${c.id}">${escapeHtml(c.name)}${remainingBadgeHtml(c.remaining)}</button>`;
       }).join('');
-      document.getElementById('instructorCourseFullNotice').classList.toggle('hidden', !coursesWithReviewed.some(c => c.full));
-      document.getElementById('instructorCourseReviewedNotice').classList.toggle('hidden', !coursesWithReviewed.some(c => c.reviewed));
+      document.getElementById('instructorCourseLimitNotice').classList.remove('hidden');
       document.getElementById('instructorCourseList').classList.remove('hidden');
       courseItems.querySelectorAll('[data-course-name]:not([disabled])').forEach(el => {
         el.addEventListener('click', () => {
@@ -1515,12 +1514,90 @@
         studentIdInput.classList.toggle('ring-2', invalid);
         studentIdInput.classList.toggle('ring-red-300', invalid);
         if (!invalid) clearCardError('studentIdCard');
+        updateProgressUI();
       });
+    }
+
+    // ── 入力状況（7項目）の進捗計算 ──
+    // 送信時の厳密なバリデーション（reviewForm submit内）とは別の、表示専用の簡易チェック。
+    // 既存の送信時バリデーションはそのまま残し、これは進捗カード・送信ボタンのラベル切り替えにのみ使う。
+    function isGradingMethodComplete() {
+      const fmtActives = [...document.querySelectorAll('[data-group="class_format"].active')];
+      if (fmtActives.length === 0) return false;
+      if (fmtActives.some(b => b.dataset.value === '__format_custom__') &&
+          !document.getElementById('formatCustomInput').value.trim()) return false;
+      if (fmtActives.length >= 2) {
+        const inputs = [...document.querySelectorAll('.percent-input[data-slider-group="class_format"]')];
+        const total = inputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
+        if (inputs.length !== fmtActives.length || total !== 100) return false;
+      }
+
+      const attActive = document.querySelector('[data-group="attendance"].active');
+      if (!attActive) return false;
+      if (attActive.dataset.value === 'たまにあり' && !document.querySelector('[data-group="attendance_surprise"].active')) return false;
+      if (attActive.dataset.value !== 'なし') {
+        const methodActives = [...document.querySelectorAll('[data-group="attendance_method"].active')];
+        if (methodActives.length === 0) return false;
+        if (methodActives.some(b => b.dataset.value === '__attendance_method_custom__') &&
+            !document.getElementById('attendanceMethodCustomInput').value.trim()) return false;
+      }
+
+      if (!document.querySelector('[data-group="homework"].active')) return false;
+      if (!document.querySelector('[data-group="homework_frequency"].active')) return false;
+
+      const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
+      if (evalActives.length === 0) return false;
+      if (evalActives.some(b => b.dataset.value === '__custom__') &&
+          !document.getElementById('evalCustomInput').value.trim()) return false;
+      if (evalActives.length >= 2) {
+        const inputs = [...document.querySelectorAll('.percent-input[data-slider-group="eval"]')];
+        const total = inputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
+        if (inputs.length !== evalActives.length || total !== 100) return false;
+      }
+      return true;
+    }
+
+    const PROGRESS_ITEMS = [
+      { label: '学籍番号', done: () => !studentIdInput || (studentIdInput.value.trim() !== '' && STUDENT_ID_RE.test(studentIdInput.value.trim().toUpperCase())) },
+      { label: '科目・担当教員', done: () => document.getElementById('courseNameHidden').value.trim() !== ''
+          && (currentInstructors.length === 0 || document.getElementById('selectedInstructorHidden').value.trim() !== '') },
+      { label: '受講年度', done: () => {
+          const v = document.getElementById('academic_year').value;
+          return !!v && v !== '0';
+        } },
+      { label: '楽単度', done: () => currentEase > 0 },
+      { label: '充実度', done: () => currentRating > 0 },
+      { label: '成績評価方法', done: isGradingMethodComplete },
+      { label: 'コメント', done: () => document.getElementById('comment').value.trim() !== '' },
+    ];
+
+    function updateProgressUI() {
+      const missing = PROGRESS_ITEMS.filter(item => !item.done());
+      const filled = PROGRESS_ITEMS.length - missing.length;
+      const countEl = document.getElementById('progressCount');
+      const barEl = document.getElementById('progressBar');
+      if (countEl) countEl.textContent = `${filled} / ${PROGRESS_ITEMS.length} 項目`;
+      if (barEl) barEl.style.width = `${Math.round(filled / PROGRESS_ITEMS.length * 100)}%`;
+
+      const btn = document.getElementById('submitBtn');
+      if (!btn || btn.disabled) return; // 送信処理中はラベルを上書きしない
+      const activeClasses = ('w-full {% if IS_DEV %}bg-orange-500 hover:bg-orange-600{% else %}bg-indigo-600 hover:bg-indigo-700{% endif %} text-white font-bold py-4 rounded-2xl active:scale-95 transition text-base shadow-md').split(' ');
+      const inactiveClasses = 'w-full bg-gray-300 text-white font-bold py-4 rounded-2xl transition text-base shadow-md cursor-not-allowed'.split(' ');
+      if (missing.length === 0) {
+        btn.textContent = 'レビューを投稿する';
+        btn.className = activeClasses.join(' ');
+      } else {
+        btn.textContent = missing.length === 1
+          ? `${missing[0].label}を入力すると送信できます`
+          : `あと${missing.length}項目で送信できます`;
+        btn.className = inactiveClasses.join(' ');
+      }
     }
 
     let saveTimer;
     function saveData() {
       document.getElementById('saveStatus').textContent = '保存中...';
+      updateProgressUI();
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -1850,6 +1927,7 @@
     buildStars();
     buildEaseStars();
     loadData();
+    updateProgressUI();
 
     // 学籍番号キャッシュの読み書き（uid なしでアクセスされた場合の保険）
     (function() {

@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
-    BAN_MESSAGE_TEXT, EASE_ORDER,
+    BAN_MESSAGE_TEXT, EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.grading_method import parse_grading_method
@@ -120,13 +120,15 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                 .order_by(Instructor.sort_order, Instructor.name)
             )).all()
         cs_url_map = await _latest_syllabus_urls(session, [cs.id for cs, _ in cs_rows])
-        full_pairs = await cache.get_full_course_section_pairs_cached()
+        remaining_map = await cache.get_review_remaining_cached()
         insts_by_course: dict = {}
         for cs, inst in cs_rows:
+            remaining = remaining_map.get((cs.subject_id, inst.name), MAX_REVIEWS_PER_COURSE_SECTION)
             insts_by_course.setdefault(cs.subject_id, []).append({
                 "name": inst.name,
                 "url": cs_url_map.get(cs.id, ""),
-                "full": (cs.subject_id, inst.name) in full_pairs,
+                "full": remaining <= 0,
+                "remaining": remaining,
             })
     return {"courses": [
         {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
@@ -160,20 +162,24 @@ async def api_preload():
         data = {"courses": course_list, "instructors": instructor_list}
         cache.set_preload_cache(data)
 
-    # 「full」（募集締切）はレビュー投稿状況で頻繁に変わりうるため、
+    # 「full」/「remaining」（募集締切・残り枠）はレビュー投稿状況で頻繁に変わりうるため、
     # 構造データ本体（数千件規模でTTL 3600秒キャッシュ）とは切り離し、毎リクエスト時に付与する
-    full_pairs = await cache.get_full_course_section_pairs_cached()
-    if full_pairs:
+    remaining_map = await cache.get_review_remaining_cached()
+    if remaining_map:
+        def _remaining(sid, name):
+            return remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION)
         data = {
             "courses": [
                 {**c, "instructors": [
-                    {**i, "full": (c["id"], i["name"]) in full_pairs} for i in c["instructors"]
+                    {**i, "full": _remaining(c["id"], i["name"]) <= 0, "remaining": _remaining(c["id"], i["name"])}
+                    for i in c["instructors"]
                 ]}
                 for c in data["courses"]
             ],
             "instructors": [
                 {**inst, "courses": [
-                    {**cn, "full": (cn["id"], inst["name"]) in full_pairs} for cn in inst["courses"]
+                    {**cn, "full": _remaining(cn["id"], inst["name"]) <= 0, "remaining": _remaining(cn["id"], inst["name"])}
+                    for cn in inst["courses"]
                 ]}
                 for inst in data["instructors"]
             ],
@@ -223,11 +229,12 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
                 .where(Instructor.name.in_(insts))
                 .order_by(Instructor.name, Subject.name)
             )).all()
-            full_pairs = await cache.get_full_course_section_pairs_cached()
+            remaining_map = await cache.get_review_remaining_cached()
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
             for inst_name, c_id, c_name in all_rows:
                 if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
-                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name, "full": (c_id, inst_name) in full_pairs})
+                    remaining = remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
+                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name, "full": remaining <= 0, "remaining": remaining})
             for name in insts:
                 result.append({"name": name, "courses": courses_by_inst[name]})
 

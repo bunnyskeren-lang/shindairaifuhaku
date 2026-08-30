@@ -201,26 +201,29 @@ async def get_all_review_stats_cached() -> dict[str, tuple]:
     return _all_review_stats_cache
 
 
-_full_pairs_cache: set[tuple[int, str]] | None = None
+_full_pairs_cache: dict[tuple[int, str], int] | None = None
 _full_pairs_cache_at: float = 0.0
 
 
-async def get_full_course_section_pairs_cached() -> set[tuple[int, str]]:
-    """レビュー数（待機中+承認済み）が上限に達した(subject_id, 担当教員名)の組の集合を返す。
-    フォーム側で募集締切表示に使う（実際の受付可否はsubmit時にDBで再確認する）。"""
+async def get_review_remaining_cached() -> dict[tuple[int, str], int]:
+    """(subject_id, 担当教員名)の組ごとに、あと何件レビューを募集できるか
+    （MAX_REVIEWS_PER_COURSE_SECTION - 待機中+承認済み件数、0未満にはならない）を返す。
+    フォーム側で残り枠バッジ・募集締切表示に使う（実際の受付可否はsubmit時にDBで再確認する）。
+    戻り値に含まれない組は投稿0件＝上限まるごと空きとして扱う。"""
     global _full_pairs_cache, _full_pairs_cache_at
     if _full_pairs_cache is not None and time.monotonic() - _full_pairs_cache_at < _COURSE_CACHE_TTL:
         return _full_pairs_cache
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
-            select(CourseSection.subject_id, Instructor.name)
+            select(CourseSection.subject_id, Instructor.name, func.count(Review.id))
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
             .join(Review, Review.course_section_id == CourseSection.id)
             .where(Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)))
             .group_by(CourseSection.subject_id, Instructor.name)
-            .having(func.count(Review.id) >= MAX_REVIEWS_PER_COURSE_SECTION)
         )).all()
-    _full_pairs_cache = {(sid, name) for sid, name in rows}
+    _full_pairs_cache = {
+        (sid, name): max(0, MAX_REVIEWS_PER_COURSE_SECTION - cnt) for sid, name, cnt in rows
+    }
     _full_pairs_cache_at = time.monotonic()
     return _full_pairs_cache
 
