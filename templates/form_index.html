@@ -27,6 +27,16 @@
       <p class="text-gray-500 text-sm mt-1">みんなの声が後輩の授業選びをサポート！</p>
     </div>
 
+    <!-- 未入力項目のまとめバナー（送信を試みて不備があった時だけ表示。JSで出し分ける） -->
+    <div id="errorSummaryBanner" class="hidden bg-white border-2 border-red-300 rounded-2xl p-4 mb-5 shadow-sm">
+      <div class="flex items-center gap-1.5 mb-2.5">
+        <span class="text-base">⚠️</span>
+        <span id="errorSummaryTitle" class="text-sm font-bold text-red-600"></span>
+      </div>
+      <div id="errorSummaryChips" class="flex flex-wrap gap-2"></div>
+      <p class="text-[11px] text-gray-400 mt-2.5">タップすると該当の入力欄まで移動します。埋まった項目はここから自動的に消えます。</p>
+    </div>
+
     <!-- 入力状況カード（自動保存＋公開までの流れの案内もここに統合） -->
     <div class="bg-white rounded-2xl shadow-sm p-4 mb-5">
       <div class="flex items-center justify-between mb-2">
@@ -469,6 +479,23 @@
       -webkit-tap-highlight-color: transparent;
     }
     .prompt-chip:active { transform: scale(0.95); background: #ede9fe; }
+
+    .error-summary-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border: 1.5px solid #fecaca;
+      color: #dc2626;
+      background: #fef2f2;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .error-summary-chip:active { transform: scale(0.95); background: #fee2e2; }
 
     .extra-input {
       width: 100%;
@@ -1584,19 +1611,55 @@
       if (el) el.textContent = `${count} / 5`;
     }
 
+    function scrollToItem(el) {
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el.focus) {
+        try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+      }
+    }
+
     const PROGRESS_ITEMS = [
-      { label: '学籍番号', done: () => !studentIdInput || (studentIdInput.value.trim() !== '' && STUDENT_ID_RE.test(studentIdInput.value.trim().toUpperCase())) },
+      { label: '学籍番号', done: () => !studentIdInput || (studentIdInput.value.trim() !== '' && STUDENT_ID_RE.test(studentIdInput.value.trim().toUpperCase())),
+        focus: () => scrollToItem(studentIdInput) },
       { label: '科目・担当教員', done: () => document.getElementById('courseNameHidden').value.trim() !== ''
-          && (currentInstructors.length === 0 || document.getElementById('selectedInstructorHidden').value.trim() !== '') },
+          && (currentInstructors.length === 0 || document.getElementById('selectedInstructorHidden').value.trim() !== ''),
+        focus: () => scrollToItem(document.getElementById('courseCard')) },
       { label: '受講年度', done: () => {
           const v = document.getElementById('academic_year').value;
           return !!v && v !== '0';
-        } },
-      { label: '楽単度', done: () => currentEase > 0 },
-      { label: '充実度', done: () => currentRating > 0 },
-      { label: '成績評価方法', done: isGradingMethodComplete },
-      { label: 'コメント', done: () => document.getElementById('comment').value.trim() !== '' },
+        },
+        focus: () => scrollToItem(document.getElementById('academicYearCard')) },
+      { label: '楽単度', done: () => currentEase > 0, focus: () => scrollToItem(document.getElementById('easeCard')) },
+      { label: '充実度', done: () => currentRating > 0, focus: () => scrollToItem(document.getElementById('ratingCard')) },
+      { label: '成績評価方法', done: isGradingMethodComplete, focus: () => scrollToItem(document.getElementById('gradingCard')) },
+      { label: 'コメント', done: () => document.getElementById('comment').value.trim() !== '', focus: () => scrollToItem(document.getElementById('comment')) },
     ];
+
+    // ── 未入力項目のまとめバナー ──
+    // 送信を試みてバリデーションに落ちた時だけ表示する（入力の最初から出しっぱなしにすると
+    // 進捗カードと情報が重複するため）。項目が埋まるたびにsaveData()経由で自動的に消える。
+    let errorBannerArmed = false;
+
+    function updateErrorBanner() {
+      const banner = document.getElementById('errorSummaryBanner');
+      if (!banner) return;
+      if (!errorBannerArmed) { banner.classList.add('hidden'); return; }
+      const missing = PROGRESS_ITEMS.filter(item => !item.done());
+      if (missing.length === 0) {
+        banner.classList.add('hidden');
+        errorBannerArmed = false;
+        return;
+      }
+      document.getElementById('errorSummaryTitle').textContent = `あと${missing.length}項目で送信できます`;
+      document.getElementById('errorSummaryChips').innerHTML = missing.map((item, i) =>
+        `<button type="button" class="error-summary-chip" data-idx="${i}">${item.label} <span style="font-size:10px">&#8595;</span></button>`
+      ).join('');
+      document.getElementById('errorSummaryChips').querySelectorAll('[data-idx]').forEach(btn => {
+        btn.addEventListener('click', () => missing[parseInt(btn.dataset.idx, 10)].focus());
+      });
+      banner.classList.remove('hidden');
+    }
 
     function updateProgressUI() {
       const missing = PROGRESS_ITEMS.filter(item => !item.done());
@@ -1626,6 +1689,7 @@
       document.getElementById('saveStatus').textContent = '保存中...';
       updateProgressUI();
       updateGradingProgress();
+      updateErrorBanner();
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -1931,10 +1995,17 @@
       }
       if (!valid) {
         refreshCardErrors();
+        errorBannerArmed = true;
+        updateErrorBanner();
         setTimeout(() => {
-          const firstErr = document.querySelector('.text-red-500:not(.hidden)');
-          if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          else window.scrollTo({ top: 0, behavior: 'smooth' });
+          const banner = document.getElementById('errorSummaryBanner');
+          if (banner && !banner.classList.contains('hidden')) {
+            banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            const firstErr = document.querySelector('.text-red-500:not(.hidden)');
+            if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            else window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
         }, 150);
         return;
       }
