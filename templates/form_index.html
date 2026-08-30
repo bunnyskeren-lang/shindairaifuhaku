@@ -665,10 +665,11 @@
       }
 
       if (!liff.isLoggedIn()) {
-        showOverlay(`<div class="text-4xl">📱</div>
-          <p class="text-sm text-gray-500">レビュー投稿にはLINEログインが必要です。</p>
-          <button type="button" id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">LINEでログイン</button>`);
-        document.getElementById('loginBtn').onclick = () => liff.login({ redirectUri: location.href });
+        // 修正理由: このページ(/)はLIFFのエンドポイントURLとして登録されていない
+        // （登録先は/liff/review）。ここでliff.login()を呼ぶとredirectUriの検証に
+        // 失敗し400 Bad Requestになるため、エンドポイントURL側でログインを完結させる
+        // （2026-08-30、外部ブラウザ経由のアクセスで発覚）
+        location.replace('/liff/review' + location.search);
         return;
       }
 
