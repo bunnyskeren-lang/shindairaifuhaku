@@ -34,7 +34,7 @@ from core.config import (
     make_register_url,
     make_review_liff_url,
 )
-from core.subject_variants import LETTER_MERGE_EXCLUDED_CLASSIFICATIONS, compute_variant_bases, TAG_PRIORITY
+from core.subject_variants import LETTER_MERGE_EXCLUDED_CLASSIFICATIONS, REMOTE_TAG, compute_variant_bases, TAG_PRIORITY
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
@@ -197,7 +197,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                 return any(n in reviewed_names for n, _ in _sem_bases[key])
             return False
         if kind.startswith("numvariant:"):
-            key = (name, fd[0], fd[1], "（遠隔）" in kind)
+            key = (name, fd[0], fd[1], REMOTE_TAG in kind)
             if key in _num_bases:
                 return any(n in reviewed_names for n, _, _, _, _ in _num_bases[key])
             return False
@@ -223,7 +223,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                     return url
             return ""
         if kind.startswith("numvariant:"):
-            key = (name, fd[0], fd[1], "（遠隔）" in kind)
+            key = (name, fd[0], fd[1], REMOTE_TAG in kind)
             if key in _num_bases:
                 for n, _, _, _, _ in sorted(_num_bases[key], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9))):
                     url = course_syllabus_urls.get(n, "")
@@ -250,8 +250,8 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
             elif kind.startswith("variant:"):
                 first_suffix = kind.split(":", 1)[1].split("/")[0]
                 liff_url = course_liff_urls.get(name + first_suffix, "")
-            elif kind.startswith("numvariant:") and (name, fac, dept, "（遠隔）" in kind) in _num_bases:
-                first_name = min(_num_bases[(name, fac, dept, "（遠隔）" in kind)], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))[0]
+            elif kind.startswith("numvariant:") and (name, fac, dept, REMOTE_TAG in kind) in _num_bases:
+                first_name = min(_num_bases[(name, fac, dept, REMOTE_TAG in kind)], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))[0]
                 liff_url = course_liff_urls.get(first_name, "")
             else:
                 liff_url = ""

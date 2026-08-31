@@ -39,8 +39,18 @@ _ROMAN_VAL = {chr(0x2160 + i): i + 1 for i in range(12)}  # Ⅰ→1 ... Ⅻ→12
 # ソート用（無タグ→遠隔→再履修→両方の順）で、line_bot/handler.py側の束ね方の手順でも
 # 同じ順序を使うため公開名にしている。
 TAG_PRIORITY = {"": 0, "（遠隔）": 1, "（再履修）": 2, "（遠隔）（再履修）": 3}
+REMOTE_TAG = "（遠隔）"
 _VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])((?:（遠隔）|（再履修）)*)$')
 _VSEM = re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
+
+
+def is_remote_tagged(name: str) -> bool:
+    """科目名の末尾に遠隔クラスタグ（REMOTE_TAG）が付いているかどうか。
+    レビュー投稿フォーム側（routers/liff_api.py）が variantGroup とは別に、遠隔/対面の
+    区別をフロントエンドのグループ化キーへ渡す用途で使う（変種グループのラベル文字列
+    自体は遠隔/対面で同じ「ベース名」のままなので、ラベルだけでは区別できないため）。"""
+    return REMOTE_TAG in name
+
 
 # 教養(人文)/(社会)/(自然)/(総合)/(健康・スポーツ)は、末尾のA/B/C/Dが「並行クラス」ではなく
 # トピック違いの独立した科目であることが多く、語尾アルファベットだけで1行に統合表示すると
@@ -130,7 +140,7 @@ def compute_variant_bases(
         if m:
             base, letter, sk, disp, tag = m
             fac, dept = fd_by_name.get(name, ("", ""))
-            key = (base, fac, dept, "（遠隔）" in tag)
+            key = (base, fac, dept, REMOTE_TAG in tag)
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     num_bases = {k: v for k, v in num_bases.items() if len(v) >= 2}
 
@@ -277,7 +287,7 @@ def compute_variant_display_groups(
         m = _vnum_match(name)
         if m:
             base, letter, sk, disp, tag = m
-            key = (base, cls, "（遠隔）" in tag)
+            key = (base, cls, REMOTE_TAG in tag)
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     for (base, cls, _remote), members in num_bases.items():
         if len(members) < 2:

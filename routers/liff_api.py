@@ -18,6 +18,7 @@ from core.config import (
 from core.grading_method import parse_grading_method
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
+from core.subject_variants import is_remote_tagged
 from database import AsyncSessionLocal
 from models import (
     CourseSection, CourseSectionView, Instructor, Review, ReviewStatus,
@@ -158,9 +159,14 @@ async def api_preload():
         # 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）は
         # レビュー投稿フォームの科目検索でも1件にまとめて選べるようにする（LINE bot科目一覧と同じ統合規則）
         variant_map = await cache.get_variant_map_cached()
+        # variantGroupは遠隔/対面で同じベース名文字列になる（ラベル自体は共通の接頭辞を保つ
+        # 必要があるため）。フロントエンド側の統合表示（_groupCourseItems）が誤って
+        # 遠隔クラスと対面クラスを1グループに混在させないよう、isRemoteを別途渡す
+        # （core.subject_variants.is_remote_tagged()参照）。
         course_list = [
             {"id": c.id, "name": c.name, "reading": c.reading or "",
              "variantGroup": variant_map.get(c.name, ""),
+             "isRemote": is_remote_tagged(c.name),
              "instructors": [{"name": i.name} for i in insts_by_course.get(c.id, [])]}
             for c in courses
         ]

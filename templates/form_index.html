@@ -1196,18 +1196,24 @@
     // 検索候補として1件にまとめ、担当教員は全変種分をマージした一覧として提示する。
     // どの変種になるかは教員選択時に自動で解決する（変種そのものはユーザーに意識させない）。
     function _groupCourseItems(items) {
+      // variantGroupは遠隔/対面で同じベース名文字列になる（表示名・サフィックス抽出の
+      // プレフィックスとして共通のベース名を保つ必要があるため）。実際のグループ化キーは
+      // isRemoteも合わせて使い、遠隔クラスと対面クラスを別グループとして扱う。
+      const groupKey = c => c.variantGroup + (c.isRemote ? ' remote' : '');
       const byGroup = new Map();
       for (const c of items) {
         if (!c.variantGroup) continue;
-        if (!byGroup.has(c.variantGroup)) byGroup.set(c.variantGroup, []);
-        byGroup.get(c.variantGroup).push(c);
+        const key = groupKey(c);
+        if (!byGroup.has(key)) byGroup.set(key, []);
+        byGroup.get(key).push(c);
       }
       const emitted = new Set();
       const result = [];
       for (const c of items) {
-        const members = c.variantGroup ? byGroup.get(c.variantGroup) : null;
+        const key = c.variantGroup ? groupKey(c) : null;
+        const members = key ? byGroup.get(key) : null;
         if (!members || members.length < 2) { result.push(c); continue; }
-        if (emitted.has(c.variantGroup)) continue;
+        if (emitted.has(key)) continue;
         // 同じ教員が複数の変種を担当していても、教員名は1回だけ表示する
         // （最初に見つかった変種の科目へ解決する。表示済みのレビューは科目詳細ページ側で
         // グループ全体分をまとめて見せているため、どの変種に紐づけても実害は無い）
@@ -1221,7 +1227,7 @@
           }
         }
         if (mergedInstructors.length === 0) { result.push(c); continue; } // 教員未登録で解決不能な場合は統合しない
-        emitted.add(c.variantGroup);
+        emitted.add(key);
         result.push({
           id: null,
           name: c.variantGroup,
