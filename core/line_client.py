@@ -62,10 +62,6 @@ async def link_rich_menu(user_id: str, rich_menu_id: str) -> None:
     await _with_retry(lambda: _api.link_rich_menu_id_to_user(user_id, rich_menu_id))
 
 
-async def unlink_rich_menu(user_id: str) -> None:
-    await _with_retry(lambda: _api.unlink_rich_menu_id_from_user(user_id))
-
-
 async def self_ping() -> None:
     if not SELF_URL:
         return
