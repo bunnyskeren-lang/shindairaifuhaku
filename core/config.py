@@ -65,7 +65,7 @@ MAX_REVIEWS_PER_COURSE_SECTION = 1
 # レビュー募集を締め切り、科目詳細ページには他教員クラスも同一内容である旨を表示する。
 # 情報基礎(id=704)・教養とは何か(id=702) いずれも教養教育院 - 2026-08-31追加
 ON_DEMAND_SAME_CONTENT_SUBJECT_IDS = {704, 702}
-ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信のため、他教員のクラスも内容は同一です"
+ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信であり、他教員のクラスも内容は同一です"
 
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数
 REVIEW_APPROVAL_UNLOCK_CREDITS = 1
