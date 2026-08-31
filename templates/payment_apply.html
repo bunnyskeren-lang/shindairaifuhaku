@@ -168,8 +168,11 @@
       }
     }
     studentIdInput.addEventListener('blur', refreshEligibility);
+    let studentIdDebounce;
     studentIdInput.addEventListener('input', function() {
       studentIdError.classList.add('hidden');
+      clearTimeout(studentIdDebounce);
+      studentIdDebounce = setTimeout(refreshEligibility, 300);
     });
 
     // 現在値が100円単位からずれていても、ネイティブのnumber inputスピナーのように
