@@ -74,6 +74,45 @@ def test_compute_variant_full_labels_includes_bracketed_suffix():
     assert "単独科目" not in labels
 
 
+def test_letter_excluded_names_keeps_variants_separate():
+    """教養(人文)/(社会)/(自然)/(総合)/(健康・スポーツ)の科目名は、letter_excluded_namesに
+    渡すことで文字(A-D)バリアント統合の対象から外せる（2026-08-31、DB上は元々別Subjectの
+    ままだが表示だけ統合していたものを、この5分類に限り統合しない方針に変更）。
+    数字・ローマ数字・セミナー系の判定には影響しないことも確認する。"""
+    names_with_fd = [
+        ("心理学A", "教養教育院", ""),
+        ("心理学B", "教養教育院", ""),
+        ("力学基礎1", "工学部", ""),
+        ("力学基礎2", "工学部", ""),
+    ]
+    excluded = frozenset({"心理学A", "心理学B"})
+
+    groups = subject_variants.compute_variant_groups(names_with_fd, letter_excluded_names=excluded)
+    assert "心理学A" not in groups
+    assert "心理学B" not in groups
+    assert groups["力学基礎1"] == groups["力学基礎2"] == "力学基礎"
+
+    labels = subject_variants.compute_variant_full_labels(names_with_fd, letter_excluded_names=excluded)
+    assert "心理学A" not in labels
+    assert "心理学B" not in labels
+    assert labels["力学基礎1"] == "力学基礎(1/2)"
+
+
+def test_compute_variant_display_groups_excludes_kyoyo_letter_classifications():
+    """管理画面向けcompute_variant_display_groups()もLETTER_MERGE_EXCLUDED_CLASSIFICATIONSに
+    属する分類では文字バリアントを統合しない。"""
+    names_with_cls = [
+        ("心理学A", "教養(人文)"),
+        ("心理学B", "教養(人文)"),
+        ("構造設計A", "工学部専門科目"),
+        ("構造設計B", "工学部専門科目"),
+    ]
+    result = subject_variants.compute_variant_display_groups(names_with_cls)
+    assert ("心理学A", "教養(人文)") not in result
+    assert ("心理学B", "教養(人文)") not in result
+    assert result[("構造設計A", "工学部専門科目")] == "構造設計 (A/B)"
+
+
 def test_compute_variant_full_labels_handles_remote_retake_tags():
     """遠隔・再履修タグ（programing files/import_syllabus.py clean_name()が付与）付きの
     科目名も、無タグ→遠隔→再履修→両方の順で束ねられグループラベルに反映されることを確認する

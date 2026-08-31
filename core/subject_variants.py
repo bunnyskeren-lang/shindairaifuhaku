@@ -41,6 +41,15 @@ TAG_PRIORITY = {"": 0, "（遠隔）": 1, "（再履修）": 2, "（遠隔）（
 _VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])((?:（遠隔）|（再履修）)*)$')
 _VSEM = re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
 
+# 教養(人文)/(社会)/(自然)/(総合)/(健康・スポーツ)は、末尾のA/B/C/Dが「並行クラス」ではなく
+# トピック違いの独立した科目であることが多く、語尾アルファベットだけで1行に統合表示すると
+# 内容の異なる科目を同一視してしまう。2026-08-31にユーザー指示でこの5分類のみ文字バリアント
+# 統合（数字/ローマ数字・セミナー系は対象外）から除外した。DB上は元々別々のSubject行のまま
+# （このモジュールは表示統合のみを扱うため、DBには一切影響しない）。
+LETTER_MERGE_EXCLUDED_CLASSIFICATIONS = frozenset({
+    "教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)", "教養(健康・スポーツ)",
+})
+
 
 def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     m = _VNUM.match(name)
@@ -57,6 +66,7 @@ def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
 
 def compute_variant_bases(
     names_with_faculty_dept: list[tuple[str, str, str]],
+    letter_excluded_names: frozenset[str] = frozenset(),
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
     dict[tuple[str, str, str], list[str]],
@@ -75,6 +85,10 @@ def compute_variant_bases(
     形（セミナーは丸括弧付き、文字は末尾に数字を伴わない、数字/ローマ数字は末尾が必ず
     数字かローマ数字）から互いに排他的なので、構築順序（先に確定した種別を後の判定から
     除外する等）を気にせず独立に計算してよい。）
+
+    letter_excluded_names（LETTER_MERGE_EXCLUDED_CLASSIFICATIONSに属する科目名の集合）に
+    含まれる名前は、文字(A-D)バリアントの判定・グループ化から除外する（他のメンバーとも
+    統合させない）。数字・ローマ数字・セミナー系の判定には影響しない。
     """
     names = [n for n, _, _ in names_with_faculty_dept]
     fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
@@ -93,12 +107,17 @@ def compute_variant_bases(
     for name in names:
         if not name or len(name) <= 1 or name[-1] not in ('A', 'B', 'C', 'D'):
             continue
+        if name in letter_excluded_names:
+            continue
         base = name[:-1]
         fac, dept = fd_by_name.get(name, ("", ""))
         key = (base, fac, dept)
         if key in letter_bases:
             continue
-        variants = [s for s in 'ABCD' if (base + s, fac, dept) in name_fd_set]
+        variants = [
+            s for s in 'ABCD'
+            if (base + s, fac, dept) in name_fd_set and (base + s) not in letter_excluded_names
+        ]
         if len(variants) >= 2:
             letter_bases[key] = variants
 
@@ -115,13 +134,16 @@ def compute_variant_bases(
     return sem_bases, letter_bases, num_bases
 
 
-def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) -> dict[str, str]:
+def compute_variant_groups(
+    names_with_faculty_dept: list[tuple[str, str, str]],
+    letter_excluded_names: frozenset[str] = frozenset(),
+) -> dict[str, str]:
     """(科目名, faculty, department)のリストから、末尾のアルファベット/数字/ローマ数字/セミナー言語
     だけが異なる2件以上の科目名をグループ化し、科目名→表示用グループラベル（ベース名）の
     マップを返す。グループに属さない（＝バリアントが1件だけ、または該当パターンなし）
-    科目名はマップに含めない。
+    科目名はマップに含めない。letter_excluded_namesの扱いはcompute_variant_bases()参照。
     """
-    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
+    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept, letter_excluded_names)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
@@ -142,16 +164,20 @@ def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) 
     return result
 
 
-def compute_variant_full_labels(names_with_faculty_dept: list[tuple[str, str, str]]) -> dict[str, str]:
+def compute_variant_full_labels(
+    names_with_faculty_dept: list[tuple[str, str, str]],
+    letter_excluded_names: frozenset[str] = frozenset(),
+) -> dict[str, str]:
     """(科目名, faculty, department)のリストから、科目名 → 括弧付き接尾辞込みの完全な
     グループ表示名（例: "力学基礎(1/2)"、"生物学各論(A1/A2/C1/C2)"）のマップを返す。
 
     compute_variant_groups()はベースラベル（接尾辞を含まない科目名の共通部分）のみを返すため、
     ベースラベルだけでは元の科目名と見分けがつかない画面（管理画面のレビュー科目別集計等）
     向けに追加した。判定基準はcompute_variant_groups()と同一（compute_variant_bases()を共有）。
-    グループに属さない科目名はマップに含めない。
+    グループに属さない科目名はマップに含めない。letter_excluded_namesの扱いは
+    compute_variant_bases()参照。
     """
-    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
+    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept, letter_excluded_names)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
@@ -217,9 +243,13 @@ def compute_variant_display_groups(
             assigned.add((n, c))
 
     # 2) 文字バリアント（末尾がA/B/C/Dのみ、数字を伴わないもの）
+    # LETTER_MERGE_EXCLUDED_CLASSIFICATIONSに属する分類は文字バリアント統合の対象外
+    # （compute_variant_bases()参照）
     letter_bases: dict[tuple[str, str], list[str]] = {}
     for name, cls in items:
         if (name, cls) in assigned or not name or len(name) <= 1 or (name, cls) not in item_set:
+            continue
+        if cls in LETTER_MERGE_EXCLUDED_CLASSIFICATIONS:
             continue
         if name[-1] in ('A', 'B', 'C', 'D'):
             base = name[:-1]

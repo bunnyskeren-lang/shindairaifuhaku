@@ -3,7 +3,11 @@ import time
 from sqlalchemy import func, select
 
 from core.config import EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION, make_syllabus_url
-from core.subject_variants import compute_variant_full_labels, compute_variant_groups
+from core.subject_variants import (
+    LETTER_MERGE_EXCLUDED_CLASSIFICATIONS,
+    compute_variant_full_labels,
+    compute_variant_groups,
+)
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
 
@@ -379,8 +383,10 @@ async def get_variant_map_cached() -> dict[str, str]:
     if _variant_map_cache is not None and time.monotonic() - _variant_map_cache_at < _COURSE_CACHE_TTL:
         return _variant_map_cache
     _, all_courses = await get_courses_cached()
+    letter_excluded = {c.name for c in all_courses if c.classification in LETTER_MERGE_EXCLUDED_CLASSIFICATIONS}
     _variant_map_cache = compute_variant_groups(
-        [(c.name, c.faculty or "", c.department or "") for c in all_courses]
+        [(c.name, c.faculty or "", c.department or "") for c in all_courses],
+        letter_excluded_names=letter_excluded,
     )
     _variant_map_cache_at = time.monotonic()
     return _variant_map_cache
@@ -401,8 +407,10 @@ async def get_variant_full_label_map_cached() -> dict[str, str]:
     if _variant_full_label_cache is not None and time.monotonic() - _variant_full_label_cache_at < _COURSE_CACHE_TTL:
         return _variant_full_label_cache
     _, all_courses = await get_courses_cached()
+    letter_excluded = {c.name for c in all_courses if c.classification in LETTER_MERGE_EXCLUDED_CLASSIFICATIONS}
     _variant_full_label_cache = compute_variant_full_labels(
-        [(c.name, c.faculty or "", c.department or "") for c in all_courses]
+        [(c.name, c.faculty or "", c.department or "") for c in all_courses],
+        letter_excluded_names=letter_excluded,
     )
     _variant_full_label_cache_at = time.monotonic()
     return _variant_full_label_cache

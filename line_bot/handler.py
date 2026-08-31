@@ -34,7 +34,7 @@ from core.config import (
     make_register_url,
     make_review_liff_url,
 )
-from core.subject_variants import compute_variant_bases, TAG_PRIORITY
+from core.subject_variants import LETTER_MERGE_EXCLUDED_CLASSIFICATIONS, compute_variant_bases, TAG_PRIORITY
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
@@ -124,7 +124,8 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
     # バリアント判定・束ね方の実体はcore.subject_variants.compute_variant_bases()に一本化済み
     # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
     names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows]
-    _sem_bases, _letter_bases, _num_bases = compute_variant_bases(names_with_fd)
+    _letter_excluded = {c.name for c in rows if c.classification in LETTER_MERGE_EXCLUDED_CLASSIFICATIONS}
+    _sem_bases, _letter_bases, _num_bases = compute_variant_bases(names_with_fd, _letter_excluded)
 
     _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}
     _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _, _ in _items}
