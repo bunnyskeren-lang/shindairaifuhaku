@@ -13,14 +13,10 @@
 {% macro group_row(row, sgid=none, pgid=none, gid=none) %}
 {% if sgid %}
 {% set main_attrs = 'data-sg="' ~ sgid ~ '" data-pg="' ~ pgid ~ '"' %}
-{% set sub_attrs = main_attrs ~ ' class="inst-row"' %}
-{% set sub_attrs_rv = main_attrs ~ ' class="review-row"' %}
 {% else %}
-{% set main_attrs = 'class="' ~ gid ~ '"' %}
-{% set sub_attrs = 'class="' ~ gid ~ ' inst-row"' %}
-{% set sub_attrs_rv = 'class="' ~ gid ~ ' review-row"' %}
+{% set main_attrs = 'class="' ~ gid ~ '" data-gid="' ~ gid ~ '"' %}
 {% endif %}
-<tr id="group-row-{{ row.key }}" {{ main_attrs|safe }} style="display:none">
+<tr id="group-row-{{ row.key }}" {{ main_attrs|safe }} data-member-count="{{ row.members | length }}" style="display:none">
   <td>
     🔗 {{ row.label }}
   </td>
@@ -28,11 +24,11 @@
   <td style="white-space:nowrap;width:64px;color:#9ca3af;font-size:11px">統合</td>
   <td class="actions">
     <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
-            onclick="event.stopPropagation();toggleRow('inst-{{ row.key }}','{{ row.ids | join(',') }}',false)">
+            onclick="event.stopPropagation();toggleRow('{{ row.key }}','{{ row.ids | join(',') }}',false,true,this)">
       👨‍🏫 担当教員{% if row.instructor_count %} {{ row.instructor_count }}人{% endif %}
     </button>
     <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
-            onclick="event.stopPropagation();toggleReviews('rv-{{ row.key }}','{{ row.ids | join(',') }}')">
+            onclick="event.stopPropagation();toggleReviews('{{ row.key }}','{{ row.ids | join(',') }}',this)">
       レビュー {{ row.review_total }}件{% if row.pending_count %} <span class="badge-pending">待機中{{ row.pending_count }}</span>{% endif %}
     </button>
     {% if row.review_summary %}
@@ -50,20 +46,6 @@
             onclick="event.stopPropagation();openEditGroup('{{ row.key }}')">編集</button>
     <button type="button" class="btn btn-danger" style="padding:4px 10px"
             onclick="event.stopPropagation();deleteGroup('{{ row.key }}',this)">削除</button>
-  </td>
-</tr>
-<tr id="inst-{{ row.key }}" {{ sub_attrs|safe }} style="display:none">
-  <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
-    <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員（統合科目{{ row.members | length }}件の合計）</div>
-    <div class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-      <span style="color:#9ca3af;font-size:12px">読み込み中...</span>
-    </div>
-    <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">統合科目のため教員の追加・削除はできません。個別に操作したい場合は科目名で検索してください。</p>
-  </td>
-</tr>
-<tr id="rv-{{ row.key }}" {{ sub_attrs_rv|safe }} style="display:none">
-  <td colspan="4" style="padding:0;background:#f9fafb" class="review-panel-body">
-    <p style="padding:12px 16px;color:#9ca3af;margin:0">読み込み中...</p>
   </td>
 </tr>
 {% endmacro %}
@@ -246,11 +228,11 @@
     </td>
     <td class="actions">
       <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
-              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}','{{ c.id }}',true)">
+              onclick="event.stopPropagation();toggleRow({{ c.id }},'{{ c.id }}',true,false,this)">
         👨‍🏫 担当教員{% if instructor_count_by_course.get(c.id) %} {{ instructor_count_by_course.get(c.id) }}人{% endif %}
       </button>
       <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
-              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}','{{ c.id }}')">
+              onclick="event.stopPropagation();toggleReviews({{ c.id }},'{{ c.id }}',this)">
         レビュー {{ review_total_by_course.get(c.id, 0) }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
       </button>
       {{ review_summary_badges(c.id) }}
@@ -258,26 +240,6 @@
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
       <button type="button" class="btn btn-danger" style="padding:4px 10px"
               onclick="event.stopPropagation();deleteCourse({{ c.id }},this)">削除</button>
-    </td>
-  </tr>
-  <tr id="inst-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="inst-row" style="display:none">
-    <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
-      <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員</div>
-      <div id="inst-list-{{ c.id }}" class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        <span style="color:#9ca3af;font-size:12px">読み込み中...</span>
-      </div>
-      <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
-        <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
-               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px">
-        <button type="button" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap"
-                onclick="addInstructor({{ c.id }})">追加</button>
-      </div>
-      <div id="inst-err-{{ c.id }}" style="display:none;color:#dc2626;font-size:11px;margin-top:4px">重複または空欄です</div>
-    </td>
-  </tr>
-  <tr id="rv-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" class="review-row" style="display:none">
-    <td colspan="4" style="padding:0;background:#f9fafb" class="review-panel-body">
-      <p style="padding:12px 16px;color:#9ca3af;margin:0">読み込み中...</p>
     </td>
   </tr>
   {% endif %}
@@ -301,7 +263,7 @@
   {% else %}
   {% set c = row.course %}
   {% set pending_count = pending_count_by_course.get(c.id, 0) %}
-  <tr id="course-row-{{ c.id }}" class="{{ gid }}" style="display:none">
+  <tr id="course-row-{{ c.id }}" class="{{ gid }}" data-gid="{{ gid }}" style="display:none">
     <td>
       {{ c.name }}
       {% if c.term_type %}<span class="badge-term" style="margin-left:4px">{{ c.term_type }}</span>{% endif %}
@@ -316,11 +278,11 @@
     </td>
     <td class="actions">
       <button type="button" class="btn" style="padding:4px 10px;background:var(--accent-soft);color:var(--accent-text)"
-              onclick="event.stopPropagation();toggleRow('inst-{{ c.id }}','{{ c.id }}',true)">
+              onclick="event.stopPropagation();toggleRow({{ c.id }},'{{ c.id }}',true,false,this)">
         👨‍🏫 担当教員{% if instructor_count_by_course.get(c.id) %} {{ instructor_count_by_course.get(c.id) }}人{% endif %}
       </button>
       <button type="button" class="btn" style="padding:4px 10px;background:#f3f4f6;color:#374151"
-              onclick="event.stopPropagation();toggleReviews('rv-{{ c.id }}','{{ c.id }}')">
+              onclick="event.stopPropagation();toggleReviews({{ c.id }},'{{ c.id }}',this)">
         レビュー {{ review_total_by_course.get(c.id, 0) }}件{% if pending_count %} <span class="badge-pending">待機中{{ pending_count }}</span>{% endif %}
       </button>
       {{ review_summary_badges(c.id) }}
@@ -328,27 +290,6 @@
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
       <button type="button" class="btn btn-danger" style="padding:4px 10px"
               onclick="event.stopPropagation();deleteCourse({{ c.id }},this)">削除</button>
-    </td>
-  </tr>
-  <!-- 教員管理トグル行 -->
-  <tr id="inst-{{ c.id }}" class="{{ gid }} inst-row" style="display:none">
-    <td colspan="4" style="padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe">
-      <div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員</div>
-      <div id="inst-list-{{ c.id }}" class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        <span style="color:#9ca3af;font-size:12px">読み込み中...</span>
-      </div>
-      <div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">
-        <input type="text" id="inst-input-{{ c.id }}" placeholder="教員名" maxlength="100"
-               style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px">
-        <button type="button" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap"
-                onclick="addInstructor({{ c.id }})">追加</button>
-        <span id="inst-err-{{ c.id }}" style="display:none;color:#ef4444;font-size:12px;font-weight:bold">同じ教員がすでに追加されています</span>
-      </div>
-    </td>
-  </tr>
-  <tr id="rv-{{ c.id }}" class="{{ gid }} review-row" style="display:none">
-    <td colspan="4" style="padding:0;background:#f9fafb" class="review-panel-body">
-      <p style="padding:12px 16px;color:#9ca3af;margin:0">読み込み中...</p>
     </td>
   </tr>
   {% endif %}
@@ -461,8 +402,72 @@ function toggleGroup(id, headerTr) {
   var arrow = headerTr.querySelector('.grp-arrow');
   if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
 }
-function toggleReviews(id, ids) {
-  const tr = document.getElementById(id);
+// 担当教員・レビューのトグル行は、科目数3000件超を常時全件DOMに埋め込むと
+// ページが極めて重くなる（入力欄への文字入力すら遅延する）ため、初回に
+// ボタンを押したタイミングでだけ<tr>を生成しDOMに追加する（遅延生成）
+function insertExtraRow(srcRow, newRow) {
+  const anchorId = srcRow.dataset.lastExtra;
+  const anchor = (anchorId && document.getElementById(anchorId)) || srcRow;
+  anchor.insertAdjacentElement('afterend', newRow);
+  srcRow.dataset.lastExtra = newRow.id;
+}
+function createReviewRow(key, btn) {
+  const srcRow = btn.closest('tr');
+  const tr = document.createElement('tr');
+  tr.id = 'rv-' + key;
+  tr.style.display = 'none';
+  if (srcRow.dataset.gid) {
+    tr.className = srcRow.dataset.gid + ' review-row';
+  } else {
+    tr.dataset.sg = srcRow.dataset.sg || '';
+    tr.dataset.pg = srcRow.dataset.pg || '';
+    tr.className = 'review-row';
+  }
+  const td = document.createElement('td');
+  td.colSpan = 4;
+  td.className = 'review-panel-body';
+  td.style.cssText = 'padding:0;background:#f9fafb';
+  td.innerHTML = '<p style="padding:12px 16px;color:#9ca3af;margin:0">読み込み中...</p>';
+  tr.appendChild(td);
+  insertExtraRow(srcRow, tr);
+  return tr;
+}
+function createInstRow(key, isGroup, btn) {
+  const srcRow = btn.closest('tr');
+  const tr = document.createElement('tr');
+  tr.id = 'inst-' + key;
+  tr.style.display = 'none';
+  if (srcRow.dataset.gid) {
+    tr.className = srcRow.dataset.gid + ' inst-row';
+  } else {
+    tr.dataset.sg = srcRow.dataset.sg || '';
+    tr.dataset.pg = srcRow.dataset.pg || '';
+    tr.className = 'inst-row';
+  }
+  const td = document.createElement('td');
+  td.colSpan = 4;
+  td.style.cssText = 'padding:12px 16px;background:var(--accent-soft);border-bottom:1px solid #c7d2fe';
+  if (isGroup) {
+    const memberCount = srcRow.dataset.memberCount || '';
+    td.innerHTML =
+      '<div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員（統合科目' + memberCount + '件の合計）</div>' +
+      '<div class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="color:#9ca3af;font-size:12px">読み込み中...</span></div>' +
+      '<p style="color:#9ca3af;font-size:11px;margin:8px 0 0">統合科目のため教員の追加・削除はできません。個別に操作したい場合は科目名で検索してください。</p>';
+  } else {
+    td.innerHTML =
+      '<div style="font-size:12px;font-weight:bold;color:var(--accent-text);margin-bottom:8px">👨‍🏫 担当教員</div>' +
+      '<div id="inst-list-' + key + '" class="inst-chip-list" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="color:#9ca3af;font-size:12px">読み込み中...</span></div>' +
+      '<div style="display:flex;gap:4px;align-items:center;margin-top:8px;flex-wrap:wrap">' +
+      '<input type="text" id="inst-input-' + key + '" placeholder="教員名" maxlength="100" style="padding:3px 8px;font-size:12px;border:1px solid #c7d2fe;border-radius:6px;width:120px">' +
+      '<button type="button" class="btn btn-primary" style="padding:3px 10px;font-size:11px;white-space:nowrap" onclick="addInstructor(' + key + ')">追加</button>' +
+      '<span id="inst-err-' + key + '" style="display:none;color:#ef4444;font-size:12px;font-weight:bold">同じ教員がすでに追加されています</span></div>';
+  }
+  tr.appendChild(td);
+  insertExtraRow(srcRow, tr);
+  return tr;
+}
+function toggleReviews(key, ids, btn) {
+  const tr = document.getElementById('rv-' + key) || createReviewRow(key, btn);
   const willShow = tr.style.display === 'none';
   if (willShow && ids && tr.dataset.loaded !== '1') {
     const body = tr.querySelector('.review-panel-body');
@@ -472,8 +477,8 @@ function toggleReviews(id, ids) {
   }
   tr.style.display = willShow ? 'table-row' : 'none';
 }
-function toggleRow(id, ids, editable) {
-  const tr = document.getElementById(id);
+function toggleRow(key, ids, editable, isGroup, btn) {
+  const tr = document.getElementById('inst-' + key) || createInstRow(key, isGroup, btn);
   const willShow = tr.style.display === 'none';
   if (willShow && ids && tr.dataset.loaded !== '1') {
     const list = tr.querySelector('.inst-chip-list');
