@@ -7,7 +7,7 @@ from core import cache, line_client, moderation
 from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
-    DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, EMAIL_VERIFICATION_ENABLED,
+    DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE,
     FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, RICHMENU_ID_MAIN,
     STUDENT_ID_RE, LINE_USER_ID_RE,
@@ -34,15 +34,15 @@ async def profile_status(request: Request):
     uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     if not uid:
         # 修正理由: LINE側のID token検証APIが一時的に失敗した場合も found=False に
-        # なり、呼び出し側が「未登録・未認証」と誤判定してメール認証ゲートへ誤誘導して
-        # いた(2026-08-31、本番で発生・大西さんの報告で発覚)。検証失敗と本当に
-        # プロフィールが無いケースを呼び出し側で区別できるようフラグを追加する。
+        # なり、呼び出し側が「未登録」と誤判定していた(2026-08-31、本番で発生・
+        # 大西さんの報告で発覚)。検証失敗と本当にプロフィールが無いケースを
+        # 呼び出し側で区別できるようフラグを追加する。
         return {"complete": False, "found": False, "auth_failed": True}
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
-        # foundはUserProfile自体の有無（メール認証済みかどうか）を区別するために追加。
-        # completeだけだと「未認証で未登録」と「認証済みだが学部学科未入力」を区別できず、
-        # 前者をメール認証ゲートへ、後者を会員登録画面へ、と誘導先を出し分けられない
+        # foundはUserProfile自体の有無を区別するために追加。completeだけだと
+        # 「未登録」と「登録済みだが学部学科未入力」を区別できず、前者を会員登録
+        # フォームの新規入力へ、後者をプリフィル入りの編集へ、と出し分けられない
         return {"complete": is_profile_complete(profile), "found": profile is not None}
 
 
@@ -133,11 +133,6 @@ async def register_profile(
 
         profile = await session.get(UserProfile, uid)
         is_new_registration = profile is None
-        if is_new_registration and EMAIL_VERIFICATION_ENABLED:
-            # 会員登録はメール認証(本人確認)を経た上で行う必要がある。ここでUserProfileが
-            # 無いまま新規作成を許すと、/verify-emailを経由せずメール認証をすり抜けて
-            # 登録できてしまう([[project_review_email_verification_20260824]]参照)。
-            return _form_error("先にメールアドレス認証が必要です。お手数ですが投稿フォームまたはお問い合わせフォームから開き直してください")
         promo_subject_name = None
         if is_new_registration:
             # 会員登録直後、もらったチケットの使い方を体験してもらうための案内科目
@@ -183,9 +178,9 @@ async def register_profile(
             "welcome_credits": REGISTRATION_WELCOME_UNLOCK_CREDITS if is_new_registration else 0,
             "promo_course_name": promo_subject_name,
             "promo_course_url": make_course_liff_url(WELCOME_PROMO_SUBJECT_ID) if promo_subject_name else "",
-            # 会員登録は「レビュー投稿フォームを開こうとしてメール認証ゲートに誘導された」流れの
+            # 会員登録は「レビュー投稿フォームを開こうとして未登録だったので誘導された」流れの
             # 最終ステップとして辿り着くのがほとんどのため、登録完了後はLINEのトーク画面を挟まず
-            # 直接レビュー投稿フォームへ戻す([[project_review_email_verification_20260824]]参照)
+            # 直接レビュー投稿フォームへ戻す
             "review_liff_url": make_review_liff_url(user_id=uid),
         }
     )

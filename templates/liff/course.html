@@ -171,8 +171,6 @@ const REVIEW_FORM_URL = "{{ review_form_url }}";
 const REVIEW_LIFF_ID = "{{ review_liff_id }}";
 const BASE_URL = "{{ base_url }}";
 const UNLOCK_REWARD = {{ unlock_reward }};
-const EMAIL_VERIFICATION_ENABLED = {{ 'true' if email_verification_enabled else 'false' }};
-const EMAIL_VERIFY_URL = "{{ email_verify_url }}";
 
 // 修正理由: レビュー閲覧には会員登録を必須にするため、未登録の間はページ本体を
 // ブラー＋オーバーレイで覆って触れなくし、会員登録へ誘導する
@@ -327,15 +325,10 @@ async function main() {
       const status = await statusRes.json();
       if (status.auth_failed) {
         // 修正理由: LINE側のID token検証が一時的に失敗しただけの場合も
-        // found=falseになり、会員登録済みの本人をメール認証ページへ誤誘導して
-        // いたバグの修正(2026-08-31)。検証失敗時はneedsRegistrationにフォール
-        // バックし(会員登録誘導オーバーレイ止まりにする)、認証ページへは飛ばさない
+        // found=falseになり、会員登録済みの本人を誤って未登録扱いしていた
+        // バグの修正(2026-08-31)。検証失敗時はneedsRegistrationにフォール
+        // バックする(会員登録誘導オーバーレイ止まりにする)
         needsRegistration = true;
-      } else if (!status.found && EMAIL_VERIFICATION_ENABLED) {
-        // 修正理由: UserProfileが全く無い(=大学メール認証が未済)場合は、
-        // /registerへ直接誘導せずメール認証ゲートへ誘導する
-        location.replace(EMAIL_VERIFY_URL);
-        return;
       } else if (!status.complete) {
         needsRegistration = true;
       }

@@ -39,15 +39,6 @@ try:
 except ValueError:
     BACKUP_INTERVAL_HOURS = 1
 
-# レビュー投稿フォームのメールアドレス認証（なりすまし防止）。Brevo等の送信サービス・
-# 送信ドメインの契約が整うまではEMAIL_VERIFICATION_ENABLED=falseのままにし、
-# 従来通り即時投稿の挙動を維持する（core/mail.pyもBREVO_API_KEY未設定時はログ出力のみ）
-BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
-MAIL_FROM_ADDRESS = os.environ.get("MAIL_FROM_ADDRESS", "")
-MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "神大ライフハック")
-EMAIL_VERIFICATION_ENABLED = os.environ.get("EMAIL_VERIFICATION_ENABLED", "false").lower() in ("1", "true", "yes")
-EMAIL_VERIFICATION_TTL_MINUTES = 30
-
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
@@ -232,16 +223,6 @@ def make_register_url(user_id: str) -> str:
     if REGISTER_LIFF_ID:
         return f"https://liff.line.me/{REGISTER_LIFF_ID}?uid={user_id}"
     return f"{APP_URL}/register?uid={user_id}"
-
-
-def make_email_verify_url() -> str:
-    """メール認証ゲート画面(/verify-email)のURL。生URLだとLINEの「アプリ内ブラウザ」で
-    開かれるだけでliff.isInClient()がfalseになり自動ログインできないため
-    ([[feedback_liff_links_must_use_liffline_me]]と同じ理由)、REVIEW_LIFF_IDのエンドポイントURL
-    (投稿フォーム=/)の後ろに/verify-emailパスを付与するLIFF URL形式で返す。"""
-    if REVIEW_LIFF_ID:
-        return f"https://liff.line.me/{REVIEW_LIFF_ID}/verify-email"
-    return f"{APP_URL}/verify-email"
 
 
 def make_review_liff_url(course_name: str = "", user_id: str = "") -> str:

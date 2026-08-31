@@ -37,7 +37,6 @@ REVIEW_FORM_URL = os.environ.get(
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
 CONTACT_LIFF_ID = os.environ.get("CONTACT_LIFF_ID", "")
-EMAIL_VERIFICATION_ENABLED = os.environ.get("EMAIL_VERIFICATION_ENABLED", "false").lower() in ("1", "true", "yes")
 
 if args.env == "prod":
     confirm = input("⚠️  本番環境のリッチメニューを更新します。よろしいですか？ (yes/no): ")
@@ -164,15 +163,7 @@ AREAS = [
 
 
 # 登録前ユーザー用: 全ボタンを会員登録LIFFへのURIActionにした同一画像のリッチメニュー。
-# EMAIL_VERIFICATION_ENABLED時は/api/register側がメール認証未完了(=UserProfile未作成)の
-# 新規登録を拒否するため、REGISTER_LIFF_IDへ直接飛ばすとメール認証をすり抜けられず
-# 「先にメールアドレス認証が必要です」で止まってしまう。先にメール認証ゲート
-# (REVIEW_LIFF_IDのエンドポイントURL経由の/verify-email、core.config.make_email_verify_url()と
-# 同じ形式)へ誘導する。
-if EMAIL_VERIFICATION_ENABLED and REVIEW_LIFF_ID:
-    _register_button_uri = f"https://liff.line.me/{REVIEW_LIFF_ID}/verify-email"
-else:
-    _register_button_uri = f"https://liff.line.me/{REGISTER_LIFF_ID}"
+_register_button_uri = f"https://liff.line.me/{REGISTER_LIFF_ID}"
 
 PREREG_AREAS = [
     {**a, "action": URIAction(label="会員登録", uri=_register_button_uri)}

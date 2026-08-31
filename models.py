@@ -43,9 +43,6 @@ class UserProfile(TimestampMixin, Base):
     faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    # 大学メール({学籍番号を小文字化}@stu.kobe-u.ac.jp)のマジックリンク認証が完了した日時。
-    # 初回のプロフィール作成時のみ検証し、以降の学籍番号変更を伴わない更新では再検証しない
-    email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # レビュー閲覧権チケットの残数。承認された自分のレビュー1件につき
     # REVIEW_APPROVAL_UNLOCK_CREDITS枚が付与され、任意の科目のレビュー閲覧解除（SubjectUnlock作成）に
     # 1枚ずつ消費する
@@ -284,18 +281,3 @@ class Inquiry(TimestampMixin, Base):
     # 'pending'(未対応) / 'handled'(対応済み)。CHECK制約はdatabase.py init_db()側で管理。
     status: Mapped[str] = mapped_column(Text, nullable=False, default=InquiryStatus.PENDING)
     handled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-class EmailVerification(TimestampMixin, Base):
-    """レビュー投稿フォームで初めてUserProfileを作る際のメール認証待ち情報。
-    大学メール宛のマジックリンクをクリックするまでUserProfile/Reviewの作成を保留し、
-    payloadに投稿内容一式をJSON文字列で保持しておく（core/mail.py・routers/email_verify_api.py参照）。"""
-    __tablename__ = "email_verifications"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    line_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    student_id: Mapped[str] = mapped_column(String(20), nullable=False)
-    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    payload: Mapped[str] = mapped_column(Text, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

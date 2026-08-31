@@ -12,7 +12,7 @@ from linebot.v3.messaging import (
 
 from core import cache
 from core.config import (
-    CONTACT_URL, EASE_STARS, EMAIL_VERIFICATION_ENABLED, PRIVACY_URL, TERMS_URL,
+    CONTACT_URL, EASE_STARS, PRIVACY_URL, TERMS_URL,
     make_course_liff_url, make_review_liff_url,
 )
 from models import Subject
@@ -283,16 +283,6 @@ def make_registration_flex(register_url: str) -> FlexMessage:
             margin="sm",
         ),
     ]
-    if EMAIL_VERIFICATION_ENABLED:
-        # 修正理由: 事前の説明なくメール認証を求められるとユーザーが驚くため、
-        # タップする前の時点で大学メールアドレスによる本人確認があることを明示する
-        _notice_contents.append(FlexText(
-            text="📧 大学メールアドレスによるメール認証を行います",
-            size="xs",
-            color="#9a3412",
-            wrap=True,
-            margin="sm",
-        ))
     return FlexMessage(
         alt_text="🎓 神大ライフハックへようこそ！会員登録をお願いします",
         contents=FlexBubble(

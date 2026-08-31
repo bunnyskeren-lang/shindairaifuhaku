@@ -6,10 +6,9 @@ from fastapi.responses import HTMLResponse, Response
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, EMAIL_VERIFICATION_ENABLED, FACULTY_DEPARTMENTS, IS_DEV,
+    APP_URL, FACULTY_DEPARTMENTS, IS_DEV,
     LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
     REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
-    make_email_verify_url,
 )
 from core.templates import templates
 
@@ -30,29 +29,12 @@ async def index(request: Request, uid: str = Query(default="")):
             "liff_id": REVIEW_LIFF_ID,
             "register_liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
-            "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
             "max_reviews_per_course_section": MAX_REVIEWS_PER_COURSE_SECTION,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-    return response
-
-
-@router.get("/verify-email", response_class=HTMLResponse)
-async def verify_email_gate(request: Request):
-    """レビュー投稿フォームを開く前段のメール認証ページ。氏名・学籍番号のみを集め、
-    大学メール宛のマジックリンクで本人確認する（/api/email/request参照）。"""
-    response = templates.TemplateResponse(
-        "form_email_gate.html",
-        {
-            "request": request,
-            "liff_id": REVIEW_LIFF_ID,
-            "IS_DEV": IS_DEV,
-        },
-    )
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
 
@@ -86,23 +68,6 @@ async def liff_review(request: Request):
             "liff_id": REVIEW_LIFF_ID,
             "base_url": APP_URL,
             "redirect_path": "/",
-        },
-    )
-
-
-@router.get("/liff/review/verify-email", response_class=HTMLResponse)
-async def liff_review_verify_email(request: Request):
-    # REVIEW_LIFF_IDのLINE Developersコンソール側エンドポイントURLが/liff/reviewの
-    # ため、make_email_verify_url()が生成する https://liff.line.me/{REVIEW_LIFF_ID}/verify-email
-    # は実際には /liff/review/verify-email に展開される。このパスで/verify-emailへ
-    # 中継する(2026-08-29、この不整合により404になっていた不具合の修正)。
-    return templates.TemplateResponse(
-        "liff/review_redirect.html",
-        {
-            "request": request,
-            "liff_id": REVIEW_LIFF_ID,
-            "base_url": APP_URL,
-            "redirect_path": "/verify-email",
         },
     )
 
@@ -153,8 +118,6 @@ async def liff_course(request: Request):
             "base_url": APP_URL,
             "IS_DEV": IS_DEV,
             "unlock_reward": REVIEW_APPROVAL_UNLOCK_CREDITS,
-            "email_verification_enabled": EMAIL_VERIFICATION_ENABLED,
-            "email_verify_url": make_email_verify_url(),
         })
     except Exception as exc:
         await save_error_log(exc, action="liff_course")

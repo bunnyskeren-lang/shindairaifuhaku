@@ -70,45 +70,6 @@ async def test_register_existing_user_does_not_double_grant_credits(http_client_
 
 
 @pytest.mark.asyncio
-async def test_register_new_user_blocked_when_email_verification_enabled(http_client_factory, monkeypatch, test_sessionmaker):
-    """EMAIL_VERIFICATION_ENABLED時、/verify-emailを経由せずUserProfileを新規作成できてしまう
-    抜け道(LINE友だち追加時の登録案内が/registerへ直接誘導していた)を防ぐガードの検証。"""
-    _fake_verify(monkeypatch)
-    _stub_link_rich_menu(monkeypatch)
-    monkeypatch.setattr(profile_api, "EMAIL_VERIFICATION_ENABLED", True)
-    client = http_client_factory(profile_api, monkeypatch)
-
-    resp = await client.post("/api/register", data=VALID_FORM)
-    assert resp.status_code == 400
-    assert "メールアドレス認証" in resp.text
-
-    async with test_sessionmaker() as session:
-        profile = await session.get(UserProfile, USER_ID)
-        assert profile is None
-
-
-@pytest.mark.asyncio
-async def test_register_existing_user_allowed_when_email_verification_enabled(http_client_factory, monkeypatch, test_sessionmaker):
-    """メール認証済み(=UserProfileが既に存在する)ユーザーの本登録(学部学科入力)は
-    EMAIL_VERIFICATION_ENABLED時も引き続き許可される。"""
-    _fake_verify(monkeypatch)
-    _stub_link_rich_menu(monkeypatch)
-    async with test_sessionmaker() as session:
-        session.add(UserProfile(line_user_id=USER_ID, name="神戸太郎", student_id="2345678S"))
-        await session.commit()
-    monkeypatch.setattr(profile_api, "EMAIL_VERIFICATION_ENABLED", True)
-    client = http_client_factory(profile_api, monkeypatch)
-
-    resp = await client.post("/api/register", data=VALID_FORM)
-    assert resp.status_code == 200
-
-    async with test_sessionmaker() as session:
-        profile = await session.get(UserProfile, USER_ID)
-        assert profile.faculty == "経営学部"
-        assert profile.department == "経営学科"
-
-
-@pytest.mark.asyncio
 async def test_register_missing_faculty_field_shows_friendly_error(http_client_factory, monkeypatch, test_sessionmaker):
     """54a0821の回帰テスト。/api/registerのForm引数が全てForm(...)(必須)だった頃は、
     POSTボディにfaculty自体が含まれないと生の{"detail":[...]}バリデーションエラーが

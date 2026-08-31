@@ -26,13 +26,11 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     EASE_ORDER,
     EASE_STARS,
-    EMAIL_VERIFICATION_ENABLED,
     RICHMENU_ID_MAIN,
     RICHMENU_ID_PREREGISTER,
     is_profile_complete,
     make_cls_sort,
     make_course_liff_url,
-    make_email_verify_url,
     make_register_url,
     make_review_liff_url,
 )
@@ -67,19 +65,6 @@ async def _registration_incomplete(user_id: str) -> bool:
         cache.set_registration_complete(user_id)
     return not complete
 
-
-async def _registration_entry_url(user_id: str) -> str:
-    """未登録/本登録未完了ユーザーへの誘導先URLを決める。UserProfileが全く無い場合は
-    メール認証(EMAIL_VERIFICATION_ENABLED時)へ誘導し、会員登録フローがメール認証を
-    経由せずUserProfileを新規作成できてしまう抜け道を塞ぐ(POST /api/registerの
-    サーバー側ガードとセット)。UserProfileはあるが学部学科未入力(=メール認証は
-    既に済んでいる)の場合は従来通り会員登録画面へ誘導する。"""
-    if EMAIL_VERIFICATION_ENABLED:
-        async with AsyncSessionLocal() as session:
-            profile = await session.get(UserProfile, user_id)
-        if profile is None:
-            return make_email_verify_url()
-    return make_register_url(user_id)
 
 # ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
 # バリアント判定・束ね方の手順はcore.subject_variants.compute_variant_bases()に一本化済み
@@ -889,7 +874,7 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
             _log_reply_timing(f"{label}:banned", t0)
             return
         if await _registration_incomplete(user_id):
-            register_url = await _registration_entry_url(user_id)
+            register_url = make_register_url(user_id)
             await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
             _log_reply_timing(f"{label}:register", t0)
             return
@@ -930,7 +915,7 @@ async def process_events(events) -> None:
                     _log_reply_timing("follow:banned", _t0)
                     continue
                 try:
-                    register_url = await _registration_entry_url(user_id)
+                    register_url = make_register_url(user_id)
                     await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
                     asyncio.create_task(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
