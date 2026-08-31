@@ -98,6 +98,36 @@ def test_letter_excluded_names_keeps_variants_separate():
     assert labels["力学基礎1"] == "力学基礎(1/2)"
 
 
+def test_num_excluded_names_keeps_health_sports_jisshu_separate():
+    """健康・スポーツ科学実習1/2は、実習1と実習2で内容が異なる独立科目のため、
+    2026-08-31にユーザー指示で数字バリアント統合対象から除外した
+    （NUM_MERGE_EXCLUDED_NAMESはcompute_variant_bases()の既定引数のため、
+    呼び出し側が明示的に渡さなくても除外される）。"""
+    names_with_fd = [
+        ("健康・スポーツ科学実習1", "教養教育院", ""),
+        ("健康・スポーツ科学実習2", "教養教育院", ""),
+        ("力学基礎1", "工学部", ""),
+        ("力学基礎2", "工学部", ""),
+    ]
+
+    groups = subject_variants.compute_variant_groups(names_with_fd)
+    assert "健康・スポーツ科学実習1" not in groups
+    assert "健康・スポーツ科学実習2" not in groups
+    assert groups["力学基礎1"] == groups["力学基礎2"] == "力学基礎"
+
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
+    assert "健康・スポーツ科学実習1" not in labels
+    assert "健康・スポーツ科学実習2" not in labels
+
+    names_with_cls = [
+        ("健康・スポーツ科学実習1", "教養(健康・スポーツ)"),
+        ("健康・スポーツ科学実習2", "教養(健康・スポーツ)"),
+    ]
+    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
+    assert ("健康・スポーツ科学実習1", "教養(健康・スポーツ)") not in display_result
+    assert ("健康・スポーツ科学実習2", "教養(健康・スポーツ)") not in display_result
+
+
 def test_compute_variant_display_groups_excludes_kyoyo_letter_classifications():
     """管理画面向けcompute_variant_display_groups()もLETTER_MERGE_EXCLUDED_CLASSIFICATIONSに
     属する分類では文字バリアントを統合しない。"""

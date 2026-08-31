@@ -61,6 +61,14 @@ LETTER_MERGE_EXCLUDED_CLASSIFICATIONS = frozenset({
     "教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)", "教養(健康・スポーツ)",
 })
 
+# 健康・スポーツ科学実習1/2は末尾数字のみが異なるが、実習1と実習2は種目等の内容が異なる
+# 独立した科目のため、2026-08-31にユーザー指示で数字バリアント統合対象から除外した。
+# LETTER_MERGE_EXCLUDED_CLASSIFICATIONSと異なり分類単位ではなく科目名単位の除外（同分類内の
+# 他の数字バリアント科目までは対象にしない、というユーザー指示のため）。
+NUM_MERGE_EXCLUDED_NAMES = frozenset({
+    "健康・スポーツ科学実習1", "健康・スポーツ科学実習2",
+})
+
 
 def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     m = _VNUM.match(name)
@@ -78,6 +86,7 @@ def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
 def compute_variant_bases(
     names_with_faculty_dept: list[tuple[str, str, str]],
     letter_excluded_names: frozenset[str] = frozenset(),
+    num_excluded_names: frozenset[str] = NUM_MERGE_EXCLUDED_NAMES,
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
     dict[tuple[str, str, str], list[str]],
@@ -102,6 +111,11 @@ def compute_variant_bases(
     letter_excluded_names（LETTER_MERGE_EXCLUDED_CLASSIFICATIONSに属する科目名の集合）に
     含まれる名前は、文字(A-D)バリアントの判定・グループ化から除外する（他のメンバーとも
     統合させない）。数字・ローマ数字・セミナー系の判定には影響しない。
+
+    num_excluded_names（既定でNUM_MERGE_EXCLUDED_NAMES）に含まれる名前は、数字・ローマ数字
+    バリアントの判定・グループ化から除外する（他のメンバーとも統合させない）。文字(A-D)・
+    セミナー系の判定には影響しない。既定値そのものが除外対象のため、呼び出し側
+    （core/cache.py・line_bot/handler.py）は明示的に渡す必要はない。
     """
     names = [n for n, _, _ in names_with_faculty_dept]
     fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
@@ -136,6 +150,8 @@ def compute_variant_bases(
 
     num_bases: dict[tuple[str, str, str, bool], list[tuple[str, str, int, str, str]]] = {}
     for name in names:
+        if name in num_excluded_names:
+            continue
         m = _vnum_match(name)
         if m:
             base, letter, sk, disp, tag = m
@@ -280,9 +296,10 @@ def compute_variant_display_groups(
 
     # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化。遠隔タグの有無でも
     # グループを分ける＝遠隔は遠隔同士、それ以外は それ以外同士でのみ統合する）
+    # NUM_MERGE_EXCLUDED_NAMESに属する科目名は数字バリアント統合の対象外（compute_variant_bases()参照）
     num_bases: dict[tuple[str, str, bool], list[tuple[str, str, int, str, str]]] = {}
     for name, cls in items:
-        if (name, cls) in assigned:
+        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES:
             continue
         m = _vnum_match(name)
         if m:
