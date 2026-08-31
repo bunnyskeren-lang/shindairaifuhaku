@@ -86,7 +86,6 @@ async def payment_apply_submit(
     name: str = Form(default=""),
     student_id: str = Form(default=""),
     paypay_id: str = Form(default=""),
-    amount: str = Form(default=""),
     _rl: None = Depends(_apply_rate_limit),
 ):
     # 修正理由: name/student_id/paypay_id/amountをFastAPIのForm(...)必須指定にしていたため、
@@ -110,16 +109,6 @@ async def payment_apply_submit(
     if not paypay:
         return _error("PayPay IDを入力してください")
 
-    try:
-        amount_val = int(amount)
-    except ValueError:
-        return _error("申請金額を正しく入力してください")
-
-    if amount_val <= 0 or amount_val % _UNIT_YEN != 0:
-        return _error(f"申請金額は{_UNIT_YEN}円単位で入力してください")
-
-    required_reviews = amount_val // _YEN_PER_REVIEW
-
     async with AsyncSessionLocal() as session:
         if await _is_banned_student(session, sid):
             return _error(BAN_MESSAGE_TEXT)
@@ -133,17 +122,19 @@ async def payment_apply_submit(
         if existing_pending is not None:
             return _error("既に支払い待ちの申請があります。処理をお待ちください")
 
+        # 申請金額はユーザー入力を受け付けず、承認済み（未申請）レビュー数から常に満額を自動算出する
         unpaid_count = await _unpaid_count(session, sid)
-        if required_reviews > unpaid_count:
-            max_amount = (unpaid_count // (_UNIT_YEN // _YEN_PER_REVIEW)) * _UNIT_YEN
-            return _error(f"承認済み（未払い）レビューが不足しています。現在申請できる金額は{max_amount}円です")
+        if unpaid_count == 0:
+            return _error("承認済み（未申請）のレビューが見つかりませんでした")
+
+        amount_val = unpaid_count * _YEN_PER_REVIEW
 
         target_ids = (await session.execute(
             select(Review.id).where(
                 Review.student_id == sid,
                 Review.status == ReviewStatus.APPROVED,
                 Review.payment_request_id.is_(None),
-            ).order_by(Review.created_at.asc()).limit(required_reviews)
+            ).order_by(Review.created_at.asc()).limit(unpaid_count)
         )).scalars().all()
 
         payment_request = PaymentRequest(
