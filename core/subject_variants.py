@@ -32,11 +32,12 @@ _FULLWIDTH_UPPER = str.maketrans(
 _ROMAN_VAL = {chr(0x2160 + i): i + 1 for i in range(12)}  # Ⅰ→1 ... Ⅻ→12
 # 末尾の（遠隔）（再履修）タグ（programing files/import_syllabus.py clean_name()が付与、
 # REMOTE/RETAKEクラスを別科目として登録する仕組み）は、数字/ローマ数字バリアントと同じ
-# 基準（末尾の文字＋数字）を保ったまま追加の識別子として扱い、A1/A2/B1/B2等と同じグループに
-# 統合する（2026-08-31）。タグの優先順位は表示上のソート用（無タグ→遠隔→再履修→両方の順）で、
-# line_bot/handler.py側の束ね方の手順でも同じ順序を使うため公開名にしている。両方のタグが
-# 同時に付く科目名（clean_name()側で両方マッチした場合、常に遠隔→再履修の順で連結される）
-# にも対応する。
+# 基準（末尾の文字＋数字）を保ったまま追加の識別子として扱う。ただし遠隔クラスは対面クラスと
+# 授業形態そのものが異なり同一視できないため、遠隔タグの有無でグループを分ける
+# （遠隔は遠隔同士、それ以外（無タグ・再履修タグのみ）は無タグ・再履修同士で統合。
+# 2026-08-31にユーザー指示で「同一グループに混在」から変更）。タグの優先順位は表示上の
+# ソート用（無タグ→遠隔→再履修→両方の順）で、line_bot/handler.py側の束ね方の手順でも
+# 同じ順序を使うため公開名にしている。
 TAG_PRIORITY = {"": 0, "（遠隔）": 1, "（再履修）": 2, "（遠隔）（再履修）": 3}
 _VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])((?:（遠隔）|（再履修）)*)$')
 _VSEM = re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
@@ -70,11 +71,13 @@ def compute_variant_bases(
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
     dict[tuple[str, str, str], list[str]],
-    dict[tuple[str, str, str], list[tuple[str, str, int, str, str]]],
+    dict[tuple[str, str, str, bool], list[tuple[str, str, int, str, str]]],
 ]:
     """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/文字(A-D)/
     数字・ローマ数字の3種のバリアントグループを (base[+言語], faculty, department) キーで
     束ねた辞書(sem_bases, letter_bases, num_bases)を返す（メンバーが2件未満のキーは含めない）。
+    num_basesのキーのみ、末尾に遠隔タグの有無(bool)を追加で持つ（遠隔クラスと対面クラスは
+    別グループとして扱うため）。
 
     compute_variant_groups()（フラットなname→labelマップ、レビュー投稿フォーム/api/preload用）と
     line_bot.handler._build_course_bubbles()（Flex Message構築、シラバス/レビューURL等メンバーの
@@ -121,13 +124,13 @@ def compute_variant_bases(
         if len(variants) >= 2:
             letter_bases[key] = variants
 
-    num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str, str]]] = {}
+    num_bases: dict[tuple[str, str, str, bool], list[tuple[str, str, int, str, str]]] = {}
     for name in names:
         m = _vnum_match(name)
         if m:
             base, letter, sk, disp, tag = m
             fac, dept = fd_by_name.get(name, ("", ""))
-            key = (base, fac, dept)
+            key = (base, fac, dept, "（遠隔）" in tag)
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     num_bases = {k: v for k, v in num_bases.items() if len(v) >= 2}
 
@@ -156,7 +159,7 @@ def compute_variant_groups(
             if name not in result:
                 result[name] = base
 
-    for (base, _fac, _dept), members in num_bases.items():
+    for (base, _fac, _dept, _remote), members in num_bases.items():
         for n, _letter, _sk, _disp, _tag in members:
             if n not in result:
                 result[n] = base
@@ -193,7 +196,7 @@ def compute_variant_full_labels(
             if name not in result:
                 result[name] = label
 
-    for (base, _fac, _dept), members in num_bases.items():
+    for (base, _fac, _dept, _remote), members in num_bases.items():
         members_sorted = sorted(members, key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
         suffix = "/".join(f"{letter}{disp}{tag}" for _n, letter, _sk, disp, tag in members_sorted)
         label = f"{base}({suffix})"
@@ -265,17 +268,18 @@ def compute_variant_display_groups(
             result[(base + s, cls)] = label
             assigned.add((base + s, cls))
 
-    # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化）
-    num_bases: dict[tuple[str, str], list[tuple[str, str, int, str, str]]] = {}
+    # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化。遠隔タグの有無でも
+    # グループを分ける＝遠隔は遠隔同士、それ以外は それ以外同士でのみ統合する）
+    num_bases: dict[tuple[str, str, bool], list[tuple[str, str, int, str, str]]] = {}
     for name, cls in items:
         if (name, cls) in assigned:
             continue
         m = _vnum_match(name)
         if m:
             base, letter, sk, disp, tag = m
-            key = (base, cls)
+            key = (base, cls, "（遠隔）" in tag)
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
-    for (base, cls), members in num_bases.items():
+    for (base, cls, _remote), members in num_bases.items():
         if len(members) < 2:
             continue
         members_sorted = sorted(members, key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))

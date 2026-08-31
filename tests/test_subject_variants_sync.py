@@ -45,7 +45,7 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
     for (base, _fac, _dept), variants in letter_bases.items():
         for s in variants:
             reconstructed[base + s] = base
-    for (base, _fac, _dept), members in num_bases.items():
+    for (base, _fac, _dept, _remote), members in num_bases.items():
         for n, _letter, _sk, _disp, _tag in members:
             reconstructed[n] = base
 
@@ -114,9 +114,10 @@ def test_compute_variant_display_groups_excludes_kyoyo_letter_classifications():
 
 
 def test_compute_variant_full_labels_handles_remote_retake_tags():
-    """遠隔・再履修タグ（programing files/import_syllabus.py clean_name()が付与）付きの
-    科目名も、無タグ→遠隔→再履修→両方の順で束ねられグループラベルに反映されることを確認する
-    （2026-08-31、遠隔・再履修タグ導入時に追加）。"""
+    """遠隔タグの有無でグループを分け、無タグ・再履修タグ同士／遠隔・遠隔＋再履修タグ同士
+    それぞれで束ねられグループラベルに反映されることを確認する
+    （2026-08-31、遠隔・再履修タグ導入時に追加。当初は遠隔/対面を同一グループに混在させて
+    いたが、遠隔クラスは対面クラスと授業形態が異なり同一視できないためユーザー指示で分離）。"""
     names_with_fd = [
         ("力学基礎1", "工学部", ""),
         ("力学基礎1（遠隔）", "工学部", ""),
@@ -124,7 +125,8 @@ def test_compute_variant_full_labels_handles_remote_retake_tags():
         ("力学基礎1（遠隔）（再履修）", "工学部", ""),
     ]
     labels = subject_variants.compute_variant_full_labels(names_with_fd)
-    label = labels["力学基礎1"]
 
-    assert label == "力学基礎(1/1（遠隔）/1（再履修）/1（遠隔）（再履修）)"
-    assert all(labels[n] == label for n in labels)
+    assert labels["力学基礎1"] == "力学基礎(1/1（再履修）)"
+    assert labels["力学基礎1（再履修）"] == "力学基礎(1/1（再履修）)"
+    assert labels["力学基礎1（遠隔）"] == "力学基礎(1（遠隔）/1（遠隔）（再履修）)"
+    assert labels["力学基礎1（遠隔）（再履修）"] == "力学基礎(1（遠隔）/1（遠隔）（再履修）)"
