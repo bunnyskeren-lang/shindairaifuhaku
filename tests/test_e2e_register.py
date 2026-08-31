@@ -19,9 +19,9 @@ def _fake_verify(monkeypatch, user_id: str = USER_ID):
 
 
 def _stub_unlink_rich_menu(monkeypatch):
-    async def _noop(user_id):
+    async def _noop(user_id, rich_menu_id=None):
         return None
-    monkeypatch.setattr(profile_api.line_client, "unlink_rich_menu", _noop)
+    monkeypatch.setattr(profile_api.line_client, "link_rich_menu", _noop)
 
 
 VALID_FORM = {

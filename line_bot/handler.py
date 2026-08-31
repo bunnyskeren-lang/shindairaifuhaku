@@ -27,6 +27,7 @@ from core.config import (
     EASE_ORDER,
     EASE_STARS,
     EMAIL_VERIFICATION_ENABLED,
+    RICHMENU_ID_MAIN,
     RICHMENU_ID_PREREGISTER,
     is_profile_complete,
     make_cls_sort,
@@ -936,9 +937,12 @@ async def process_events(events) -> None:
                     await save_error_log(exc, action="follow")
                 try:
                     if await _registration_incomplete(user_id):
+                        # LINE側のデフォルトリッチメニューを登録前メニューにしてあるため
+                        # (setup_richmenu.py参照)、このlink呼び出し自体が失敗してもデフォルトの
+                        # フェイルセーフにより未登録ユーザーには登録前メニューが表示され続ける
                         await line_client.link_rich_menu(user_id, RICHMENU_ID_PREREGISTER)
                     else:
-                        await line_client.unlink_rich_menu(user_id)
+                        await line_client.link_rich_menu(user_id, RICHMENU_ID_MAIN)
                 except Exception as exc:
                     await save_error_log(exc, user_id=user_id, action="follow_richmenu")
                 _log_reply_timing("follow", _t0)

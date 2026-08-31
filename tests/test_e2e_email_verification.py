@@ -179,9 +179,9 @@ async def test_verify_then_submit_rejected_until_registration_completed(http_cli
 @pytest.mark.asyncio
 async def test_verify_then_register_then_submit_creates_review(http_client_factory, monkeypatch, test_sessionmaker):
     """メール認証→/api/register（学部・学科入力）で会員登録が完了して初めて/submitが通る。"""
-    async def _noop_unlink(user_id):
+    async def _noop_unlink(user_id, rich_menu_id=None):
         return None
-    monkeypatch.setattr(profile_api.line_client, "unlink_rich_menu", _noop_unlink)
+    monkeypatch.setattr(profile_api.line_client, "link_rich_menu", _noop_unlink)
 
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)

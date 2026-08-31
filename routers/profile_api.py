@@ -9,7 +9,8 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE, EMAIL_VERIFICATION_ENABLED,
     FACULTIES, FACULTY_DEPARTMENTS,
-    REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, STUDENT_ID_RE, LINE_USER_ID_RE,
+    REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, RICHMENU_ID_MAIN,
+    STUDENT_ID_RE, LINE_USER_ID_RE,
     WELCOME_PROMO_SUBJECT_ID,
     is_profile_complete, make_course_liff_url, make_review_liff_url,
 )
@@ -163,9 +164,11 @@ async def register_profile(
     cache.set_registration_complete(uid)
 
     try:
-        await line_client.unlink_rich_menu(uid)
+        # LINE側のデフォルトリッチメニューは登録前メニュー(setup_richmenu.py参照)なので、
+        # 登録完了後は通常メニューを明示的にlinkする(unlinkだけだとデフォルト=登録前に戻ってしまう)
+        await line_client.link_rich_menu(uid, RICHMENU_ID_MAIN)
     except Exception as exc:
-        await save_error_log(exc, user_id=uid, action="register_richmenu_unlink")
+        await save_error_log(exc, user_id=uid, action="register_richmenu_link")
 
     return templates.TemplateResponse(
         "form_register_success.html", {

@@ -37,7 +37,8 @@ pip install -r requirements-dev.txt
 | `LIFF_ID` | `2010406205-emxo5rhE`（本番値） | 科目詳細LIFFページのLIFF ID |
 | `REGISTER_LIFF_ID` | `""` | 会員登録LIFFページのLIFF ID |
 | `REVIEW_LIFF_ID` | `""` | レビュー投稿LIFFページのLIFF ID |
-| `RICHMENU_ID_PREREGISTER` | `""` | 未登録ユーザー用リッチメニューのID（`setup_richmenu.py`実行後に払い出される） |
+| `RICHMENU_ID_PREREGISTER` | `""` | 未登録ユーザー用リッチメニューのID（`setup_richmenu.py`実行後に払い出される。LINE側のデフォルトリッチメニューにも設定される） |
+| `RICHMENU_ID_MAIN` | `""` | 登録済みユーザー用（通常）リッチメニューのID（`setup_richmenu.py`実行後に払い出される。登録完了時に個別リンクするため必須） |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` | `""` / `""` / `admin@example.com` | Web Push通知用VAPID鍵（`programing files/seeds/generate_vapid.py`で生成） |
 | `SELF_URL` | `""` | 自己ping先の自身のURL（Render無料/Starterプランのスリープ防止） |
 | `APP_URL` | `https://shindairaifuhaku.onrender.com` | リンク生成に使う自身のURL |
@@ -81,7 +82,7 @@ cd "programing files"
 python setup_richmenu.py --env dev   # 本番の場合は --env prod（要明示的な指示。DEPLOYMENT.md参照）
 ```
 
-出力された未登録ユーザー用リッチメニューIDを `.env` の `RICHMENU_ID_PREREGISTER` に設定する。
+出力された通常リッチメニューID・未登録ユーザー用リッチメニューIDを `.env` の `RICHMENU_ID_MAIN` / `RICHMENU_ID_PREREGISTER` にそれぞれ設定する（LINE側のデフォルトは登録前メニューになるよう設定される。未登録ユーザーに全機能が使えてしまう抜け道を防ぐためのフェイルセーフ設計）。
 
 ## Web Push (VAPID) の準備（任意）
 

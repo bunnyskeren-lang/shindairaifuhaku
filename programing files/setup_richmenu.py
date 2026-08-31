@@ -37,6 +37,7 @@ REVIEW_FORM_URL = os.environ.get(
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
 CONTACT_LIFF_ID = os.environ.get("CONTACT_LIFF_ID", "")
+EMAIL_VERIFICATION_ENABLED = os.environ.get("EMAIL_VERIFICATION_ENABLED", "false").lower() in ("1", "true", "yes")
 
 if args.env == "prod":
     confirm = input("⚠️  本番環境のリッチメニューを更新します。よろしいですか？ (yes/no): ")
@@ -162,9 +163,19 @@ AREAS = [
 ]
 
 
-# 登録前ユーザー用: 全ボタンを会員登録LIFFへのURIActionにした同一画像のリッチメニュー
+# 登録前ユーザー用: 全ボタンを会員登録LIFFへのURIActionにした同一画像のリッチメニュー。
+# EMAIL_VERIFICATION_ENABLED時は/api/register側がメール認証未完了(=UserProfile未作成)の
+# 新規登録を拒否するため、REGISTER_LIFF_IDへ直接飛ばすとメール認証をすり抜けられず
+# 「先にメールアドレス認証が必要です」で止まってしまう。先にメール認証ゲート
+# (REVIEW_LIFF_IDのエンドポイントURL経由の/verify-email、core.config.make_email_verify_url()と
+# 同じ形式)へ誘導する。
+if EMAIL_VERIFICATION_ENABLED and REVIEW_LIFF_ID:
+    _register_button_uri = f"https://liff.line.me/{REVIEW_LIFF_ID}/verify-email"
+else:
+    _register_button_uri = f"https://liff.line.me/{REGISTER_LIFF_ID}"
+
 PREREG_AREAS = [
-    {**a, "action": URIAction(label="会員登録", uri=f"https://liff.line.me/{REGISTER_LIFF_ID}")}
+    {**a, "action": URIAction(label="会員登録", uri=_register_button_uri)}
     for a in AREAS
 ] if REGISTER_LIFF_ID else []
 
@@ -243,35 +254,45 @@ def main():
         except Exception:
             print("既存のデフォルトリッチメニューなし")
 
-        # 前回実行分の登録前用リッチメニューが残っていれば削除（デフォルトではないため上のロジックでは消えない）
+        # 前回実行分の残骸（登録前用・通常メニュー両方）を削除
+        # （デフォルトはどちらか一方だけなので、上のロジックでは非デフォルト側が消えない）
         _delete_richmenus_by_name(api, "神大ライフハック（登録前）")
+        _delete_richmenus_by_name(api, "神大ライフハック")
 
         print(f"画像を読み込み中: {image_path}")
         image_data = load_custom_image(image_path)
 
-        # 通常メニュー（デフォルトに設定）
+        # 通常メニュー（デフォルトにはせず、登録完了ユーザーへ個別リンクする）
         main_id = _create_and_upload(api, "神大ライフハック", AREAS, image_data)
-        api.set_default_rich_menu(main_id)
-        print(f"[完了] デフォルトリッチメニューに設定しました: {main_id}")
+        print(f"[完了] 通常リッチメニューを作成しました: {main_id}")
 
-        # 登録前メニュー（全ボタン→会員登録LIFF。デフォルトにはせず、未登録ユーザーへ個別リンクする）
+        # 登録前メニュー（全ボタン→会員登録LIFF）。LINE側のデフォルトに設定する。
+        # 未登録ユーザーへのlink_rich_menu個別呼び出し(line_bot/handler.py)が万一失敗しても、
+        # デフォルトが「制限なしの通常メニュー」だと全機能が使えてしまう抜け道になっていたため
+        # (2026-08-31発覚)、デフォルトを安全側（登録前メニュー）に倒す設計に変更した。
         prereg_id = ""
         if PREREG_AREAS:
             prereg_id = _create_and_upload(api, "神大ライフハック（登録前）", PREREG_AREAS, image_data)
-            print(f"[完了] 登録前リッチメニューを作成しました: {prereg_id}")
+            api.set_default_rich_menu(prereg_id)
+            print(f"[完了] 登録前リッチメニューをデフォルトに設定しました: {prereg_id}")
         else:
             print("[警告] REGISTER_LIFF_ID が未設定のため、登録前リッチメニューは作成されませんでした")
+            print("[警告] 登録前メニューが無いため、代わりに通常メニューをデフォルトに設定します")
+            api.set_default_rich_menu(main_id)
 
         print(f"\n環境: {args.env}  /  REVIEW_FORM_URL: {REVIEW_FORM_URL}")
         print("\nボタン配置（通常メニュー）:")
         for a in AREAS:
             print(f"  {a['label']:16s} → {a['action'].__class__.__name__}")
 
+        print("\n次の環境変数を設定してください:")
+        print(f"  RICHMENU_ID_MAIN={main_id}")
         if prereg_id:
-            print(f"\n次の環境変数を設定してください: RICHMENU_ID_PREREGISTER={prereg_id}")
-            print("  1. programing files/.env" + (".dev" if args.env == "dev" else "") + f" に RICHMENU_ID_PREREGISTER={prereg_id} を追記")
-            svc = "shindairaifuhaku-1（dev）" if args.env == "dev" else "shindairaifuhaku（本番）"
-            print(f"  2. Render の {svc} サービスの Environment にも同じ値を追加してください")
+            print(f"  RICHMENU_ID_PREREGISTER={prereg_id}")
+        env_file = ".env.dev" if args.env == "dev" else ".env"
+        print(f"  1. programing files/{env_file} に上記を追記")
+        svc = "shindairaifuhaku-1（dev）" if args.env == "dev" else "shindairaifuhaku（本番）"
+        print(f"  2. Render の {svc} サービスの Environment にも同じ値を追加してください")
 
 
 if __name__ == "__main__":
