@@ -15,8 +15,8 @@ router = APIRouter()
 _eligible_rate_limit = rate_limiter(max_requests=20, window_seconds=60)
 _apply_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
-_UNIT_YEN = 100
-_YEN_PER_REVIEW = 20
+_UNIT_YEN = 200
+_YEN_PER_REVIEW = 40
 
 
 async def _unpaid_count(session, sid: str) -> int:
@@ -24,6 +24,17 @@ async def _unpaid_count(session, sid: str) -> int:
         select(func.count(Review.id)).where(
             Review.student_id == sid,
             Review.status == ReviewStatus.APPROVED,
+            Review.payment_request_id.is_(None),
+        )
+    )).scalar_one()
+
+
+async def _submitted_count(session, sid: str) -> int:
+    """未払い（過去の支払い申請に紐づいていない）レビューの総投稿数。
+    status問わず（pending/approved/rejected）カウントする。"""
+    return (await session.execute(
+        select(func.count(Review.id)).where(
+            Review.student_id == sid,
             Review.payment_request_id.is_(None),
         )
     )).scalar_one()
@@ -59,8 +70,14 @@ async def payment_eligible(
         if await _is_banned_student(session, sid):
             return JSONResponse({"valid": False})
         count = await _unpaid_count(session, sid)
+        submitted_count = await _submitted_count(session, sid)
     max_amount = (count // (_UNIT_YEN // _YEN_PER_REVIEW)) * _UNIT_YEN
-    return JSONResponse({"valid": True, "count": count, "max_amount": max_amount})
+    return JSONResponse({
+        "valid": True,
+        "count": count,
+        "submitted_count": submitted_count,
+        "max_amount": max_amount,
+    })
 
 
 @router.post("/payment/apply/submit")
