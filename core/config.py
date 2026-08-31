@@ -60,6 +60,13 @@ def normalize_student_id(raw: str) -> str:
 # 1科目×1担当教員（course_section）あたりのレビュー投稿受付上限（待機中+承認済みの合計）
 MAX_REVIEWS_PER_COURSE_SECTION = 1
 
+# オンデマンド配信のため担当教員によらず授業内容が同一な科目（subjects.id）。
+# 1件のレビューがあれば他の教員のクラスにも実質流用できるため、全course_sectionで
+# レビュー募集を締め切り、科目詳細ページには他教員クラスも同一内容である旨を表示する。
+# 情報基礎(id=704)・教養とは何か(id=702) いずれも教養教育院 - 2026-08-31追加
+ON_DEMAND_SAME_CONTENT_SUBJECT_IDS = {704, 702}
+ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信のため、他教員のクラスも内容は同一です"
+
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数
 REVIEW_APPROVAL_UNLOCK_CREDITS = 1
 

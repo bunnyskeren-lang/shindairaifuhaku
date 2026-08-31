@@ -8,6 +8,7 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
+    ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
     STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
 )
 from core.liff_auth import verify_liff_id_token
@@ -80,6 +81,8 @@ async def submit(
         )).scalars().first()
         if not subject:
             return _form_error("指定された科目が見つかりません")
+        if subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
+            return _form_error("この科目はオンデマンド配信のため内容が教員によらず同一です。レビュー募集は終了しました")
 
         existing = (await session.execute(
             select(UserProfile).where(UserProfile.line_user_id == uid)

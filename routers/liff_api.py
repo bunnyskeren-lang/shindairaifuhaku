@@ -11,6 +11,7 @@ from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT, EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION,
+    ON_DEMAND_SAME_CONTENT_NOTE, ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.grading_method import parse_grading_method
@@ -124,11 +125,12 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
         insts_by_course: dict = {}
         for cs, inst in cs_rows:
             remaining = remaining_map.get((cs.subject_id, inst.name), MAX_REVIEWS_PER_COURSE_SECTION)
+            closed = cs.subject_id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS
             insts_by_course.setdefault(cs.subject_id, []).append({
                 "name": inst.name,
                 "url": cs_url_map.get(cs.id, ""),
-                "full": remaining <= 0,
-                "remaining": remaining,
+                "full": closed or remaining <= 0,
+                "remaining": 0 if closed else remaining,
             })
     return {"courses": [
         {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
@@ -165,20 +167,22 @@ async def api_preload():
     # 「full」/「remaining」（募集締切・残り枠）はレビュー投稿状況で頻繁に変わりうるため、
     # 構造データ本体（数千件規模でTTL 3600秒キャッシュ）とは切り離し、毎リクエスト時に付与する
     remaining_map = await cache.get_review_remaining_cached()
-    if remaining_map:
+    if remaining_map or ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
+        def _full(sid, name):
+            return sid in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS or remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION) <= 0
         def _remaining(sid, name):
-            return remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION)
+            return 0 if sid in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS else remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION)
         data = {
             "courses": [
                 {**c, "instructors": [
-                    {**i, "full": _remaining(c["id"], i["name"]) <= 0, "remaining": _remaining(c["id"], i["name"])}
+                    {**i, "full": _full(c["id"], i["name"]), "remaining": _remaining(c["id"], i["name"])}
                     for i in c["instructors"]
                 ]}
                 for c in data["courses"]
             ],
             "instructors": [
                 {**inst, "courses": [
-                    {**cn, "full": _remaining(cn["id"], inst["name"]) <= 0, "remaining": _remaining(cn["id"], inst["name"])}
+                    {**cn, "full": _full(cn["id"], inst["name"]), "remaining": _remaining(cn["id"], inst["name"])}
                     for cn in inst["courses"]
                 ]}
                 for inst in data["instructors"]
@@ -233,8 +237,9 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
             for inst_name, c_id, c_name in all_rows:
                 if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
-                    remaining = remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
-                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name, "full": remaining <= 0, "remaining": remaining})
+                    closed = c_id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS
+                    remaining = 0 if closed else remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
+                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name, "full": closed or remaining <= 0, "remaining": remaining})
             for name in insts:
                 result.append({"name": name, "courses": courses_by_inst[name]})
 
@@ -411,6 +416,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "category": subject.category or "",
             "term_type": subject.term_type or "",
             "credits": float(subject.credits) if subject.credits else 0,
+            "note": ON_DEMAND_SAME_CONTENT_NOTE if subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS else "",
             "syllabus_url": syllabus_url or "",
             "review_count": review_count,
             "locked": locked,

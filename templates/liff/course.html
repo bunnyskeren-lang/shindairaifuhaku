@@ -104,6 +104,7 @@
   </div>
 
   <div id="lock-card"></div>
+  <div id="on-demand-note"></div>
 
   <div class="card" id="summary-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -373,6 +374,11 @@ async function main() {
   if (data.credits)
     meta.insertAdjacentHTML("beforeend",
       `<span class="badge badge-cr">🎓 ${esc(data.credits)}単位</span>`);
+
+  if (data.note) {
+    document.getElementById("on-demand-note").innerHTML =
+      `<div class="card" style="padding:10px 14px;margin-bottom:0;font-size:12px;color:#4338ca;background:#eef2ff">${esc(data.note)}</div>`;
+  }
 
   // ── 総合評価 ──
   const RATING_LABELS = ['', 'ほぼ学びなし', 'ちょい学び', 'まあまあ学びあり', 'かなり学べた', 'めちゃくちゃ学べた'];
