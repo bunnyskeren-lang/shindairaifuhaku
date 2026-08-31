@@ -33,7 +33,11 @@ async def profile_status(request: Request):
     body = await request.json()
     uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     if not uid:
-        return {"complete": False, "found": False}
+        # 修正理由: LINE側のID token検証APIが一時的に失敗した場合も found=False に
+        # なり、呼び出し側が「未登録・未認証」と誤判定してメール認証ゲートへ誤誘導して
+        # いた(2026-08-31、本番で発生・大西さんの報告で発覚)。検証失敗と本当に
+        # プロフィールが無いケースを呼び出し側で区別できるようフラグを追加する。
+        return {"complete": False, "found": False, "auth_failed": True}
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
         # foundはUserProfile自体の有無（メール認証済みかどうか）を区別するために追加。
@@ -52,7 +56,9 @@ async def profile_prefill(request: Request):
     body = await request.json()
     uid = await verify_liff_id_token((body.get("id_token") or "").strip(), request)
     if not uid:
-        return {"found": False}
+        # 修正理由: profile_status()と同様、LINE側のID token検証失敗と本当に
+        # プロフィールが無いケースを呼び出し側で区別できるようフラグを追加する。
+        return {"found": False, "auth_failed": True}
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
         if not profile:

@@ -706,6 +706,16 @@
         return;
       }
 
+      if (d.auth_failed) {
+        // 修正理由: LINE側のID token検証が一時的に失敗しただけなのに、
+        // 会員登録済みの本人を「未認証」と誤判定してメール認証ページへ
+        // 誤誘導していたバグの修正(2026-08-31)。この場合は再試行を促す。
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン確認に失敗しました。もう一度お試しください。</p>
+          <button onclick="location.reload()" class="block w-full text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
+        return;
+      }
+
       if (!d.found) {
         if (EMAIL_VERIFICATION_ENABLED) {
           // 修正理由: 初めての投稿者はプロフィール作成前に大学メールでの本人確認を

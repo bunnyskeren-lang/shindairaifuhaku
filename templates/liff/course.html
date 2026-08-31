@@ -325,13 +325,18 @@ async function main() {
         body: JSON.stringify({ id_token: idToken }),
       });
       const status = await statusRes.json();
-      if (!status.found && EMAIL_VERIFICATION_ENABLED) {
+      if (status.auth_failed) {
+        // 修正理由: LINE側のID token検証が一時的に失敗しただけの場合も
+        // found=falseになり、会員登録済みの本人をメール認証ページへ誤誘導して
+        // いたバグの修正(2026-08-31)。検証失敗時はneedsRegistrationにフォール
+        // バックし(会員登録誘導オーバーレイ止まりにする)、認証ページへは飛ばさない
+        needsRegistration = true;
+      } else if (!status.found && EMAIL_VERIFICATION_ENABLED) {
         // 修正理由: UserProfileが全く無い(=大学メール認証が未済)場合は、
         // /registerへ直接誘導せずメール認証ゲートへ誘導する
         location.replace(EMAIL_VERIFY_URL);
         return;
-      }
-      if (!status.complete) {
+      } else if (!status.complete) {
         needsRegistration = true;
       }
     } catch(e) {
