@@ -1250,7 +1250,7 @@
       dropdown.classList.remove('hidden');
       dropdown.querySelectorAll('[data-idx]').forEach(el => {
         const c = items[parseInt(el.dataset.idx)];
-        el.addEventListener('click', () => selectCourse(c.name, c.instructors, c.id, !!c.isGroup));
+        el.addEventListener('click', () => selectCourse(c.name, c.instructors, c.id, !!c.isGroup, c.variantSuffixes));
       });
     }
 
@@ -1289,13 +1289,19 @@
     let currentCourseId = null;
     const chipsEl = document.getElementById('instructorChips');
 
-    function selectCourse(name, instructors, courseId, isGroup) {
+    function selectCourse(name, instructors, courseId, isGroup, variantSuffixes) {
       currentInstructors = instructors || [];
       // 統合科目（isGroup）は教員を選ぶまでどの変種か確定しないため、courseNameHiddenは
       // 一旦空にしておき（送信バリデーションで弾かれる）、教員選択時に実際の科目名へ差し替える
       currentCourseId = isGroup ? null : (courseId ?? null);
       document.getElementById('courseNameHidden').value = isGroup ? '' : name;
-      document.getElementById('selectedCourseName').textContent = name;
+      // 統合科目は教員選択後も「英語科教育論(A1/A2/B1/B2)」のようにグループ全体の表記を
+      // 表示し続ける（実際にどの変種に紐づいたか＝courseNameHiddenの値をユーザーに
+      // 意識させない設計のため。selectCourse呼び出し時点でのisGroup/variantSuffixesを
+      // クロージャで保持し、下の教員クリックハンドラでも使い回す）
+      const displayName = (isGroup && variantSuffixes && variantSuffixes.length)
+        ? `${name}(${variantSuffixes.join('/')})` : name;
+      document.getElementById('selectedCourseName').textContent = displayName;
       document.getElementById('selectedCourse').classList.remove('hidden');
       document.getElementById('courseNameLabelInstr').classList.remove('hidden');
       if (searchMode === 'course') {
@@ -1344,7 +1350,9 @@
             if (btn.dataset.courseId) {
               const cName = btn.dataset.courseName;
               document.getElementById('courseNameHidden').value = cName;
-              document.getElementById('selectedCourseName').textContent = cName;
+              // isGroupの間はグループ表記(displayName)のまま維持し、実際に解決された
+              // 変種名(cName)はcourseNameHidden（送信用）にのみ反映する
+              document.getElementById('selectedCourseName').textContent = isGroup ? displayName : cName;
               currentCourseId = parseInt(btn.dataset.courseId, 10);
             }
             document.getElementById('instructorHint').classList.add('hidden');
