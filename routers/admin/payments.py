@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
+from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -56,6 +57,23 @@ async def admin_payment_pay(request_id: int, _: str = Depends(check_admin)):
         if payment_request and payment_request.status == PaymentRequestStatus.PENDING:
             payment_request.status = PaymentRequestStatus.PAID
             payment_request.paid_at = datetime.now(timezone.utc)
+
+            # PayPayで現金化した分だけ、レビュー承認時に付与済みの閲覧チケットを使用済みにする
+            # （現金と閲覧権チケットの二重取得を防ぐため）
+            review_count = (await session.execute(
+                select(func.count(Review.id)).where(
+                    Review.payment_request_id == payment_request.id,
+                    Review.credit_granted_at.isnot(None),
+                )
+            )).scalar_one()
+            if review_count:
+                credits_to_use = review_count * REVIEW_APPROVAL_UNLOCK_CREDITS
+                await session.execute(
+                    UserProfile.__table__.update()
+                    .where(UserProfile.student_id == payment_request.student_id)
+                    .values(unlock_credits=func.greatest(UserProfile.unlock_credits - credits_to_use, 0))
+                )
+
             await session.commit()
     return RedirectResponse("/admin/payments", status_code=303)
 
