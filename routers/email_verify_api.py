@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.activity_log import save_error_log
 from core.config import (
@@ -165,19 +166,25 @@ async def verify_email_confirm(request: Request, token: str = Form(...)):
 
         payload = json.loads(ev.payload)
         now = datetime.now(timezone.utc)
-        profile = await session.get(UserProfile, ev.line_user_id)
-        if profile is None:
-            session.add(UserProfile(
-                line_user_id=ev.line_user_id,
-                name=payload["name"],
-                student_id=ev.student_id,
-                email_verified_at=now,
-            ))
-        else:
-            profile.email_verified_at = now
+        # 修正理由: 確認ボタンの連打・多重タップでPOSTがほぼ同時に2回走ると、
+        # 従来のget-then-insert(session.get→profile is Noneならadd)では両方が
+        # 「未作成」と判定して同時にINSERTを試み、後発側がline_user_id主キーの
+        # 一意制約違反で失敗する競合状態があった(2026-08-31発覚)。ON CONFLICT DO UPDATEで
+        # INSERT自体をDBレベルでアトミックにし、既存プロフィールがあれば
+        # email_verified_atだけ更新する（name/student_idは新規作成時のみ設定・上書きしない）。
+        stmt = pg_insert(UserProfile).values(
+            line_user_id=ev.line_user_id,
+            name=payload["name"],
+            student_id=ev.student_id,
+            email_verified_at=now,
+        ).on_conflict_do_update(
+            index_elements=[UserProfile.line_user_id],
+            set_={"email_verified_at": now},
+        )
         ev.consumed_at = now
 
         try:
+            await session.execute(stmt)
             await session.commit()
         except Exception as exc:
             await session.rollback()
