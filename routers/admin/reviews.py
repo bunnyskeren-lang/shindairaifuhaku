@@ -93,6 +93,8 @@ async def admin_reviews(
     apage: int = Query(default=1, ge=1),
     rpage: int = Query(default=1, ge=1),
 ):
+    variant_labels = await cache.get_variant_full_label_map_cached()
+
     async with AsyncSessionLocal() as session:
         pending_rows = (await session.execute(
             select(Review, Subject.name.label("subj_name"))
@@ -125,9 +127,12 @@ async def admin_reviews(
             .order_by(Review.created_at.desc())
             .offset((rpage - 1) * _PAGE_SIZE).limit(_PAGE_SIZE)
         )).all()
-    pending = [_make_review_ns(r, n) for r, n in pending_rows]
-    approved = [_make_review_ns(r, n) for r, n in approved_rows]
-    rejected = [_make_review_ns(r, n) for r, n in rejected_rows]
+    # 語尾バリアント違いの科目（力学基礎1/力学基礎2等）は管理画面上も
+    # 「力学基礎(1/2)」のようにグループ名でまとめて表示する（個々のSubjectのままだと
+    # 教員が同じでも別科目に投稿されたように見えてしまうため）
+    pending = [_make_review_ns(r, variant_labels.get(n, n)) for r, n in pending_rows]
+    approved = [_make_review_ns(r, variant_labels.get(n, n)) for r, n in approved_rows]
+    rejected = [_make_review_ns(r, variant_labels.get(n, n)) for r, n in rejected_rows]
     return templates.TemplateResponse("admin/reviews.html", {
         "request": request,
         "pending": pending,

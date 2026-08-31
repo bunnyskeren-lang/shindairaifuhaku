@@ -133,6 +133,42 @@ def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) 
     return result
 
 
+def compute_variant_full_labels(names_with_faculty_dept: list[tuple[str, str, str]]) -> dict[str, str]:
+    """(科目名, faculty, department)のリストから、科目名 → 括弧付き接尾辞込みの完全な
+    グループ表示名（例: "力学基礎(1/2)"、"生物学各論(A1/A2/C1/C2)"）のマップを返す。
+
+    compute_variant_groups()はベースラベル（接尾辞を含まない科目名の共通部分）のみを返すため、
+    ベースラベルだけでは元の科目名と見分けがつかない画面（管理画面のレビュー科目別集計等）
+    向けに追加した。判定基準はcompute_variant_groups()と同一（compute_variant_bases()を共有）。
+    グループに属さない科目名はマップに含めない。
+    """
+    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
+    result: dict[str, str] = {}
+
+    for (base_lang, _fac, _dept), members in sem_bases.items():
+        suffix = "/".join(sk for _n, sk in sorted(members, key=lambda x: x[1]))
+        label = f"{base_lang}({suffix})"
+        for n, _sk in members:
+            result[n] = label
+
+    for (base, _fac, _dept), variants in letter_bases.items():
+        label = f"{base}({'/'.join(variants)})"
+        for s in variants:
+            name = base + s
+            if name not in result:
+                result[name] = label
+
+    for (base, _fac, _dept), members in num_bases.items():
+        members_sorted = sorted(members, key=lambda x: (x[1], x[2]))
+        suffix = "/".join(f"{letter}{disp}" for _n, letter, _sk, disp in members_sorted)
+        label = f"{base}({suffix})"
+        for n, _letter, _sk, _disp in members:
+            if n not in result:
+                result[n] = label
+
+    return result
+
+
 def compute_variant_display_groups(
     names_with_classification: list[tuple[str, str]],
 ) -> dict[tuple[str, str], str]:

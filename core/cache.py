@@ -3,7 +3,7 @@ import time
 from sqlalchemy import func, select
 
 from core.config import EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION, make_syllabus_url
-from core.subject_variants import compute_variant_groups
+from core.subject_variants import compute_variant_full_labels, compute_variant_groups
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
 
@@ -268,6 +268,7 @@ def invalidate_courses_cache():
     global _syllabus_url_cache, _syllabus_url_cache_at
     global _preload_cache, _preload_cache_at
     global _variant_map_cache, _variant_map_cache_at
+    global _variant_full_label_cache, _variant_full_label_cache_at
     _course_by_name = {}
     _course_list_all = []
     _course_cache_at = 0.0
@@ -285,6 +286,8 @@ def invalidate_courses_cache():
     # ここで一緒に無効化する
     _variant_map_cache = None
     _variant_map_cache_at = 0.0
+    _variant_full_label_cache = None
+    _variant_full_label_cache_at = 0.0
 
 
 def invalidate_review_cache():
@@ -381,6 +384,28 @@ async def get_variant_map_cached() -> dict[str, str]:
     )
     _variant_map_cache_at = time.monotonic()
     return _variant_map_cache
+
+
+_variant_full_label_cache: dict[str, str] | None = None
+_variant_full_label_cache_at: float = 0.0
+
+
+async def get_variant_full_label_map_cached() -> dict[str, str]:
+    """科目名 → 括弧付き接尾辞込みの完全なグループ表示名のマップ（compute_variant_full_labels()）。
+
+    管理画面のレビュー科目別集計（routers/admin/reviews.py）が、末尾バリアント違いの科目
+    （力学基礎1/力学基礎2等）を「力学基礎(1/2)」のようにまとめて表示するために使う。
+    get_variant_map_cached()と同様、全科目走査のコストを避けるためTTLキャッシュする。
+    """
+    global _variant_full_label_cache, _variant_full_label_cache_at
+    if _variant_full_label_cache is not None and time.monotonic() - _variant_full_label_cache_at < _COURSE_CACHE_TTL:
+        return _variant_full_label_cache
+    _, all_courses = await get_courses_cached()
+    _variant_full_label_cache = compute_variant_full_labels(
+        [(c.name, c.faculty or "", c.department or "") for c in all_courses]
+    )
+    _variant_full_label_cache_at = time.monotonic()
+    return _variant_full_label_cache
 
 
 # ── admin session revocation（core/security.pyのcheck_admin用） ──────────────
