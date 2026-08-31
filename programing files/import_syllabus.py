@@ -75,12 +75,27 @@ _PAREN_F2H = str.maketrans("（）", "()")
 _PAREN_H2F = str.maketrans("()", "（）")
 
 _CROSSLIST_RE = re.compile(r'\((?P<kind>副|主)[：:][^)]+\)')
+# 科目名の【...】タグのうち、遠隔・再履修は同じ教員が通常クラスと同じ科目・同じ学期に
+# 別コマとして持つことが多く、course_sections/syllabi の一意制約（同一科目×同一教員は
+# 1コマしか保持できない）で通常クラス側に潰れて消えてしまう。そのため他のタグ（【不動産】等、
+# 科目名そのものの一部）と違い削除せず名前末尾に残し、別科目として扱う（2026-08-31）
+_SPECIAL_BRACKET_SUFFIXES = [
+    (re.compile(r'【[^】]*遠隔[^】]*】'), "（遠隔）"),
+    (re.compile(r'【[^】]*再履修[^】]*】'), "（再履修）"),
+]
 
 
 def clean_name(name: str) -> str:
     name = _CROSSLIST_RE.sub('', name)
-    name = re.sub(r'【[^】]*】', '', name)
-    return name.strip()
+    suffix = ""
+    for pattern, tag_suffix in _SPECIAL_BRACKET_SUFFIXES:
+        if pattern.search(name):
+            suffix = tag_suffix
+            break
+    name = re.sub(r'【[^】]*】', '', name).strip()
+    if suffix and not name.endswith(suffix):
+        name = f"{name}{suffix}"
+    return name
 
 
 def is_crosslist_secondary(raw_name: str) -> bool:
@@ -320,20 +335,27 @@ async def ensure_classification_bucket(session, cls_name: str, faculty_name: str
 
 def classify_kyoyo(name: str) -> str | None:
     """教養科目の科目名から分類（教養(人文)等）を判定する。未知の科目名はNoneを返す。"""
-    if name in _KYOYO_NAME_TO_CLASSIFICATION:
-        return _KYOYO_NAME_TO_CLASSIFICATION[name]
+    # 遠隔・再履修クラスはclean_name()で名前末尾に「（遠隔）」「（再履修）」が付与されているため、
+    # 分類判定は元の科目名（接尾辞を外したもの）で行う
+    base_name = name
+    for _pattern, _suffix in _SPECIAL_BRACKET_SUFFIXES:
+        if base_name.endswith(_suffix):
+            base_name = base_name[:-len(_suffix)]
+            break
+    if base_name in _KYOYO_NAME_TO_CLASSIFICATION:
+        return _KYOYO_NAME_TO_CLASSIFICATION[base_name]
     # 括弧・ダッシュの全角/半角表記ゆれを吸収して完全一致を再試行
     for alt in {
-        name.translate(_PAREN_F2H).replace('－', '-'),
-        name.translate(_PAREN_H2F).replace('-', '－'),
-    } - {name}:
+        base_name.translate(_PAREN_F2H).replace('－', '-'),
+        base_name.translate(_PAREN_H2F).replace('-', '－'),
+    } - {base_name}:
         if alt in _KYOYO_NAME_TO_CLASSIFICATION:
             return _KYOYO_NAME_TO_CLASSIFICATION[alt]
     # パターンはすべて半角数字で書かれているため、全角数字の科目名（過去に手動投入された
     # ものが一部残る）も拾えるよう半角化してから照合する
-    normalized_name = normalize_alnum(name)
+    normalized_name = normalize_alnum(base_name)
     for pattern, cls in _KYOYO_PATTERN_MAP:
-        if pattern.match(name) or pattern.match(normalized_name):
+        if pattern.match(base_name) or pattern.match(normalized_name):
             return cls
     return None
 
@@ -640,15 +662,14 @@ def main():
             faculty=args.faculty,
             auto_create=not args.no_auto_create,
         )
-        # 取り込み直後に開講年次・科目分類・単位数も自動で補完する。
-        # run()/run_credits()はどちらも「まだ値が無いもの」だけを対象にするため、
-        # 今回追加した科目・時間割だけが処理され、全件再スキャンにはならない。
-        # import_courses()と同じイベントループ内で呼ぶ必要がある（別のasyncio.run()に
-        # 分けるとSQLAlchemyの非同期コネクションプールが前のループに紐づいたまま
-        # 「Event loop is closed」になるため）。
+        # 取り込み直後に単位数も自動で補完する。run_credits()は「まだ値が無いもの」
+        # だけを対象にするため、今回追加した科目・時間割だけが処理され、全件再スキャン
+        # にはならない。import_courses()と同じイベントループ内で呼ぶ必要がある
+        # （別のasyncio.run()に分けるとSQLAlchemyの非同期コネクションプールが前の
+        # ループに紐づいたまま「Event loop is closed」になるため）。
+        # 対象年次・科目分類を取得していたrun()は2026-07-30のMy時間割機能全廃止で
+        # fetch_syllabus_info.py側から削除済みのため、ここでも呼ばない。
         import fetch_syllabus_info as fsi
-        print("開講年次・科目分類を取得中...")
-        await fsi.run(dry_run=False, force=False)
         print("単位数を取得中...")
         await fsi.run_credits(dry_run=False, force=False)
 
