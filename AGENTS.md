@@ -338,7 +338,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `course_sections` | 科目×教員のセクション |
 | `syllabi` | シラバス（年度・クォーター・時間割コード。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み、target_grades/subject_category列は2026-07-30に廃止済み） |
 | `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い。`credit_granted_at`は閲覧権チケット付与済みフラグ、承認時に一度だけ付与するための冪等性チェック用） |
-| `payment_requests` | レビュー報酬（1件40円、200円単位＝5件単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/40件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
+| `payment_requests` | レビュー報酬（1件100円、100円単位＝1件単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/100件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
 | `course_section_views` | 科目セクションの閲覧数 |
 | `subject_unlocks` | レビュー閲覧権の解除記録（line_user_id, subject_id）。デフォルトでは他人のレビューは閲覧できず、会員登録（初回）で`REGISTRATION_WELCOME_UNLOCK_CREDITS`（1枚）、自分のレビューが1件承認されるたびに`REVIEW_APPROVAL_UNLOCK_CREDITS`（1枚）が`user_profiles.unlock_credits`に加算され、任意の科目でチケットを1枚消費して解除する（`routers/liff_api.py` `/api/course/{id}/unlock`）。語尾バリアントグループはグループ内の全subject_idをまとめて解除する |
 

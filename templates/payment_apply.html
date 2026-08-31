@@ -6,8 +6,8 @@
   <title>レビュー報酬の支払い申請 | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* ネイティブのnumber inputスピナーは、200円単位からずれた値の状態でクリックすると
-       min値まで巻き戻る等の不可解な挙動をするため非表示にし、代わりに±200円の
+    /* ネイティブのnumber inputスピナーは、100円単位からずれた値の状態でクリックすると
+       min値まで巻き戻る等の不可解な挙動をするため非表示にし、代わりに±100円の
        カスタムボタンで操作させる */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button {
@@ -32,7 +32,7 @@
     <div class="text-center mb-6">
       <div class="text-5xl mb-3">💰</div>
       <h1 class="text-2xl font-bold text-gray-800">レビュー報酬の支払い申請</h1>
-      <p class="text-gray-500 text-sm mt-1">承認されたレビュー5件につき200円、200円単位でPayPayにお支払いします</p>
+      <p class="text-gray-500 text-sm mt-1">承認されたレビュー1件につき100円、100円単位でPayPayにお支払いします</p>
     </div>
 
     <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-5 text-sm text-amber-700 space-y-1.5">
@@ -42,7 +42,7 @@
       </div>
       <div class="flex items-start gap-2">
         <span class="text-lg leading-none mt-0.5">🔢</span>
-        <span>申請金額は200円単位（5件単位）です。端数（5件未満）は次回に繰り越されます</span>
+        <span>申請金額は100円単位（レビュー1件単位）です</span>
       </div>
       <div class="flex items-start gap-2">
         <span class="text-lg leading-none mt-0.5">📅</span>
@@ -112,15 +112,15 @@
           💴 申請金額（円） <span class="text-red-500">*</span>
         </label>
         <div class="flex items-stretch gap-2">
-          <button type="button" id="amountMinus" aria-label="200円減らす"
+          <button type="button" id="amountMinus" aria-label="100円減らす"
             class="shrink-0 w-11 rounded-xl border border-gray-200 text-lg font-bold text-gray-600 hover:bg-gray-50 transition">−</button>
-          <input type="number" name="amount" id="amount" step="200" min="200" readonly
+          <input type="number" name="amount" id="amount" step="100" min="100" readonly
             class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-center bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
             placeholder="ボタンで金額を選択" required>
-          <button type="button" id="amountPlus" aria-label="200円増やす"
+          <button type="button" id="amountPlus" aria-label="100円増やす"
             class="shrink-0 w-11 rounded-xl border border-gray-200 text-lg font-bold text-gray-600 hover:bg-gray-50 transition">＋</button>
         </div>
-        <p id="amountError" class="hidden mt-1 text-red-500 text-xs">200円単位で、申請可能な金額以下を選択してください</p>
+        <p id="amountError" class="hidden mt-1 text-red-500 text-xs">100円単位で、申請可能な金額以下を選択してください</p>
       </div>
 
       <button type="submit"
@@ -170,7 +170,7 @@
           eligibleAmount.textContent = '';
           eligibleZeroNotice.classList.remove('hidden');
         } else {
-          eligibleAmount.textContent = '申請可能な最大金額：' + maxAmount + '円（端数は次回に繰越）';
+          eligibleAmount.textContent = '申請可能な最大金額：' + maxAmount + '円';
         }
         amountInput.max = maxAmount || '';
       } catch (e) {
@@ -188,19 +188,19 @@
       studentIdDebounce = setTimeout(refreshEligibility, 300);
     });
 
-    // 手入力は不可（readonly）にし、±ボタンでのみ200円単位で増減させる。
-    // 現在値が200円単位からずれていても、直近の200円単位に揃えたうえで一段階だけ増減させる
+    // 手入力は不可（readonly）にし、±ボタンでのみ100円単位で増減させる。
+    // 現在値が100円単位からずれていても、直近の100円単位に揃えたうえで一段階だけ増減させる
     function stepAmount(delta) {
       let v = parseInt(amountInput.value, 10);
       if (isNaN(v)) v = 0;
-      v = delta > 0 ? Math.floor(v / 200) * 200 + 200 : Math.ceil(v / 200) * 200 - 200;
-      if (v < 200) v = 200;
+      v = delta > 0 ? Math.floor(v / 100) * 100 + 100 : Math.ceil(v / 100) * 100 - 100;
+      if (v < 100) v = 100;
       if (maxAmount && v > maxAmount) v = maxAmount;
       amountInput.value = v;
       amountError.classList.add('hidden');
     }
-    document.getElementById('amountMinus').addEventListener('click', function() { stepAmount(-200); });
-    document.getElementById('amountPlus').addEventListener('click', function() { stepAmount(200); });
+    document.getElementById('amountMinus').addEventListener('click', function() { stepAmount(-100); });
+    document.getElementById('amountPlus').addEventListener('click', function() { stepAmount(100); });
 
     document.getElementById('paymentForm').addEventListener('submit', function(e) {
       const nameInput = document.getElementById('name');
@@ -224,7 +224,7 @@
         return;
       }
       const amount = parseInt(amountInput.value, 10);
-      if (!amount || amount <= 0 || amount % 200 !== 0 || (maxAmount && amount > maxAmount)) {
+      if (!amount || amount <= 0 || amount % 100 !== 0 || (maxAmount && amount > maxAmount)) {
         e.preventDefault();
         amountError.classList.remove('hidden');
         return;

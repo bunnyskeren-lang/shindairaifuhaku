@@ -15,8 +15,8 @@ router = APIRouter()
 _eligible_rate_limit = rate_limiter(max_requests=20, window_seconds=60)
 _apply_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
-_UNIT_YEN = 200
-_YEN_PER_REVIEW = 40
+_UNIT_YEN = 100
+_YEN_PER_REVIEW = 100
 
 
 async def _unpaid_count(session, sid: str) -> int:

@@ -197,8 +197,8 @@ class PaymentRequestStatus:
 
 
 class PaymentRequest(TimestampMixin, Base):
-    """レビュー投稿報酬（1件40円、200円単位＝5件単位）の支払い申請。
-    承認時に対象のreviews（古い順にamount/40件）へpayment_request_idを付与して予約し、
+    """レビュー投稿報酬（1件100円、100円単位＝1件単位）の支払い申請。
+    承認時に対象のreviews（古い順にamount/100件）へpayment_request_idを付与して予約し、
     二重申請・二重支払いを防ぐ（reviews側の紐付けが実質の「支払い済みフラグ」）。"""
     __tablename__ = "payment_requests"
 

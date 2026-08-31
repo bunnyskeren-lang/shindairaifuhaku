@@ -252,8 +252,8 @@ async def test_non_banned_student_can_submit_payment_request(http_client_factory
         cs_id = (await session.execute(
             select(CourseSection.id).where(CourseSection.subject_id == course_id)
         )).scalars().first()
-        # amount=200円(_UNIT_YEN)には5件(_YEN_PER_REVIEW=40円/件)の承認済みレビューが必要
-        for _ in range(5):
+        # amount=200円(_UNIT_YEN)には2件(_YEN_PER_REVIEW=100円/件)の承認済みレビューが必要
+        for _ in range(2):
             session.add(Review(
                 course_section_id=cs_id, student_id="2345678S",
                 status=ReviewStatus.APPROVED, rating=4, ease_rating="A",
