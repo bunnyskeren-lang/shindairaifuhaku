@@ -50,6 +50,14 @@ async def reply(reply_token: str, messages: list) -> None:
 
 async def link_rich_menu(user_id: str, rich_menu_id: str) -> None:
     if not rich_menu_id:
+        # RICHMENU_ID_MAIN/RICHMENU_ID_PREREGISTER未設定のまま呼ばれると、LINE側の
+        # デフォルトリッチメニュー（登録前用）が変わらず残り続け、ユーザーが気づかない
+        # まま詰む（2026-08-31、デフォルトを登録前メニューに倒す設計変更で発覚）。
+        # 呼び出し元は例外を握りつぶさずログで検知できるようにする
+        await save_error_log(
+            RuntimeError("link_rich_menu called with empty rich_menu_id"),
+            user_id=user_id, action="link_rich_menu_missing_id",
+        )
         return
     await _with_retry(lambda: _api.link_rich_menu_id_to_user(user_id, rich_menu_id))
 

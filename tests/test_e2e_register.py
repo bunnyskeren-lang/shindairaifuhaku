@@ -18,7 +18,7 @@ def _fake_verify(monkeypatch, user_id: str = USER_ID):
     monkeypatch.setattr(profile_api, "verify_liff_id_token", _verify)
 
 
-def _stub_unlink_rich_menu(monkeypatch):
+def _stub_link_rich_menu(monkeypatch):
     async def _noop(user_id, rich_menu_id=None):
         return None
     monkeypatch.setattr(profile_api.line_client, "link_rich_menu", _noop)
@@ -36,7 +36,7 @@ VALID_FORM = {
 @pytest.mark.asyncio
 async def test_register_new_user_grants_welcome_credits(http_client_factory, monkeypatch, test_sessionmaker):
     _fake_verify(monkeypatch)
-    _stub_unlink_rich_menu(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
     client = http_client_factory(profile_api, monkeypatch)
 
     resp = await client.post("/api/register", data=VALID_FORM)
@@ -52,7 +52,7 @@ async def test_register_new_user_grants_welcome_credits(http_client_factory, mon
 @pytest.mark.asyncio
 async def test_register_existing_user_does_not_double_grant_credits(http_client_factory, monkeypatch, test_sessionmaker):
     _fake_verify(monkeypatch)
-    _stub_unlink_rich_menu(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
     client = http_client_factory(profile_api, monkeypatch)
 
     first = await client.post("/api/register", data=VALID_FORM)
@@ -74,7 +74,7 @@ async def test_register_new_user_blocked_when_email_verification_enabled(http_cl
     """EMAIL_VERIFICATION_ENABLED時、/verify-emailを経由せずUserProfileを新規作成できてしまう
     抜け道(LINE友だち追加時の登録案内が/registerへ直接誘導していた)を防ぐガードの検証。"""
     _fake_verify(monkeypatch)
-    _stub_unlink_rich_menu(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
     monkeypatch.setattr(profile_api, "EMAIL_VERIFICATION_ENABLED", True)
     client = http_client_factory(profile_api, monkeypatch)
 
@@ -92,7 +92,7 @@ async def test_register_existing_user_allowed_when_email_verification_enabled(ht
     """メール認証済み(=UserProfileが既に存在する)ユーザーの本登録(学部学科入力)は
     EMAIL_VERIFICATION_ENABLED時も引き続き許可される。"""
     _fake_verify(monkeypatch)
-    _stub_unlink_rich_menu(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
     async with test_sessionmaker() as session:
         session.add(UserProfile(line_user_id=USER_ID, name="神戸太郎", student_id="2345678S"))
         await session.commit()
@@ -115,7 +115,7 @@ async def test_register_missing_faculty_field_shows_friendly_error(http_client_f
     そのまま表示されていた。Form("")化により、既存の日本語エラーメッセージ分岐へ
     流れることを固定する。"""
     _fake_verify(monkeypatch)
-    _stub_unlink_rich_menu(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
     client = http_client_factory(profile_api, monkeypatch)
 
     form = {k: v for k, v in VALID_FORM.items() if k != "faculty"}
@@ -129,7 +129,7 @@ async def test_register_missing_faculty_field_shows_friendly_error(http_client_f
 async def test_register_missing_department_field_shows_friendly_error(http_client_factory, monkeypatch, test_sessionmaker):
     """54a0821の回帰テスト。departmentがPOSTボディに含まれない場合も同様。"""
     _fake_verify(monkeypatch)
-    _stub_unlink_rich_menu(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
     client = http_client_factory(profile_api, monkeypatch)
 
     form = {k: v for k, v in VALID_FORM.items() if k != "department"}
@@ -142,7 +142,7 @@ async def test_register_missing_department_field_shows_friendly_error(http_clien
 @pytest.mark.asyncio
 async def test_register_new_user_sees_promo_course_link(http_client_factory, monkeypatch, test_sessionmaker):
     _fake_verify(monkeypatch)
-    _stub_unlink_rich_menu(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
     async with test_sessionmaker() as session:
         session.add(Subject(id=WELCOME_PROMO_SUBJECT_ID, name="データサイエンス基礎学", faculty="教養教育院"))
         await session.commit()

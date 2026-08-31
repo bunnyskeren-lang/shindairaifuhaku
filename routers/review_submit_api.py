@@ -8,7 +8,7 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
-    STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, make_course_liff_url,
+    STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -187,6 +187,5 @@ async def submit(
             "course_name": course_name,
             "course_id": course_id,
             "review_count": review_count,
-            "course_liff_url": make_course_liff_url(course_id),
         }
     )
