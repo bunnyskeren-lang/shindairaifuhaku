@@ -78,7 +78,10 @@ _CROSSLIST_RE = re.compile(r'\((?P<kind>副|主)[：:][^)]+\)')
 # 科目名の【...】タグのうち、遠隔・再履修は同じ教員が通常クラスと同じ科目・同じ学期に
 # 別コマとして持つことが多く、course_sections/syllabi の一意制約（同一科目×同一教員は
 # 1コマしか保持できない）で通常クラス側に潰れて消えてしまう。そのため他のタグ（【不動産】等、
-# 科目名そのものの一部）と違い削除せず名前末尾に残し、別科目として扱う（2026-08-31）
+# 科目名そのものの一部）と違い削除せず名前末尾に残し、別科目として扱う（2026-08-31）。
+# 両方のタグが同時に付く科目名（【遠隔】【再履修】等、別々の括弧で両方マッチする場合）は
+# 片方だけ拾って落とすと再び一意制約衝突に戻ってしまうため、両方とも遠隔→再履修の順で
+# 連結する（core/subject_variants.pyのTAG_PRIORITYもこの順序・連結済み文字列に対応済み）。
 _SPECIAL_BRACKET_SUFFIXES = [
     (re.compile(r'【[^】]*遠隔[^】]*】'), "（遠隔）"),
     (re.compile(r'【[^】]*再履修[^】]*】'), "（再履修）"),
@@ -87,11 +90,9 @@ _SPECIAL_BRACKET_SUFFIXES = [
 
 def clean_name(name: str) -> str:
     name = _CROSSLIST_RE.sub('', name)
-    suffix = ""
-    for pattern, tag_suffix in _SPECIAL_BRACKET_SUFFIXES:
-        if pattern.search(name):
-            suffix = tag_suffix
-            break
+    suffix = "".join(
+        tag_suffix for pattern, tag_suffix in _SPECIAL_BRACKET_SUFFIXES if pattern.search(name)
+    )
     name = re.sub(r'【[^】]*】', '', name).strip()
     if suffix and not name.endswith(suffix):
         name = f"{name}{suffix}"
@@ -335,13 +336,16 @@ async def ensure_classification_bucket(session, cls_name: str, faculty_name: str
 
 def classify_kyoyo(name: str) -> str | None:
     """教養科目の科目名から分類（教養(人文)等）を判定する。未知の科目名はNoneを返す。"""
-    # 遠隔・再履修クラスはclean_name()で名前末尾に「（遠隔）」「（再履修）」が付与されているため、
-    # 分類判定は元の科目名（接尾辞を外したもの）で行う
+    # 遠隔・再履修クラスはclean_name()で名前末尾に「（遠隔）」「（再履修）」が付与されている
+    # （両方同時に付くこともある）ため、分類判定は元の科目名（接尾辞を全て外したもの）で行う
     base_name = name
-    for _pattern, _suffix in _SPECIAL_BRACKET_SUFFIXES:
-        if base_name.endswith(_suffix):
-            base_name = base_name[:-len(_suffix)]
-            break
+    stripped = True
+    while stripped:
+        stripped = False
+        for _pattern, _suffix in _SPECIAL_BRACKET_SUFFIXES:
+            if base_name.endswith(_suffix):
+                base_name = base_name[:-len(_suffix)]
+                stripped = True
     if base_name in _KYOYO_NAME_TO_CLASSIFICATION:
         return _KYOYO_NAME_TO_CLASSIFICATION[base_name]
     # 括弧・ダッシュの全角/半角表記ゆれを吸収して完全一致を再試行

@@ -51,3 +51,41 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
 
     assert reconstructed == flat
     assert "単独科目" not in flat
+
+
+def test_compute_variant_full_labels_includes_bracketed_suffix():
+    """compute_variant_full_labels()はcompute_variant_groups()と同じグループ判定を使うが、
+    ベースラベルではなく「力学基礎(1/2)」のような接尾辞込みの完全ラベルを返す
+    （管理画面のレビュー科目別集計向け、routers/admin/reviews.py参照）。"""
+    names_with_fd = [
+        ("生物学各論A1", "教養教育院", ""),
+        ("生物学各論A2", "教養教育院", ""),
+        ("力学基礎1", "工学部", ""),
+        ("力学基礎2", "工学部", ""),
+        ("外国語セミナーA(英語)", "教養教育院", ""),
+        ("外国語セミナーB(英語)", "教養教育院", ""),
+        ("単独科目", "教養教育院", ""),
+    ]
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
+
+    assert labels["生物学各論A1"] == labels["生物学各論A2"] == "生物学各論(A1/A2)"
+    assert labels["力学基礎1"] == labels["力学基礎2"] == "力学基礎(1/2)"
+    assert labels["外国語セミナーA(英語)"] == "外国語セミナー(英語)(A/B)"
+    assert "単独科目" not in labels
+
+
+def test_compute_variant_full_labels_handles_remote_retake_tags():
+    """遠隔・再履修タグ（programing files/import_syllabus.py clean_name()が付与）付きの
+    科目名も、無タグ→遠隔→再履修→両方の順で束ねられグループラベルに反映されることを確認する
+    （2026-08-31、遠隔・再履修タグ導入時に追加）。"""
+    names_with_fd = [
+        ("力学基礎1", "工学部", ""),
+        ("力学基礎1（遠隔）", "工学部", ""),
+        ("力学基礎1（再履修）", "工学部", ""),
+        ("力学基礎1（遠隔）（再履修）", "工学部", ""),
+    ]
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
+    label = labels["力学基礎1"]
+
+    assert label == "力学基礎(1/1（遠隔）/1（再履修）/1（遠隔）（再履修）)"
+    assert all(labels[n] == label for n in labels)
