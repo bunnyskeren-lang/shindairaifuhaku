@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from core import cache
 from core.config import normalize_instructor_name
@@ -11,6 +11,33 @@ from routers.admin._common import reorder_sort_order
 
 router = APIRouter()
 
+# 教員追加をInstructor upsert(1往復) + CourseSection重複チェック+INSERT(2往復)の
+# 計3往復の逐次DB通信で行っていたが、Render(Singapore)⇄Supabase間はDB1往復のレイテンシが
+# 大きく体感が重かった。1つのCTEにまとめて1往復で完結させる（新規教員行と重複チェックは
+# ON CONFLICT DO NOTHINGで表現し、既存行はフォールバックのSELECTで取得する）
+_ADD_INSTRUCTOR_SQL = text("""
+WITH new_instr AS (
+    INSERT INTO instructors (name) VALUES (:name)
+    ON CONFLICT (name) DO NOTHING
+    RETURNING id, name
+),
+instr AS (
+    SELECT id, name FROM new_instr
+    UNION ALL
+    SELECT id, name FROM instructors
+    WHERE name = :name AND NOT EXISTS (SELECT 1 FROM new_instr)
+),
+new_cs AS (
+    INSERT INTO course_sections (subject_id, instructor_id)
+    SELECT :course_id, instr.id FROM instr
+    ON CONFLICT (subject_id, instructor_id) DO NOTHING
+    RETURNING id
+)
+SELECT instr.id AS instructor_id, instr.name AS instructor_name, new_cs.id AS cs_id
+FROM instr
+LEFT JOIN new_cs ON true
+""")
+
 
 @router.post("/admin/courses/{course_id}/instructors/add")
 async def add_instructor(course_id: int, request: Request, name: str = Form(...), _: str = Depends(check_admin)):
@@ -18,35 +45,23 @@ async def add_instructor(course_id: int, request: Request, name: str = Form(...)
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if name_s:
         async with AsyncSessionLocal() as session:
-            # Instructor upsert
-            instr = (await session.execute(
-                select(Instructor).where(Instructor.name == name_s)
-            )).scalar_one_or_none()
-            if not instr:
-                instr = Instructor(name=name_s)
-                session.add(instr)
-                await session.flush()
-            # CourseSection 重複チェック
-            existing_cs = (await session.execute(
-                select(CourseSection).where(
-                    CourseSection.subject_id == course_id,
-                    CourseSection.instructor_id == instr.id,
-                )
-            )).scalar_one_or_none()
-            if existing_cs:
+            row = (await session.execute(
+                _ADD_INSTRUCTOR_SQL, {"name": name_s, "course_id": course_id}
+            )).one()
+            if row.cs_id is None:
+                # 重複（この科目に既に同じ教員が登録済み）。新規教員行がここで作られていても
+                # commitしないため、session close時に暗黙ロールバックされ永続化されない
                 if is_ajax:
                     return JSONResponse({"ok": False, "error": "duplicate"})
                 referer = request.headers.get("Referer", "/admin/courses")
                 sep = "&" if "?" in referer else "?"
                 return RedirectResponse(f"{referer}{sep}inst_err={course_id}", status_code=303)
-            cs = CourseSection(subject_id=course_id, instructor_id=instr.id)
-            session.add(cs)
             await session.commit()
             cache.invalidate_courses_cache()
             # シラバスURLはtimetable_code/departmentから動的生成するため、時間割インポート前の
             # このタイミングでは持たない（時間割インポート後は管理画面表示時に自動で付与される）
             if is_ajax:
-                return JSONResponse({"ok": True, "id": instr.id, "name": instr.name, "url": ""})
+                return JSONResponse({"ok": True, "id": row.instructor_id, "name": row.instructor_name, "url": ""})
     if is_ajax:
         return JSONResponse({"ok": False, "error": "empty"})
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
