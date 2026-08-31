@@ -454,7 +454,7 @@ async def init_db():
 
         # ── 2026-08-24: レビュー閲覧の鍵システム ──
         # デフォルトでは他人のレビューは閲覧できず、自分のレビューが1件承認されるたびに
-        # 任意の科目3件分の閲覧権（チケット、REVIEW_APPROVAL_UNLOCK_CREDITS）が付与される。
+        # 任意の科目の閲覧権（チケット、REVIEW_APPROVAL_UNLOCK_CREDITS枚）が付与される。
         # subject_unlocksテーブル自体は
         # create_all()で新規作成されるため、ここでは既存テーブルへのカラム追加のみ行う。
         await conn.execute(text(
