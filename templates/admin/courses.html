@@ -609,6 +609,8 @@ function deleteInstructor(courseId, instId, btn) {
         empty.textContent = 'まだ登録なし';
         list.appendChild(empty);
       }
+    } else {
+      showErrorToast(data.error || '削除できませんでした');
     }
   }).catch(function() { showErrorToast(); });
 }
