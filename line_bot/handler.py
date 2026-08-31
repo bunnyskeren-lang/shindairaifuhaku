@@ -756,6 +756,7 @@ async def _handle_course_search(t: str, user_id: str) -> list:
             "name": r["display"],
             "faculty": f"{r['faculty']}{r['department']}",
             "stars": EASE_STARS.get(best_ease, ""),
+            "category": r["rep"].category or "",
         })
 
     return [make_search_result_card(items, title=f"🔍「{t}」の検索結果")]

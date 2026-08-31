@@ -71,6 +71,11 @@ WELCOME_PROMO_SUBJECT_ID = 2
 # 虚偽投稿等でLINE bot利用を永久停止（UserProfile.banned_at）されたユーザーへの定型応答
 BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止しております。心当たりがある場合は、お問い合わせフォームよりご連絡ください。"
 
+# レビュー投稿を受け付ける科目のcategory（Subject.category）。2026-08-31より教養科目のみに限定。
+# フォーム(/submit)・LINE bot双方の投稿導線をこの値で揃える。
+REVIEW_SUBMISSION_CATEGORY = "教養"
+REVIEW_SUBMISSION_RESTRICTED_MESSAGE = "現在、レビュー投稿は教養科目のみ受け付けています"
+
 
 def student_email(student_id: str) -> str:
     """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""

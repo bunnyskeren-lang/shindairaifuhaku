@@ -12,6 +12,7 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT, EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE, ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
+    REVIEW_SUBMISSION_CATEGORY,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.grading_method import parse_grading_method
@@ -83,7 +84,7 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                 (Subject.name.ilike(f"{q_full}%", escape="\\"), 0),
                 else_=1,
             )
-            stmt = select(Subject)
+            stmt = select(Subject).where(Subject.category == REVIEW_SUBMISSION_CATEGORY)
             for tok in tokens:
                 t = escape_like(tok)
                 stmt = stmt.where(or_(
@@ -102,14 +103,18 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                     (norm_col.ilike(f"{norm_q_full}%", escape="\\"), 0),
                     else_=1,
                 )
-                stmt2 = select(Subject)
+                stmt2 = select(Subject).where(Subject.category == REVIEW_SUBMISSION_CATEGORY)
                 for tok in norm_tokens:
                     t = escape_like(tok)
                     stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
                 stmt2 = stmt2.order_by(norm_relevance, Subject.name).limit(_SEARCH_RESULT_LIMIT)
                 courses = (await session.execute(stmt2)).scalars().all()
         else:
-            stmt = select(Subject).order_by(Subject.name).limit(30)
+            stmt = (
+                select(Subject)
+                .where(Subject.category == REVIEW_SUBMISSION_CATEGORY)
+                .order_by(Subject.name).limit(30)
+            )
             courses = (await session.execute(stmt)).scalars().all()
         course_ids = [c.id for c in courses]
         cs_rows = []
@@ -142,7 +147,9 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
 async def api_preload():
     data = cache.get_preload_cache()
     if data is None:
-        _, courses = await cache.get_courses_cached()
+        _, all_courses_ = await cache.get_courses_cached()
+        # レビュー投稿フォームの科目候補は教養科目のみに限定する
+        courses = [c for c in all_courses_ if c.category == REVIEW_SUBMISSION_CATEGORY]
         insts_by_course = await cache.get_all_instructors_cached()
         inst_courses: dict[str, dict[int, str]] = {}
         for c in courses:
@@ -230,7 +237,7 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
                 select(Instructor.name, Subject.id, Subject.name)
                 .join(CourseSection, CourseSection.instructor_id == Instructor.id)
                 .join(Subject, Subject.id == CourseSection.subject_id)
-                .where(Instructor.name.in_(insts))
+                .where(Instructor.name.in_(insts), Subject.category == REVIEW_SUBMISSION_CATEGORY)
                 .order_by(Instructor.name, Subject.name)
             )).all()
             remaining_map = await cache.get_review_remaining_cached()
@@ -240,8 +247,11 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
                     closed = c_id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS
                     remaining = 0 if closed else remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
                     courses_by_inst[inst_name].append({"id": c_id, "name": c_name, "full": closed or remaining <= 0, "remaining": remaining})
+            # 教養科目を担当していない教員（専門科目のみ担当）はレビュー投稿フォームの
+            # 検索結果から除外する
             for name in insts:
-                result.append({"name": name, "courses": courses_by_inst[name]})
+                if courses_by_inst[name]:
+                    result.append({"name": name, "courses": courses_by_inst[name]})
 
     return {"instructors": result}
 

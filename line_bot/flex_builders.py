@@ -13,6 +13,7 @@ from linebot.v3.messaging import (
 from core import cache
 from core.config import (
     CONTACT_URL, EASE_STARS, PRIVACY_URL, TERMS_URL,
+    REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
 )
 from models import Subject
@@ -107,8 +108,26 @@ async def prewarm_flex_cache() -> None:
 
 
 def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
-    form_url = make_review_liff_url(course.name, user_id)
     liff_url = make_course_liff_url(course.id)
+    can_submit = course.category == REVIEW_SUBMISSION_CATEGORY
+
+    footer_buttons = []
+    if can_submit:
+        form_url = make_review_liff_url(course.name, user_id)
+        footer_buttons.append(FlexButton(
+            action=URIAction(label="✏️ レビューを投稿する", uri=form_url),
+            style="primary", color="#6366f1", height="sm",
+        ))
+    footer_buttons.append(FlexButton(
+        action=URIAction(label="📖 科目詳細を見る", uri=liff_url),
+        style="secondary", height="sm",
+    ))
+
+    second_line = (
+        "あなたが最初のレビュワーになりませんか？🌟" if can_submit
+        else REVIEW_SUBMISSION_RESTRICTED_MESSAGE
+    )
+
     return FlexMessage(
         alt_text=f"📖 {course.name}",
         contents=FlexBubble(
@@ -125,7 +144,7 @@ def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
                 contents=[
                     FlexText(text="まだレビューがありません 😢", weight="bold", size="sm", color="#475569"),
                     FlexText(
-                        text="あなたが最初のレビュワーになりませんか？🌟",
+                        text=second_line,
                         size="xs", color="#64748b", margin="sm", wrap=True,
                     ),
                 ],
@@ -135,16 +154,7 @@ def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
                 layout="vertical",
                 spacing="sm",
                 padding_all="md",
-                contents=[
-                    FlexButton(
-                        action=URIAction(label="✏️ レビューを投稿する", uri=form_url),
-                        style="primary", color="#6366f1", height="sm",
-                    ),
-                    FlexButton(
-                        action=URIAction(label="📖 科目詳細を見る", uri=liff_url),
-                        style="secondary", height="sm",
-                    ),
-                ],
+                contents=footer_buttons,
             ),
         ),
     )
@@ -433,7 +443,7 @@ def _make_search_result_row(item: dict) -> FlexBox:
             ],
         ),
     ]
-    if not item["stars"]:
+    if not item["stars"] and item.get("category") == REVIEW_SUBMISSION_CATEGORY:
         form_url = make_review_liff_url(item['name'])
         row_contents.append(
             FlexText(

@@ -25,9 +25,9 @@ def _stub_push_notification(monkeypatch):
     monkeypatch.setattr(review_submit_api, "send_push_notification", _noop)
 
 
-async def _seed_course(test_sessionmaker, name="経営管理", instructor="山田太郎"):
+async def _seed_course(test_sessionmaker, name="経営管理", instructor="山田太郎", category="教養"):
     async with test_sessionmaker() as session:
-        subj = Subject(name=name, faculty="経営学部", category="専門")
+        subj = Subject(name=name, faculty="経営学部", category=category)
         session.add(subj)
         await session.flush()
         instr = Instructor(name=instructor)
@@ -74,6 +74,23 @@ async def test_submit_creates_review_for_registered_user(http_client_factory, mo
         assert reviews[0].content == "とても勉強になりました"
         assert reviews[0].status == "pending"
         assert reviews[0].submitter_name == "神戸太郎"
+
+
+@pytest.mark.asyncio
+async def test_submit_senmon_course_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """レビュー投稿は教養科目(category=='教養')のみ受け付け、専門科目は拒否する。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker, category="専門")
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 400
+    assert "教養科目のみ" in resp.text
+
+    async with test_sessionmaker() as session:
+        assert (await session.execute(select(Review))).scalars().first() is None
 
 
 @pytest.mark.asyncio
