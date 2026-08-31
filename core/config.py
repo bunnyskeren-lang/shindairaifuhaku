@@ -51,6 +51,12 @@ EMAIL_VERIFICATION_TTL_MINUTES = 30
 STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
+
+def normalize_student_id(raw: str) -> str:
+    """学籍番号入力の前後・途中の空白（半角・全角とも）を除去し大文字化する。
+    途中にスペースが入る誤入力（例:「234 5678S」）もSTUDENT_ID_REに通すための共通処理"""
+    return _re.sub(r'[\s　]+', '', raw).upper()
+
 # 1科目×1担当教員（course_section）あたりのレビュー投稿受付上限（待機中+承認済みの合計）
 MAX_REVIEWS_PER_COURSE_SECTION = 1
 

@@ -8,7 +8,7 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
-    STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete,
+    STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -62,7 +62,7 @@ async def submit(
     if not comment.strip():
         return _form_error("コメントを入力してください")
 
-    sid = student_id.strip().upper()
+    sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 

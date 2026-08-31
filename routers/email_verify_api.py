@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core.activity_log import save_error_log
 from core.config import (
     APP_URL, EMAIL_VERIFICATION_TTL_MINUTES, LINE_USER_ID_RE, REVIEW_LIFF_ID,
-    STUDENT_ID_RE, make_register_url, student_email,
+    STUDENT_ID_RE, make_register_url, normalize_student_id, student_email,
 )
 from core.liff_auth import verify_liff_id_token
 from core.mail import send_verification_email
@@ -63,7 +63,7 @@ async def request_email_verification(
     name = reg_name.strip()[:100]
     if not name:
         return _err("お名前を入力してください")
-    sid = student_id.strip().upper()
+    sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):
         return _err("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 

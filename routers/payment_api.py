@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, select
 
-from core.config import BAN_MESSAGE_TEXT, IS_DEV, STUDENT_ID_RE
+from core.config import BAN_MESSAGE_TEXT, IS_DEV, STUDENT_ID_RE, normalize_student_id
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -52,7 +52,7 @@ async def payment_eligible(
     student_id: str = Query(default=""),
     _rl: None = Depends(_eligible_rate_limit),
 ):
-    sid = student_id.strip().upper()
+    sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):
         return JSONResponse({"valid": False})
     async with AsyncSessionLocal() as session:
@@ -85,7 +85,7 @@ async def payment_apply_submit(
     if not name:
         return _error("お名前を入力してください")
 
-    sid = student_id.strip().upper()
+    sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):
         return _error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 

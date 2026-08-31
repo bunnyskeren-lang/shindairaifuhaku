@@ -134,7 +134,7 @@
     let maxAmount = 0;
 
     async function refreshEligibility() {
-      const sid = studentIdInput.value.trim().toUpperCase();
+      const sid = studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase();
       studentIdInput.value = sid;
       eligibleZeroNotice.classList.add('hidden');
       if (!STUDENT_ID_RE.test(sid)) {
@@ -203,7 +203,7 @@
         e.preventDefault();
         return;
       }
-      const sid = studentIdInput.value.trim().toUpperCase();
+      const sid = studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase();
       studentIdInput.value = sid;
       if (!STUDENT_ID_RE.test(sid)) {
         e.preventDefault();

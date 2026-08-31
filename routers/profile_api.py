@@ -12,7 +12,7 @@ from core.config import (
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, RICHMENU_ID_MAIN,
     STUDENT_ID_RE, LINE_USER_ID_RE,
     WELCOME_PROMO_SUBJECT_ID,
-    is_profile_complete, make_course_liff_url, make_review_liff_url,
+    is_profile_complete, make_course_liff_url, make_review_liff_url, normalize_student_id,
 )
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
@@ -106,7 +106,7 @@ async def register_profile(
     name = _re.sub(r'[\s　]+', '', name)
     if not name:
         return _form_error("お名前を入力してください")
-    sid = _re.sub(r'[\s　]+', '', student_id).upper()
+    sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
     if faculty not in FACULTIES:

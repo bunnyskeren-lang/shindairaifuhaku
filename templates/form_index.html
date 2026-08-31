@@ -1555,7 +1555,7 @@
 
     if (studentIdInput) {
       studentIdInput.addEventListener('input', () => {
-        const v = studentIdInput.value.trim().toUpperCase();
+        const v = studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase();
         const invalid = v && !STUDENT_ID_RE.test(v);
         studentIdError.classList.toggle('hidden', !invalid);
         studentIdInput.classList.toggle('border-red-400', invalid);
@@ -1635,7 +1635,7 @@
     }
 
     const PROGRESS_ITEMS = [
-      { label: '学籍番号', done: () => !studentIdInput || (studentIdInput.value.trim() !== '' && STUDENT_ID_RE.test(studentIdInput.value.trim().toUpperCase())),
+      { label: '学籍番号', done: () => !studentIdInput || (studentIdInput.value.trim() !== '' && STUDENT_ID_RE.test(studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase())),
         focus: () => scrollToItem(studentIdInput) },
       { label: '科目・担当教員', done: () => document.getElementById('courseNameHidden').value.trim() !== ''
           && (currentInstructors.length === 0 || document.getElementById('selectedInstructorHidden').value.trim() !== ''),
@@ -1912,7 +1912,7 @@
       let valid = true;
 
       if (studentIdInput) {
-        studentIdInput.value = studentIdInput.value.trim().toUpperCase();
+        studentIdInput.value = studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase();
         if (!STUDENT_ID_RE.test(studentIdInput.value)) {
           studentIdError.classList.remove('hidden');
           valid = false;
