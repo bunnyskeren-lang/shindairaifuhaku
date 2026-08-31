@@ -35,6 +35,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
             select(
                 UserProfile.line_user_id.label("user_id"),
                 last_seen_subq.c.last_seen,
+                UserProfile.created_at.label("registered_at"),
                 UserProfile.name,
                 UserProfile.student_id,
                 UserProfile.unlock_credits,
