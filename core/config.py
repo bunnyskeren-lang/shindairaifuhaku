@@ -52,7 +52,7 @@ STUDENT_ID_RE = _re.compile(r'^\d{7}(MM|ME|MH|[LHJEBSTAZX])$')
 LINE_USER_ID_RE = _re.compile(r'^U[0-9a-f]{32}$')
 
 # 1科目×1担当教員（course_section）あたりのレビュー投稿受付上限（待機中+承認済みの合計）
-MAX_REVIEWS_PER_COURSE_SECTION = 3
+MAX_REVIEWS_PER_COURSE_SECTION = 1
 
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数
 REVIEW_APPROVAL_UNLOCK_CREDITS = 3
