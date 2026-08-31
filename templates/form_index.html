@@ -1686,6 +1686,7 @@
     }
 
     let saveTimer;
+    let formSubmitted = false;
     function saveData() {
       document.getElementById('saveStatus').textContent = '保存中...';
       updateProgressUI();
@@ -1693,6 +1694,11 @@
       updateErrorBanner();
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
+        // 修正理由: 送信ボタン押下直後、debounce待ち(500ms)中のsaveTimerが
+        // localStorage.removeItem()の後に発火し、送信済みの内容を下書きとして
+        // 復活させてしまうバグがあった（「別の授業もレビューする」で戻ると
+        // 投稿直後の科目が再選択された状態になる原因）。formSubmittedフラグで抑止する
+        if (formSubmitted) return;
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           nickname: document.getElementById('nickname').value,
           academic_year: document.getElementById('academic_year').value,
@@ -2028,6 +2034,8 @@
         return;
       }
 
+      formSubmitted = true;
+      clearTimeout(saveTimer);
       localStorage.removeItem(STORAGE_KEY);
       e.target.submit();
     });
