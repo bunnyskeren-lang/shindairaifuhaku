@@ -171,7 +171,10 @@ async def api_preload():
             for c in courses
         ]
         instructor_list = [
-            {"name": name, "courses": [{"id": cid, "name": cn} for cid, cn in courses_by_id.items()]}
+            {"name": name, "courses": [
+                {"id": cid, "name": cn, "variantGroup": variant_map.get(cn, ""), "isRemote": is_remote_tagged(cn)}
+                for cid, cn in courses_by_id.items()
+            ]}
             for name, courses_by_id in sorted(inst_courses.items())
         ]
         data = {"courses": course_list, "instructors": instructor_list}
@@ -247,12 +250,16 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
                 .order_by(Instructor.name, Subject.name)
             )).all()
             remaining_map = await cache.get_review_remaining_cached()
+            variant_map = await cache.get_variant_map_cached()
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
             for inst_name, c_id, c_name in all_rows:
                 if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
                     closed = c_id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS
                     remaining = 0 if closed else remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
-                    courses_by_inst[inst_name].append({"id": c_id, "name": c_name, "full": closed or remaining <= 0, "remaining": remaining})
+                    courses_by_inst[inst_name].append({
+                        "id": c_id, "name": c_name, "full": closed or remaining <= 0, "remaining": remaining,
+                        "variantGroup": variant_map.get(c_name, ""), "isRemote": is_remote_tagged(c_name),
+                    })
             # 教養科目を担当していない教員（専門科目のみ担当）はレビュー投稿フォームの
             # 検索結果から除外する
             for name in insts:

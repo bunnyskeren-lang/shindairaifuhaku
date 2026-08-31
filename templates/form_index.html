@@ -1475,6 +1475,39 @@
       searchInstructors(instrSearchInput.value.trim());
     });
 
+    // 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）を担当する
+    // 教員の場合、教員名検索から選んだ担当科目一覧でも1件にまとめて表示する
+    // （_groupCourseItemsと同じ統合規則。ここでは教員は既に確定しているため、代表として
+    // 「未投稿かつ空きのある変種」→「空きのある変種」→「先頭の変種」の優先順で
+    // 実際に送信されるsubjectを1つ選ぶだけでよい）。
+    function _groupInstructorCourseItems(courses, instName) {
+      const groupKey = c => c.variantGroup + (c.isRemote ? ' remote' : '');
+      const byGroup = new Map();
+      for (const c of courses) {
+        if (!c.variantGroup) continue;
+        const key = groupKey(c);
+        if (!byGroup.has(key)) byGroup.set(key, []);
+        byGroup.get(key).push(c);
+      }
+      const emitted = new Set();
+      const result = [];
+      for (const c of courses) {
+        const key = c.variantGroup ? groupKey(c) : null;
+        const members = key ? byGroup.get(key) : null;
+        if (!members || members.length < 2) { result.push(c); continue; }
+        if (emitted.has(key)) continue;
+        emitted.add(key);
+        const scored = members.map(m => ({ m, reviewed: !m.full && _reviewedSet.has(m.id + '::' + instName) }));
+        const rep = (scored.find(s => !s.m.full && !s.reviewed) || scored.find(s => !s.m.full) || scored[0]).m;
+        const suffixes = members.map(m => m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name);
+        result.push({
+          id: rep.id, name: rep.name, full: rep.full, remaining: rep.remaining,
+          displayName: `${c.variantGroup}(${suffixes.join('/')})`,
+        });
+      }
+      return result;
+    }
+
     function selectInstructor(inst) {
       instrSearchInput.value = inst.name;
       instrSearchDropdown.classList.add('hidden');
@@ -1491,22 +1524,24 @@
         return;
       }
       courseUnregistered.classList.add('hidden');
-      courseLabel.textContent = `${inst.name} の担当科目（${inst.courses.length}件）`;
-      const coursesWithReviewed = inst.courses.map(c => ({
+      const groupedCourses = _groupInstructorCourseItems(inst.courses, inst.name);
+      courseLabel.textContent = `${inst.name} の担当科目（${groupedCourses.length}件）`;
+      const coursesWithReviewed = groupedCourses.map(c => ({
         ...c,
         reviewed: !c.full && _reviewedSet.has(c.id + '::' + inst.name),
       }));
       courseItems.innerHTML = coursesWithReviewed.map(c => {
+        const label = c.displayName || c.name;
         if (c.full) {
           return `<button type="button" class="chip-btn" disabled style="opacity:.45;text-decoration:line-through;cursor:not-allowed;display:inline-flex;align-items:center"
-            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}${remainingBadgeHtml(c.remaining)}</button>`;
+            data-course-name="${escapeHtml(c.name)}" data-display-name="${escapeHtml(label)}">${escapeHtml(label)}${remainingBadgeHtml(c.remaining)}</button>`;
         }
         if (c.reviewed) {
           return `<button type="button" class="chip-btn" disabled style="opacity:.5;cursor:not-allowed"
-            data-course-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}（投稿済み）</button>`;
+            data-course-name="${escapeHtml(c.name)}" data-display-name="${escapeHtml(label)}">${escapeHtml(label)}（投稿済み）</button>`;
         }
         return `<button type="button" class="chip-btn" style="display:inline-flex;align-items:center"
-          data-course-name="${escapeHtml(c.name)}" data-course-id="${c.id}">${escapeHtml(c.name)}${remainingBadgeHtml(c.remaining)}</button>`;
+          data-course-name="${escapeHtml(c.name)}" data-display-name="${escapeHtml(label)}" data-course-id="${c.id}">${escapeHtml(label)}${remainingBadgeHtml(c.remaining)}</button>`;
       }).join('');
       document.getElementById('instructorCourseLimitNotice').classList.remove('hidden');
       document.getElementById('instructorCourseList').classList.remove('hidden');
@@ -1518,7 +1553,7 @@
           currentCourseId = el.dataset.courseId ? parseInt(el.dataset.courseId, 10) : null;
           document.getElementById('courseNameHidden').value = el.dataset.courseName;
           document.getElementById('selectedInstructorHidden').value = inst.name;
-          document.getElementById('selectedCourseName').textContent = el.dataset.courseName;
+          document.getElementById('selectedCourseName').textContent = el.dataset.displayName || el.dataset.courseName;
           document.getElementById('selectedCourse').classList.remove('hidden');
           document.getElementById('courseNameLabelInstr').classList.remove('hidden');
           document.getElementById('selectedInstructorName').textContent = inst.name;
