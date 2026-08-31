@@ -13,7 +13,7 @@
       <h1 class="text-xl font-bold text-gray-800 mb-2">メールアドレスの確認</h1>
       <p class="text-gray-500 text-sm mb-6">下のボタンを押して、本人確認を完了してください。</p>
 
-      <form action="/api/email/verify" method="post">
+      <form action="/api/email/verify" method="post" onsubmit="this.querySelector('button').disabled=true;">
         <input type="hidden" name="token" value="{{ token }}">
         <button type="submit"
           class="block w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">

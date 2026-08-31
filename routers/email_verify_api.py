@@ -112,7 +112,8 @@ async def _validate_token(session, token: str):
     if not ev:
         return None, "認証リンクが無効です。お手数ですが投稿フォームからやり直してください"
     if ev.consumed_at is not None:
-        return None, "このリンクはすでに使用されています"
+        # evは呼び出し元に返す(呼び出し元で「本人がすでに認証済みか」を判定できるようにするため)
+        return ev, "このリンクはすでに使用されています"
     expires_at = ev.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -125,6 +126,21 @@ async def _validate_token(session, token: str):
     if taken is not None and taken != ev.line_user_id:
         return None, "この学籍番号はすでに別のアカウントで登録されています"
     return ev, None
+
+
+async def _already_verified_response(session, request: Request, ev):
+    """トークン消費済みエラーの代わりに、本人確認自体は完了している場合は
+    完了画面を返す(二重タップ・同じメールリンクの再アクセス等で、成功しているのに
+    エラー画面が出てユーザーが混乱するのを防ぐため)。該当しなければNone。"""
+    profile = (await session.execute(
+        select(UserProfile).where(UserProfile.line_user_id == ev.line_user_id)
+    )).scalar_one_or_none()
+    if profile is None or profile.email_verified_at is None:
+        return None
+    return templates.TemplateResponse(
+        "form_email_verified.html",
+        {"request": request, "liff_id": REVIEW_LIFF_ID, "register_url": make_register_url(ev.line_user_id)},
+    )
 
 
 @router.get("/api/email/verify")
@@ -144,8 +160,12 @@ async def verify_email_confirm_page(token: str, request: Request):
         )
 
     async with AsyncSessionLocal() as session:
-        _ev, err = await _validate_token(session, token)
+        ev, err = await _validate_token(session, token)
         if err:
+            if ev is not None:
+                already = await _already_verified_response(session, request, ev)
+                if already is not None:
+                    return already
             return _err(err)
 
     return templates.TemplateResponse("form_email_confirm.html", {"request": request, "token": token})
@@ -162,6 +182,10 @@ async def verify_email_confirm(request: Request, token: str = Form(...)):
     async with AsyncSessionLocal() as session:
         ev, err = await _validate_token(session, token)
         if err:
+            if ev is not None:
+                already = await _already_verified_response(session, request, ev)
+                if already is not None:
+                    return already
             return _err(err)
 
         payload = json.loads(ev.payload)

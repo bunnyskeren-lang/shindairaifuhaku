@@ -249,7 +249,10 @@ async def test_fully_registered_profile_can_submit_regardless_of_email_verificat
 
 
 @pytest.mark.asyncio
-async def test_verify_rejects_already_consumed_token(http_client_factory, monkeypatch, test_sessionmaker):
+async def test_verify_replays_consumed_token_as_success(http_client_factory, monkeypatch, test_sessionmaker):
+    """二重タップや同じメールリンクの再アクセスで既に消費済みのトークンに再度アクセスしても、
+    本人確認自体は完了しているので200(完了画面)を返す。他人による使い回し等、本人確認が
+    完了していないケースのエラーはtest_verify_rejects_expired_tokenやid_token検証失敗系で担保する。"""
     _fake_verify(monkeypatch)
     captured = _capture_mail(monkeypatch)
     request_client = http_client_factory(email_verify_api, monkeypatch)
@@ -260,9 +263,9 @@ async def test_verify_rejects_already_consumed_token(http_client_factory, monkey
     resp1 = await verify_client.post("/api/email/verify", data={"token": token})
     assert resp1.status_code == 200
     resp2 = await verify_client.post("/api/email/verify", data={"token": token})
-    assert resp2.status_code == 400
+    assert resp2.status_code == 200
     resp3 = await verify_client.get(f"/api/email/verify?token={token}")
-    assert resp3.status_code == 400
+    assert resp3.status_code == 200
 
 
 @pytest.mark.asyncio
