@@ -46,7 +46,7 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
         for s in variants:
             reconstructed[base + s] = base
     for (base, _fac, _dept), members in num_bases.items():
-        for n, _letter, _sk, _disp in members:
+        for n, _letter, _sk, _disp, _tag in members:
             reconstructed[n] = base
 
     assert reconstructed == flat

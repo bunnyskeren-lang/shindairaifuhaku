@@ -30,20 +30,27 @@ _FULLWIDTH_UPPER = str.maketrans(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
 )
 _ROMAN_VAL = {chr(0x2160 + i): i + 1 for i in range(12)}  # Ⅰ→1 ... Ⅻ→12
-_VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])$')
+# 末尾の（遠隔）（再履修）タグ（programing files/import_syllabus.py clean_name()が付与、
+# REMOTE/RETAKEクラスを別科目として登録する仕組み）は、数字/ローマ数字バリアントと同じ
+# 基準（末尾の文字＋数字）を保ったまま追加の識別子として扱い、A1/A2/B1/B2等と同じグループに
+# 統合する（2026-08-31）。タグの優先順位は表示上のソート用（無タグ→遠隔→再履修の順）で、
+# line_bot/handler.py側の束ね方の手順でも同じ順序を使うため公開名にしている。
+TAG_PRIORITY = {"": 0, "（遠隔）": 1, "（再履修）": 2}
+_VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])(（遠隔）|（再履修）)?$')
 _VSEM = re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
 
 
-def _vnum_match(name: str) -> tuple[str, str, int, str] | None:
+def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     m = _VNUM.match(name)
     if not m:
         return None
     base = m.group(1).strip()
     letter = (m.group(2) or "").translate(_FULLWIDTH_UPPER)
     raw = m.group(3)
+    tag = m.group(4) or ""
     if raw in _ROMAN_VAL:
-        return base, letter, _ROMAN_VAL[raw], raw
-    return base, letter, int(raw), raw
+        return base, letter, _ROMAN_VAL[raw], raw, tag
+    return base, letter, int(raw), raw, tag
 
 
 def compute_variant_bases(
@@ -51,7 +58,7 @@ def compute_variant_bases(
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
     dict[tuple[str, str, str], list[str]],
-    dict[tuple[str, str, str], list[tuple[str, str, int, str]]],
+    dict[tuple[str, str, str], list[tuple[str, str, int, str, str]]],
 ]:
     """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/文字(A-D)/
     数字・ローマ数字の3種のバリアントグループを (base[+言語], faculty, department) キーで
@@ -93,14 +100,14 @@ def compute_variant_bases(
         if len(variants) >= 2:
             letter_bases[key] = variants
 
-    num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str]]] = {}
+    num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str, str]]] = {}
     for name in names:
         m = _vnum_match(name)
         if m:
-            base, letter, sk, disp = m
+            base, letter, sk, disp, tag = m
             fac, dept = fd_by_name.get(name, ("", ""))
             key = (base, fac, dept)
-            num_bases.setdefault(key, []).append((name, letter, sk, disp))
+            num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     num_bases = {k: v for k, v in num_bases.items() if len(v) >= 2}
 
     return sem_bases, letter_bases, num_bases
@@ -126,7 +133,7 @@ def compute_variant_groups(names_with_faculty_dept: list[tuple[str, str, str]]) 
                 result[name] = base
 
     for (base, _fac, _dept), members in num_bases.items():
-        for n, _letter, _sk, _disp in members:
+        for n, _letter, _sk, _disp, _tag in members:
             if n not in result:
                 result[n] = base
 
@@ -159,10 +166,10 @@ def compute_variant_full_labels(names_with_faculty_dept: list[tuple[str, str, st
                 result[name] = label
 
     for (base, _fac, _dept), members in num_bases.items():
-        members_sorted = sorted(members, key=lambda x: (x[1], x[2]))
-        suffix = "/".join(f"{letter}{disp}" for _n, letter, _sk, disp in members_sorted)
+        members_sorted = sorted(members, key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
+        suffix = "/".join(f"{letter}{disp}{tag}" for _n, letter, _sk, disp, tag in members_sorted)
         label = f"{base}({suffix})"
-        for n, _letter, _sk, _disp in members:
+        for n, _letter, _sk, _disp, _tag in members:
             if n not in result:
                 result[n] = label
 
@@ -227,22 +234,22 @@ def compute_variant_display_groups(
             assigned.add((base + s, cls))
 
     # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化）
-    num_bases: dict[tuple[str, str], list[tuple[str, str, int, str]]] = {}
+    num_bases: dict[tuple[str, str], list[tuple[str, str, int, str, str]]] = {}
     for name, cls in items:
         if (name, cls) in assigned:
             continue
         m = _vnum_match(name)
         if m:
-            base, letter, sk, disp = m
+            base, letter, sk, disp, tag = m
             key = (base, cls)
-            num_bases.setdefault(key, []).append((name, letter, sk, disp))
+            num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     for (base, cls), members in num_bases.items():
         if len(members) < 2:
             continue
-        members_sorted = sorted(members, key=lambda x: (x[1], x[2]))
-        suffix = "/".join(f"{letter}{disp}" for _, letter, _sk, disp in members_sorted)
+        members_sorted = sorted(members, key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
+        suffix = "/".join(f"{letter}{disp}{tag}" for _, letter, _sk, disp, tag in members_sorted)
         label = f"{base} ({suffix})"
-        for n, _letter, _sk, _disp in members_sorted:
+        for n, _letter, _sk, _disp, _tag in members_sorted:
             result[(n, cls)] = label
             assigned.add((n, cls))
 

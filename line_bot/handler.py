@@ -36,7 +36,7 @@ from core.config import (
     make_register_url,
     make_review_liff_url,
 )
-from core.subject_variants import compute_variant_bases
+from core.subject_variants import compute_variant_bases, TAG_PRIORITY
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
@@ -141,8 +141,8 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
     names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows]
     _sem_bases, _letter_bases, _num_bases = compute_variant_bases(names_with_fd)
 
-    _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _ in _items}
-    _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _ in _items}
+    _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}
+    _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _, _ in _items}
     seen_num_base: set[tuple[str, str, str]] = set()
 
     _letter_base_for: dict[str, tuple[str, str, str]] = {
@@ -189,8 +189,8 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
             key = _num_base_for[name]
             if key not in seen_num_base:
                 seen_num_base.add(key)
-                items_sorted = sorted(_num_bases[key], key=lambda x: (x[1], x[2]))
-                suffix = "/".join(f"{letter}{disp}" for _, letter, _sk, disp in items_sorted)
+                items_sorted = sorted(_num_bases[key], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
+                suffix = "/".join(f"{letter}{disp}{tag}" for _, letter, _sk, disp, tag in items_sorted)
                 groups[cls].append((key[0], f"numvariant:{suffix}", key[1], key[2]))
             continue
         groups[cls].append((name, "single", "", ""))
@@ -213,7 +213,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
         if kind.startswith("numvariant:"):
             key = (name, fd[0], fd[1])
             if key in _num_bases:
-                return any(n in reviewed_names for n, _, _, _ in _num_bases[key])
+                return any(n in reviewed_names for n, _, _, _, _ in _num_bases[key])
             return False
         return False
 
@@ -237,7 +237,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                     return url
             return ""
         if kind.startswith("numvariant:") and (name, fd[0], fd[1]) in _num_bases:
-            for n, _, _, _ in sorted(_num_bases[(name, fd[0], fd[1])], key=lambda x: (x[1], x[2])):
+            for n, _, _, _, _ in sorted(_num_bases[(name, fd[0], fd[1])], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9))):
                 url = course_syllabus_urls.get(n, "")
                 if url:
                     return url
@@ -263,7 +263,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                 first_suffix = kind.split(":", 1)[1].split("/")[0]
                 liff_url = course_liff_urls.get(name + first_suffix, "")
             elif kind.startswith("numvariant:") and (name, fac, dept) in _num_bases:
-                first_name = min(_num_bases[(name, fac, dept)], key=lambda x: (x[1], x[2]))[0]
+                first_name = min(_num_bases[(name, fac, dept)], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))[0]
                 liff_url = course_liff_urls.get(first_name, "")
             else:
                 liff_url = ""
