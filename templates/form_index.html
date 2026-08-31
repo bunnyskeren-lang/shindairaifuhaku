@@ -316,14 +316,13 @@
             placeholder="💬 補足（任意）例：前半のみ毎回課題あり" maxlength="40">
         </div>
 
-        <!-- 課題の量 -->
-        <div class="rounded-xl bg-orange-50 border border-orange-100 p-3 mb-3">
+        <!-- 課題の量（頻度が「毎授業」「数回」の場合のみ表示） -->
+        <div id="homeworkSection" class="hidden rounded-xl bg-orange-50 border border-orange-100 p-3 mb-3">
           <p class="text-xs font-bold text-orange-700 mb-2">📝 普段の課題の量 <span class="text-red-500">*</span></p>
           <div class="flex flex-wrap gap-2">
             <button type="button" class="chip-btn single" data-group="homework" data-value="多め">多め</button>
             <button type="button" class="chip-btn single" data-group="homework" data-value="普通">普通</button>
             <button type="button" class="chip-btn single" data-group="homework" data-value="少なめ">少なめ</button>
-            <button type="button" class="chip-btn single" data-group="homework" data-value="なし">なし</button>
           </div>
           <p id="homeworkError" class="hidden mt-1.5 text-red-500 text-xs">選択してください</p>
 
@@ -850,6 +849,17 @@
             surpriseSection.classList.add('hidden');
             document.querySelectorAll('[data-group="attendance_surprise"]').forEach(b => b.classList.remove('active'));
             document.getElementById('attendanceSurpriseError').classList.add('hidden');
+          }
+        }
+        if (btn.dataset.group === 'homework_frequency') {
+          const homeworkSection = document.getElementById('homeworkSection');
+          if (btn.dataset.value === '毎授業' || btn.dataset.value === '数回') {
+            homeworkSection.classList.remove('hidden');
+          } else {
+            homeworkSection.classList.add('hidden');
+            document.querySelectorAll('[data-group="homework"]').forEach(b => b.classList.remove('active'));
+            document.getElementById('homeworkExtraInput').value = '';
+            document.getElementById('homeworkError').classList.add('hidden');
           }
         }
         if (PERCENT_GROUPS[btn.dataset.group]) renderGroupPercents(btn.dataset.group);
@@ -1586,7 +1596,11 @@
       }
       return true;
     }
-    function homeworkDone() { return !!document.querySelector('[data-group="homework"].active'); }
+    function homeworkDone() {
+      const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
+      if (hwFreq && hwFreq.dataset.value === 'なし') return true;
+      return !!document.querySelector('[data-group="homework"].active');
+    }
     function homeworkFrequencyDone() { return !!document.querySelector('[data-group="homework_frequency"].active'); }
     function evalDone() {
       const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
@@ -1806,14 +1820,17 @@
             document.getElementById('attendanceNoneConfirm').classList.remove('hidden');
           }
         }
-        if (d.homework) {
-          document.querySelectorAll('[data-group="homework"]').forEach(b => {
-            b.classList.toggle('active', b.dataset.value === d.homework);
-          });
-        }
         if (d.homeworkFrequency) {
           document.querySelectorAll('[data-group="homework_frequency"]').forEach(b => {
             b.classList.toggle('active', b.dataset.value === d.homeworkFrequency);
+          });
+          if (d.homeworkFrequency === '毎授業' || d.homeworkFrequency === '数回') {
+            document.getElementById('homeworkSection').classList.remove('hidden');
+          }
+        }
+        if (d.homework) {
+          document.querySelectorAll('[data-group="homework"]').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === d.homework);
           });
         }
         if (d.evals?.length) {
@@ -1946,13 +1963,13 @@
           }
         }
       }
-      if (!document.querySelector('[data-group="homework"].active')) {
-        document.getElementById('homeworkError').classList.remove('hidden');
-        valid = false;
-      }
       const hwFreqActive = document.querySelector('[data-group="homework_frequency"].active');
       if (!hwFreqActive) {
         document.getElementById('homeworkFrequencyError').classList.remove('hidden');
+        valid = false;
+      }
+      if (hwFreqActive && hwFreqActive.dataset.value !== 'なし' && !document.querySelector('[data-group="homework"].active')) {
+        document.getElementById('homeworkError').classList.remove('hidden');
         valid = false;
       }
       // 評価方法
