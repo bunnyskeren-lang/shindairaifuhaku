@@ -22,6 +22,18 @@
 
 例：「Render dev の Environment に以下を追加してください：`KEY=value`」
 
+## 本番デプロイ時の「コード以外の反映作業」洗い出しルール（必須）
+
+**dev→本番デプロイ（`git push origin dev:shindairaifuhaku-prod`）を行う際は、ユーザーに指摘される前に、コードのpush以外に必要な作業がないか自動で洗い出して案内すること。** 具体的には、直前の本番デプロイ地点（旧`shindairaifuhaku-prod`のコミット）から今回pushする内容までの差分全体を対象に、以下を機械的にチェックする：
+
+1. **新規環境変数**: `git diff <旧本番コミット> <新dev内容> -- '*.py' | grep "os.environ\|os.getenv"` 等で新規追加された環境変数を全て洗い出し、Render本番Environmentへの登録が必要か案内する（上記「環境変数の追加ルール」参照）
+2. **新規LIFF ID**: 新設されたLIFF機能があれば、本番用LIFFアプリがLINE Developers Consoleで作成済みか・IDがRender本番に登録済みかを確認・案内する
+3. **リッチメニュー変更**: `programing files/assets/richmenu.png`や`setup_richmenu.py`のボタン配置が変わっていれば、`--env prod`の実行が必要なことを案内する（実行すると`RICHMENU_ID_PREREGISTER`が変わるため、`.env`とRender本番の両方の更新も忘れず案内する）
+4. **DB同期**: 対象4テーブル（`display_orders`/`subjects`/`instructors`/`course_sections`）の同期（`sync_db_to_prod.py`）が必要なことを案内する
+5. **その他の外部サービス設定**: 新しい外部サービス連携（メール送信ドメイン認証、DNS設定等）が絡む場合、dev側で完了済みの設定が本番用にも別途必要かを確認し案内する
+
+これらは`本番デプロイ手順`の実行前後に必ず一度チェックし、ユーザーから聞かれるまで待たない。
+
 ---
 
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
