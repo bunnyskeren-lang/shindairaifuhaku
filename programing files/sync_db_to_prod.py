@@ -30,7 +30,10 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_SCRIPT_DIR, ".env"), override=True)
 
 DEV_URL = os.environ.get("DEV_DATABASE_URL", "")
-PROD_URL = os.environ.get("DATABASE_URL", "")
+# 本番の直接接続ホスト(db.<ref>.supabase.co)はIPv6アドレスしか持たず、IPv6非対応の
+# ネットワークからは接続できない(Renderは到達できるためアプリ本体はDATABASE_URLのまま)。
+# ローカルからの同期用にIPv4対応のSession Pooler経由URLがあれば優先する。
+PROD_URL = os.environ.get("PROD_DB_SYNC_URL") or os.environ.get("DATABASE_URL", "")
 if not DEV_URL or not PROD_URL:
     print("programing files/.env に DEV_DATABASE_URL / DATABASE_URL が設定されていません。")
     sys.exit(1)
