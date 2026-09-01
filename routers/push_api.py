@@ -27,7 +27,8 @@ async def push_enable_page(token: str = ""):
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>通知の設定</title></head>
 <body style="font-family:sans-serif;padding:2em;text-align:center;">
-<p id="msg">通知を有効化しています…</p>
+<button id="btn" style="font-size:1.1em;padding:0.8em 1.5em;">通知を有効にする</button>
+<p id="msg"></p>
 <script>
 (function() {{
   var TOKEN = {token!r};
@@ -40,25 +41,36 @@ async def push_enable_page(token: str = ""):
     return arr;
   }}
   function setMsg(t) {{ document.getElementById('msg').textContent = t; }}
+  var btn = document.getElementById('btn');
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {{
+    btn.disabled = true;
     setMsg('このブラウザ・アプリの開き方では通知に対応していません');
     return;
   }}
-  navigator.serviceWorker.register('/sw.js').then(function(reg) {{
-    return reg.pushManager.getSubscription().then(function(sub) {{
-      if (sub) return sub;
-      return reg.pushManager.subscribe({{ userVisibleOnly: true, applicationServerKey: urlB64(VAPID_KEY) }});
+  // iOSはNotification許可のプロンプトをユーザーのタップ操作(ボタンクリック)からしか
+  // 出せない制約があるため、ページ読み込み時の自動実行ではなくボタンのclickハンドラ内で
+  // subscribe()を呼ぶ必要がある(2026-09-01、自動実行版でPermission拒否が起きたため修正)。
+  btn.addEventListener('click', function() {{
+    btn.disabled = true;
+    setMsg('通知を有効化しています…');
+    navigator.serviceWorker.register('/sw.js').then(function(reg) {{
+      return reg.pushManager.getSubscription().then(function(sub) {{
+        if (sub) return sub;
+        return reg.pushManager.subscribe({{ userVisibleOnly: true, applicationServerKey: urlB64(VAPID_KEY) }});
+      }});
+    }}).then(function(sub) {{
+      return fetch('/push/subscribe?token=' + encodeURIComponent(TOKEN), {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify(sub.toJSON()),
+      }});
+    }}).then(function(res) {{
+      setMsg(res.ok ? '通知を有効にしました。このページは閉じて大丈夫です' : '登録に失敗しました');
+      btn.disabled = !res.ok;
+    }}).catch(function() {{
+      setMsg('通知が許可されませんでした。iPhoneの設定アプリ > このアプリ の通知が許可されているか確認してから、もう一度ボタンを押してください');
+      btn.disabled = false;
     }});
-  }}).then(function(sub) {{
-    return fetch('/push/subscribe?token=' + encodeURIComponent(TOKEN), {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify(sub.toJSON()),
-    }});
-  }}).then(function(res) {{
-    setMsg(res.ok ? '通知を有効にしました。このページは閉じて大丈夫です' : '登録に失敗しました');
-  }}).catch(function() {{
-    setMsg('通知の許可が必要です。ホーム画面に追加したアイコンから開き直してお試しください');
   }});
 }})();
 </script>
