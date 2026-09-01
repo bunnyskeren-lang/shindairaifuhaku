@@ -40,7 +40,7 @@
       </div>
       <div class="flex items-start gap-2">
         <span class="text-lg leading-none mt-0.5">🔢</span>
-        <span>申請金額は100円単位（レビュー1件単位）です</span>
+        <span>申請金額は100円単位（レビュー1件単位）、1回の申請につき上限1000円です</span>
       </div>
       <div class="flex items-start gap-2">
         <span class="text-lg leading-none mt-0.5">📅</span>
@@ -101,6 +101,9 @@
           </div>
         </div>
         <p id="eligibleAmount" class="text-xs text-gray-400 mb-4">学籍番号を入力すると件数が表示されます</p>
+        <p id="eligibleCapNotice" class="hidden text-xs text-amber-600 mb-4 leading-relaxed">
+          1回の申請上限（1000円）のため、今回はこの金額での申請となります。残りは次回以降の申請でお受け取りいただけます。
+        </p>
         <p id="eligibleZeroNotice" class="hidden text-xs text-gray-500 mb-4 leading-relaxed">
           承認済み（未申請）のレビューが見つかりませんでした。学籍番号を投稿時と同じもので入力しているかご確認のうえ、
           ご不明な点は<a href="/contact" class="text-indigo-500 underline">お問い合わせフォーム</a>からご連絡ください。
@@ -130,6 +133,7 @@
     const submittedCount = document.getElementById('submittedCount');
     const eligibleAmount = document.getElementById('eligibleAmount');
     const eligibleZeroNotice = document.getElementById('eligibleZeroNotice');
+    const eligibleCapNotice = document.getElementById('eligibleCapNotice');
     const amountInput = document.getElementById('amount');
     const amountError = document.getElementById('amountError');
     const STUDENT_ID_RE = /^\d{7}(MM|ME|MH|[LHJEBSTAZX])$/;
@@ -139,6 +143,7 @@
       const sid = studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase();
       studentIdInput.value = sid;
       eligibleZeroNotice.classList.add('hidden');
+      eligibleCapNotice.classList.add('hidden');
       if (!STUDENT_ID_RE.test(sid)) {
         eligibleCount.textContent = '-';
         submittedCount.textContent = '-';
@@ -168,6 +173,7 @@
         } else {
           eligibleAmount.textContent = '';
           amountInput.value = maxAmount;
+          eligibleCapNotice.classList.toggle('hidden', data.count * 100 <= maxAmount);
         }
         amountError.classList.add('hidden');
       } catch (e) {

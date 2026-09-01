@@ -17,6 +17,9 @@ _apply_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
 _UNIT_YEN = 100
 _YEN_PER_REVIEW = 100
+# 1回の申請あたりの上限額。超過分は未申請のまま残り、次回以降の申請に繰り越される
+_MAX_APPLY_AMOUNT = 1000
+_MAX_REVIEWS_PER_APPLY = _MAX_APPLY_AMOUNT // _YEN_PER_REVIEW
 
 
 async def _unpaid_count(session, sid: str) -> int:
@@ -71,7 +74,10 @@ async def payment_eligible(
             return JSONResponse({"valid": False})
         count = await _unpaid_count(session, sid)
         submitted_count = await _submitted_count(session, sid)
-    max_amount = (count // (_UNIT_YEN // _YEN_PER_REVIEW)) * _UNIT_YEN
+    max_amount = min(
+        (count // (_UNIT_YEN // _YEN_PER_REVIEW)) * _UNIT_YEN,
+        _MAX_APPLY_AMOUNT,
+    )
     return JSONResponse({
         "valid": True,
         "count": count,
@@ -122,19 +128,21 @@ async def payment_apply_submit(
         if existing_pending is not None:
             return _error("既に支払い待ちの申請があります。処理をお待ちください")
 
-        # 申請金額はユーザー入力を受け付けず、承認済み（未申請）レビュー数から常に満額を自動算出する
+        # 申請金額はユーザー入力を受け付けず、承認済み（未申請）レビュー数から自動算出する。
+        # ただし1回の申請あたり_MAX_APPLY_AMOUNTを上限とし、超過分は未申請のまま次回に繰り越す
         unpaid_count = await _unpaid_count(session, sid)
         if unpaid_count == 0:
             return _error("承認済み（未申請）のレビューが見つかりませんでした")
 
-        amount_val = unpaid_count * _YEN_PER_REVIEW
+        apply_count = min(unpaid_count, _MAX_REVIEWS_PER_APPLY)
+        amount_val = apply_count * _YEN_PER_REVIEW
 
         target_ids = (await session.execute(
             select(Review.id).where(
                 Review.student_id == sid,
                 Review.status == ReviewStatus.APPROVED,
                 Review.payment_request_id.is_(None),
-            ).order_by(Review.created_at.asc()).limit(unpaid_count)
+            ).order_by(Review.created_at.asc()).limit(apply_count)
         )).scalars().all()
 
         payment_request = PaymentRequest(
