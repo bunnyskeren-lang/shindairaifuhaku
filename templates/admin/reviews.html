@@ -114,6 +114,25 @@
 }
 .section-body { margin-top: 12px; }
 
+.reassign-box {
+  margin: 0 14px 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+}
+.reassign-title { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 8px; }
+.reassign-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; position: relative; }
+.reassign-row .edit-input { flex: 1; }
+.reassign-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+  background: #fff; border: 1px solid #d1d5db; border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.08); max-height: 180px; overflow-y: auto;
+}
+.reassign-result-item { padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.reassign-result-item:hover { background: #f1f5f9; }
+.reassign-selected { font-size: 12px; color: #16a34a; font-weight: 700; min-height: 16px; }
+
 .subject-group { margin-bottom: 18px; }
 .subject-group-header {
   display: flex;
@@ -228,6 +247,25 @@
 </div>
 {% endmacro %}
 
+{% macro reassign_box(r) %}
+<div class="reassign-box">
+  <div class="reassign-title">🔀 科目・担当教員の修正（お問い合わせ対応・投稿し直し不要）</div>
+  <form method="post" action="/admin/reviews/reassign/{{ r.id }}" class="reassign-form"
+        data-confirm="このレビューの科目・担当教員を変更します。よろしいですか？">
+    <input type="hidden" name="subject_id" class="reassign-subject-id">
+    <div class="reassign-row">
+      <input type="text" class="edit-input reassign-subject-input" placeholder="正しい科目名で検索（現在: {{ r.course_name }}）" autocomplete="off">
+      <div class="reassign-results"></div>
+    </div>
+    <div class="reassign-row">
+      <input type="text" name="instructor_name" class="edit-input reassign-instructor-input" placeholder="正しい担当教員名" value="{{ r.selected_instructor or '' }}" autocomplete="off">
+      <button type="submit" class="btn btn-primary" style="font-size:12px;padding:5px 14px;flex-shrink:0">変更を保存</button>
+    </div>
+    <div class="reassign-selected"></div>
+  </form>
+</div>
+{% endmacro %}
+
 {% from "admin/base.html" import pager %}
 
 {% block content %}
@@ -251,6 +289,7 @@
           <form method="post" action="/admin/reviews/approve/{{ r.id }}" id="approve-form-{{ r.id }}">
             {{ review_body(r, editable=True) }}
           </form>
+          {{ reassign_box(r) }}
           <div class="review-footer">
             <form method="post" action="/admin/reviews/reject/{{ r.id }}" style="margin:0"
                   data-confirm="却下しますか？">
@@ -283,6 +322,7 @@
         <form method="post" action="/admin/reviews/update/{{ r.id }}" id="edit-form-{{ r.id }}">
           {{ review_body(r, editable=True) }}
         </form>
+        {{ reassign_box(r) }}
         <div class="review-footer">
           {% if not r.paid %}
           <form method="post" action="/admin/reviews/restore/{{ r.id }}" style="margin:0">
@@ -319,6 +359,7 @@
         <form method="post" action="/admin/reviews/update/{{ r.id }}" id="edit-form-{{ r.id }}">
           {{ review_body(r, editable=True) }}
         </form>
+        {{ reassign_box(r) }}
         <div class="review-footer">
           <form method="post" action="/admin/reviews/restore/{{ r.id }}" style="margin:0">
             <button class="btn" style="font-size:12px;padding:5px 14px;background:#6b7280;color:#fff">↩ 待機中に戻す</button>
@@ -375,5 +416,57 @@ function renderGradingPreview(textarea) {
     }
   }
 }
+
+// レビューの科目・担当教員の付け替え（お問い合わせ対応）。
+// 検索は投稿フォームと同じ /api/courses（教養科目限定）を再利用する
+document.querySelectorAll('.reassign-box').forEach(function(box) {
+  const searchInput = box.querySelector('.reassign-subject-input');
+  const resultsEl = box.querySelector('.reassign-results');
+  const subjectIdInput = box.querySelector('.reassign-subject-id');
+  const selectedEl = box.querySelector('.reassign-selected');
+  const form = box.querySelector('.reassign-form');
+  let searchTimer = null;
+
+  searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimer);
+    subjectIdInput.value = '';
+    selectedEl.textContent = '';
+    const q = searchInput.value.trim();
+    if (!q) { resultsEl.innerHTML = ''; return; }
+    searchTimer = setTimeout(function() {
+      fetch('/api/courses?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          resultsEl.innerHTML = '';
+          (data.courses || []).slice(0, 10).forEach(function(c) {
+            const item = document.createElement('div');
+            item.className = 'reassign-result-item';
+            item.textContent = c.name;
+            item.addEventListener('click', function() {
+              subjectIdInput.value = c.id;
+              searchInput.value = c.name;
+              selectedEl.textContent = '選択中の科目: ' + c.name;
+              resultsEl.innerHTML = '';
+            });
+            resultsEl.appendChild(item);
+          });
+        })
+        .catch(function() { showErrorToast('科目検索に失敗しました'); });
+    }, 250);
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!box.contains(e.target)) resultsEl.innerHTML = '';
+  });
+
+  form.addEventListener('submit', function(e) {
+    const instr = box.querySelector('.reassign-instructor-input').value.trim();
+    if (!subjectIdInput.value || !instr) {
+      e.preventDefault();
+      e.stopPropagation();
+      showErrorToast('修正後の科目を検索結果から選択し、担当教員名を入力してください');
+    }
+  });
+});
 </script>
 {% endblock %}

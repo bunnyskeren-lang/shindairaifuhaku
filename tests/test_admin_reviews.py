@@ -120,6 +120,62 @@ async def test_update_edits_rejected_review_without_changing_status(http_client_
 
 
 @pytest.mark.asyncio
+async def test_reassign_moves_review_to_existing_course_section(http_client_factory, monkeypatch, test_sessionmaker):
+    review_id = await _seed_review(test_sessionmaker, status=ReviewStatus.APPROVED)
+    async with test_sessionmaker() as session:
+        # 間違ったレビューの投稿先とは別の、正しい科目×教員の組み合わせを事前に用意しておく
+        correct_subj = Subject(name="国際経営論", faculty="経営学部", category="専門")
+        session.add(correct_subj)
+        await session.flush()
+        correct_instr = Instructor(name="鈴木花子")
+        session.add(correct_instr)
+        await session.flush()
+        correct_cs = CourseSection(subject_id=correct_subj.id, instructor_id=correct_instr.id)
+        session.add(correct_cs)
+        await session.commit()
+        correct_subject_id = correct_subj.id
+        correct_cs_id = correct_cs.id
+
+    client = _admin_client(http_client_factory, monkeypatch)
+    resp = await client.post(f"/admin/reviews/reassign/{review_id}", data={
+        "subject_id": str(correct_subject_id),
+        "instructor_name": "鈴木花子",
+    })
+    assert resp.status_code == 303
+
+    async with test_sessionmaker() as session:
+        review = await session.get(Review, review_id)
+        assert review.course_section_id == correct_cs_id
+        assert review.selected_instructor == "鈴木花子"
+
+
+@pytest.mark.asyncio
+async def test_reassign_creates_course_section_and_instructor_when_missing(http_client_factory, monkeypatch, test_sessionmaker):
+    review_id = await _seed_review(test_sessionmaker, status=ReviewStatus.PENDING)
+    async with test_sessionmaker() as session:
+        target_subj = Subject(name="国際法概論", faculty="国際人間科学部", category="専門")
+        session.add(target_subj)
+        await session.commit()
+        target_subject_id = target_subj.id
+
+    client = _admin_client(http_client_factory, monkeypatch)
+    resp = await client.post(f"/admin/reviews/reassign/{review_id}", data={
+        "subject_id": str(target_subject_id),
+        "instructor_name": "新任太郎",
+    })
+    assert resp.status_code == 303
+
+    async with test_sessionmaker() as session:
+        review = await session.get(Review, review_id)
+        assert review.selected_instructor == "新任太郎"
+        cs = await session.get(CourseSection, review.course_section_id)
+        assert cs is not None
+        assert cs.subject_id == target_subject_id
+        instr = await session.get(Instructor, cs.instructor_id)
+        assert instr.name == "新任太郎"
+
+
+@pytest.mark.asyncio
 async def test_admin_reviews_page_paginates_approved_and_rejected(http_client_factory, monkeypatch, test_sessionmaker):
     for i in range(3):
         await _seed_review(test_sessionmaker, status=ReviewStatus.APPROVED, content=f"承認{i}")

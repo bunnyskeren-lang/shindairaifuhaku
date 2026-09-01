@@ -7,12 +7,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, func, select
 
 from core import cache
-from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
+from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS, normalize_instructor_name
 from core.grading_method import build_grading_method_from_edit_text
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
 
 router = APIRouter()
 
@@ -201,6 +201,55 @@ async def admin_review_update(
             _apply_review_edits(review, content, rating, ease_rating, grading_method, selected_instructor, nickname)
             await session.commit()
     cache.invalidate_review_cache()
+    return RedirectResponse("/admin/reviews", status_code=303)
+
+
+async def _get_or_create_course_section(session, subject_id: int, instructor_name: str) -> CourseSection:
+    name = normalize_instructor_name(instructor_name)
+    instructor = (await session.execute(
+        select(Instructor).where(Instructor.name == name)
+    )).scalar_one_or_none()
+    if instructor is None:
+        instructor = Instructor(name=name)
+        session.add(instructor)
+        await session.flush()
+    cs = (await session.execute(
+        select(CourseSection).where(
+            CourseSection.subject_id == subject_id,
+            CourseSection.instructor_id == instructor.id,
+        )
+    )).scalar_one_or_none()
+    if cs is None:
+        cs = CourseSection(subject_id=subject_id, instructor_id=instructor.id)
+        session.add(cs)
+        await session.flush()
+    return cs
+
+
+@router.post("/admin/reviews/reassign/{review_id}")
+async def admin_review_reassign(
+    review_id: int,
+    subject_id: int = Form(...),
+    instructor_name: str = Form(...),
+    _: str = Depends(check_admin),
+):
+    # 誤った科目・担当教員でレビューが投稿された場合に、管理者が正しい組み合わせへ
+    # 付け替える（お問い合わせ対応用）。course_section_id自体を丸ごと差し替えるため、
+    # 対応する組み合わせのcourse_sectionが無ければ新規作成する（教員追加と同じ扱い）
+    name = instructor_name.strip()
+    if not name:
+        return RedirectResponse("/admin/reviews", status_code=303)
+    async with AsyncSessionLocal() as session:
+        review = await session.get(Review, review_id)
+        subject = await session.get(Subject, subject_id)
+        if review and subject:
+            cs = await _get_or_create_course_section(session, subject_id, name)
+            review.course_section_id = cs.id
+            review.selected_instructor = normalize_instructor_name(name)
+            await session.commit()
+    cache.invalidate_review_cache()
+    cache.invalidate_courses_cache()
+    cache.invalidate_full_pairs_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
 
 
