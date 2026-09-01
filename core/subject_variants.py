@@ -83,14 +83,6 @@ def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     return base, letter, int(raw), raw, tag
 
 
-def variant_base_name(name: str) -> str | None:
-    """科目名から末尾数字/ローマ数字バリアント判定のベース名のみを取り出す
-    （文字＋数字パターン。例:「ドイツ語初級A1」→「ドイツ語初級」）。該当パターンが
-    無い場合はNone。core.config.MULTI_REVIEW_ALLOWED_BASE_NAMES判定用に公開している。"""
-    m = _vnum_match(name)
-    return m[0] if m else None
-
-
 def compute_variant_bases(
     names_with_faculty_dept: list[tuple[str, str, str]],
     letter_excluded_names: frozenset[str] = frozenset(),

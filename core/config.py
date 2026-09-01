@@ -55,18 +55,6 @@ def normalize_student_id(raw: str) -> str:
 # 1科目×1担当教員（course_section）あたりのレビュー投稿受付上限（待機中+承認済みの合計）
 MAX_REVIEWS_PER_COURSE_SECTION = 1
 
-# 語学初級科目（独語/仏語/露語/中国語）は年間を通じA面(前期)・B面(後期)で担当教員が
-# 変わることが多く、同じ学生が正規に2件のレビューを持ちうるため、通常科目の
-# 「1ユーザー1件まで（他教員なら複数可）」より明示的に絞り、1ユーザーにつき
-# MULTI_REVIEW_MAX_PER_STUDENT件まで（うち同じ担当教員の重複は不可）を許可する。
-# ベース名の判定は core.subject_variants.variant_base_name() の末尾数字バリアント
-# 判定を使う（SA3/SA4/SB3/SB4等の"S"クラスはベース名が別扱いになり対象外）。
-# 2026-09-01、ユーザー指示。
-MULTI_REVIEW_ALLOWED_BASE_NAMES = frozenset({
-    "ドイツ語初級", "フランス語初級", "ロシア語初級", "中国語初級",
-})
-MULTI_REVIEW_MAX_PER_STUDENT = 2
-
 # オンデマンド配信のため担当教員によらず授業内容が同一な科目（subjects.id）。
 # 1件のレビューがあれば他の教員のクラスにも実質流用できるため、全course_sectionで
 # レビュー募集を締め切り、科目詳細ページには他教員クラスも同一内容である旨を表示する。
