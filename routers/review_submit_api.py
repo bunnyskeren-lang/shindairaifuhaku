@@ -8,11 +8,14 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
+    MULTI_REVIEW_ALLOWED_BASE_NAMES,
+    MULTI_REVIEW_MAX_PER_STUDENT,
     ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
 )
 from core.liff_auth import verify_liff_id_token
+from core.subject_variants import variant_base_name
 from core.push import send_push_notification
 from core.rate_limit import rate_limiter
 from core.templates import templates
@@ -141,6 +144,26 @@ async def submit(
                     CourseSection.instructor_id == cs_obj.instructor_id,
                 )
             )).scalars().all()
+
+        # 語学初級科目（独語/仏語/露語/中国語）は前期(A面)・後期(B面)で担当教員が変わることが
+        # 多く、同じ学生が正規に2件のレビューを持ちうる。ただし下のdup_reviewチェックは
+        # 「同じ教員」への重複しか防げず、素のグループ内には教員が多数（10件超）紐づくため
+        # 何もしなければ学生1人が教員を変えて際限なく投稿できてしまう。対象科目に限り、
+        # 学生1人あたりの投稿数をグループ全体（教員問わず）でMULTI_REVIEW_MAX_PER_STUDENT件に
+        # 明示的に絞る（2026-09-01、ユーザー指示）。
+        if variant_base_name(subject.name) in MULTI_REVIEW_ALLOWED_BASE_NAMES:
+            all_group_cs_ids = (await session.execute(
+                select(CourseSection.id).where(CourseSection.subject_id.in_(group_subject_ids))
+            )).scalars().all()
+            student_review_count = (await session.execute(
+                select(func.count(Review.id)).where(
+                    Review.course_section_id.in_(all_group_cs_ids),
+                    Review.student_id == sid,
+                    Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+                )
+            )).scalar_one()
+            if student_review_count >= MULTI_REVIEW_MAX_PER_STUDENT:
+                return _form_error(f"この科目へのレビュー投稿は1人{MULTI_REVIEW_MAX_PER_STUDENT}件までです")
 
         # 修正理由: 同じ学籍番号の人が同じ科目×担当教員の組み合わせへ複数回レビュー投稿できてしまっていたため、
         # 既に投稿済み（待機中+承認済み）があればサーバー側で拒否する（フォーム側のグレーアウトは補助的なもの）
