@@ -38,6 +38,8 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 UserProfile.created_at.label("registered_at"),
                 UserProfile.name,
                 UserProfile.student_id,
+                UserProfile.faculty,
+                UserProfile.department,
                 UserProfile.unlock_credits,
                 UserProfile.banned_at,
                 UserProfile.ban_reason,
