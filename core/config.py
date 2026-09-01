@@ -16,6 +16,10 @@ REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku.on
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
+# 管理画面ログイン(セッションCookie)とは独立に、通知購読(service worker登録+push subscribe)
+# だけを許可するための秘密トークン。iPhoneでアプリがOSに回収されCookieが消えても、
+# 一度この秘密リンクで購読しておけば管理画面に再ログインしなくても通知は届き続ける。
+PUSH_ENABLE_TOKEN = os.environ.get("PUSH_ENABLE_TOKEN", "")
 SELF_URL = os.environ.get("SELF_URL", "").rstrip("/")
 LIFF_ID = os.environ.get("LIFF_ID", "2010406205-emxo5rhE")
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")

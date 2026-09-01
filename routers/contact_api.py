@@ -1,10 +1,13 @@
+import asyncio
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
+from core.activity_log import save_error_log
 from core.config import CONTACT_LIFF_ID, IS_DEV
 from core.liff_auth import verify_liff_id_token
+from core.push import send_inquiry_push_notification
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -78,5 +81,15 @@ async def contact_submit(
             status=InquiryStatus.PENDING,
         ))
         await session.commit()
+
+    # お問い合わせは既にcommit済みのため、レビュー投稿と同様に
+    # レスポンスを待たせずバックグラウンドで通知する
+    async def _notify() -> None:
+        try:
+            await send_inquiry_push_notification(cat, body)
+        except Exception as exc:
+            await save_error_log(exc, action="contact_push_notification")
+
+    asyncio.create_task(_notify())
 
     return templates.TemplateResponse("contact_success.html", {"request": request})

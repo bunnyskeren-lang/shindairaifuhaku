@@ -1,3 +1,4 @@
+import asyncio
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -5,6 +6,7 @@ from sqlalchemy import select
 
 from core import cache, line_client, moderation
 from core.activity_log import save_error_log
+from core.push import send_registration_push_notification
 from core.config import (
     BAN_MESSAGE_TEXT,
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE,
@@ -170,6 +172,17 @@ async def register_profile(
         await line_client.link_rich_menu(uid, RICHMENU_ID_MAIN)
     except Exception as exc:
         await save_error_log(exc, user_id=uid, action="register_richmenu_link")
+
+    if is_new_registration:
+        # 会員登録はここで既にcommit済みのため、レビュー投稿と同様に
+        # レスポンスを待たせずバックグラウンドで通知する
+        async def _notify() -> None:
+            try:
+                await send_registration_push_notification(name[:100], faculty, department)
+            except Exception as exc:
+                await save_error_log(exc, user_id=uid, action="register_push_notification")
+
+        asyncio.create_task(_notify())
 
     return templates.TemplateResponse(
         "form_register_success.html", {

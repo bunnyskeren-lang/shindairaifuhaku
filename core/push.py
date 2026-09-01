@@ -9,7 +9,7 @@ from database import AsyncSessionLocal
 from models import PushSubscription
 
 
-async def send_push_notification(course_name: str, rating: int, ease_rating: str, comment: str):
+async def _send_to_subscribers(title: str, body: str, url: str = "/admin/courses") -> None:
     if not VAPID_PRIVATE_KEY:
         return
     from pywebpush import webpush, WebPushException
@@ -17,11 +17,8 @@ async def send_push_notification(course_name: str, rating: int, ease_rating: str
         subs = (await session.execute(select(PushSubscription))).scalars().all()
     if not subs:
         return
-    _stars = "★" * rating + "☆" * (5 - rating)
-    payload = _json.dumps({
-        "title": f"📝 新着レビュー: {course_name}",
-        "body": f"{_stars}  楽単: {ease_rating}\n{comment[:80]}",
-    })
+    payload = _json.dumps({"title": title, "body": body, "url": url})
+
     async def _send_one(sub) -> int | None:
         try:
             await asyncio.to_thread(
@@ -45,3 +42,29 @@ async def send_push_notification(course_name: str, rating: int, ease_rating: str
         async with AsyncSessionLocal() as session:
             await session.execute(_sa_delete(PushSubscription).where(PushSubscription.id.in_(expired_ids)))
             await session.commit()
+
+
+async def send_push_notification(course_name: str, rating: int, ease_rating: str, comment: str):
+    stars = "★" * rating + "☆" * (5 - rating)
+    await _send_to_subscribers(
+        title=f"📝 新着レビュー: {course_name}",
+        body=f"{stars}  楽単: {ease_rating}\n{comment[:80]}",
+        url="/admin/courses",
+    )
+
+
+async def send_registration_push_notification(name: str, faculty: str, department: str | None):
+    dept = f" {department}" if department else ""
+    await _send_to_subscribers(
+        title="👤 新規会員登録",
+        body=f"{name}（{faculty}{dept}）",
+        url="/admin/users",
+    )
+
+
+async def send_inquiry_push_notification(category: str, content: str):
+    await _send_to_subscribers(
+        title=f"📩 新着お問い合わせ: {category}",
+        body=content[:80],
+        url="/admin/inquiries",
+    )

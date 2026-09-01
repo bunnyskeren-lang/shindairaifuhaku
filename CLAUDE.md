@@ -294,6 +294,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
 │   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /submit, /api/course/{id}
 │   ├── payment_api.py               ← /payment/apply（レビュー報酬支払い申請フォーム）, /api/payment/eligible, /payment/apply/submit
+│   ├── push_api.py                   ← /push/enable, /push/subscribe（管理画面ログインCookieに依存しない通知購読専用。秘密トークン`PUSH_ENABLE_TOKEN`で認可）
 │   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
 │       ├── auth.py                     ← /admin/login, /admin/logout
 │       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe

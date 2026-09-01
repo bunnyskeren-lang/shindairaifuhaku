@@ -96,11 +96,12 @@ self.addEventListener('push', function(e) {
     body: d.body || '',
     icon: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
     badge: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
+    data: { url: d.url || '/admin/courses' },
   }));
 });
 self.addEventListener('notificationclick', function(e) {
   e.notification.close();
-  e.waitUntil(clients.openWindow('/admin/courses'));
+  e.waitUntil(clients.openWindow(e.notification.data && e.notification.data.url || '/admin/courses'));
 });
 """.strip()
     return Response(content=js, media_type="application/javascript")

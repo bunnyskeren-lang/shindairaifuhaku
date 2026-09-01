@@ -15,7 +15,7 @@ from core.activity_log import log_cleanup_loop, save_error_log
 from database import engine, init_db
 from routers import (
     contact_api, health, liff_api, pages, payment_api, profile_api,
-    review_submit_api, richmenu, webhook,
+    push_api, review_submit_api, richmenu, webhook,
 )
 from routers.admin import (
     auth as admin_auth,
@@ -197,6 +197,7 @@ app.include_router(profile_api.router)
 app.include_router(review_submit_api.router)
 app.include_router(payment_api.router)
 app.include_router(contact_api.router)
+app.include_router(push_api.router)
 
 app.include_router(admin_auth.router)
 app.include_router(admin_dashboard.router)
