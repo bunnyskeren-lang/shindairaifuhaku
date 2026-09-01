@@ -96,12 +96,16 @@ async def admin_reviews(
     variant_labels = await cache.get_variant_full_label_map_cached()
 
     async with AsyncSessionLocal() as session:
+        # reviews.student_id（フォーム手入力のテキスト）とuser_profiles.student_idの
+        # 完全一致でのみ会員登録日時に紐づく。一致しない（会員登録日時が特定できない）
+        # レビューは末尾にまとめ、その中ではレビュー投稿日時が新しい順に並べる。
         pending_rows = (await session.execute(
             select(Review, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == Review.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
+            .outerjoin(UserProfile, UserProfile.student_id == Review.student_id)
             .where(Review.status == ReviewStatus.PENDING)
-            .order_by(Review.created_at.desc())
+            .order_by(UserProfile.created_at.desc().nulls_last(), Review.created_at.desc())
         )).all()
 
         approved_total = (await session.execute(
@@ -111,8 +115,9 @@ async def admin_reviews(
             select(Review, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == Review.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
+            .outerjoin(UserProfile, UserProfile.student_id == Review.student_id)
             .where(Review.status == ReviewStatus.APPROVED)
-            .order_by(Review.created_at.desc())
+            .order_by(UserProfile.created_at.desc().nulls_last(), Review.created_at.desc())
             .offset((apage - 1) * _PAGE_SIZE).limit(_PAGE_SIZE)
         )).all()
 
@@ -123,8 +128,9 @@ async def admin_reviews(
             select(Review, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == Review.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
+            .outerjoin(UserProfile, UserProfile.student_id == Review.student_id)
             .where(Review.status == ReviewStatus.REJECTED)
-            .order_by(Review.created_at.desc())
+            .order_by(UserProfile.created_at.desc().nulls_last(), Review.created_at.desc())
             .offset((rpage - 1) * _PAGE_SIZE).limit(_PAGE_SIZE)
         )).all()
     # 語尾バリアント違いの科目（力学基礎1/力学基礎2等）は管理画面上も

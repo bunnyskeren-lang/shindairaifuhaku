@@ -45,7 +45,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 UserProfile.ban_reason,
             )
             .outerjoin(last_seen_subq, last_seen_subq.c.user_id == UserProfile.line_user_id)
-            .order_by(last_seen_subq.c.last_seen.desc().nulls_last())
+            .order_by(UserProfile.created_at.desc())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()
 
