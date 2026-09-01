@@ -213,21 +213,51 @@ async def get_review_remaining_cached() -> dict[tuple[int, str], int]:
     """(subject_id, 担当教員名)の組ごとに、あと何件レビューを募集できるか
     （MAX_REVIEWS_PER_COURSE_SECTION - 待機中+承認済み件数、0未満にはならない）を返す。
     フォーム側で残り枠バッジ・募集締切表示に使う（実際の受付可否はsubmit時にDBで再確認する）。
-    戻り値に含まれない組は投稿0件＝上限まるごと空きとして扱う。"""
+    戻り値に含まれない組は投稿0件＝上限まるごと空きとして扱う。
+
+    末尾バリアントグループ（例: 線形代数1/2/3/4）に属する科目は、同じ教員が複数メンバーを
+    担当している場合、実質同じ授業のため募集枠をグループ全体で合算する（2026-09-01、
+    以前はsubject_id単位でしか見ておらず、同じ教員のバリアント違い科目それぞれに1件ずつ
+    投稿できてしまい「1科目1件まで」の上限をすり抜けられていたバグの修正）。
+    """
     global _full_pairs_cache, _full_pairs_cache_at
     if _full_pairs_cache is not None and time.monotonic() - _full_pairs_cache_at < _COURSE_CACHE_TTL:
         return _full_pairs_cache
     async with AsyncSessionLocal() as s:
-        rows = (await s.execute(
+        cs_rows = (await s.execute(
+            select(CourseSection.subject_id, Instructor.name)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+        )).all()
+        review_rows = (await s.execute(
             select(CourseSection.subject_id, Instructor.name, func.count(Review.id))
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
             .join(Review, Review.course_section_id == CourseSection.id)
             .where(Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)))
             .group_by(CourseSection.subject_id, Instructor.name)
         )).all()
-    _full_pairs_cache = {
-        (sid, name): max(0, MAX_REVIEWS_PER_COURSE_SECTION - cnt) for sid, name, cnt in rows
-    }
+    counts = {(sid, name): cnt for sid, name, cnt in review_rows}
+
+    _, all_courses = await get_courses_cached()
+    variant_map = await get_variant_map_cached()
+    group_key_by_sid: dict[int, tuple] = {}
+    for c in all_courses:
+        label = variant_map.get(c.name)
+        if label:
+            group_key_by_sid[c.id] = (label, c.faculty or "", c.department or "")
+
+    group_totals: dict[tuple, int] = {}
+    for (sid, name), cnt in counts.items():
+        gkey = group_key_by_sid.get(sid)
+        if gkey:
+            key = (gkey, name)
+            group_totals[key] = group_totals.get(key, 0) + cnt
+
+    result: dict[tuple[int, str], int] = {}
+    for sid, name in cs_rows:
+        gkey = group_key_by_sid.get(sid)
+        total = group_totals.get((gkey, name), 0) if gkey else counts.get((sid, name), 0)
+        result[(sid, name)] = max(0, MAX_REVIEWS_PER_COURSE_SECTION - total)
+    _full_pairs_cache = result
     _full_pairs_cache_at = time.monotonic()
     return _full_pairs_cache
 
@@ -390,6 +420,29 @@ async def get_variant_map_cached() -> dict[str, str]:
     )
     _variant_map_cache_at = time.monotonic()
     return _variant_map_cache
+
+
+async def get_variant_group_subject_ids(subject: Subject) -> list[int]:
+    """subjectが末尾バリアントグループ（例: 生物学各論A1/A2/C1/C2）に属する場合、
+    グループ内の全subject_idを返す。属さない場合は[subject.id]のみを返す。
+    レビュー閲覧統合(routers/liff_api.py _group_subject_ids)とレビュー投稿の重複防止・
+    募集枠共有(get_review_remaining_cached()、routers/review_submit_api.py)の両方が
+    同じグループ判定を使うための共通実装（2026-09-01、両者が別々にロジックを持つと
+    line_bot/handler.py同様の同期漏れが起きうるため一本化）。"""
+    _, all_courses = await get_courses_cached()
+    variant_map = await get_variant_map_cached()
+    label = variant_map.get(subject.name, "")
+    if not label:
+        return [subject.id]
+    # compute_variant_groups()はラベル文字列（ベース名）しか返さないため、別学部の科目が
+    # 偶然同じベース名グループを持つ場合の誤統合を避け、対象subjectと同じfaculty/departmentの
+    # 科目だけに絞り込む（liff_api.py _group_subject_ids参照）
+    return [
+        c.id for c in all_courses
+        if variant_map.get(c.name) == label
+        and (c.faculty or "") == (subject.faculty or "")
+        and (c.department or "") == (subject.department or "")
+    ]
 
 
 _variant_full_label_cache: dict[str, str] | None = None

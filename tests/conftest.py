@@ -76,6 +76,21 @@ def _reset_ban_status_cache():
 
 
 @pytest.fixture(autouse=True)
+def _reset_courses_cache():
+    """core.cache.get_courses_cached()等(科目一覧・バリアントグループ・募集枠)はTTL付きで
+    モジュールグローバルにキャッシュされる。テストごとに独立したSQLiteインメモリDBを使うため、
+    前のテストでキャッシュされた科目一覧が残っていると、別テストのDBに存在しない科目名で
+    バリアントグループ判定をしてしまい誤判定になる(2026-09-01、バリアントグループの
+    レビュー投稿上限テスト追加時に発覚)。"""
+    from core import cache
+    cache.invalidate_courses_cache()
+    cache.invalidate_full_pairs_cache()
+    yield
+    cache.invalidate_courses_cache()
+    cache.invalidate_full_pairs_cache()
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limit_buckets():
     """core.rate_limit._bucketsはIPアドレス単位のグローバル状態で、テストクライアントは
     毎回同一の疑似IPを使うため、レート制限テスト以外のE2Eテストが429で誤って

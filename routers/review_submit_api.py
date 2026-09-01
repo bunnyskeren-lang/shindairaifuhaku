@@ -127,11 +127,26 @@ async def submit(
         if cs_obj is None:
             return _form_error("この科目の担当教員情報が見つかりません")
 
+        # 末尾バリアントグループ（例: 線形代数1/2/3/4）に属する科目は、同じ教員が複数メンバーを
+        # 担当している場合、レビュー閲覧側では既に1つの科目としてまとめて表示している
+        # （routers/liff_api.py _group_subject_ids）。投稿側の重複防止・上限判定もグループ全体で
+        # 見ないと、同じ教員のバリアント違い科目それぞれに1件ずつ投稿でき「1科目1件まで」の
+        # 上限をすり抜けられてしまう（2026-09-01発覚）。
+        group_subject_ids = await cache.get_variant_group_subject_ids(subject)
+        group_cs_ids = [cs_obj.id]
+        if len(group_subject_ids) > 1:
+            group_cs_ids = (await session.execute(
+                select(CourseSection.id).where(
+                    CourseSection.subject_id.in_(group_subject_ids),
+                    CourseSection.instructor_id == cs_obj.instructor_id,
+                )
+            )).scalars().all()
+
         # 修正理由: 同じ学籍番号の人が同じ科目×担当教員の組み合わせへ複数回レビュー投稿できてしまっていたため、
         # 既に投稿済み（待機中+承認済み）があればサーバー側で拒否する（フォーム側のグレーアウトは補助的なもの）
         dup_review = (await session.execute(
             select(Review.id).where(
-                Review.course_section_id == cs_obj.id,
+                Review.course_section_id.in_(group_cs_ids),
                 Review.student_id == sid,
                 Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
             )
@@ -141,7 +156,7 @@ async def submit(
 
         existing_review_count = (await session.execute(
             select(func.count(Review.id)).where(
-                Review.course_section_id == cs_obj.id,
+                Review.course_section_id.in_(group_cs_ids),
                 Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
             )
         )).scalar_one()

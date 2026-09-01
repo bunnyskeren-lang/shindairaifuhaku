@@ -272,25 +272,17 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
 async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str]]:
     """科目がレビュー投稿フォームと同じ語尾バリアントグループ（例: 生物学各論A1/A2/C1/C2）
     に属する場合、グループラベル・グループ内の全subject_id・全科目名を返す。
-    属さない場合はラベル""・[subject.id]のみを返す（レビュー閲覧では単独科目として扱う）。"""
-    _, all_courses = await cache.get_courses_cached()
+    属さない場合はラベル""・[subject.id]のみを返す（レビュー閲覧では単独科目として扱う）。
+    グループ判定の実体はcache.get_variant_group_subject_ids()（レビュー投稿の重複防止・
+    募集枠共有と共通化済み、2026-09-01）。"""
     variant_map = await cache.get_variant_map_cached()
     label = variant_map.get(subject.name, "")
-    if not label:
+    ids = await cache.get_variant_group_subject_ids(subject)
+    if not label or len(ids) < 2:
         return "", [subject.id], [subject.name]
-    # 修正理由: compute_variant_groups()は「ベース名」というラベル文字列しか返さないため、
-    # 別学部の科目が偶然同じベース名で数字バリアントグループを持つ場合（例: 工学部「制御工学Ⅰ/Ⅱ」と
-    # システム情報学部「制御工学1/2」、どちらも表示ラベルは「制御工学」）、ラベル文字列だけで
-    # membersを再構築すると学部をまたいで誤統合してしまう。compute_variant_groups()自体は
-    # faculty+department単位でグループ化しているため、ここでも対象subjectと同じfaculty/department
-    # の科目だけに絞り込んで正しいグループを再現する。
-    members = [
-        c for c in all_courses
-        if variant_map.get(c.name) == label
-        and (c.faculty or "") == (subject.faculty or "")
-        and (c.department or "") == (subject.department or "")
-    ]
-    return label, [c.id for c in members], [c.name for c in members]
+    _, all_courses = await cache.get_courses_cached()
+    names_by_id = {c.id: c.name for c in all_courses}
+    return label, ids, [names_by_id[i] for i in ids]
 
 
 @router.get("/api/course/{course_id}")
