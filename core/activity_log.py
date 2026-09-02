@@ -11,7 +11,7 @@ from models import ErrorLog, MessageLog, UserActivity
 _LOG_RETENTION_DAYS = 30
 
 
-async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None):
+async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None, notify: bool = True):
     try:
         # exc.__traceback__から明示的に組み立てる。asyncio.Task.add_done_callback等、
         # 元のexceptブロックを抜けた後に呼ばれる場合はtraceback.format_exc()だと
@@ -30,6 +30,21 @@ async def save_error_log(exc: Exception, user_id: str | None = None, action: str
         # DB書き込み自体が失敗した場合でも、Renderの標準ログには残す
         # （ここでのraiseは呼び出し元の処理を止めてしまうため行わない）
         print(f"[error_log_failed] {type(log_exc).__name__}: {log_exc} (original: {type(exc).__name__}: {exc})", flush=True)
+        return
+
+    if not notify:
+        return
+
+    async def _notify() -> None:
+        try:
+            # circular import回避のため遅延import（core.push が core.activity_log.save_error_log を使うため）
+            from core.push import send_error_push_notification
+            await send_error_push_notification(action, type(exc).__name__, str(exc))
+        except Exception as push_exc:
+            # ここでsave_error_logを呼ぶと無限ループになるためprintのみに留める
+            print(f"[error_push_notify_failed] {type(push_exc).__name__}: {push_exc}", flush=True)
+
+    asyncio.create_task(_notify())
 
 
 async def save_log_bg(user_id: str, direction: str, message: str) -> None:

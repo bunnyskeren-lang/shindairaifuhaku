@@ -36,9 +36,10 @@ async def _send_to_subscribers(title: str, body: str, url: str = "/admin/courses
         except WebPushException as e:
             if e.response is not None and e.response.status_code == 410:
                 return sub.id
-            await save_error_log(e, action="push_notification")
+            # notify=False: push通知の送信失敗自体をpush通知しようとすると無限ループになるため
+            await save_error_log(e, action="push_notification", notify=False)
         except Exception as e:
-            await save_error_log(e, action="push_notification")
+            await save_error_log(e, action="push_notification", notify=False)
         return None
 
     results = await asyncio.gather(*(_send_one(sub) for sub in subs))
@@ -72,4 +73,12 @@ async def send_inquiry_push_notification(category: str, content: str):
         title=f"📩 新着お問い合わせ: {category}",
         body=content[:80],
         url="/admin/inquiries",
+    )
+
+
+async def send_error_push_notification(action: str | None, error_type: str, error_message: str):
+    await _send_to_subscribers(
+        title=f"⚠️ エラー発生: {action or error_type}",
+        body=f"{error_type}: {error_message[:120]}",
+        url="/admin/errors",
     )
