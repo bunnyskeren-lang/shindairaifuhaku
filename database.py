@@ -67,6 +67,14 @@ async def init_db():
     )
     from sqlalchemy import text
     async with engine.begin() as conn:
+        # 修正理由: 複数ワーカー・再デプロイ時の新旧プロセス並行起動等でinit_db()が
+        # 同時に走ると、後続のALTER TABLE群がプロセス間でロック順序違いのデッドロックを
+        # 起こすことがある(2026-09-02、大西さんが登録済みなのに再度会員登録を求められた
+        # 事象の調査で発覚。DeadlockDetectedError on chk_do_kind制約追加)。
+        # トランザクションスコープのアドバイザリーロックで直列化する
+        # (pg_advisory_xact_lockはCOMMIT/ROLLBACKで自動解放されるため、PgBouncerの
+        # transactionモードpooler経由でも安全にセッションをまたがず使える)
+        await conn.execute(text("SELECT pg_advisory_xact_lock(727001)"))
         await conn.run_sync(Base.metadata.create_all)
         # classification_orders → display_orders(kind='classification') への移行
         # classification_ordersテーブルがまだ存在する場合のみ実行（移行後は削除済みで存在しない）
