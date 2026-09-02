@@ -91,7 +91,8 @@ AREAS = [
     },
     {
         # 2026-09-02: 専用の入り口画面（科目名検索を主導線にしたFlexMessage、
-        # line_bot/flex_builders.py の make_review_browse_entry_flex()）を実装
+        # line_bot/flex_builders.py の make_category_browse_flex()）を実装。
+        # 教養/専門タブと系統・学部グリッドを1画面に統合（2026-09-02改修）
         "label": "レビュー閲覧",
         "x": REV_W, "y": TOP_Y, "w": SIDE_X - REV_W, "h": ROW2_Y - TOP_Y,
         "action": PostbackAction(label="レビューを閲覧", data="レビュー閲覧"),

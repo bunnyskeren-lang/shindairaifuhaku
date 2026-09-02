@@ -2,7 +2,7 @@ import asyncio
 import random
 import re as _re
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from linebot.v3.messaging import (
     FlexBubble,
@@ -44,7 +44,7 @@ from core.subject_variants import (
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
-    make_category_select_flex,
+    make_category_browse_flex,
     make_classification_select_flex,
     make_help_flex,
     make_no_review_flex,
@@ -52,7 +52,6 @@ from line_bot.flex_builders import (
     make_onitan_card,
     make_rakutan_card,
     make_registration_flex,
-    make_review_browse_entry_flex,
     make_search_result_card,
 )
 from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
@@ -511,7 +510,9 @@ async def _handle_kyoyo_menu() -> list:
     clss = sorted({c.classification for c in edu_courses}, key=_cls_sort)
     reviewed_cls = {c.classification for c in edu_courses if c.name in reviewed_names_edu}
     if clss:
-        result = [make_classification_select_flex(clss, reviewed_cls)]
+        counts = Counter(c.classification for c in edu_courses)
+        items = [(cls, cls, counts[cls]) for cls in clss]
+        result = [make_category_browse_flex("教養", items, reviewed_cls)]
     else:
         result = await handle_course_list(category="教養")
     cache.set_course_list_cache(_menu_key, result)
@@ -553,12 +554,12 @@ async def _handle_senmon_menu() -> list:
     display_reviewed = reviewed_fac | reviewed_other
 
     if display_items:
-        result = [make_classification_select_flex(
-            display_items, display_reviewed,
-            title="🎓 専門科目",
-            subtitle="学部を選んでください",
-            header_color="#0ea5e9",
-        )]
+        fac_counts = {fac: sum(1 for c in sen_courses if (c.faculty or "").startswith(fac))
+                      for fac in faculties_present}
+        cls_counts = {cls: sum(1 for c in sen_courses if c.classification == cls) for cls in other_clss}
+        items = [(fac, fac, fac_counts[fac]) for fac in faculties_present] + \
+                [(cls, cls, cls_counts[cls]) for cls in other_clss]
+        result = [make_category_browse_flex("専門", items, display_reviewed)]
     else:
         result = await handle_course_list(category="専門")
     cache.set_course_list_cache(_menu_key, result)
@@ -773,11 +774,8 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if "::R:" in t:
         t, _reading_row = t.split("::R:", 1)
 
-    if t in ["レビュー閲覧", "レビューを閲覧"]:
-        return [make_review_browse_entry_flex()]
-
-    if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
-        return [make_category_select_flex()]
+    if t in ["レビュー閲覧", "レビューを閲覧", "科目一覧", "科目", "授業一覧", "一覧"]:
+        return await _handle_kyoyo_menu()
 
     if t in ["教養", "教養科目", "教養一覧"]:
         return await _handle_kyoyo_menu()
