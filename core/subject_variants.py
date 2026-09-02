@@ -32,12 +32,13 @@ _FULLWIDTH_UPPER = str.maketrans(
 _ROMAN_VAL = {chr(0x2160 + i): i + 1 for i in range(12)}  # Ⅰ→1 ... Ⅻ→12
 # 末尾の（遠隔）（再履修）タグ（programing files/import_syllabus.py clean_name()が付与、
 # REMOTE/RETAKEクラスを別科目として登録する仕組み）は、数字/ローマ数字バリアントと同じ
-# 基準（末尾の文字＋数字）を保ったまま追加の識別子として扱う。ただし遠隔クラスは対面クラスと
-# 授業形態そのものが異なり同一視できないため、遠隔タグの有無でグループを分ける
-# （遠隔は遠隔同士、それ以外（無タグ・再履修タグのみ）は無タグ・再履修同士で統合。
-# 2026-08-31にユーザー指示で「同一グループに混在」から変更）。タグの優先順位は表示上の
-# ソート用（無タグ→遠隔→再履修→両方の順）で、line_bot/handler.py側の束ね方の手順でも
-# 同じ順序を使うため公開名にしている。
+# 基準（末尾の文字＋数字）を保ったまま追加の識別子として扱う。授業形態・受講条件が異なる
+# クラス同士を同一視しないよう、タグが完全一致するクラス同士でのみ統合する（無タグ→無タグ
+# 同士、遠隔→遠隔同士、再履修→再履修同士、遠隔＋再履修→遠隔＋再履修同士の4系統に分離。
+# 2026-08-31は遠隔タグの有無だけで区別し無タグと再履修タグを同一グループに混在させていたが、
+# 2026-09-02にユーザー指示で「再履修は再履修のみで統合」に変更し完全一致に揃えた）。
+# タグの優先順位は表示上のソート用（無タグ→遠隔→再履修→両方の順）で、line_bot/handler.py
+# 側の束ね方の手順でも同じ順序を使うため公開名にしている。
 TAG_PRIORITY = {"": 0, "（遠隔）": 1, "（再履修）": 2, "（遠隔）（再履修）": 3}
 REMOTE_TAG = "（遠隔）"
 _VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])((?:（遠隔）|（再履修）)*)$')
@@ -99,6 +100,20 @@ def num_variant_suffix(members: list[tuple[str, str, int, str, str]]) -> str:
     return "/".join(parts)
 
 
+def variant_tag_in_suffix(suffix: str) -> str:
+    """num_variant_suffix()が組み立てた接尾辞文字列（例:"1（遠隔）（再履修）/2（遠隔）（再履修）"）
+    から、そのグループのタグ（""/（遠隔）/（再履修）/（遠隔）（再履修）の4種）を復元する。
+    同一グループ内のmembersは全て同じタグを持つ（num_basesのキーがタグ完全一致で
+    グループ化されているため）ので、どのmemberの表記を見ても同じ結果になる。
+    line_bot/handler.py _build_course_bubbles()がkind文字列（"numvariant:<suffix>"）だけから
+    num_basesの元のキーを引き直す際に使う（TAG_PRIORITYの並び=長い順でないと「（遠隔）」が
+    「（遠隔）（再履修）」より先にマッチして誤判定するため、長い順に固定で判定する）。"""
+    for tag in ("（遠隔）（再履修）", "（遠隔）", "（再履修）"):
+        if tag in suffix:
+            return tag
+    return ""
+
+
 def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     name = _STUDENT_ID_SPLIT_RE.sub('', name)
     m = _VNUM.match(name)
@@ -120,13 +135,16 @@ def compute_variant_bases(
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
     dict[tuple[str, str, str], list[str]],
-    dict[tuple[str, str, str, bool], list[tuple[str, str, int, str, str]]],
+    dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]],
 ]:
     """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/文字(A-D)/
     数字・ローマ数字の3種のバリアントグループを (base[+言語], faculty, department) キーで
     束ねた辞書(sem_bases, letter_bases, num_bases)を返す（メンバーが2件未満のキーは含めない）。
-    num_basesのキーのみ、末尾に遠隔タグの有無(bool)を追加で持つ（遠隔クラスと対面クラスは
-    別グループとして扱うため）。
+    num_basesのキーのみ、末尾のタグ（""/（遠隔）/（再履修）/（遠隔）（再履修）の4種）を
+    追加で持つ（授業形態が異なるクラスを同一視しないよう、タグが完全一致するクラス同士
+    でのみ統合する。2026-09-02にユーザー指示で「再履修は再履修のみで統合」に変更、
+    無タグと再履修タグを混在させていた旧仕様（2026-08-31時点、REMOTE_TAG in tagの
+    真偽値だけで区別）から4タグ完全一致に揃えた）。
 
     compute_variant_groups()（フラットなname→labelマップ、レビュー投稿フォーム/api/preload用）と
     line_bot.handler._build_course_bubbles()（Flex Message構築、シラバス/レビューURL等メンバーの
@@ -178,7 +196,7 @@ def compute_variant_bases(
         if len(variants) >= 2:
             letter_bases[key] = variants
 
-    num_bases: dict[tuple[str, str, str, bool], list[tuple[str, str, int, str, str]]] = {}
+    num_bases: dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]] = {}
     for name in names:
         if name in num_excluded_names:
             continue
@@ -186,7 +204,7 @@ def compute_variant_bases(
         if m:
             base, letter, sk, disp, tag = m
             fac, dept = fd_by_name.get(name, ("", ""))
-            key = (base, fac, dept, REMOTE_TAG in tag)
+            key = (base, fac, dept, tag)
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     num_bases = {k: v for k, v in num_bases.items() if len(v) >= 2}
 
@@ -215,7 +233,7 @@ def compute_variant_groups(
             if name not in result:
                 result[name] = base
 
-    for (base, _fac, _dept, _remote), members in num_bases.items():
+    for (base, _fac, _dept, _tag), members in num_bases.items():
         for n, _letter, _sk, _disp, _tag in members:
             if n not in result:
                 result[n] = base
@@ -252,7 +270,7 @@ def compute_variant_full_labels(
             if name not in result:
                 result[name] = label
 
-    for (base, _fac, _dept, _remote), members in num_bases.items():
+    for (base, _fac, _dept, _tag), members in num_bases.items():
         label = f"{base}({num_variant_suffix(members)})"
         for n, _letter, _sk, _disp, _tag in members:
             if n not in result:
@@ -322,19 +340,19 @@ def compute_variant_display_groups(
             result[(base + s, cls)] = label
             assigned.add((base + s, cls))
 
-    # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化。遠隔タグの有無でも
-    # グループを分ける＝遠隔は遠隔同士、それ以外は それ以外同士でのみ統合する）
+    # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化。タグ（""/（遠隔）/
+    # （再履修）/（遠隔）（再履修）の4種）が完全一致するクラス同士でのみ統合する）
     # NUM_MERGE_EXCLUDED_NAMESに属する科目名は数字バリアント統合の対象外（compute_variant_bases()参照）
-    num_bases: dict[tuple[str, str, bool], list[tuple[str, str, int, str, str]]] = {}
+    num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str, str]]] = {}
     for name, cls in items:
         if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES:
             continue
         m = _vnum_match(name)
         if m:
             base, letter, sk, disp, tag = m
-            key = (base, cls, REMOTE_TAG in tag)
+            key = (base, cls, tag)
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
-    for (base, cls, _remote), members in num_bases.items():
+    for (base, cls, _tag), members in num_bases.items():
         if len(members) < 2:
             continue
         label = f"{base} ({num_variant_suffix(members)})"
