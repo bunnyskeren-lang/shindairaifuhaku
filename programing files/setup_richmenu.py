@@ -10,6 +10,7 @@
   CONTACT_LIFF_ID    (お問い合わせボタンのLIFF URL用)
 """
 import argparse
+import asyncio
 import io
 import os
 import sys
@@ -229,6 +230,47 @@ def _create_and_upload(api, name: str, areas: list, image_data: bytes) -> str:
     return rich_menu_id
 
 
+async def _relink_registered_users(main_id: str) -> None:
+    """setup_richmenu.pyはリッチメニューを削除→再作成するため、実行のたびにLINE側で
+    既存ユーザーへの個人リンクが無効化され、登録済みユーザーが「個人リンク無し」状態に
+    戻ってデフォルト（登録前メニュー）へフォールバックしてしまう(2026-09-02、登録済みの
+    大西さんがリッチメニューを押すと会員登録画面に遷移する不具合の原因)。
+    登録完了済みユーザー全員を新しい通常メニューへ再リンクし直す。"""
+    import httpx
+    from sqlalchemy import text
+    from database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        uids = (await session.execute(text(
+            "SELECT line_user_id FROM user_profiles "
+            "WHERE name IS NOT NULL AND name != '' "
+            "AND student_id IS NOT NULL AND student_id != '' "
+            "AND faculty IS NOT NULL AND faculty != '' "
+            "AND department IS NOT NULL AND department != '' "
+            "AND banned_at IS NULL"
+        ))).scalars().all()
+
+    if not uids:
+        print("再リンク対象の登録済みユーザーはいません")
+        return
+
+    print(f"登録済みユーザー{len(uids)}名を新しい通常リッチメニューへ再リンク中...")
+    headers = {"Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"}
+    ok = ng = 0
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for uid in uids:
+            resp = await client.post(
+                f"https://api.line.me/v2/bot/user/{uid}/richmenu/{main_id}",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                ok += 1
+            else:
+                ng += 1
+                print(f"  [警告] {uid} の再リンクに失敗: {resp.status_code} {resp.text}")
+    print(f"再リンク完了: 成功{ok}件 / 失敗{ng}件")
+
+
 def main():
     image_path = args.image or "assets/richmenu.png"
 
@@ -271,6 +313,8 @@ def main():
             print("[警告] REGISTER_LIFF_ID が未設定のため、登録前リッチメニューは作成されませんでした")
             print("[警告] 登録前メニューが無いため、代わりに通常メニューをデフォルトに設定します")
             api.set_default_rich_menu(main_id)
+
+        asyncio.run(_relink_registered_users(main_id))
 
         print(f"\n環境: {args.env}  /  REVIEW_FORM_URL: {REVIEW_FORM_URL}")
         print("\nボタン配置（通常メニュー）:")
