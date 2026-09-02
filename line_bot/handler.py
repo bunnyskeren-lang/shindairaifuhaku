@@ -429,7 +429,7 @@ async def _get_rakutan_ranking() -> list:
         random.shuffle(pool)
         selected.extend(pool[:5 - len(selected)])
     items = [
-        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, "")}
+        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, ""), "ease": ease}
         for i, (sid, name, ease) in enumerate(selected, 1)
     ]
     return [make_rakutan_card(items)]
@@ -460,7 +460,7 @@ async def _get_onitan_ranking() -> list:
         random.shuffle(pool)
         selected.extend(pool[:5 - len(selected)])
     items = [
-        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, "")}
+        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, ""), "ease": ease}
         for i, (sid, name, ease) in enumerate(selected, 1)
     ]
     return [make_onitan_card(items)]
@@ -495,7 +495,11 @@ async def _get_omikuji() -> list:
         if sid not in best_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best_ease[sid], 99):
             best_ease[sid] = ease
     items = [
-        {"rank": i, "id": s.id, "name": s.name, "stars": EASE_STARS.get(best_ease.get(s.id, ""), "")}
+        {
+            "rank": i, "id": s.id, "name": s.name,
+            "stars": EASE_STARS.get(best_ease.get(s.id, ""), ""),
+            "ease": best_ease.get(s.id, ""),
+        }
         for i, s in enumerate(selected_subjects, 1)
     ]
     return [make_omikuji_card(items)]

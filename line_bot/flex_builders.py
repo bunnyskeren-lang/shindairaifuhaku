@@ -12,7 +12,7 @@ from linebot.v3.messaging import (
 
 from core import cache
 from core.config import (
-    CONTACT_URL, EASE_STARS, PRIVACY_URL, TERMS_URL,
+    CONTACT_URL, EASE_COLOR, EASE_LABEL, EASE_STARS, PRIVACY_URL, TERMS_URL,
     REGISTRATION_WELCOME_UNLOCK_CREDITS, REVIEW_APPROVAL_UNLOCK_CREDITS,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
@@ -366,59 +366,132 @@ def make_registration_flex(register_url: str) -> FlexMessage:
     )
 
 
-def _make_ranking_card(title: str, items: list[dict], header_bg: str, row_bg: str, accent: str) -> FlexMessage:
-    # items: [{"rank": int, "id": int, "name": str, "stars": str}]  rankは選出順の内部管理用で表示はしない
+# 楽単5選/鬼単5選の順位バッジ配色（1位が最も強調される5段階のグラデーション）。
+# インデックス0=1位。件数が5を超える場合は末尾の色を使い回す。
+_RAKUTAN_RANK_COLORS = [
+    ("#f59e0b", "#ffffff"),
+    ("#fbbf24", "#ffffff"),
+    ("#fcd34d", "#78350f"),
+    ("#fde68a", "#78350f"),
+    ("#fef3c7", "#92400e"),
+]
+_ONITAN_RANK_COLORS = [
+    ("#7f1d1d", "#ffffff"),
+    ("#b91c1c", "#ffffff"),
+    ("#dc2626", "#ffffff"),
+    ("#f87171", "#ffffff"),
+    ("#fecaca", "#7f1d1d"),
+]
+
+
+def _make_ranking_card(
+    title: str,
+    items: list[dict],
+    header_bg: str,
+    row_bg: str,
+    accent: str,
+    subtitle: str = "",
+    row_bg_top: str | None = None,
+    rank_colors: list[tuple[str, str]] | None = None,
+    top_emoji: str | None = None,
+    footer_button_label: str | None = None,
+    footer_button_uri: str | None = None,
+) -> FlexMessage:
+    # items: [{"rank": int, "id": int, "name": str, "stars": str, "ease": str}]
+    # rankは1始まりの表示順位。easeはSS/S/A/B/C（EASE_LABEL/EASE_COLORのキー、無ければ""）
     rows = []
     for item in items:
-        liff_url = make_course_liff_url(item['id'])
+        liff_url = make_course_liff_url(item["id"])
+        pos = item["rank"]
+        if rank_colors:
+            badge_bg, badge_color = rank_colors[min(pos - 1, len(rank_colors) - 1)]
+        else:
+            badge_bg, badge_color = accent, "#ffffff"
+        badge_text = top_emoji if (pos == 1 and top_emoji) else str(pos)
+        tier_label = EASE_LABEL.get(item.get("ease", ""), "")
+        tier_color = EASE_COLOR.get(item.get("ease", ""), accent)
+        row_bg_color = row_bg_top if (pos == 1 and row_bg_top) else row_bg
+
+        stars_row_contents = [FlexText(text=item["stars"], size="xs", color=tier_color, flex=0)]
+        if tier_label:
+            stars_row_contents.append(FlexText(text=tier_label, size="xxs", color="#94a3b8", flex=0, margin="xs"))
+
         rows.append(
             FlexBox(
-                layout="vertical",
-                background_color=row_bg,
-                corner_radius="10px",
+                layout="horizontal",
+                align_items="center",
+                background_color=row_bg_color,
+                corner_radius="12px",
                 padding_all="md",
                 margin="sm",
+                action=URIAction(label=item["name"][:20], uri=liff_url),
                 contents=[
-                    FlexText(
-                        text=item["name"], weight="bold", size="md", color="#1e293b",
-                        wrap=True,
-                        action=URIAction(label=item["name"][:20], uri=liff_url),
+                    FlexBox(
+                        layout="vertical",
+                        width="34px", height="34px", corner_radius="17px",
+                        background_color=badge_bg,
+                        justify_content="center", align_items="center",
+                        contents=[FlexText(text=badge_text, color=badge_color, weight="bold", size="sm", align="center")],
                     ),
-                    FlexText(text=item["stars"], size="sm", color=accent, margin="sm"),
+                    FlexBox(
+                        layout="vertical",
+                        flex=1,
+                        margin="md",
+                        contents=[
+                            FlexText(text=item["name"], weight="bold", size="sm", color="#1e293b", wrap=True, max_lines=1),
+                            FlexBox(layout="horizontal", margin="xs", contents=stars_row_contents),
+                        ],
+                    ),
+                    FlexText(text="›", color="#cbd5e1", size="lg", weight="bold", flex=0, gravity="center"),
                 ],
             )
         )
+
+    header_contents = [FlexText(text=title, weight="bold", color="#ffffff", size="md")]
+    if subtitle:
+        header_contents.append(FlexText(text=subtitle, size="xxs", color="#ffffff", margin="xs"))
+
+    footer_contents = [FlexText(text="タップすると科目の詳細が見られます", size="xxs", color="#94a3b8", align="center")]
+    if footer_button_label and footer_button_uri:
+        footer_contents.append(
+            FlexButton(
+                action=URIAction(label=footer_button_label, uri=footer_button_uri),
+                style="primary", color=accent, height="sm", margin="sm",
+            )
+        )
+
     bubble = FlexBubble(
-        header=FlexBox(
-            layout="vertical",
-            contents=[FlexText(text=title, weight="bold", color="#ffffff", size="md")],
-            background_color=header_bg,
-            padding_all="lg",
-        ),
+        header=FlexBox(layout="vertical", contents=header_contents, background_color=header_bg, padding_all="lg"),
         body=FlexBox(layout="vertical", contents=rows, padding_all="lg"),
-        footer=FlexBox(
-            layout="vertical",
-            contents=[
-                FlexText(text="★は楽単度を表します（多いほど楽単）", size="xs", color="#94a3b8", align="center"),
-                FlexText(text="科目名をタップすると詳細が見られます", size="xs", color="#94a3b8", align="center"),
-            ],
-            padding_all="md",
-        ),
+        footer=FlexBox(layout="vertical", contents=footer_contents, padding_all="md"),
     )
     return FlexMessage(alt_text=title, contents=bubble)
 
 
 def make_rakutan_card(items: list[dict]) -> FlexMessage:
-    return _make_ranking_card("😴 楽単5選", items, header_bg="#f59e0b", row_bg="#fffbeb", accent="#f59e0b")
+    return _make_ranking_card(
+        "😴 楽単5選", items, header_bg="#f59e0b", row_bg="#fffbeb", accent="#f59e0b",
+        subtitle="承認済みレビューから厳選", row_bg_top="#fef3c7",
+        rank_colors=_RAKUTAN_RANK_COLORS, top_emoji="👑",
+        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
+    )
 
 
 def make_onitan_card(items: list[dict]) -> FlexMessage:
-    return _make_ranking_card("👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c")
+    return _make_ranking_card(
+        "👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c",
+        subtitle="承認済みレビューから厳選", row_bg_top="#fee2e2",
+        rank_colors=_ONITAN_RANK_COLORS, top_emoji="💀",
+        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
+    )
 
 
 def make_omikuji_card(items: list[dict]) -> FlexMessage:
-    # items: [{"rank": int, "id": int, "name": str, "stars": str}]  楽単5選/鬼単5選と同じ表記。stars=楽単度
-    return _make_ranking_card("⛩️ 10連おみくじ", items, header_bg="#7c3aed", row_bg="#f5f3ff", accent="#7c3aed")
+    # items: [{"rank": int, "id": int, "name": str, "stars": str, "ease": str}]  楽単5選/鬼単5選と同じ表記。stars/easeは楽単度
+    return _make_ranking_card(
+        "⛩️ 10連おみくじ", items, header_bg="#7c3aed", row_bg="#f5f3ff", accent="#7c3aed",
+        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
+    )
 
 
 def _make_search_result_row(item: dict) -> FlexBox:
