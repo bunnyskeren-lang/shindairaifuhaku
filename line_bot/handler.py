@@ -90,6 +90,40 @@ async def _registration_incomplete(user_id: str) -> bool:
 _ALPHA_SPLIT_THRESHOLD = 48
 _ALPHA_CHUNK_SIZE = 50
 
+# ── ドリルダウンpostbackデータの統一形式 ────────────────────────────
+# 従来は画面ごとに"教養:"/"専門:"/"専門F:"/生の分類名 とpostbackデータの形式が
+# バラバラで、パス情報（学部・学科等）が一部の画面でしか渡らず、パンくず表示や
+# 「一つ前の階層に戻る」ボタンを画面共通のロジックで組み立てられなかった。
+# 常に (category, faculty, department, classification) の4要素をこの順で"|"区切りで
+# 持たせる1つの形式に統一する（2026-09-02、系統/学部タップ後のルーティングUX改善）。
+# 旧形式のボタンは、デプロイ前に送信済みのメッセージ内にまだ残っている可能性があるため、
+# handle_message側の解釈は当面残す（新規生成はすべてこの形式のみを使う）。
+_NAV_PREFIX = "nav:"
+
+
+def _make_nav_data(category: str = "", faculty: str = "", department: str = "", classification: str = "") -> str:
+    return f"{_NAV_PREFIX}{category}|{faculty}|{department}|{classification}"
+
+
+def _parse_nav_data(data: str) -> tuple[str, str, str, str] | None:
+    if not data.startswith(_NAV_PREFIX):
+        return None
+    parts = data[len(_NAV_PREFIX):].split("|")
+    if len(parts) != 4:
+        return None
+    return parts[0], parts[1], parts[2], parts[3]
+
+
+def _breadcrumb(category: str = "", faculty: str = "", department: str = "") -> str:
+    parts = ["科目一覧"]
+    if category:
+        parts.append(f"{category}科目")
+    if faculty:
+        parts.append(faculty)
+    if department:
+        parts.append(department)
+    return " › ".join(parts)
+
 
 def _reading_key(subj) -> str:
     return (subj.reading or "").strip() or (subj.name or "")
@@ -98,16 +132,11 @@ def _reading_key(subj) -> str:
 def _build_alpha_split_menu(rows: list, category: str, classification: str,
                              faculty: str, department: str) -> list | None:
     """rowsがよみがな順の均等分割メニューを挟むべき件数のとき、選択メニューのFlexMessageを
-    組み立てて返す。分割の絞り込み軸(row_prefix)が定まらない場合はNoneを返し、
+    組み立てて返す。絞り込み軸（分類または学部）が定まらない場合はNoneを返し、
     呼び出し側は通常の一覧表示にフォールバックする。"""
-    if faculty and not classification:
-        row_prefix = f"専門F:{faculty}|{department}"
-    elif classification and category:
-        row_prefix = f"{category}:{classification}"
-    elif classification:
-        row_prefix = classification
-    else:
+    if not classification and not faculty:
         return None
+    row_prefix = _make_nav_data(category, faculty, department, classification)
     by_reading = sorted(rows, key=_reading_key)
     chunks = [by_reading[i:i + _ALPHA_CHUNK_SIZE] for i in range(0, len(by_reading), _ALPHA_CHUNK_SIZE)]
     items = []
@@ -116,11 +145,26 @@ def _build_alpha_split_menu(rows: list, category: str, classification: str,
         last_ch = _reading_key(chunk[-1])[:1] or "?"
         label = f"{first_ch}〜{last_ch}" if first_ch != last_ch else first_ch
         items.append((f"{label}（{len(chunk)}件）", f"{row_prefix}::R:{i}"))
+
+    # 「一つ前の階層に戻る」＝学部が分かっていればその学部の学科/分類選択画面を作り直す
+    # （_handle_faculty_menuは学部名だけから学科分割/分類分割いずれかを再判定できるため、
+    # ここではどちらの選択画面だったか覚えておく必要がない）。学部が無い（教養や学部横断
+    # 分類）場合は選択画面が存在しないため、トップ（教養/専門タブ）に戻るボタンのみになる。
+    back_label = back_data = None
+    if faculty:
+        back_label, back_data = "◀ 学部・学科選択に戻る", _make_nav_data(category="専門", faculty=faculty)
+    home_label = home_data = None
+    if category:
+        home_label, home_data = f"🏠 {category}科目一覧に戻る", category
+
     return [make_classification_select_flex(
         items, set(),
         title="📚 科目一覧",
         subtitle=f"{len(rows)}件あります。よみがな順で絞り込んでください",
         header_color="#6366f1",
+        breadcrumb=_breadcrumb(category, faculty, department),
+        back_label=back_label, back_data=back_data,
+        home_label=home_label, home_data=home_data,
     )]
 
 
@@ -286,6 +330,22 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
         header_contents = [FlexText(text=classification, weight="bold", color="#ffffff", size="sm")]
         if faculty_str:
             header_contents.append(FlexText(text=faculty_str, size="xs", color="#c7d2fe", margin="xs"))
+
+        # 修正理由: 従来はこのカルーセルが最終画面で、別の系統/学部を見たくなっても
+        # テキストを打ち直す以外に手段が無かった。教養/専門タブに一気に戻るボタンを
+        # 全バブルのフッターに付ける（2026-09-02、系統/学部タップ後のルーティングUX改善）。
+        home_category = cls_category.get(base_cls, "")
+        footer = None
+        if home_category:
+            footer = FlexBox(
+                layout="vertical",
+                padding_all="md",
+                contents=[FlexButton(
+                    action=PostbackAction(label=f"{home_category}科目一覧に戻る"[:20], data=home_category),
+                    style="secondary",
+                    height="sm",
+                )],
+            )
         return FlexBubble(
             size="kilo",
             header=FlexBox(
@@ -300,6 +360,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                 spacing="xs",
                 padding_all="md",
             ),
+            footer=footer,
         )
 
     MAX_PER_BUBBLE = 6
@@ -511,7 +572,7 @@ async def _handle_kyoyo_menu() -> list:
     reviewed_cls = {c.classification for c in edu_courses if c.name in reviewed_names_edu}
     if clss:
         counts = Counter(c.classification for c in edu_courses)
-        items = [(cls, cls, counts[cls]) for cls in clss]
+        items = [(cls, _make_nav_data(category="教養", classification=cls), counts[cls]) for cls in clss]
         result = [make_category_browse_flex("教養", items, reviewed_cls)]
     else:
         result = await handle_course_list(category="教養")
@@ -557,8 +618,8 @@ async def _handle_senmon_menu() -> list:
         fac_counts = {fac: sum(1 for c in sen_courses if (c.faculty or "").startswith(fac))
                       for fac in faculties_present}
         cls_counts = {cls: sum(1 for c in sen_courses if c.classification == cls) for cls in other_clss}
-        items = [(fac, fac, fac_counts[fac]) for fac in faculties_present] + \
-                [(cls, cls, cls_counts[cls]) for cls in other_clss]
+        items = [(fac, _make_nav_data(category="専門", faculty=fac), fac_counts[fac]) for fac in faculties_present] + \
+                [(cls, _make_nav_data(category="専門", classification=cls), cls_counts[cls]) for cls in other_clss]
         result = [make_category_browse_flex("専門", items, display_reviewed)]
     else:
         result = await handle_course_list(category="専門")
@@ -600,13 +661,13 @@ async def _handle_faculty_menu(t: str) -> list:
             _dept_label(d) for d in dept_values
             if any(c.name in reviewed_names_sen for c in fac_courses if (c.department or "") == d)
         }
-        items = [(_dept_label(d), f"{t}|{d}") for d in dept_sorted]
+        items = [(_dept_label(d), _make_nav_data(category="専門", faculty=t, department=d)) for d in dept_sorted]
         result = [make_classification_select_flex(
             items, reviewed_dept_labels,
             title=f"🎓 {t} 専門科目",
             subtitle="学科・専攻を選んでください",
             header_color="#0ea5e9",
-            data_prefix="専門F:",
+            breadcrumb=_breadcrumb("専門"),
             back_label="◀ 学部選択に戻る",
             back_data="専門",
         )]
@@ -615,12 +676,13 @@ async def _handle_faculty_menu(t: str) -> list:
         cls_sorted = sorted(cls_values, key=_cls_sort)
         reviewed_cls = {cls for cls in cls_sorted
                          if any(c.name in reviewed_names_sen for c in fac_courses if c.classification == cls)}
+        items = [(cls, _make_nav_data(category="専門", faculty=t, classification=cls)) for cls in cls_sorted]
         result = [make_classification_select_flex(
-            cls_sorted, reviewed_cls,
+            items, reviewed_cls,
             title=f"🎓 {t} 専門科目",
             subtitle="分類を選んでください",
             header_color="#0ea5e9",
-            data_prefix="専門:",
+            breadcrumb=_breadcrumb("専門"),
             back_label="◀ 学部選択に戻る",
             back_data="専門",
         )]
@@ -768,7 +830,7 @@ async def _handle_course_search(t: str, user_id: str) -> list:
 
 async def handle_message(text: str, user_id: str = "") -> list:
     t = text.strip()
-    # 科目数が多い分類・学部で挟まれる50音行選択（例:"専門:国際人間科学部専門科目::R:あ行"）の
+    # 科目数が多い分類・学部で挟まれる50音行選択（例:"nav:専門|||国際人間科学部専門科目::R:0"）の
     # 行指定部分を切り離す。handle_course_list呼び出し以外の分岐判定には影響しない。
     _reading_row = ""
     if "::R:" in t:
@@ -780,6 +842,26 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if t in ["教養", "教養科目", "教養一覧"]:
         return await _handle_kyoyo_menu()
 
+    # 系統/学部タップ後のドリルダウン（統一postbackデータ形式、2026-09-02〜）。
+    # (category, faculty, department, classification) の4要素から、どの粒度の画面へ
+    # 進むべきかをここで一括判定する（学科・分類の絞り込みが必要な学部は選択画面を、
+    # 絞り込み不要な学部・系統・分類は直接科目一覧を返す）。
+    _nav = _parse_nav_data(t)
+    if _nav is not None:
+        _cat, _fac, _dept, _cls = _nav
+        if _dept:
+            return await handle_course_list(category="専門", faculty=_fac, department=_dept, reading_row=_reading_row)
+        if _cls:
+            return await handle_course_list(category=_cat, classification=_cls, reading_row=_reading_row)
+        if _fac:
+            return await _handle_faculty_menu(_fac)
+        if _cat:
+            return await handle_course_list(category=_cat, reading_row=_reading_row)
+
+    # ここから下は旧形式（"教養:"/"専門:"/"専門F:"/分類名そのまま）のpostbackデータ用の
+    # 後方互換フォールバック。新規生成するボタンはすべて上のnav:形式に統一済みだが、
+    # デプロイ前に送信済みのメッセージ内にまだ古い形式のボタンが残っている可能性があるため
+    # 解釈だけは残す（新規追加時にこの節を増やす必要はない）。
     if t.startswith("教養:"):
         cls = t[len("教養:"):]
         return await handle_course_list(category="教養", classification=cls, reading_row=_reading_row)
@@ -793,7 +875,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         fac, _, dept = fac_dept.partition("|")
         return await handle_course_list(category="専門", faculty=fac, department=dept, reading_row=_reading_row)
 
-    # 分類名の直接タップ（例：「教養(社会)」）
+    # 分類名の直接タップ（例：「教養(社会)」、旧形式）
     if t in await cache.get_cls_set():
         return await handle_course_list(classification=t, reading_row=_reading_row)
 
@@ -803,7 +885,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if t in ["専門科目", "専門", "専門一覧"]:
         return await _handle_senmon_menu()
 
-    # 学部名タップ（例："経営学部"）
+    # 学部名タップ（例："経営学部"、旧形式。現在は生成しないが後方互換のため残す）
     if t in await cache.get_faculty_order():
         return await _handle_faculty_menu(t)
 
