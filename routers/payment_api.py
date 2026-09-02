@@ -15,7 +15,6 @@ router = APIRouter()
 _eligible_rate_limit = rate_limiter(max_requests=20, window_seconds=60)
 _apply_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
-_UNIT_YEN = 100
 _YEN_PER_REVIEW = 100
 # 1回の申請あたりの上限額。超過分は未申請のまま残り、次回以降の申請に繰り越される
 _MAX_APPLY_AMOUNT = 1000
@@ -74,10 +73,7 @@ async def payment_eligible(
             return JSONResponse({"valid": False})
         count = await _unpaid_count(session, sid)
         submitted_count = await _submitted_count(session, sid)
-    max_amount = min(
-        (count // (_UNIT_YEN // _YEN_PER_REVIEW)) * _UNIT_YEN,
-        _MAX_APPLY_AMOUNT,
-    )
+    max_amount = min(count * _YEN_PER_REVIEW, _MAX_APPLY_AMOUNT)
     return JSONResponse({
         "valid": True,
         "count": count,
