@@ -13,6 +13,7 @@ from linebot.v3.messaging import (
 from core import cache
 from core.config import (
     CONTACT_URL, EASE_STARS, PRIVACY_URL, TERMS_URL,
+    REGISTRATION_WELCOME_UNLOCK_CREDITS, REVIEW_APPROVAL_UNLOCK_CREDITS,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
 )
@@ -241,7 +242,8 @@ def make_help_flex() -> FlexMessage:
                          "他の人のレビューを見るには科目ごとに🎫チケットを1枚使います",
                          bg="#fffbeb", icon_color="#d97706"),
                     card("🎁", "もらい方",
-                         "会員登録で1枚、自分のレビューが承認されるたびに3枚もらえます",
+                         f"会員登録で{REGISTRATION_WELCOME_UNLOCK_CREDITS}枚、"
+                         f"自分のレビューが承認されるたびに{REVIEW_APPROVAL_UNLOCK_CREDITS}枚もらえます",
                          bg="#fffbeb", icon_color="#d97706"),
                     section_label("💬  チャット"),
                     card("🔍", "科目名を送る",
@@ -436,7 +438,6 @@ def _make_search_result_row(item: dict) -> FlexBox:
                 FlexText(
                     text=name_text, weight="bold", size="sm", color="#1e293b",
                     wrap=True, flex=1,
-                    action=URIAction(label=item["name"][:20], uri=liff_url),
                 ),
                 FlexText(text=stars_text, size="sm", color=stars_color, flex=0,
                           align="end", gravity="center"),
@@ -451,6 +452,10 @@ def _make_search_result_row(item: dict) -> FlexBox:
                 action=URIAction(label="レビュー投稿", uri=form_url),
             )
         )
+    # 修正理由: 従来は科目名テキスト部分のみがタップ対象で、行の背景（紫の領域）を
+    # 押しても反応しなかったため誤タップが起きやすかった。行全体（このコンテナ）に
+    # actionを設定し、内側の「レビューを投稿する」テキストだけは独自actionが優先されて
+    # レビュー投稿導線として機能する（LINE Flex Messageの仕様上、子要素のactionが親を上書きする）。
     return FlexBox(
         layout="vertical",
         background_color="#f5f3ff",
@@ -458,6 +463,7 @@ def _make_search_result_row(item: dict) -> FlexBox:
         padding_all="sm",
         margin="xs",
         contents=row_contents,
+        action=URIAction(label=item["name"][:20], uri=liff_url),
     )
 
 

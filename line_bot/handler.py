@@ -749,6 +749,7 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     # 関連度順：科目名（グループはベース名）が入力語から始まるものを最優先
     t_lower = t.lower()
     matched.sort(key=lambda r: 0 if r["display"].lower().startswith(t_lower) else 1)
+    total_matched = len(matched)
     matched = matched[:_MSG_SEARCH_LIMIT]
 
     all_stats = await cache.get_all_review_stats_cached()
@@ -767,7 +768,8 @@ async def _handle_course_search(t: str, user_id: str) -> list:
             "category": r["rep"].category or "",
         })
 
-    return [make_search_result_card(items, title=f"🔍「{t}」の検索結果")]
+    count_label = f"{total_matched}件" if total_matched <= _MSG_SEARCH_LIMIT else f"{total_matched}件中{_MSG_SEARCH_LIMIT}件"
+    return [make_search_result_card(items, title=f"🔍「{t}」の検索結果（{count_label}）")]
 
 
 async def handle_message(text: str, user_id: str = "") -> list:
