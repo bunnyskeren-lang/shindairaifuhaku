@@ -228,3 +228,27 @@ def test_student_id_split_classes_merge_into_base_numeral_group():
     assert labels["微分積分1 Z（学番下3桁：001～110）"] == "微分積分(1/2)"
     assert labels["数理統計1"] == "数理統計(1)"
     assert labels["数理統計1　T機械(学番下3桁：501-522)，A"] == "数理統計(1)"
+
+
+def test_student_id_parity_split_classes_merge_into_base_numeral_group():
+    """「力学基礎1　Z　学籍番号：奇数」のような、括弧を使わず「学籍番号：奇数/偶数」で
+    分割するクラスも_STUDENT_ID_SPLIT_REの対象（2026-09-02、力学基礎で発覚。既存の
+    「Z（学番下3桁：...）」パターンとは表記が異なり、当初のregexではマッチできなかった）。"""
+    names_with_fd = [
+        ("力学基礎1", "教養教育院", ""),
+        ("力学基礎1　Z　学籍番号：奇数", "教養教育院", ""),
+        ("力学基礎1　Z　学籍番号：偶数", "教養教育院", ""),
+        ("力学基礎2", "教養教育院", ""),
+        ("力学基礎2　Z　学籍番号：奇数", "教養教育院", ""),
+        ("力学基礎2　Z　学籍番号：偶数", "教養教育院", ""),
+    ]
+    groups = subject_variants.compute_variant_groups(names_with_fd)
+    assert groups["力学基礎1　Z　学籍番号：奇数"] == "力学基礎"
+    assert groups["力学基礎1　Z　学籍番号：偶数"] == "力学基礎"
+    assert groups["力学基礎2　Z　学籍番号：奇数"] == "力学基礎"
+    assert groups["力学基礎2　Z　学籍番号：偶数"] == "力学基礎"
+
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
+    assert labels["力学基礎1"] == "力学基礎(1/2)"
+    assert labels["力学基礎1　Z　学籍番号：奇数"] == "力学基礎(1/2)"
+    assert labels["力学基礎2　Z　学籍番号：偶数"] == "力学基礎(1/2)"
