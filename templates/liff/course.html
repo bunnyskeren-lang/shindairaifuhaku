@@ -603,7 +603,7 @@ async function main() {
     return card;
   }
 
-  let sortMode = "new";
+  let sortMode = "ease";
   let instructorFilter = "";
 
   function renderReviewCards() {
@@ -645,8 +645,8 @@ async function main() {
     if (data.reviews.length > 1) {
       controlsHtml += `<div class="sort-row">
         <select id="sort-select" class="sort-select">
+          <option value="ease" selected>楽単順</option>
           <option value="new">新しい順</option>
-          <option value="ease">楽単順</option>
         </select>
       </div>`;
     }
