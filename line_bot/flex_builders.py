@@ -743,14 +743,21 @@ def make_classification_select_flex(
     subtitle: str = "系統を選んでください",
     header_color: str = "#6366f1",
     data_prefix: str = "",
+    breadcrumb: str = "",
     back_label: str | None = None,
     back_data: str | None = None,
+    home_label: str | None = None,
+    home_data: str | None = None,
 ) -> FlexMessage:
     """classifications は文字列のリスト、または (表示ラベル, postbackデータ) のタプルのリスト。
     タプルの場合、表示ラベルと実際に送信されるpostbackデータを分離できる
     （例：学科一覧で短い学科名を見せつつ、内部的には学部を含むfaculty値を送る）。
+    breadcrumbを指定すると、タイトルの上に現在地のパンくずを表示する。
     back_label/back_dataを両方指定すると、一つ前の階層に戻るボタンをフッターに表示する
-    （学部→学科→分類のような多階層ドリルダウンで迷子にならないようにするため）。"""
+    （学部→学科→分類のような多階層ドリルダウンで迷子にならないようにするため）。
+    home_label/home_dataを両方指定すると、それとは別にトップ（教養/専門タブ）まで一気に
+    戻るボタンも併せて表示する（2026-09-02、系統/学部タップ後のルーティングUX改善で追加。
+    back_data宛先とhome_data宛先が同じ場合はback側のみ表示し重複を避ける）。"""
     if reviewed_cls is None:
         reviewed_cls = set()
     items = [(c, c) if isinstance(c, str) else c for c in classifications]
@@ -789,16 +796,28 @@ def make_classification_select_flex(
                 margin="sm" if reviewed_cls else "none",
             )
         )
+    if home_label and home_data and home_data != back_data:
+        footer_contents.append(
+            FlexButton(
+                action=PostbackAction(label=home_label[:20], data=home_data),
+                style="secondary",
+                color="#4338ca",
+                height="sm",
+                margin="sm" if footer_contents else "none",
+            )
+        )
     footer = FlexBox(layout="vertical", contents=footer_contents, padding_all="md") if footer_contents else None
+    header_contents = []
+    if breadcrumb:
+        header_contents.append(FlexText(text=breadcrumb, size="xxs", color="#c7d2fe", wrap=True))
+    header_contents.append(FlexText(text=title, weight="bold", color="#ffffff", size="lg"))
+    header_contents.append(FlexText(text=subtitle, color="#c7d2fe", size="sm"))
     return FlexMessage(
         alt_text=f"{title} — {subtitle}",
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
-                contents=[
-                    FlexText(text=title, weight="bold", color="#ffffff", size="lg"),
-                    FlexText(text=subtitle, color="#c7d2fe", size="sm"),
-                ],
+                contents=header_contents,
                 background_color=header_color,
                 padding_all="lg",
             ),
