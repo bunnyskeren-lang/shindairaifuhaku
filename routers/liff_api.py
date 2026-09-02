@@ -369,11 +369,22 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     .limit(1)
                 )).first()
 
+        async def _instructor_syllabus_urls(cs_ids_: list) -> dict[int, str]:
+            async with AsyncSessionLocal() as s:
+                return await _latest_syllabus_urls(s, cs_ids_)
+
         cs_ids = [cs.id for cs, _ in cs_instr_rows]
 
-        (avg_rating, ease_counts, rating_counts, review_count), reviews_raw, sc_row = await asyncio.gather(
-            _agg_and_ease(cs_ids), _reviews(cs_ids), _syllabus_code()
+        (avg_rating, ease_counts, rating_counts, review_count), reviews_raw, sc_row, cs_syllabus_urls = await asyncio.gather(
+            _agg_and_ease(cs_ids), _reviews(cs_ids), _syllabus_code(), _instructor_syllabus_urls(cs_ids)
         )
+        # 教員別のシラバスURL（絞り込みチップで教員を選んだ際、その教員のシラバスに切り替えるため）。
+        # 同じ教員が複数course_section（バリアント違い等）を持つ場合は最初に見つかった方を採用する
+        instructor_syllabus_urls: dict[str, str] = {}
+        for cs, instr in cs_instr_rows:
+            url = cs_syllabus_urls.get(cs.id)
+            if url and instr.name not in instructor_syllabus_urls:
+                instructor_syllabus_urls[instr.name] = url
 
         # ビューカウント記録
         # 修正理由: バリアントグループでcs_idsはグループ全体にまたがるため、閲覧数は
@@ -447,6 +458,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "credits": float(subject.credits) if subject.credits else 0,
             "note": ON_DEMAND_SAME_CONTENT_NOTE if subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS else "",
             "syllabus_url": syllabus_url or "",
+            "instructor_syllabus_urls": instructor_syllabus_urls,
             "review_count": review_count,
             "locked": locked,
             "unlock_credits": unlock_credits,

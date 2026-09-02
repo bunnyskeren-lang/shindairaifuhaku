@@ -654,6 +654,7 @@ async function main() {
         btn.classList.add("active");
         instructorFilter = btn.dataset.instr;
         renderReviewCards();
+        updateSyllabusButton();
       });
     }
     const sortEl = document.getElementById("sort-select");
@@ -695,11 +696,20 @@ async function main() {
     }
   }
 
-  if (data.syllabus_url) {
+  function updateSyllabusButton() {
     const sylBtn = document.getElementById("btn-syllabus");
-    sylBtn.href = data.syllabus_url;
-    sylBtn.style.display = "block";
+    // 教員で絞り込み中はその教員のシラバスURLに切り替える。無ければボタン自体を隠す
+    const url = instructorFilter
+      ? (data.instructor_syllabus_urls || {})[instructorFilter] || ""
+      : data.syllabus_url;
+    if (url) {
+      sylBtn.href = url;
+      sylBtn.style.display = "block";
+    } else {
+      sylBtn.style.display = "none";
+    }
   }
+  updateSyllabusButton();
 
   document.getElementById("loading").style.display = "none";
   document.getElementById("content").style.display = "block";
