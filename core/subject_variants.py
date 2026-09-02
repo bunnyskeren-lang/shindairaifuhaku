@@ -1,13 +1,17 @@
 """科目名の末尾バリアント統合ロジック（レビュー投稿フォーム・LINE bot・管理画面用）。
 
-_vnum_match()・_VSEM（文字A/B/C/D・セミナー系・数字/ローマ数字のいずれもfaculty+department単位で
+_vnum_match()・_VSEM（セミナー系・数字/ローマ数字のいずれもfaculty+department単位で
 グループ化する。2026-08-25以前はclassification単位だったが、classificationは学部をまたいで
 共有されうる表示カテゴリでしかなく、subjects.nameの実際の識別単位（UNIQUE制約
-name+faculty+department）と食い違うことがあったため統一した。文字バリアント・セミナー系は
+name+faculty+department）と食い違うことがあったため統一した。セミナー系は
 2026-08-29以前はfaculty/department非依存で判定しており、別学部の同名バリアントを誤統合する
 バグがあったため数字バリアントと同じ基準に揃えた）はここが唯一の定義で、
 line_bot/handler.py はこのモジュールからimportして使う（2026-08-25以前は同一ロジックを
 手動で複製していたが、byte単位の同期漏れリスクをなくすため一本化した）。
+
+末尾のアルファベット（A/B/C/Dのみが異なる）だけを根拠にした統合は2026-09-02にユーザー指示で
+恒常的に廃止した。並行クラス（同一内容の別クラス）と、トピックが異なる独立科目の見分けが
+アルファベットの有無だけでは付かず、誤統合が繰り返し問題になっていたため。
 
 compute_variant_groups()（レビュー投稿フォーム/api/preload・LINE botメッセージ検索向け）に対し、
 グループ化そのものの手順（seenの積み上げ方・グループラベルの組み立て）はline_bot/handler.py
@@ -19,8 +23,8 @@ _build_course_bubbles()内にFlex Message構築と密結合した形で別途実
 1日近く残っていた。修正の際は判定規則だけでなく、束ね方の手順側の同期漏れも都度確認すること）。
 
 compute_variant_display_groups() は管理画面の科目一覧（routers/admin/courses.py）向けに
-別途追加したもので、一括編集・一括削除という破壊的操作の誤爆を避けるため、文字バリアント・
-セミナー系も含め全パターンをclassification単位でグループ化する（compute_variant_groups()より
+別途追加したもので、一括編集・一括削除という破壊的操作の誤爆を避けるため、セミナー系も
+含め全パターンをclassification単位でグループ化する（compute_variant_groups()より
 グループ化条件が厳しい）。
 """
 import re
@@ -67,19 +71,10 @@ def is_remote_tagged(name: str) -> bool:
     return REMOTE_TAG in name
 
 
-# 教養(人文)/(社会)/(自然)/(総合)/(健康・スポーツ)は、末尾のA/B/C/Dが「並行クラス」ではなく
-# トピック違いの独立した科目であることが多く、語尾アルファベットだけで1行に統合表示すると
-# 内容の異なる科目を同一視してしまう。2026-08-31にユーザー指示でこの5分類のみ文字バリアント
-# 統合（数字/ローマ数字・セミナー系は対象外）から除外した。DB上は元々別々のSubject行のまま
-# （このモジュールは表示統合のみを扱うため、DBには一切影響しない）。
-LETTER_MERGE_EXCLUDED_CLASSIFICATIONS = frozenset({
-    "教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)", "教養(健康・スポーツ)",
-})
-
 # 健康・スポーツ科学実習1/2は末尾数字のみが異なるが、実習1と実習2は種目等の内容が異なる
 # 独立した科目のため、2026-08-31にユーザー指示で数字バリアント統合対象から除外した。
-# LETTER_MERGE_EXCLUDED_CLASSIFICATIONSと異なり分類単位ではなく科目名単位の除外（同分類内の
-# 他の数字バリアント科目までは対象にしない、というユーザー指示のため）。
+# 分類単位ではなく科目名単位の除外（同分類内の他の数字バリアント科目までは対象にしない、
+# というユーザー指示のため）。
 NUM_MERGE_EXCLUDED_NAMES = frozenset({
     "健康・スポーツ科学実習1", "健康・スポーツ科学実習2",
 })
@@ -133,44 +128,42 @@ def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
 
 def compute_variant_bases(
     names_with_faculty_dept: list[tuple[str, str, str]],
-    letter_excluded_names: frozenset[str] = frozenset(),
     num_excluded_names: frozenset[str] = NUM_MERGE_EXCLUDED_NAMES,
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
-    dict[tuple[str, str, str], list[str]],
     dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]],
 ]:
-    """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/文字(A-D)/
-    数字・ローマ数字の3種のバリアントグループを (base[+言語], faculty, department) キーで
-    束ねた辞書(sem_bases, letter_bases, num_bases)を返す（メンバーが2件未満のキーは含めない）。
+    """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/
+    数字・ローマ数字の2種のバリアントグループを (base[+言語], faculty, department) キーで
+    束ねた辞書(sem_bases, num_bases)を返す（メンバーが2件未満のキーは含めない）。
     num_basesのキーのみ、末尾のタグ（""/（遠隔）/（再履修）/（遠隔）（再履修）の4種）を
     追加で持つ（授業形態が異なるクラスを同一視しないよう、タグが完全一致するクラス同士
     でのみ統合する。2026-09-02にユーザー指示で「再履修は再履修のみで統合」に変更、
     無タグと再履修タグを混在させていた旧仕様（2026-08-31時点、REMOTE_TAG in tagの
     真偽値だけで区別）から4タグ完全一致に揃えた）。
 
+    末尾がA/B/C/Dのみ異なる「文字バリアント」の統合は2026-09-02にユーザー指示で恒常的に
+    廃止した（並行クラスとトピック違いの独立科目が見分けられず誤統合が繰り返し問題に
+    なっていたため）。DB上はいずれも元々別々のSubject行で、このモジュールは表示統合のみを
+    扱うため、廃止してもDBには一切影響しない。
+
     compute_variant_groups()（フラットなname→labelマップ、レビュー投稿フォーム/api/preload用）と
     line_bot.handler._build_course_bubbles()（Flex Message構築、シラバス/レビューURL等メンバーの
     詳細情報が必要）の両方はこの関数の結果から必要な形に組み立てる。
     （2026-08-30、判定規則(_vnum_match/_VSEM)はimportで共有済みだったが「束ね方の手順」自体が
     line_bot/handler.py側に別途手動複製されており、同期漏れが繰り返し起きていた反省から
-    実体をここに一本化した。セミナー系・文字(A-D)・数字/ローマ数字の3パターンは正規表現の
-    形（セミナーは丸括弧付き、文字は末尾に数字を伴わない、数字/ローマ数字は末尾が必ず
-    数字かローマ数字）から互いに排他的なので、構築順序（先に確定した種別を後の判定から
-    除外する等）を気にせず独立に計算してよい。）
-
-    letter_excluded_names（LETTER_MERGE_EXCLUDED_CLASSIFICATIONSに属する科目名の集合）に
-    含まれる名前は、文字(A-D)バリアントの判定・グループ化から除外する（他のメンバーとも
-    統合させない）。数字・ローマ数字・セミナー系の判定には影響しない。
+    実体をここに一本化した。セミナー系・数字/ローマ数字の2パターンは正規表現の形
+    （セミナーは丸括弧付き、数字/ローマ数字は末尾が必ず数字かローマ数字）から互いに
+    排他的なので、構築順序（先に確定した種別を後の判定から除外する等）を気にせず
+    独立に計算してよい。）
 
     num_excluded_names（既定でNUM_MERGE_EXCLUDED_NAMES）に含まれる名前は、数字・ローマ数字
-    バリアントの判定・グループ化から除外する（他のメンバーとも統合させない）。文字(A-D)・
-    セミナー系の判定には影響しない。既定値そのものが除外対象のため、呼び出し側
+    バリアントの判定・グループ化から除外する（他のメンバーとも統合させない）。セミナー系の
+    判定には影響しない。既定値そのものが除外対象のため、呼び出し側
     （core/cache.py・line_bot/handler.py）は明示的に渡す必要はない。
     """
     names = [n for n, _, _ in names_with_faculty_dept]
     fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
-    name_fd_set = set(names_with_faculty_dept)
 
     sem_bases: dict[tuple[str, str, str], list[tuple[str, str]]] = {}
     for name in names:
@@ -180,24 +173,6 @@ def compute_variant_bases(
             key = (m.group(1) + m.group(3), fac, dept)
             sem_bases.setdefault(key, []).append((name, m.group(2)))
     sem_bases = {k: v for k, v in sem_bases.items() if len(v) >= 2}
-
-    letter_bases: dict[tuple[str, str, str], list[str]] = {}
-    for name in names:
-        if not name or len(name) <= 1 or name[-1] not in ('A', 'B', 'C', 'D'):
-            continue
-        if name in letter_excluded_names:
-            continue
-        base = name[:-1]
-        fac, dept = fd_by_name.get(name, ("", ""))
-        key = (base, fac, dept)
-        if key in letter_bases:
-            continue
-        variants = [
-            s for s in 'ABCD'
-            if (base + s, fac, dept) in name_fd_set and (base + s) not in letter_excluded_names
-        ]
-        if len(variants) >= 2:
-            letter_bases[key] = variants
 
     num_bases: dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]] = {}
     for name in names:
@@ -211,30 +186,23 @@ def compute_variant_bases(
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     num_bases = {k: v for k, v in num_bases.items() if len(v) >= 2}
 
-    return sem_bases, letter_bases, num_bases
+    return sem_bases, num_bases
 
 
 def compute_variant_groups(
     names_with_faculty_dept: list[tuple[str, str, str]],
-    letter_excluded_names: frozenset[str] = frozenset(),
 ) -> dict[str, str]:
-    """(科目名, faculty, department)のリストから、末尾のアルファベット/数字/ローマ数字/セミナー言語
+    """(科目名, faculty, department)のリストから、末尾の数字/ローマ数字/セミナー言語
     だけが異なる2件以上の科目名をグループ化し、科目名→表示用グループラベル（ベース名）の
     マップを返す。グループに属さない（＝バリアントが1件だけ、または該当パターンなし）
-    科目名はマップに含めない。letter_excluded_namesの扱いはcompute_variant_bases()参照。
+    科目名はマップに含めない。
     """
-    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept, letter_excluded_names)
+    sem_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
         for n, _sk in members:
             result[n] = base_lang
-
-    for (base, _fac, _dept), variants in letter_bases.items():
-        for s in variants:
-            name = base + s
-            if name not in result:
-                result[name] = base
 
     for (base, _fac, _dept, _tag), members in num_bases.items():
         for n, _letter, _sk, _disp, _tag in members:
@@ -246,7 +214,6 @@ def compute_variant_groups(
 
 def compute_variant_full_labels(
     names_with_faculty_dept: list[tuple[str, str, str]],
-    letter_excluded_names: frozenset[str] = frozenset(),
 ) -> dict[str, str]:
     """(科目名, faculty, department)のリストから、科目名 → 括弧付き接尾辞込みの完全な
     グループ表示名（例: "力学基礎(1/2)"、"生物学各論(A1/A2/C1/C2)"）のマップを返す。
@@ -254,10 +221,9 @@ def compute_variant_full_labels(
     compute_variant_groups()はベースラベル（接尾辞を含まない科目名の共通部分）のみを返すため、
     ベースラベルだけでは元の科目名と見分けがつかない画面（管理画面のレビュー科目別集計等）
     向けに追加した。判定基準はcompute_variant_groups()と同一（compute_variant_bases()を共有）。
-    グループに属さない科目名はマップに含めない。letter_excluded_namesの扱いは
-    compute_variant_bases()参照。
+    グループに属さない科目名はマップに含めない。
     """
-    sem_bases, letter_bases, num_bases = compute_variant_bases(names_with_faculty_dept, letter_excluded_names)
+    sem_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
@@ -265,13 +231,6 @@ def compute_variant_full_labels(
         label = f"{base_lang}({suffix})"
         for n, _sk in members:
             result[n] = label
-
-    for (base, _fac, _dept), variants in letter_bases.items():
-        label = f"{base}({'/'.join(variants)})"
-        for s in variants:
-            name = base + s
-            if name not in result:
-                result[name] = label
 
     for (base, _fac, _dept, _tag), members in num_bases.items():
         label = f"{base}({num_variant_suffix(members)})"
@@ -290,7 +249,7 @@ def compute_variant_display_groups(
     （例: "生物学各論 (A1/A2/C1/C2)"）のマップを返す。
     書式はLINE bot科目一覧（line_bot/handler.py _make_bubble の f"{name} ({suffix})"）に合わせる。
     管理画面での一括編集・一括削除に使うため、compute_variant_groups()と異なり
-    文字バリアント・セミナー系も含め全パターンをclassification単位でグループ化する
+    セミナー系も含め全パターンをclassification単位でグループ化する
     （同名科目が別学部・別分類に存在する場合の誤統合を避けるため）。
     戻り値のキーを(科目名, classification)のペアにしているのは、同じ科目名が複数の
     classificationにまたがって別々のSubjectとして存在するケース（例:「病理学Ⅰ」が
@@ -303,7 +262,6 @@ def compute_variant_display_groups(
     result: dict[tuple[str, str], str] = {}
     assigned: set[tuple[str, str]] = set()
     items = list(dict.fromkeys((n, c or "") for n, c in names_with_classification))
-    item_set = set(items)
 
     # 1) セミナー系（外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)）
     sem_bases: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
@@ -320,30 +278,10 @@ def compute_variant_display_groups(
             result[(n, c)] = label
             assigned.add((n, c))
 
-    # 2) 文字バリアント（末尾がA/B/C/Dのみ、数字を伴わないもの）
-    # LETTER_MERGE_EXCLUDED_CLASSIFICATIONSに属する分類は文字バリアント統合の対象外
-    # （compute_variant_bases()参照）
-    letter_bases: dict[tuple[str, str], list[str]] = {}
-    for name, cls in items:
-        if (name, cls) in assigned or not name or len(name) <= 1 or (name, cls) not in item_set:
-            continue
-        if cls in LETTER_MERGE_EXCLUDED_CLASSIFICATIONS:
-            continue
-        if name[-1] in ('A', 'B', 'C', 'D'):
-            base = name[:-1]
-            key = (base, cls)
-            if key in letter_bases:
-                continue
-            variants = [s for s in 'ABCD' if (base + s, cls) in item_set]
-            if len(variants) >= 2:
-                letter_bases[key] = variants
-    for (base, cls), variants in letter_bases.items():
-        label = f"{base} ({'/'.join(variants)})"
-        for s in variants:
-            result[(base + s, cls)] = label
-            assigned.add((base + s, cls))
+    # 末尾がA/B/C/Dのみ異なる「文字バリアント」の統合は2026-09-02にユーザー指示で恒常的に
+    # 廃止した（compute_variant_bases()のモジュールdocstring参照）。
 
-    # 3) 数字・ローマ数字バリアント（同一classification単位でグループ化。タグ（""/（遠隔）/
+    # 2) 数字・ローマ数字バリアント（同一classification単位でグループ化。タグ（""/（遠隔）/
     # （再履修）/（遠隔）（再履修）の4種）が完全一致するクラス同士でのみ統合する）
     # NUM_MERGE_EXCLUDED_NAMESに属する科目名は数字バリアント統合の対象外（compute_variant_bases()参照）
     num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str, str]]] = {}

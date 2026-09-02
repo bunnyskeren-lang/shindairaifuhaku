@@ -35,16 +35,13 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
         ("外国語セミナーB(英語)", "教養教育院", ""),
         ("単独科目", "教養教育院", ""),
     ]
-    sem_bases, letter_bases, num_bases = subject_variants.compute_variant_bases(names_with_fd)
+    sem_bases, num_bases = subject_variants.compute_variant_bases(names_with_fd)
     flat = subject_variants.compute_variant_groups(names_with_fd)
 
     reconstructed: dict[str, str] = {}
     for (base_lang, _fac, _dept), members in sem_bases.items():
         for n, _sk in members:
             reconstructed[n] = base_lang
-    for (base, _fac, _dept), variants in letter_bases.items():
-        for s in variants:
-            reconstructed[base + s] = base
     for (base, _fac, _dept, _remote), members in num_bases.items():
         for n, _letter, _sk, _disp, _tag in members:
             reconstructed[n] = base
@@ -74,25 +71,24 @@ def test_compute_variant_full_labels_includes_bracketed_suffix():
     assert "単独科目" not in labels
 
 
-def test_letter_excluded_names_keeps_variants_separate():
-    """教養(人文)/(社会)/(自然)/(総合)/(健康・スポーツ)の科目名は、letter_excluded_namesに
-    渡すことで文字(A-D)バリアント統合の対象から外せる（2026-08-31、DB上は元々別Subjectの
-    ままだが表示だけ統合していたものを、この5分類に限り統合しない方針に変更）。
-    数字・ローマ数字・セミナー系の判定には影響しないことも確認する。"""
+def test_letter_only_variants_are_never_merged():
+    """末尾がA/B/C/Dのみ異なる「文字バリアント」の統合は2026-09-02にユーザー指示で
+    恒常的に廃止した（並行クラスとトピック違いの独立科目が語尾アルファベットだけでは
+    見分けられず誤統合が繰り返し問題になっていたため）。数字・ローマ数字・セミナー系の
+    判定には影響しないことも確認する。"""
     names_with_fd = [
         ("心理学A", "教養教育院", ""),
         ("心理学B", "教養教育院", ""),
         ("力学基礎1", "工学部", ""),
         ("力学基礎2", "工学部", ""),
     ]
-    excluded = frozenset({"心理学A", "心理学B"})
 
-    groups = subject_variants.compute_variant_groups(names_with_fd, letter_excluded_names=excluded)
+    groups = subject_variants.compute_variant_groups(names_with_fd)
     assert "心理学A" not in groups
     assert "心理学B" not in groups
     assert groups["力学基礎1"] == groups["力学基礎2"] == "力学基礎"
 
-    labels = subject_variants.compute_variant_full_labels(names_with_fd, letter_excluded_names=excluded)
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
     assert "心理学A" not in labels
     assert "心理学B" not in labels
     assert labels["力学基礎1"] == "力学基礎(1/2)"
@@ -128,9 +124,9 @@ def test_num_excluded_names_keeps_health_sports_jisshu_separate():
     assert ("健康・スポーツ科学実習2", "教養(健康・スポーツ)") not in display_result
 
 
-def test_compute_variant_display_groups_excludes_kyoyo_letter_classifications():
-    """管理画面向けcompute_variant_display_groups()もLETTER_MERGE_EXCLUDED_CLASSIFICATIONSに
-    属する分類では文字バリアントを統合しない。"""
+def test_compute_variant_display_groups_never_merges_letter_only_variants():
+    """管理画面向けcompute_variant_display_groups()も、末尾がA/B/C/Dのみ異なる
+    文字バリアントは（分類を問わず）統合しない（2026-09-02に恒常廃止）。"""
     names_with_cls = [
         ("心理学A", "教養(人文)"),
         ("心理学B", "教養(人文)"),
@@ -140,7 +136,8 @@ def test_compute_variant_display_groups_excludes_kyoyo_letter_classifications():
     result = subject_variants.compute_variant_display_groups(names_with_cls)
     assert ("心理学A", "教養(人文)") not in result
     assert ("心理学B", "教養(人文)") not in result
-    assert result[("構造設計A", "工学部専門科目")] == "構造設計 (A/B)"
+    assert ("構造設計A", "工学部専門科目") not in result
+    assert ("構造設計B", "工学部専門科目") not in result
 
 
 def test_compute_variant_full_labels_handles_remote_retake_tags():

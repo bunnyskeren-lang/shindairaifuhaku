@@ -35,7 +35,6 @@ from core.config import (
     make_review_liff_url,
 )
 from core.subject_variants import (
-    LETTER_MERGE_EXCLUDED_CLASSIFICATIONS,
     TAG_PRIORITY,
     compute_variant_bases,
     num_variant_suffix,
@@ -131,17 +130,11 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
     # バリアント判定・束ね方の実体はcore.subject_variants.compute_variant_bases()に一本化済み
     # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
     names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows]
-    _letter_excluded = {c.name for c in rows if c.classification in LETTER_MERGE_EXCLUDED_CLASSIFICATIONS}
-    _sem_bases, _letter_bases, _num_bases = compute_variant_bases(names_with_fd, _letter_excluded)
+    _sem_bases, _num_bases = compute_variant_bases(names_with_fd)
 
     _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}
     _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _, _ in _items}
     seen_num_base: set[tuple[str, str, str, bool]] = set()
-
-    _letter_base_for: dict[str, tuple[str, str, str]] = {
-        _key[0] + s: _key for _key, _variants in _letter_bases.items() for s in _variants
-    }
-    seen_letter_base: set[tuple[str, str, str]] = set()
 
     _sem_variant_names = {n for _items in _sem_bases.values() for n, _ in _items}
     _sem_base_for = {n: _key for _key, _items in _sem_bases.items() for n, _ in _items}
@@ -152,7 +145,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
     course_syllabus_urls: dict[str, str] = {c.name: _sv_by_id[c.id] for c in rows if c.id in _sv_by_id}
     course_liff_urls: dict[str, str] = {c.name: make_course_liff_url(c.id) for c in rows}
     # entries内タプルの末尾2要素は、variant/numvariant種別の科目は(faculty, department)を保持する
-    # （_num_bases/_letter_bases/_sem_basesの正しいキーをclassificationからだけでは復元できないため。
+    # （_num_bases/_sem_basesの正しいキーをclassificationからだけでは復元できないため。
     # singleでは""）
     groups: dict[str, list[tuple[str, str, str, str]]] = defaultdict(list)
     cls_category: dict[str, str] = {}
@@ -170,13 +163,6 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                 items_sorted = sorted(_sem_bases[base], key=lambda x: x[1])
                 suffix = "/".join(sk for _, sk in items_sorted)
                 groups[cls].append((base[0], f"variant:{suffix}", base[1], base[2]))
-            continue
-        if name in _letter_base_for:
-            key = _letter_base_for[name]
-            if key not in seen_letter_base:
-                seen_letter_base.add(key)
-                suffix = "/".join(_letter_bases[key])
-                groups[cls].append((key[0], f"variant:{suffix}", key[1], key[2]))
             continue
         if name in _num_variant_names:
             key = _num_base_for[name]
