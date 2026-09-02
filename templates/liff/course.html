@@ -48,6 +48,38 @@
     background: #f8fafc; border-radius: 8px; padding: 10px 12px;
     margin-bottom: 8px; font-size: 13px; color: #334155; line-height: 1.6;
   }
+  .comment-box.clamped {
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .comment-more {
+    font-size: 11.5px; font-weight: 600; color: var(--accent);
+    margin: -4px 0 8px 2px; cursor: pointer;
+  }
+
+  .dist-row { display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 4px; }
+  .dist-label { width: 34px; text-align: right; color: #64748b; flex-shrink: 0; }
+  .dist-bar-track { flex: 1; background: #f1f5f9; border-radius: 999px; height: 6px; overflow: hidden; }
+  .dist-bar-fill { height: 6px; border-radius: 999px; }
+  .dist-count { width: 22px; text-align: right; color: #94a3b8; flex-shrink: 0; }
+
+  .review-controls { padding: 0 12px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+  .filter-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  .chip {
+    flex-shrink: 0; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid #e2e8f0; background: #fff; color: #64748b;
+  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sort-row { display: flex; justify-content: flex-end; }
+  .sort-select {
+    font-size: 12px; color: #64748b; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 5px 8px; background: #fff;
+  }
+
+  .mine-badge {
+    display: inline-block; font-size: 10.5px; font-weight: 700; color: #fff;
+    background: var(--accent); border-radius: 999px; padding: 2px 9px; margin-bottom: 8px;
+  }
+  .card.mine { border: 2px solid var(--accent); }
 
   .actions { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .btn {
@@ -112,6 +144,7 @@
       <div id="review-count" style="font-size:11px;color:#94a3b8"></div>
     </div>
     <div id="ratings"></div>
+    <div id="rating-dist"></div>
     <details class="legend">
       <summary>★の意味を見る</summary>
       <div class="legend-body">
@@ -151,6 +184,7 @@
     </details>
   </div>
 
+  <div id="review-controls" class="review-controls"></div>
   <div id="reviews-section"></div>
 
   <p style="font-size:11px;color:#94a3b8;text-align:center;margin:8px 0 0">
@@ -455,58 +489,180 @@ async function main() {
     ratingsEl.innerHTML = `<div class="no-review">⭐ まだレビューはありません。あなたが最初のレビュワーになりませんか？🌟</div>`;
   }
 
+  // ── 評価の内訳（分布） ──
+  // 平均・最頻値だけでは「1件だけ極端に低い評価がある」等が埋もれて見えないため、
+  // 楽単度・充実度それぞれの件数分布をバー表示する（review_count===0や施錠中は表示しない）
+  const distEl = document.getElementById("rating-dist");
+  if (!data.locked && data.review_count > 0) {
+    const easeOrder = ["SS", "S", "A", "B", "C"];
+    const ratingOrder = ["5", "4", "3", "2", "1"];
+    const easeDist = data.ease_distribution || {};
+    const ratingDist = data.rating_distribution || {};
+    let bars = '<div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:5px">楽単度</div>';
+    for (const k of easeOrder) {
+      const cnt = easeDist[k] || 0;
+      const pct = data.review_count ? Math.round((cnt / data.review_count) * 100) : 0;
+      bars += `<div class="dist-row">
+        <span class="dist-label">${k}</span>
+        <div class="dist-bar-track"><div class="dist-bar-fill" style="width:${pct}%;background:#f59e0b"></div></div>
+        <span class="dist-count">${cnt}</span>
+      </div>`;
+    }
+    bars += '<div style="font-size:10px;font-weight:700;color:#64748b;margin:10px 0 5px">充実度</div>';
+    for (const k of ratingOrder) {
+      const cnt = ratingDist[k] || 0;
+      const pct = data.review_count ? Math.round((cnt / data.review_count) * 100) : 0;
+      bars += `<div class="dist-row">
+        <span class="dist-label">${k}★</span>
+        <div class="dist-bar-track"><div class="dist-bar-fill" style="width:${pct}%;background:#a78bfa"></div></div>
+        <span class="dist-count">${cnt}</span>
+      </div>`;
+    }
+    distEl.innerHTML = `<details class="legend" style="margin-top:6px;padding-top:10px">
+      <summary>評価の内訳を見る（${data.review_count}件）</summary>
+      <div class="legend-body">${bars}</div>
+    </details>`;
+  }
+
   // ── レビューカード（1件ずつ） ──
   // ロック中の解除カード・ボタンはページ最上部（#lock-card）で既に組み立て済みのため、
   // ここではロック中は何も描画しない
   const reviewsSection = document.getElementById("reviews-section");
-  if (!data.locked && data.reviews && data.reviews.length) {
-    data.reviews.forEach((r, i) => {
-      const card = document.createElement("div");
-      card.className = "card";
-      const byLabel = r.nickname ? `ニックネーム ${esc(r.nickname)}` : "匿名";
-      const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
-      const yearLabel = r.academic_year ? `受講年度 ${r.academic_year}年` : "";
-      let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:700;color:var(--accent)">👨‍🏫 ${instrLabel}</span>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-          ${yearLabel ? `<span style="font-size:10px;color:#94a3b8">📅 ${yearLabel}</span>` : ""}
-          <span style="font-size:11px;color:#94a3b8">🏷️ ${byLabel}</span>
-        </div>
-      </div>`;
-      if (r.ease_rating) {
-        html += `<div class="rating-row">
-          <span class="rating-label">楽単度</span>
-          <span class="stars" style="color:#f59e0b">${EASE_STARS[r.ease_rating] || ""}</span>
-        </div>`;
-      }
+  const controlsEl = document.getElementById("review-controls");
+
+  function buildReviewCard(r) {
+    const card = document.createElement("div");
+    card.className = "card" + (r.is_mine ? " mine" : "");
+    const byLabel = r.nickname ? `ニックネーム ${esc(r.nickname)}` : "匿名";
+    const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
+    const yearLabel = r.academic_year ? `受講年度 ${r.academic_year}年` : "";
+    let html = "";
+    if (r.is_mine) {
+      html += `<div class="mine-badge">✅ あなたの投稿</div>`;
+    }
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:700;color:var(--accent)">👨‍🏫 ${instrLabel}</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        ${yearLabel ? `<span style="font-size:10px;color:#94a3b8">📅 ${yearLabel}</span>` : ""}
+        <span style="font-size:11px;color:#94a3b8">🏷️ ${byLabel}</span>
+      </div>
+    </div>`;
+    if (r.ease_rating) {
       html += `<div class="rating-row">
-        <span class="rating-label">充実度</span>
-        <span class="stars" style="color:#a78bfa">${stars(r.rating)}</span>
+        <span class="rating-label">楽単度</span>
+        <span class="stars" style="color:#f59e0b">${EASE_STARS[r.ease_rating] || ""}</span>
       </div>`;
-      const gmParts = r.grading_method || [];
-      if (gmParts.length) {
-        let gmHtml = '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9">';
-        gmHtml += '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.05em;margin-bottom:6px">📋 成績評価方法</div>';
-        gmHtml += '<div style="display:flex;flex-direction:column;gap:5px">';
-        for (const part of gmParts) {
-          if (!part.label) {
-            gmHtml += `<div style="font-size:12px;color:#374151">${esc(part.text)}</div>`;
-          } else {
-            gmHtml += `<div style="display:flex;align-items:baseline;gap:6px">
-              <span style="font-size:10px;font-weight:700;color:var(--accent);background:#ede9fe;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0">${esc(part.label)}</span>
-              <span style="font-size:12px;color:#374151;line-height:1.5">${esc(part.text)}</span>
-            </div>`;
-          }
+    }
+    html += `<div class="rating-row">
+      <span class="rating-label">充実度</span>
+      <span class="stars" style="color:#a78bfa">${stars(r.rating)}</span>
+    </div>`;
+    const gmParts = r.grading_method || [];
+    if (gmParts.length) {
+      let gmHtml = '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9">';
+      gmHtml += '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.05em;margin-bottom:6px">📋 成績評価方法</div>';
+      gmHtml += '<div style="display:flex;flex-direction:column;gap:5px">';
+      for (const part of gmParts) {
+        if (!part.label) {
+          gmHtml += `<div style="font-size:12px;color:#374151">${esc(part.text)}</div>`;
+        } else {
+          gmHtml += `<div style="display:flex;align-items:baseline;gap:6px">
+            <span style="font-size:10px;font-weight:700;color:var(--accent);background:#ede9fe;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0">${esc(part.label)}</span>
+            <span style="font-size:12px;color:#374151;line-height:1.5">${esc(part.text)}</span>
+          </div>`;
         }
-        gmHtml += '</div></div>';
-        html += gmHtml;
       }
-      if (r.comment) {
-        html += `<div class="comment-box" style="margin-top:8px">${esc(r.comment)}</div>`;
-      }
-      card.innerHTML = html;
-      reviewsSection.appendChild(card);
-    });
+      gmHtml += '</div></div>';
+      html += gmHtml;
+    }
+    card.innerHTML = html;
+    if (r.comment) {
+      // 長文コメントは4行でクランプし「続きを読む」で展開する
+      // （レビューが多い科目でスクロールが長くなりすぎるのを防ぐ）
+      const box = document.createElement("div");
+      box.className = "comment-box";
+      box.style.marginTop = "8px";
+      box.textContent = r.comment;
+      card.appendChild(box);
+      requestAnimationFrame(() => {
+        if (box.scrollHeight > box.clientHeight + 2) {
+          box.classList.add("clamped");
+          const more = document.createElement("div");
+          more.className = "comment-more";
+          more.textContent = "続きを読む ▾";
+          more.addEventListener("click", () => {
+            const expanded = box.classList.toggle("clamped") === false;
+            more.textContent = expanded ? "折りたたむ ▴" : "続きを読む ▾";
+          });
+          card.insertBefore(more, box.nextSibling);
+        }
+      });
+    }
+    return card;
+  }
+
+  let sortMode = "new";
+  let instructorFilter = "";
+
+  function renderReviewCards() {
+    reviewsSection.innerHTML = "";
+    let list = (data.reviews || []).slice();
+    if (instructorFilter) {
+      list = list.filter(r => r.instructor === instructorFilter);
+    }
+    if (sortMode === "rating") {
+      list.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.academic_year || 0) - (a.academic_year || 0));
+    } else {
+      list.sort((a, b) => (b.academic_year || 0) - (a.academic_year || 0));
+    }
+    if (!list.length) {
+      reviewsSection.innerHTML = `<div class="card"><div class="no-review">この条件に合うレビューはありません</div></div>`;
+      return;
+    }
+    list.forEach(r => reviewsSection.appendChild(buildReviewCard(r)));
+  }
+
+  if (!data.locked && data.reviews && data.reviews.length) {
+    // 担当教員が複数いる科目（バリアント統合科目等）は教員で絞り込めるようにする。
+    // 1人しかいない場合はチップを出しても意味がないため表示しない
+    const instructors = [...new Set(data.reviews.map(r => r.instructor).filter(Boolean))];
+    let controlsHtml = "";
+    if (instructors.length > 1) {
+      controlsHtml += `<div class="filter-chips" id="instructor-chips">
+        <button type="button" class="chip active" data-instr="">すべて</button>
+        ${instructors.map(name => `<button type="button" class="chip" data-instr="${esc(name)}">${esc(name)}</button>`).join("")}
+      </div>`;
+    }
+    if (data.reviews.length > 1) {
+      controlsHtml += `<div class="sort-row">
+        <select id="sort-select" class="sort-select">
+          <option value="new">新しい順</option>
+          <option value="rating">評価が高い順</option>
+        </select>
+      </div>`;
+    }
+    controlsEl.innerHTML = controlsHtml;
+
+    const chipsEl = document.getElementById("instructor-chips");
+    if (chipsEl) {
+      chipsEl.addEventListener("click", (e) => {
+        const btn = e.target.closest(".chip");
+        if (!btn) return;
+        chipsEl.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+        btn.classList.add("active");
+        instructorFilter = btn.dataset.instr;
+        renderReviewCards();
+      });
+    }
+    const sortEl = document.getElementById("sort-select");
+    if (sortEl) {
+      sortEl.addEventListener("change", () => {
+        sortMode = sortEl.value;
+        renderReviewCards();
+      });
+    }
+
+    renderReviewCards();
   }
 
   // ── ボタン ──

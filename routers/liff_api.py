@@ -322,21 +322,31 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
         # 掴んでおり、一斉アクセス時にDB接続プールを圧迫しやすい経路だったため）。
         async def _agg_and_ease(cs_ids: list):
             if not cs_ids:
-                return None, []
+                return None, {}, {}, 0
             async with AsyncSessionLocal() as s:
+                # 評価の内訳表示（充実度★1〜5・楽単度SS〜Cそれぞれの件数分布）のため、
+                # ease_rating単独ではなく(ease_rating, rating)の2軸でgroup byする。
+                # 平均・総件数はどちらもこの1本の結果から再合成できる
                 rows = (await s.execute(
-                    select(
-                        Review.ease_rating, func.count(Review.id),
-                        func.sum(Review.rating), func.count(Review.rating),
-                    )
+                    select(Review.ease_rating, Review.rating, func.count(Review.id))
                     .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
-                    .group_by(Review.ease_rating)
+                    .group_by(Review.ease_rating, Review.rating)
                 )).all()
-            ease_rows = [(ease, cnt) for ease, cnt, _, _ in rows]
-            rating_sum = sum((rsum or 0) for _, _, rsum, _ in rows)
-            rating_count = sum(rcnt for _, _, _, rcnt in rows)
-            avg_rating = (rating_sum / rating_count) if rating_count else None
-            return avg_rating, ease_rows
+            ease_counts: dict = {}
+            rating_counts: dict = {}
+            rating_sum = 0
+            rating_total = 0
+            total_count = 0
+            for ease, rating, cnt in rows:
+                total_count += cnt
+                if ease:
+                    ease_counts[ease] = ease_counts.get(ease, 0) + cnt
+                if rating is not None:
+                    rating_counts[rating] = rating_counts.get(rating, 0) + cnt
+                    rating_sum += rating * cnt
+                    rating_total += cnt
+            avg_rating = (rating_sum / rating_total) if rating_total else None
+            return avg_rating, ease_counts, rating_counts, total_count
 
         async def _reviews(cs_ids: list):
             if not cs_ids:
@@ -361,7 +371,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
 
         cs_ids = [cs.id for cs, _ in cs_instr_rows]
 
-        (avg_rating, ease_rows), reviews_raw, sc_row = await asyncio.gather(
+        (avg_rating, ease_counts, rating_counts, review_count), reviews_raw, sc_row = await asyncio.gather(
             _agg_and_ease(cs_ids), _reviews(cs_ids), _syllabus_code()
         )
 
@@ -401,18 +411,21 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 instr_names.append(instr.name)
         instructor_str = "・".join(instr_names)
         top_ease = None
-        if ease_rows:
-            top_ease = sorted(ease_rows, key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
+        if ease_counts:
+            top_ease = sorted(ease_counts.items(), key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
         # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
         # 任意の科目3件分の閲覧権が付与される。閲覧権はsubject単位・バリアントグループ内で共有）
-        review_count = sum(cnt for _, cnt in ease_rows)
         unlock_credits = None
+        # 閲覧中の本人が投稿したレビューをハイライト表示するため、自分のstudent_idを控えておく
+        # （reviewsテーブルにline_user_idは無いため、user_profiles.student_idとの一致で判定する）
+        my_student_id = None
         unlocked = review_count == 0
         if not unlocked and uid:
             async with AsyncSessionLocal() as s:
                 profile = await s.get(UserProfile, uid)
                 unlock_credits = profile.unlock_credits if profile else 0
+                my_student_id = profile.student_id if profile else None
                 unlocked = (await s.execute(
                     select(SubjectUnlock.subject_id).where(
                         SubjectUnlock.line_user_id == uid,
@@ -438,6 +451,8 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "unlock_credits": unlock_credits,
             "avg_rating": avg_rating if not locked else None,
             "top_ease": top_ease if not locked else None,
+            "rating_distribution": rating_counts if not locked else {},
+            "ease_distribution": ease_counts if not locked else {},
             "reviews": [
                 {
                     "rating": r.rating,
@@ -450,6 +465,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     "instructor": r.selected_instructor or "",
                     "nickname": r.nickname or "",
                     "academic_year": r.academic_year or 0,
+                    "is_mine": bool(my_student_id and r.student_id and r.student_id == my_student_id),
                 }
                 for r in reviews_raw
             ] if not locked else [],
