@@ -34,7 +34,13 @@ from core.config import (
     make_register_url,
     make_review_liff_url,
 )
-from core.subject_variants import LETTER_MERGE_EXCLUDED_CLASSIFICATIONS, REMOTE_TAG, compute_variant_bases, TAG_PRIORITY
+from core.subject_variants import (
+    LETTER_MERGE_EXCLUDED_CLASSIFICATIONS,
+    REMOTE_TAG,
+    TAG_PRIORITY,
+    compute_variant_bases,
+    num_variant_suffix,
+)
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
@@ -175,8 +181,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
             key = _num_base_for[name]
             if key not in seen_num_base:
                 seen_num_base.add(key)
-                items_sorted = sorted(_num_bases[key], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
-                suffix = "/".join(f"{letter}{disp}{tag}" for _, letter, _sk, disp, tag in items_sorted)
+                suffix = num_variant_suffix(_num_bases[key])
                 groups[cls].append((key[0], f"numvariant:{suffix}", key[1], key[2]))
             continue
         groups[cls].append((name, "single", "", ""))

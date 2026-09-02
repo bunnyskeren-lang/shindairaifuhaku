@@ -42,6 +42,17 @@ TAG_PRIORITY = {"": 0, "（遠隔）": 1, "（再履修）": 2, "（遠隔）（
 REMOTE_TAG = "（遠隔）"
 _VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])((?:（遠隔）|（再履修）)*)$')
 _VSEM = re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
+# 「微分積分1　Z（学番下3桁：001～110）」のような、大人数科目を学籍番号の下3桁で複数クラスに
+# 分割した際の接尾辞。同じ科目の別クラスでしかなく統合対象だが、末尾が数字/ローマ数字＋
+# （遠隔）（再履修）タグのみを想定する_VNUMではマッチできず、共通専門基礎科目（微分積分・
+# 線形代数・数理統計）で48件が未統合のまま表示される不具合があった（2026-09-02発覚。原因は
+# 2026-08-31にimport_syllabus.pyの--also-coursesクラッシュバグ(2026-07-30から約1ヶ月放置)を
+# 修正した際の再インポートで、これらの分割クラスが初めてDBに投入されたこと）。数字の直後に
+# 現れる接尾辞のため、_VNUMでマッチさせる前に取り除いてベース科目と同一グループに統合する。
+# 開き括弧・閉じ括弧の全角/半角が生データ内で揃っていないケースがあるため両方を許容する。
+_STUDENT_ID_SPLIT_RE = re.compile(
+    r'[\s　]*(?:Z|T機械|[A-Z])[（(]学番[^）)]*[）)](?:[，,][A-Z])?(?=(?:（遠隔）|（再履修）)*$)'
+)
 
 
 def is_remote_tagged(name: str) -> bool:
@@ -70,7 +81,26 @@ NUM_MERGE_EXCLUDED_NAMES = frozenset({
 })
 
 
+def num_variant_suffix(members: list[tuple[str, str, int, str, str]]) -> str:
+    """num_basesの1グループ分のmembersから、表示用の接尾辞文字列（例:"1/2/3/4"）を組み立てる。
+    学番分割クラス（_STUDENT_ID_SPLIT_RE）はベース科目と同じ(letter, disp, tag)に潰れて
+    複数のmembersが同じ表示内容になりうるため、重複を除いてから連結する（そのままだと
+    「微分積分(1/1/1/2/2...)」のようになる）。line_bot/handler.py _build_course_bubbles()の
+    束ね方の手順も同じ重複を踏むため、ここに一本化して共有する。"""
+    members_sorted = sorted(members, key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
+    seen: set[tuple[str, str, str]] = set()
+    parts = []
+    for _n, letter, _sk, disp, tag in members_sorted:
+        key = (letter, disp, tag)
+        if key in seen:
+            continue
+        seen.add(key)
+        parts.append(f"{letter}{disp}{tag}")
+    return "/".join(parts)
+
+
 def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
+    name = _STUDENT_ID_SPLIT_RE.sub('', name)
     m = _VNUM.match(name)
     if not m:
         return None
@@ -223,9 +253,7 @@ def compute_variant_full_labels(
                 result[name] = label
 
     for (base, _fac, _dept, _remote), members in num_bases.items():
-        members_sorted = sorted(members, key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
-        suffix = "/".join(f"{letter}{disp}{tag}" for _n, letter, _sk, disp, tag in members_sorted)
-        label = f"{base}({suffix})"
+        label = f"{base}({num_variant_suffix(members)})"
         for n, _letter, _sk, _disp, _tag in members:
             if n not in result:
                 result[n] = label
@@ -309,10 +337,8 @@ def compute_variant_display_groups(
     for (base, cls, _remote), members in num_bases.items():
         if len(members) < 2:
             continue
-        members_sorted = sorted(members, key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))
-        suffix = "/".join(f"{letter}{disp}{tag}" for _, letter, _sk, disp, tag in members_sorted)
-        label = f"{base} ({suffix})"
-        for n, _letter, _sk, _disp, _tag in members_sorted:
+        label = f"{base} ({num_variant_suffix(members)})"
+        for n, _letter, _sk, _disp, _tag in members:
             result[(n, cls)] = label
             assigned.add((n, cls))
 
