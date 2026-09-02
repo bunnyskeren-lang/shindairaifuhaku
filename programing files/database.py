@@ -56,5 +56,12 @@ async def init_db():
         MessageLog, DisplayOrder, UserProfile,
         Subject, Instructor, CourseSection, Syllabus, Review,
     )
+    from sqlalchemy import text
     async with engine.begin() as conn:
+        # ルートのdatabase.py init_db()と同じロックキー(727001)で直列化する。
+        # Web本体の再デプロイとこのスクリプトの実行が重なると、同じDBに対する
+        # create_all()同士が低確率でデッドロックしうるため
+        # (pg_advisory_xact_lockはCOMMIT/ROLLBACKで自動解放されるため、PgBouncerの
+        # transactionモードpooler経由でも安全にセッションをまたがず使える)
+        await conn.execute(text("SELECT pg_advisory_xact_lock(727001)"))
         await conn.run_sync(Base.metadata.create_all)
