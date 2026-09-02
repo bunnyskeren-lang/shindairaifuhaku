@@ -241,6 +241,8 @@ function esc(s) {
 }
 
 const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★☆☆", S: "★★★★☆", SS: "★★★★★" };
+// 楽単順ソート用。数字が小さいほど楽単（SSが最も楽）。未評価は最後に回す
+const EASE_ORDER = { SS: 0, S: 1, A: 2, B: 3, C: 4 };
 
 function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   let html = `<div class="card" style="border:2px solid var(--accent)">`;
@@ -610,8 +612,13 @@ async function main() {
     if (instructorFilter) {
       list = list.filter(r => r.instructor === instructorFilter);
     }
-    if (sortMode === "rating") {
-      list.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.academic_year || 0) - (a.academic_year || 0));
+    if (sortMode === "ease") {
+      // 「楽単順」= 楽単度が高い(SS→C)順、未評価は最後、同一楽単度内は受講年度が新しい順
+      list.sort((a, b) => {
+        const ea = EASE_ORDER[a.ease_rating] ?? 99;
+        const eb = EASE_ORDER[b.ease_rating] ?? 99;
+        return ea - eb || (b.academic_year || 0) - (a.academic_year || 0);
+      });
     } else {
       // 「新しい順」= 受講年度が新しい順、同じ年度内は投稿日時が新しい順
       list.sort((a, b) => (b.academic_year || 0) - (a.academic_year || 0)
@@ -639,7 +646,7 @@ async function main() {
       controlsHtml += `<div class="sort-row">
         <select id="sort-select" class="sort-select">
           <option value="new">新しい順</option>
-          <option value="rating">評価が高い順</option>
+          <option value="ease">楽単順</option>
         </select>
       </div>`;
     }
