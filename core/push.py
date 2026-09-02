@@ -27,6 +27,11 @@ async def _send_to_subscribers(title: str, body: str, url: str = "/admin/courses
                 data=payload,
                 vapid_private_key=VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": f"mailto:{VAPID_EMAIL}"},
+                # 修正理由: pywebpushのttl既定値は0で、送信時点で端末がオフライン
+                # (画面ロック・回線切断・iOSでバックグラウンド未接続等)だとプッシュサービスが
+                # 通知を保持せず即座に破棄していた。レビュー投稿の通知だけ届かないという報告の
+                # 原因(2026-09-02発覚)。1日保持することで端末のオンライン復帰時に配信されるようにする
+                ttl=86400,
             )
         except WebPushException as e:
             if e.response is not None and e.response.status_code == 410:
