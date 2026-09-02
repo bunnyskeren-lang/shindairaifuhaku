@@ -316,6 +316,13 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         size="sm",
                         color="#374151",
                     ),
+                    FlexText(
+                        text="🚧 本サービスは現在β版として提供しており、予告なく仕様変更・停止等を行う場合があります",
+                        size="xxs",
+                        color="#9ca3af",
+                        wrap=True,
+                        margin="md",
+                    ),
                     FlexBox(
                         layout="vertical",
                         margin="lg",
