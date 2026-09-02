@@ -90,11 +90,11 @@ AREAS = [
         "action": _review_action(),
     },
     {
-        # 2026-08-24時点で「レビューを閲覧」専用の入り口は未実装のため、
-        # 既存の科目一覧（カテゴリ選択）フローを暫定で割り当てる
+        # 2026-09-02: 専用の入り口画面（科目名検索を主導線にしたFlexMessage、
+        # line_bot/flex_builders.py の make_review_browse_entry_flex()）を実装
         "label": "レビュー閲覧",
         "x": REV_W, "y": TOP_Y, "w": SIDE_X - REV_W, "h": ROW2_Y - TOP_Y,
-        "action": PostbackAction(label="科目一覧", data="科目一覧"),
+        "action": PostbackAction(label="レビューを閲覧", data="レビュー閲覧"),
     },
     # ── Row 2（楽単5選・10連おみくじ・鬼単5選）─────────────────────
     {

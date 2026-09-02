@@ -52,6 +52,7 @@ from line_bot.flex_builders import (
     make_onitan_card,
     make_rakutan_card,
     make_registration_flex,
+    make_review_browse_entry_flex,
     make_search_result_card,
 )
 from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
@@ -783,6 +784,9 @@ async def handle_message(text: str, user_id: str = "") -> list:
     _reading_row = ""
     if "::R:" in t:
         t, _reading_row = t.split("::R:", 1)
+
+    if t in ["レビュー閲覧", "レビューを閲覧"]:
+        return [make_review_browse_entry_flex()]
 
     if t in ["科目一覧", "科目", "授業一覧", "一覧"]:
         return [make_category_select_flex()]

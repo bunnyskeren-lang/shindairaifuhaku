@@ -560,8 +560,9 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
 
 
 def _make_search_result_row(item: dict) -> FlexBox:
-    # 改行行数をできるだけ減らすため、学部名は科目名と同じ行に丸括弧で付記し、
-    # 未レビュー時のレビュー投稿導線もボタンではなくテキストリンクにして高さを抑える
+    # 検索結果は最大10件（_MSG_SEARCH_LIMIT）表示されるため、10件並んでもスマホ1画面に
+    # 収まるよう1行固定の高さにする（科目名はmax_lines=1で省略、レビュー投稿導線も
+    # 別行にせず同じ行の右端にテキストリンクとして詰め込む）
     stars_text = item["stars"] or "評価なし"
     stars_color = "#f59e0b" if item["stars"] else "#94a3b8"
     liff_url = make_course_liff_url(item['id'])
@@ -569,35 +570,31 @@ def _make_search_result_row(item: dict) -> FlexBox:
     if item.get("faculty"):
         name_text = f"{name_text}（{item['faculty']}）"
     row_contents = [
-        FlexBox(
-            layout="horizontal",
-            spacing="sm",
-            contents=[
-                FlexText(
-                    text=name_text, weight="bold", size="sm", color="#1e293b",
-                    wrap=True, flex=1,
-                ),
-                FlexText(text=stars_text, size="sm", color=stars_color, flex=0,
-                          align="end", gravity="center"),
-            ],
+        FlexText(
+            text=name_text, weight="bold", size="xs", color="#1e293b",
+            wrap=True, max_lines=1, flex=1,
         ),
+        FlexText(text=stars_text, size="xxs", color=stars_color, flex=0,
+                  align="end", gravity="center"),
     ]
     if not item["stars"] and item.get("category") == REVIEW_SUBMISSION_CATEGORY:
         form_url = make_review_liff_url(item['name'])
         row_contents.append(
             FlexText(
-                text="✏️ レビューを投稿する", size="xxs", color="#7c3aed", margin="xs",
+                text="✏️投稿", size="xxs", weight="bold", color="#7c3aed", flex=0,
+                align="end", gravity="center", margin="sm",
                 action=URIAction(label="レビュー投稿", uri=form_url),
             )
         )
     # 修正理由: 従来は科目名テキスト部分のみがタップ対象で、行の背景（紫の領域）を
     # 押しても反応しなかったため誤タップが起きやすかった。行全体（このコンテナ）に
-    # actionを設定し、内側の「レビューを投稿する」テキストだけは独自actionが優先されて
+    # actionを設定し、内側の「✏️投稿」テキストだけは独自actionが優先されて
     # レビュー投稿導線として機能する（LINE Flex Messageの仕様上、子要素のactionが親を上書きする）。
     return FlexBox(
-        layout="vertical",
+        layout="horizontal",
+        spacing="sm",
         background_color="#f5f3ff",
-        corner_radius="10px",
+        corner_radius="8px",
         padding_all="sm",
         margin="xs",
         contents=row_contents,
@@ -630,6 +627,75 @@ def make_search_result_card(items: list[dict], title: str) -> FlexMessage:
 
 
 # ── Course list carousel ────────────────────────────────────────
+
+
+def make_review_browse_entry_flex() -> FlexMessage:
+    # リッチメニュー「レビューを閲覧」専用の入り口。従来は科目一覧（教養/専門の
+    # カテゴリ選択）フローへ直接飛ばしていたが、科目名を直接送信すれば検索できる
+    # ことが分かりにくく毎回ドリルダウンを強いていたため、検索を主導線として案内し、
+    # カテゴリ選択は「または分類から探す」の副導線として添える形に変更した。
+    def _tile(emoji: str, label: str, desc: str, data: str, fg: str, bg: str, border: str) -> FlexBox:
+        return FlexBox(
+            layout="vertical",
+            action=PostbackAction(label=label, data=data),
+            contents=[
+                FlexText(text=emoji, size="lg", align="center"),
+                FlexText(text=label, size="sm", weight="bold", color=fg, align="center", margin="xs"),
+                FlexText(text=desc, size="xxs", color="#64748b", align="center"),
+            ],
+            background_color=bg,
+            border_width="1.5px",
+            border_color=border,
+            corner_radius="16px",
+            padding_all="md",
+            flex=1,
+        )
+
+    return FlexMessage(
+        alt_text="🔍 レビューを閲覧 — 科目名で検索、またはカテゴリから探せます",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="🔍 レビューを閲覧", weight="bold", color="#ffffff", size="lg"),
+                    FlexText(text="科目名で検索、またはカテゴリから探せます", color="#e0f2fe", size="xs"),
+                ],
+                background_color="#0284c7",
+                padding_all="lg",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                padding_all="md",
+                contents=[
+                    FlexBox(
+                        layout="vertical",
+                        background_color="#f0f9ff",
+                        border_width="1px",
+                        border_color="#bae6fd",
+                        corner_radius="12px",
+                        padding_all="md",
+                        contents=[
+                            FlexText(text="💬 科目名をそのまま送信すると検索できます", size="xs",
+                                      weight="bold", color="#0c4a6e", wrap=True),
+                            FlexText(text="例：「線形代数」「微分積分」など", size="xxs",
+                                      color="#0369a1", margin="xs"),
+                        ],
+                    ),
+                    FlexText(text="または分類から探す", size="xxs", color="#94a3b8",
+                              align="center", margin="lg"),
+                    FlexBox(
+                        layout="horizontal",
+                        spacing="sm",
+                        margin="sm",
+                        contents=[
+                            _tile("📚", "教養科目", "系統から探す", "教養", "#4f46e5", "#eef2ff", "#4f46e5"),
+                            _tile("🎓", "専門科目", "学部から探す", "専門", "#0284c7", "#e0f2fe", "#0284c7"),
+                        ],
+                    ),
+                ],
+            ),
+        ),
+    )
 
 
 def make_category_select_flex() -> FlexMessage:
