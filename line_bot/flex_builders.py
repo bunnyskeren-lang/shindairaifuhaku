@@ -488,10 +488,75 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
 
 def make_omikuji_card(items: list[dict]) -> FlexMessage:
     # items: [{"rank": int, "id": int, "name": str, "stars": str, "ease": str}]  楽単5選/鬼単5選と同じ表記。stars/easeは楽単度
-    return _make_ranking_card(
-        "⛩️ 10連おみくじ", items, header_bg="#7c3aed", row_bg="#f5f3ff", accent="#7c3aed",
-        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
+    # 楽単5選/鬼単5選と同じ縦一列リストだと10件分でカードが縦に長くなりスマホ1画面に収まらないため、
+    # 2列×5行のグリッドに圧縮した専用レイアウトにしている(2026-09-02)。
+    # おみくじらしく楽単度ラベル(天国/楽々/標準/大変/修羅場)を主役にし、★は補助情報として下段に添える。
+    header_bg, row_bg, accent = "#7c3aed", "#f5f3ff", "#7c3aed"
+
+    def cell(item: dict) -> FlexBox:
+        tier_label = EASE_LABEL.get(item.get("ease", ""), "")
+        tier_color = EASE_COLOR.get(item.get("ease", ""), accent)
+        detail_row = [FlexText(text=item["stars"], size="xxs", color="#94a3b8", flex=0)]
+        if tier_label:
+            detail_row.insert(0, FlexText(text=tier_label, size="xs", weight="bold", color=tier_color, flex=0))
+        return FlexBox(
+            layout="vertical",
+            flex=1,
+            background_color=row_bg,
+            corner_radius="10px",
+            padding_all="sm",
+            action=URIAction(label=item["name"][:20], uri=make_course_liff_url(item["id"])),
+            contents=[
+                FlexBox(
+                    layout="horizontal",
+                    spacing="xs",
+                    align_items="center",
+                    contents=[
+                        FlexBox(
+                            layout="vertical",
+                            width="20px", height="20px", corner_radius="10px",
+                            background_color=accent, flex=0,
+                            justify_content="center", align_items="center",
+                            contents=[FlexText(text=str(item["rank"]), color="#ffffff", weight="bold", size="xxs", align="center")],
+                        ),
+                        FlexText(text=item["name"], weight="bold", size="xs", color="#1e293b", wrap=True, max_lines=1, flex=1),
+                    ],
+                ),
+                FlexBox(layout="horizontal", spacing="xs", margin="xs", contents=detail_row),
+            ],
+        )
+
+    # 母数(承認済みレビューがある科目)が10件未満だと items は10件より少なくなりうるため、
+    # zip(items[0::2], items[1::2])のような組み方だと件数が奇数の場合に末尾の1件が黙って
+    # 落ちる。range+スライスで組めば奇数件でも最後の行を1セルだけの行として拾える。
+    rows = [
+        FlexBox(layout="horizontal", spacing="sm", margin=("none" if i == 0 else "sm"), contents=[cell(x) for x in items[i:i + 2]])
+        for i in range(0, len(items), 2)
+    ]
+
+    bubble = FlexBubble(
+        header=FlexBox(
+            layout="vertical",
+            background_color=header_bg,
+            padding_all="md",
+            contents=[
+                FlexText(text="⛩️ 10連おみくじ", weight="bold", color="#ffffff", size="md"),
+                FlexText(text="科目をタップで詳細を表示", size="xxs", color="#ffffff", margin="xs"),
+            ],
+        ),
+        body=FlexBox(layout="vertical", contents=rows, padding_all="md"),
+        footer=FlexBox(
+            layout="vertical",
+            padding_all="md",
+            contents=[
+                FlexButton(
+                    action=URIAction(label="📝 レビューを投稿", uri=make_review_liff_url()),
+                    style="primary", color=accent, height="sm",
+                ),
+            ],
+        ),
     )
+    return FlexMessage(alt_text="⛩️ 10連おみくじ", contents=bubble)
 
 
 def _make_search_result_row(item: dict) -> FlexBox:
