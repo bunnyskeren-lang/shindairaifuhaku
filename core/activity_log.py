@@ -1,4 +1,5 @@
 import asyncio
+import time
 import traceback as _traceback
 from datetime import datetime, timedelta, timezone
 
@@ -9,6 +10,12 @@ from database import AsyncSessionLocal
 from models import ErrorLog, MessageLog, UserActivity
 
 _LOG_RETENTION_DAYS = 30
+
+# DB接続枯渇等の障害時に短時間で大量のエラーが発生すると、エラー1件ごとにPush通知が
+# 飛んで管理者端末に通知が殺到してしまうため、Push通知だけをクールダウンで間引く
+# （DBへのErrorLog保存自体は間引かず、全件記録する）
+_ERROR_PUSH_COOLDOWN_SECONDS = 300
+_last_error_push_at: float = 0.0
 
 
 async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None, notify: bool = True):
@@ -34,6 +41,12 @@ async def save_error_log(exc: Exception, user_id: str | None = None, action: str
 
     if not notify:
         return
+
+    global _last_error_push_at
+    now = time.monotonic()
+    if now - _last_error_push_at < _ERROR_PUSH_COOLDOWN_SECONDS:
+        return
+    _last_error_push_at = now
 
     async def _notify() -> None:
         try:
