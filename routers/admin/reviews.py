@@ -92,6 +92,7 @@ async def admin_reviews(
     _: str = Depends(check_admin),
     apage: int = Query(default=1, ge=1),
     rpage: int = Query(default=1, ge=1),
+    msg: Optional[str] = Query(default=None),
 ):
     variant_labels = await cache.get_variant_full_label_map_cached()
 
@@ -150,6 +151,7 @@ async def admin_reviews(
         "rpage": rpage,
         "rtotal": rejected_total,
         "rtotal_pages": max(1, (rejected_total + _PAGE_SIZE - 1) // _PAGE_SIZE),
+        "error": msg,
     })
 
 
@@ -244,6 +246,28 @@ async def admin_review_reassign(
         subject = await session.get(Subject, subject_id)
         if review and subject:
             cs = await _get_or_create_course_section(session, subject_id, name)
+            # 付け替え先に同じ学生の別レビューが既にあると重複投稿になるため拒否する
+            # （投稿側 routers/review_submit_api.py と同じ、末尾バリアントグループ単位の重複判定）
+            if review.student_id:
+                group_subject_ids = await cache.get_variant_group_subject_ids(subject)
+                group_cs_ids = [cs.id]
+                if len(group_subject_ids) > 1:
+                    group_cs_ids = (await session.execute(
+                        select(CourseSection.id).where(
+                            CourseSection.subject_id.in_(group_subject_ids),
+                            CourseSection.instructor_id == cs.instructor_id,
+                        )
+                    )).scalars().all()
+                dup = (await session.execute(
+                    select(Review.id).where(
+                        Review.course_section_id.in_(group_cs_ids),
+                        Review.student_id == review.student_id,
+                        Review.id != review_id,
+                        Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+                    )
+                )).scalars().first()
+                if dup is not None:
+                    return RedirectResponse("/admin/reviews?msg=reassign_duplicate", status_code=303)
             review.course_section_id = cs.id
             review.selected_instructor = normalize_instructor_name(name)
             await session.commit()
