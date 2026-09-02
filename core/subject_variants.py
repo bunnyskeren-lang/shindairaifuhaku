@@ -80,6 +80,19 @@ NUM_MERGE_EXCLUDED_NAMES = frozenset({
 })
 
 
+# システム情報学部専門科目は、末尾の数字違いが実質的に独立した別内容の科目であるケースが
+# 多く、バリアント統合（セミナー系・数字/ローマ数字の両方）が誤爆するとの理由で2026-09-02に
+# ユーザー指示で分類（classification）単位で統合対象から恒常的に除外した。
+# NUM_MERGE_EXCLUDED_NAMESが科目名単位の除外なのに対し、こちらはclassification単位。
+# compute_variant_bases()等はclassificationを引数に取らないため、呼び出し側
+# （core/cache.py・line_bot/handler.py・routers/admin/courses.py）が
+# names_with_faculty_dept/names_with_classificationを組み立てる際に、この集合に属する
+# classificationの科目をあらかじめ除いてから各compute_variant_*()関数へ渡す。
+CLASSIFICATION_MERGE_EXCLUDED = frozenset({
+    "システム情報学部専門科目",
+})
+
+
 def num_variant_suffix(members: list[tuple[str, str, int, str, str]]) -> str:
     """num_basesの1グループ分のmembersから、表示用の接尾辞文字列（例:"1/2/3/4"）を組み立てる。
     学番分割クラス（_STUDENT_ID_SPLIT_RE）はベース科目と同じ(letter, disp, tag)に潰れて

@@ -9,7 +9,7 @@ from sqlalchemy import case, func, or_, select
 from core import cache
 from core.config import escape_like, make_cls_sort, make_syllabus_url, reading, syllabus_department_key
 from core.security import check_admin
-from core.subject_variants import compute_variant_display_groups
+from core.subject_variants import CLASSIFICATION_MERGE_EXCLUDED, compute_variant_display_groups
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
@@ -38,7 +38,8 @@ async def admin_courses(
     # 対象。一部だけ検索にヒットした場合でもグループ全体を対象に統合する）
     _, all_courses_for_variant = await cache.get_courses_cached()
     label_by_name = compute_variant_display_groups(
-        [(c.name, c.classification or "") for c in all_courses_for_variant]
+        [(c.name, c.classification or "") for c in all_courses_for_variant
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED]
     )
     members_by_label: dict[str, list] = defaultdict(list)
     for c in all_courses_for_variant:

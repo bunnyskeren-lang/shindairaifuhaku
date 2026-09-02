@@ -35,6 +35,7 @@ from core.config import (
     make_review_liff_url,
 )
 from core.subject_variants import (
+    CLASSIFICATION_MERGE_EXCLUDED,
     TAG_PRIORITY,
     compute_variant_bases,
     num_variant_suffix,
@@ -129,7 +130,8 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
     FlexBubble一覧を組み立てる（8バブル単位のカルーセル分割は呼び出し側で行う）。"""
     # バリアント判定・束ね方の実体はcore.subject_variants.compute_variant_bases()に一本化済み
     # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
-    names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows]
+    names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows
+                      if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED]
     _sem_bases, _num_bases = compute_variant_bases(names_with_fd)
 
     _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}
