@@ -415,7 +415,8 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             top_ease = sorted(ease_counts.items(), key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
 
         # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
-        # 任意の科目3件分の閲覧権が付与される。閲覧権はsubject単位・バリアントグループ内で共有）
+        # REVIEW_APPROVAL_UNLOCK_CREDITS枚の閲覧権が付与される。閲覧権はsubject単位・
+        # バリアントグループ内で共有）
         unlock_credits = None
         # 閲覧中の本人が投稿したレビューをハイライト表示するため、自分のstudent_idを控えておく
         # （reviewsテーブルにline_user_idは無いため、user_profiles.student_idとの一致で判定する）
@@ -465,6 +466,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     "instructor": r.selected_instructor or "",
                     "nickname": r.nickname or "",
                     "academic_year": r.academic_year or 0,
+                    "created_at": r.created_at.isoformat(),
                     "is_mine": bool(my_student_id and r.student_id and r.student_id == my_student_id),
                 }
                 for r in reviews_raw

@@ -1,9 +1,13 @@
 """レビュー閲覧UX改善(2026-09-02)のE2Eテスト。
 
-/api/course/{id}が返す評価分布(rating_distribution/ease_distribution)と、
-閲覧者本人の投稿を示すis_mineフラグが正しく計算されることを検証する。
+/api/course/{id}が返す評価分布(rating_distribution/ease_distribution)、
+閲覧者本人の投稿を示すis_mineフラグ、並び替え(新しい順=受講年度→投稿日時)用の
+created_at返却が正しいことを検証する。
 """
+from datetime import datetime, timezone
+
 import pytest
+from sqlalchemy import select
 
 import routers.liff_api as liff_api
 from models import CourseSection, Instructor, Review, ReviewStatus, Subject, SubjectUnlock, UserProfile
@@ -87,6 +91,38 @@ async def test_course_api_flags_own_review_as_mine(http_client_factory, monkeypa
     assert len(mine) == 1
     assert mine[0]["rating"] == 5
     assert len(others) == 2
+
+
+@pytest.mark.asyncio
+async def test_course_api_reviews_include_created_at_for_client_side_sort(http_client_factory, monkeypatch, test_sessionmaker):
+    """並び替え「新しい順」(受講年度が新しい順、同一年度内は投稿日時が新しい順)は
+    クライアント側で行うため、reviewsの各要素にcreated_at(ISO8601、パース可能)が
+    含まれ、同一受講年度のレビュー間でも順序を判別できる値になっていることを検証する。"""
+    course_id = await _seed_course_with_reviews(test_sessionmaker, my_student_id="2345678S")
+    async with test_sessionmaker() as session:
+        cs_id = (await session.execute(
+            select(CourseSection.id).where(CourseSection.subject_id == course_id)
+        )).scalars().first()
+        # 既存の academic_year=2025 のレビューと同一年度で、投稿日時だけ異なる行を追加
+        session.add(Review(
+            course_section_id=cs_id, student_id="7777777X",
+            status=ReviewStatus.APPROVED, rating=4, ease_rating="B",
+            selected_instructor="鈴木一郎", academic_year=2025,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ))
+        await session.commit()
+
+    _fake_verify(monkeypatch)
+    client = http_client_factory(liff_api, monkeypatch)
+    resp = await client.get(f"/api/course/{course_id}", params={"id_token": "valid-token"})
+    data = resp.json()
+
+    same_year = [r for r in data["reviews"] if r["academic_year"] == 2025]
+    assert len(same_year) == 2
+    for r in same_year:
+        assert r["created_at"]
+        datetime.fromisoformat(r["created_at"])  # パース可能なISO形式であること
+    assert len({r["created_at"] for r in same_year}) == 2
 
 
 @pytest.mark.asyncio

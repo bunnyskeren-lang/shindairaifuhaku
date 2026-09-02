@@ -613,7 +613,9 @@ async function main() {
     if (sortMode === "rating") {
       list.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.academic_year || 0) - (a.academic_year || 0));
     } else {
-      list.sort((a, b) => (b.academic_year || 0) - (a.academic_year || 0));
+      // 「新しい順」= 受講年度が新しい順、同じ年度内は投稿日時が新しい順
+      list.sort((a, b) => (b.academic_year || 0) - (a.academic_year || 0)
+        || (new Date(b.created_at) - new Date(a.created_at)));
     }
     if (!list.length) {
       reviewsSection.innerHTML = `<div class="card"><div class="no-review">この条件に合うレビューはありません</div></div>`;
