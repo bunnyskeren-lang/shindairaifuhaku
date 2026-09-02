@@ -1001,14 +1001,22 @@ async def process_events(events) -> None:
                         await save_error_log(exc, user_id=user_id, action="follow_banned")
                     _log_reply_timing("follow:banned", _t0)
                     continue
+                # 修正理由: LINEはブロック解除でも新規フォローと同じFollowEventを送るため、
+                # 登録済みユーザーが再フォローしても従来は毎回「会員登録」Flexを無条件で
+                # 返していた(2026-09-02、大西さんが登録済みなのに再度会員登録を求められた
+                # 事象の根本原因)。登録要否を先に判定し、登録済みなら使い方案内を返す
+                incomplete = await _registration_incomplete(user_id)
                 try:
-                    register_url = make_register_url(user_id)
-                    await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
+                    if incomplete:
+                        register_url = make_register_url(user_id)
+                        await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
+                    else:
+                        await line_client.reply(event.reply_token, [make_help_flex()])
                     asyncio.create_task(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
                     await save_error_log(exc, action="follow")
                 try:
-                    if await _registration_incomplete(user_id):
+                    if incomplete:
                         # LINE側のデフォルトリッチメニューを登録前メニューにしてあるため
                         # (setup_richmenu.py参照)、このlink呼び出し自体が失敗してもデフォルトの
                         # フェイルセーフにより未登録ユーザーには登録前メニューが表示され続ける
