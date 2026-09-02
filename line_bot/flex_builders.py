@@ -644,10 +644,10 @@ def make_category_browse_flex(
     if reviewed_labels is None:
         reviewed_labels = set()
 
-    def _tab(label: str, is_active: bool) -> FlexBox:
+    def _tab(label: str, data: str, is_active: bool) -> FlexBox:
         return FlexBox(
             layout="vertical",
-            action=PostbackAction(label=label[:20], data=label.replace("科目", "")),
+            action=PostbackAction(label=label[:20], data=data),
             contents=[FlexText(
                 text=label, size="sm", weight="bold", align="center",
                 color="#0284c7" if is_active else "#e0f2fe",
@@ -717,8 +717,8 @@ def make_category_browse_flex(
                         padding_all="3px",
                         spacing="xs",
                         contents=[
-                            _tab("教養科目", active_category == "教養"),
-                            _tab("専門科目", active_category == "専門"),
+                            _tab("教養科目", "教養", active_category == "教養"),
+                            _tab("専門科目", "専門", active_category == "専門"),
                         ],
                     ),
                 ],
