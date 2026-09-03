@@ -19,6 +19,39 @@ from core.config import (
 )
 from models import Subject
 
+# ── レビュー投稿済みバッジ ───────────────────────────────────────
+# 従来は「✓ 科目名」のように文字プレフィックスでレビュー有無を表していたが、
+# 文字色だけの違いと合わせて判別しづらかったため、丸バッジ（塗りつぶし+チェック／
+# 枠線のみ）に統一した（2026-09-03、科目一覧カードUI改善の一環で全箇所に反映）。
+
+
+def make_review_badge(has_review: bool, size: str = "16px") -> FlexBox:
+    if has_review:
+        return FlexBox(
+            layout="vertical", width=size, height=size,
+            corner_radius="999px", background_color="#4f46e5",
+            justify_content="center", align_items="center",
+            contents=[FlexText(text="✓", size="xxs", color="#ffffff", weight="bold", align="center")],
+        )
+    return FlexBox(
+        layout="vertical", width=size, height=size,
+        corner_radius="999px", border_width="1.5px", border_color="#cbd5e1",
+        justify_content="center", align_items="center",
+        contents=[FlexText(text=" ", size="xxs", color="#ffffff")],
+    )
+
+
+def make_review_badge_legend() -> FlexBox:
+    """フッター等に置く「バッジ＝レビュー投稿済み」の凡例1行。"""
+    return FlexBox(
+        layout="horizontal", justify_content="center", align_items="center", spacing="xs",
+        contents=[
+            make_review_badge(True, size="11px"),
+            FlexText(text="＝レビュー投稿済みを含む", size="xxs", color="#94a3b8"),
+        ],
+    )
+
+
 # ── FlexMessage builder ─────────────────────────────────────────
 
 
@@ -671,8 +704,14 @@ def make_category_browse_flex(
             layout="vertical",
             action=PostbackAction(label=label[:20], data=data),
             contents=[
-                FlexText(text=f"✓ {label}" if reviewed else label, size="sm", weight="bold", wrap=True,
-                          color="#0f172a" if reviewed else "#334155", align="center"),
+                FlexBox(
+                    layout="horizontal", justify_content="center", align_items="center", spacing="xs",
+                    contents=[
+                        make_review_badge(reviewed, size="14px"),
+                        FlexText(text=label, size="sm", weight="bold", wrap=True,
+                                  color="#0f172a" if reviewed else "#334155", align="center"),
+                    ],
+                ),
                 FlexText(text=f"{count}件", size="xxs", color="#94a3b8", align="center", margin="xs"),
             ],
             background_color="#eef2ff" if reviewed else "#f8fafc",
@@ -694,10 +733,7 @@ def make_category_browse_flex(
 
     footer = None
     if reviewed_labels:
-        footer = FlexBox(
-            layout="vertical", padding_all="md",
-            contents=[FlexText(text="✓ = レビュー投稿済みを含む", size="xxs", color="#94a3b8", align="center")],
-        )
+        footer = FlexBox(layout="vertical", padding_all="md", contents=[make_review_badge_legend()])
 
     return FlexMessage(
         alt_text=f"🔍 レビューを閲覧 — {title}・{subtitle}",
@@ -765,15 +801,19 @@ def make_classification_select_flex(
         FlexBox(
             layout="vertical",
             action=PostbackAction(label=label[:20], data=f"{data_prefix}{value}"),
-            contents=[
-                FlexText(
-                    text=f"✓ {label}" if label in reviewed_cls else label,
-                    size="lg",
-                    color="#0f172a" if label in reviewed_cls else "#94a3b8",
-                    weight="bold",
-                    align="center",
-                )
-            ],
+            contents=[FlexBox(
+                layout="horizontal", justify_content="center", align_items="center", spacing="sm",
+                contents=[
+                    make_review_badge(label in reviewed_cls, size="17px"),
+                    FlexText(
+                        text=label,
+                        size="lg",
+                        color="#0f172a" if label in reviewed_cls else "#94a3b8",
+                        weight="bold",
+                        align="center",
+                    ),
+                ],
+            )],
             background_color="#eef2ff" if label in reviewed_cls else "#f8fafc",
             border_width="2px",
             border_color="#0f172a" if label in reviewed_cls else "#cbd5e1",
@@ -784,9 +824,7 @@ def make_classification_select_flex(
     ]
     footer_contents = []
     if reviewed_cls:
-        footer_contents.append(
-            FlexText(text="✓ = レビュー投稿済みを含む", size="xxs", color="#94a3b8", align="center")
-        )
+        footer_contents.append(make_review_badge_legend())
     if back_label and back_data:
         footer_contents.append(
             FlexButton(

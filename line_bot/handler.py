@@ -168,9 +168,13 @@ def _build_alpha_split_menu(rows: list, category: str, classification: str,
     )]
 
 
-async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> list:
+async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
+                                 breadcrumb: str = "", reading_label: str = "", reading_count: int = 0) -> list:
     """絞り込み・ソート済みのSubject行から、末尾バリアント統合・シラバス/レビューURL付与済みの
-    FlexBubble一覧を組み立てる（8バブル単位のカルーセル分割は呼び出し側で行う）。"""
+    FlexBubble一覧を組み立てる（8バブル単位のカルーセル分割は呼び出し側で行う）。
+    breadcrumb/reading_label/reading_countはヘッダーの現在地表示（パンくず・よみがな
+    範囲チップ）に使う。よみがな絞り込みを経由していない場合reading_labelは空文字になり
+    チップは表示されない（2026-09-03、科目一覧カードUI改善）。"""
     # バリアント判定・束ね方の実体はcore.subject_variants.compute_variant_bases()に一本化済み
     # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
     names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows
@@ -268,6 +272,19 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                         return url
         return ""
 
+    def _pill(emoji: str, bg: str, url: str) -> FlexBox:
+        return FlexBox(
+            layout="vertical", width="22px", height="22px",
+            corner_radius="999px", background_color=bg,
+            justify_content="center", align_items="center",
+            action=URIAction(label=emoji, uri=url),
+            contents=[FlexText(text=emoji, size="sm", align="center")],
+        )
+
+    def _status_dot(has_review: bool) -> FlexText:
+        return FlexText(text="●" if has_review else "○", size="xs",
+                         color="#4f46e5" if has_review else "#cbd5e1", flex=0)
+
     def _make_bubble(classification: str, entries: list) -> FlexBubble:
         btn_contents = []
         for idx, (name, kind, fac, dept) in enumerate(entries):
@@ -281,7 +298,6 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
             syl_url = _group_syllabus_url(name, kind, fd)
             has_content = has_review or bool(syl_url)
             text_color = "#0f172a" if has_content else "#94a3b8"
-            display_text = f"✓{display}" if has_review else display
             if kind == "single":
                 liff_url = course_liff_urls.get(name, "")
             elif kind.startswith("variant:"):
@@ -300,36 +316,54 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort) -> li
                 name_action = URIAction(label=display[:20], uri=liff_url)
             else:
                 name_action = PostbackAction(label=display[:20], data=name)
-            name_box = FlexBox(
-                layout="horizontal",
-                action=name_action,
-                contents=[FlexText(text=display_text, wrap=True, size="sm", color=text_color, flex=1)],
-            )
 
-            row_contents = [name_box]
-            link_items = []
+            pills = []
             if liff_url:
-                link_items.append(FlexText(text="📝レビュー", size="xxs", color="#4f46e5", flex=0,
-                                           action=URIAction(label="レビュー", uri=liff_url)))
+                pills.append(_pill("📝", "#e0e7ff", liff_url))
             if syl_url:
-                link_items.append(FlexText(text="📄シラバス", size="xxs", color="#2563eb", flex=0,
-                                           action=URIAction(label="シラバス", uri=syl_url)))
-            if link_items:
-                row_contents.append(FlexBox(layout="horizontal", contents=link_items, margin="sm", spacing="md"))
+                pills.append(_pill("📄", "#dbeafe", syl_url))
 
+            row_children = [
+                _status_dot(has_review),
+                FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1),
+            ]
+            if pills:
+                row_children.append(FlexBox(layout="horizontal", spacing="xs", contents=pills))
+
+            # 修正理由: 従来は科目名の細いテキスト部分のみがタップ対象で、📝📄リンクは
+            # xxsサイズの文字リンクで押しにくかった。1エントリー1行にまとめ、行全体を
+            # タップ対象にした上でアイコンピルのタップ領域も広げる（2026-09-03、科目一覧
+            # カードUI改善）。エントリーごとの背景色/枠線付きカード化も検討したが、
+            # 件数×バブル数で乗算されFlexメッセージのJSONサイズが膨らみすぎるため見送り、
+            # レビュー有無は文字色＋●○の点だけで示す軽量な表現にとどめている。
             if idx > 0:
-                btn_contents.append(FlexSeparator(margin="md"))
+                btn_contents.append(FlexSeparator(margin="sm"))
             btn_contents.append(FlexBox(
-                layout="vertical",
-                contents=row_contents,
-                padding_top="sm",
-                padding_bottom="sm",
+                layout="horizontal", spacing="sm", align_items="flex-start",
+                action=name_action,
+                contents=row_children,
             ))
+
         base_cls = classification.rstrip("①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮")
         faculty_str = cls_faculty.get(base_cls, "")
-        header_contents = [FlexText(text=classification, weight="bold", color="#ffffff", size="sm")]
+
+        header_contents = []
+        if breadcrumb:
+            header_contents.append(FlexText(text=breadcrumb, size="xxs", color="#c7d2fe", wrap=True))
+        header_contents.append(FlexText(text=classification, weight="bold", color="#ffffff", size="sm"))
+
+        # 現在地表示: よみがな絞り込みを経由している場合は範囲「げ〜し（6件）」を、
+        # 学部が分かっていれば学部名も並べて1行で表示する（2026-09-03、現在地が
+        # 分かりにくいというUX指摘への対応。チップ状のボックスではなくプレーン
+        # テキストにしているのは、上のコメントと同じくJSONサイズを抑えるため）。
+        locator_parts = []
+        if reading_label:
+            locator_parts.append(f"{reading_label}（{reading_count}件）")
         if faculty_str:
-            header_contents.append(FlexText(text=faculty_str, size="xs", color="#c7d2fe", margin="xs"))
+            locator_parts.append(faculty_str)
+        if locator_parts:
+            header_contents.append(FlexText(text=" ・ ".join(locator_parts), size="xxs",
+                                             color="#c7d2fe", margin="xs", wrap=True))
 
         # 修正理由: 従来はこのカルーセルが最終画面で、別の系統/学部を見たくなっても
         # テキストを打ち直す以外に手段が無かった。教養/専門タブに一気に戻るボタンを
@@ -413,6 +447,11 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             cache.set_course_list_cache(_cl_key, split_menu)
             return split_menu
 
+    # よみがな範囲チップ（例:「げ〜し（6件）」）は、_build_alpha_split_menuで提示した
+    # ラベルと同じ計算方法で作る。どのよみがな範囲を今見ているか一目で分かるように
+    # ヘッダーに表示するため（2026-09-03、現在地が分かりにくいというUX指摘への対応）。
+    reading_label = ""
+    reading_count = 0
     if reading_row:
         try:
             _idx = int(reading_row)
@@ -420,6 +459,11 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             _idx = -1
         by_reading = sorted(rows, key=_reading_key)
         rows = by_reading[_idx * _ALPHA_CHUNK_SIZE:(_idx + 1) * _ALPHA_CHUNK_SIZE] if _idx >= 0 else []
+        if rows:
+            first_ch = _reading_key(rows[0])[:1] or "?"
+            last_ch = _reading_key(rows[-1])[:1] or "?"
+            reading_label = f"{first_ch}〜{last_ch}" if first_ch != last_ch else first_ch
+            reading_count = len(rows)
 
     rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
 
@@ -434,7 +478,11 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             label = ""
         return [TextMessage(text=f"まだ{label}科目が登録されていません。")]
 
-    bubbles = await _build_course_bubbles(rows, reviewed_names, _cls_sort)
+    bubbles = await _build_course_bubbles(
+        rows, reviewed_names, _cls_sort,
+        breadcrumb=_breadcrumb(category, faculty, department),
+        reading_label=reading_label, reading_count=reading_count,
+    )
 
     alt = f"📚 {category}一覧" if category else "📚 科目一覧"
     if not bubbles:
