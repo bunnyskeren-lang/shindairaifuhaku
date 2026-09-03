@@ -53,6 +53,7 @@ from line_bot.flex_builders import (
     make_onitan_card,
     make_rakutan_card,
     make_registration_flex,
+    make_review_badge_legend,
     make_search_result_card,
 )
 from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
@@ -419,20 +420,19 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         # 修正理由: 従来はこのカルーセルが最終画面で、別の系統/学部を見たくなっても
         # テキストを打ち直す以外に手段が無かった。教養/専門タブに一気に戻るボタンを
         # 全バブルのフッターに付ける（2026-09-02、系統/学部タップ後のルーティングUX改善）。
-        footer = None
+        # ✓バッジの意味がバブル単体では分からないというUX指摘を受け、系統/学部ブラウズ等と
+        # 同じ凡例（make_review_badge_legend）を必ず添える（2026-09-03）。
+        footer_contents = [make_review_badge_legend()]
         if home_category:
-            footer = FlexBox(
-                layout="vertical",
-                padding_all="md",
-                contents=[FlexBox(
-                    layout="vertical", justify_content="center", align_items="center",
-                    action=PostbackAction(label=f"{home_category}科目一覧に戻る"[:20], data=home_category),
-                    background_color="#eef2ff", border_width="1.5px", border_color="#c7d2fe",
-                    corner_radius="10px", padding_all="10px",
-                    contents=[FlexText(text=f"‹ {home_category}科目一覧に戻る", size="xs", weight="bold",
-                                         color="#4338ca", align="center")],
-                )],
-            )
+            footer_contents.append(FlexBox(
+                layout="vertical", justify_content="center", align_items="center",
+                action=PostbackAction(label=f"{home_category}科目一覧に戻る"[:20], data=home_category),
+                background_color="#eef2ff", border_width="1.5px", border_color="#c7d2fe",
+                corner_radius="10px", padding_all="10px",
+                contents=[FlexText(text=f"‹ {home_category}科目一覧に戻る", size="xs", weight="bold",
+                                     color="#4338ca", align="center")],
+            ))
+        footer = FlexBox(layout="vertical", spacing="sm", padding_all="md", contents=footer_contents)
         return FlexBubble(
             size="kilo",
             header=FlexBox(
