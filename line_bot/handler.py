@@ -352,9 +352,23 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         btn_contents = []
         for idx, (name, kind, fac, dept) in enumerate(entries):
             fd = (fac, dept)
-            if kind.startswith("variant:") or kind.startswith("numvariant:"):
+            if kind.startswith("variant:"):
                 suffix = kind.split(":", 1)[1]
                 display = f"{name} ({suffix})"
+            elif kind.startswith("numvariant:"):
+                # （遠隔）（再履修）タグは元々各要素末尾に個別付与されている（例:
+                # "1（再履修）/2（再履修）"）が、視認性のため要素側からタグを取り除き
+                # グループ全体の末尾に半角括弧で1回だけ付け直す（2026-09-03、ユーザー指示。
+                # 例: "線形代数(1/2/3/4)(再履修)"）。kind文字列自体（タグ埋め込み込み）は
+                # _entry_has_review等がvariant_tag_in_suffix()でタグを復元するのに使うため
+                # 変更しない
+                suffix = kind.split(":", 1)[1]
+                tag = variant_tag_in_suffix(kind)
+                if tag:
+                    nums = "/".join(p[:-len(tag)] for p in suffix.split("/"))
+                    display = f"{name}({nums}){tag.replace('（', '(').replace('）', ')')}"
+                else:
+                    display = f"{name}({suffix})"
             elif kind.startswith("parennumvariant:"):
                 main_suffix, paren_base, paren_suffix = _parse_parennum_kind(kind)
                 display = f"{name}({main_suffix})（{paren_base}({paren_suffix})）"
