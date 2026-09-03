@@ -273,18 +273,37 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                         return url
         return ""
 
-    def _pill(emoji: str, bg: str, url: str) -> FlexBox:
+    def _pill(emoji: str, label: str, bg: str, text_color: str, url: str) -> FlexBox:
+        # 絵文字だけでは何のリンクか分かりにくいというUX指摘を受け、短いラベルを併記する
+        # （2026-09-03、科目一覧カード見た目刷新）
         return FlexBox(
-            layout="vertical", width="22px", height="22px",
+            layout="horizontal", spacing="2px", flex=0,
             corner_radius="999px", background_color=bg,
             justify_content="center", align_items="center",
-            action=URIAction(label=emoji, uri=url),
-            contents=[FlexText(text=emoji, size="sm", align="center")],
+            padding_all="4px", padding_start="9px", padding_end="9px",
+            action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
+            contents=[
+                FlexText(text=emoji, size="xs", align="center", gravity="center"),
+                FlexText(text=label, size="xxs", weight="bold", color=text_color, align="center", gravity="center"),
+            ],
         )
 
-    def _status_dot(has_review: bool) -> FlexText:
-        return FlexText(text="●" if has_review else "○", size="xs",
-                         color="#4f46e5" if has_review else "#cbd5e1", flex=0)
+    def _status_badge(has_review: bool) -> FlexBox:
+        # ●○の点だけでは判別しづらいというUX指摘を受け、系統/学部ブラウズ等と同じ
+        # チェックマークバッジ（make_review_badge相当）に統一する（2026-09-03）
+        if has_review:
+            return FlexBox(
+                layout="vertical", width="16px", height="16px", flex=0,
+                corner_radius="999px", background_color="#4f46e5",
+                justify_content="center", align_items="center",
+                contents=[FlexText(text="✓", size="xxs", color="#ffffff", weight="bold", align="center")],
+            )
+        return FlexBox(
+            layout="vertical", width="16px", height="16px", flex=0,
+            corner_radius="999px", border_width="1.5px", border_color="#cbd5e1",
+            justify_content="center", align_items="center",
+            contents=[FlexText(text=" ", size="xxs", color="#ffffff")],
+        )
 
     def _make_bubble(classification: str, entries: list) -> FlexBubble:
         btn_contents = []
@@ -320,13 +339,14 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
 
             pills = []
             if liff_url:
-                pills.append(_pill("📝", "#e0e7ff", liff_url))
+                pills.append(_pill("📝", "レビュー", "#e0e7ff", "#4338ca", liff_url))
             if syl_url:
-                pills.append(_pill("📄", "#dbeafe", syl_url))
+                pills.append(_pill("📄", "シラバス", "#dbeafe", "#1e3a8a", syl_url))
 
             row_children = [
-                _status_dot(has_review),
-                FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1),
+                _status_badge(has_review),
+                FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1,
+                          weight="bold" if has_review else "regular"),
             ]
             if pills:
                 row_children.append(FlexBox(layout="horizontal", spacing="xs", contents=pills))
@@ -334,9 +354,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             # 修正理由: 従来は科目名の細いテキスト部分のみがタップ対象で、📝📄リンクは
             # xxsサイズの文字リンクで押しにくかった。1エントリー1行にまとめ、行全体を
             # タップ対象にした上でアイコンピルのタップ領域も広げる（2026-09-03、科目一覧
-            # カードUI改善）。エントリーごとの背景色/枠線付きカード化も検討したが、
-            # 件数×バブル数で乗算されFlexメッセージのJSONサイズが膨らみすぎるため見送り、
-            # レビュー有無は文字色＋●○の点だけで示す軽量な表現にとどめている。
+            # カードUI改善）。エントリーごとの背景色/枠線付きカード化は、件数×バブル数で
+            # 乗算されFlexメッセージのJSONサイズが膨らみすぎるため見送っている
+            # （個別エントリーではなくバッジ＋ラベル付きピルで視認性を確保する方針）。
             if idx > 0:
                 btn_contents.append(FlexSeparator(margin="sm"))
             btn_contents.append(FlexBox(
@@ -347,38 +367,58 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
 
         base_cls = classification.rstrip("①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮")
         faculty_str = cls_faculty.get(base_cls, "")
+        home_category = cls_category.get(base_cls, "")
+        cat_icon = "📚" if home_category == "教養" else "🎓" if home_category == "専門" else "📖"
 
         header_contents = []
         if breadcrumb:
             header_contents.append(FlexText(text=breadcrumb, size="xxs", color="#c7d2fe", wrap=True))
-        header_contents.append(FlexText(text=classification, weight="bold", color="#ffffff", size="sm"))
+        header_contents.append(FlexBox(
+            layout="horizontal", spacing="xs", align_items="center", margin="xs",
+            contents=[
+                FlexBox(
+                    layout="vertical", width="20px", height="20px", flex=0,
+                    corner_radius="999px", background_color="#ffffff2e",
+                    justify_content="center", align_items="center",
+                    contents=[FlexText(text=cat_icon, size="xs", align="center")],
+                ),
+                FlexText(text=classification, weight="bold", color="#ffffff", size="sm", flex=1),
+            ],
+        ))
 
         # 現在地表示: よみがな絞り込みを経由している場合は範囲「げ〜し（6件）」を、
         # 学部が分かっていれば学部名も並べて1行で表示する（2026-09-03、現在地が
-        # 分かりにくいというUX指摘への対応。チップ状のボックスではなくプレーン
-        # テキストにしているのは、上のコメントと同じくJSONサイズを抑えるため）。
+        # 分かりにくいというUX指摘への対応）。半透明ピルのチップにして視認性を上げる
+        # （見た目刷新に伴いプレーンテキストから変更。JSONサイズ増はバブル1個につき
+        # ボックス1つ分のみで軽微）。
         locator_parts = []
         if reading_label:
             locator_parts.append(f"{reading_label}（{reading_count}件）")
         if faculty_str:
             locator_parts.append(faculty_str)
         if locator_parts:
-            header_contents.append(FlexText(text=" ・ ".join(locator_parts), size="xxs",
-                                             color="#c7d2fe", margin="xs", wrap=True))
+            header_contents.append(FlexBox(
+                layout="vertical", flex=0, margin="sm",
+                padding_all="4px", padding_start="10px", padding_end="10px",
+                corner_radius="999px", background_color="#ffffff29",
+                contents=[FlexText(text=" ・ ".join(locator_parts), size="xxs", color="#ffffff", wrap=True)],
+            ))
 
         # 修正理由: 従来はこのカルーセルが最終画面で、別の系統/学部を見たくなっても
         # テキストを打ち直す以外に手段が無かった。教養/専門タブに一気に戻るボタンを
         # 全バブルのフッターに付ける（2026-09-02、系統/学部タップ後のルーティングUX改善）。
-        home_category = cls_category.get(base_cls, "")
         footer = None
         if home_category:
             footer = FlexBox(
                 layout="vertical",
                 padding_all="md",
-                contents=[FlexButton(
+                contents=[FlexBox(
+                    layout="vertical", justify_content="center", align_items="center",
                     action=PostbackAction(label=f"{home_category}科目一覧に戻る"[:20], data=home_category),
-                    style="secondary",
-                    height="sm",
+                    background_color="#eef2ff", border_width="1.5px", border_color="#c7d2fe",
+                    corner_radius="10px", padding_all="10px",
+                    contents=[FlexText(text=f"‹ {home_category}科目一覧に戻る", size="xs", weight="bold",
+                                         color="#4338ca", align="center")],
                 )],
             )
         return FlexBubble(
