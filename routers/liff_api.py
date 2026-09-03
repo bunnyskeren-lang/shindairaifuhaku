@@ -456,7 +456,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "category": subject.category or "",
             "term_type": subject.term_type or "",
             "credits": float(subject.credits) if subject.credits else 0,
-            "note": ON_DEMAND_SAME_CONTENT_NOTE if subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS else "",
+            "note": ON_DEMAND_SAME_CONTENT_NOTE if (not locked and subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS) else "",
             "syllabus_url": syllabus_url or "",
             "instructor_syllabus_urls": instructor_syllabus_urls,
             "review_count": review_count,
