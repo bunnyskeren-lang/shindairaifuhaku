@@ -206,6 +206,46 @@ async def get_all_review_stats_cached() -> dict[str, tuple]:
     return _all_review_stats_cache
 
 
+_ease_extremes_cache: dict[int, tuple[str, str, str]] = {}
+_ease_extremes_cache_at: float = 0.0
+
+
+async def get_ease_extremes_cached() -> dict[int, tuple[str, str, str]]:
+    """楽単/鬼単ランキング(line_bot.handler._get_rakutan_ranking/_get_onitan_ranking)向け:
+    subject_id → (科目名, 最も高い楽単度, 最も低い楽単度)のマップ。
+
+    修正理由(2026-09-03): 従来はランキング表示のたびにSubject×CourseSection×Reviewを
+    全件JOINしてPython側で科目ごとの最良/最悪easeを求めており、10連おみくじ(2026-08-25に
+    同種の問題を修正済み)と同じくレビュー件数が増えるほど重くなる設計だった。
+    get_all_review_stats_cachedと同じTTL・無効化契機(invalidate_review_cache)でキャッシュする。
+    """
+    global _ease_extremes_cache, _ease_extremes_cache_at
+    if _ease_extremes_cache and time.monotonic() - _ease_extremes_cache_at < _COURSE_CACHE_TTL:
+        return _ease_extremes_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(Subject.id, Subject.name, Review.ease_rating)
+            .join(CourseSection, CourseSection.subject_id == Subject.id)
+            .join(Review, Review.course_section_id == CourseSection.id)
+            .where(Review.status == ReviewStatus.APPROVED)
+            .group_by(Subject.id, Subject.name, Review.ease_rating)
+        )).all()
+    result: dict[int, tuple[str, str, str]] = {}
+    for sid, name, ease in rows:
+        if sid not in result:
+            result[sid] = (name, ease, ease)
+            continue
+        _, best, worst = result[sid]
+        if EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best, 99):
+            best = ease
+        if EASE_ORDER.get(ease, -1) > EASE_ORDER.get(worst, -1):
+            worst = ease
+        result[sid] = (name, best, worst)
+    _ease_extremes_cache = result
+    _ease_extremes_cache_at = time.monotonic()
+    return _ease_extremes_cache
+
+
 _full_pairs_cache: dict[tuple[int, str], int] | None = None
 _full_pairs_cache_at: float = 0.0
 
@@ -333,6 +373,7 @@ def invalidate_review_cache():
     global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
     global _all_review_stats_cache, _all_review_stats_cache_at
     global _course_flex_cache, _course_list_cache
+    global _ease_extremes_cache, _ease_extremes_cache_at
     _reviewed_cache = set()
     _reviewed_cache_at = 0.0
     _reviewed_cache_init = False
@@ -340,6 +381,8 @@ def invalidate_review_cache():
     _all_review_stats_cache_at = 0.0
     _course_flex_cache = {}
     _course_list_cache = {}
+    _ease_extremes_cache = {}
+    _ease_extremes_cache_at = 0.0
     invalidate_full_pairs_cache()
 
 
@@ -618,4 +661,5 @@ async def warm_query_caches() -> None:
         get_all_review_stats_cached(),
         get_syllabus_urls_cached(),
         get_variant_map_cached(),
+        get_ease_extremes_cached(),
     )

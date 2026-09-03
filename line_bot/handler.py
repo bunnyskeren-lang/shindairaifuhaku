@@ -555,21 +555,13 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 # ── Ranking ──────────────────────────────────────────────────────
 
 async def _get_rakutan_ranking() -> list:
-    # 「楽単度が最も高い」科目群からランダムに5件選ぶ。毎回結果を変えたいのでキャッシュしない
-    async with AsyncSessionLocal() as _s:
-        rows = (await _s.execute(
-            select(Subject.id, Subject.name, Review.ease_rating)
-            .join(CourseSection, CourseSection.subject_id == Subject.id)
-            .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == ReviewStatus.APPROVED)
-            .group_by(Subject.id, Subject.name, Review.ease_rating)
-        )).all()
-    if not rows:
+    # 「楽単度が最も高い」科目群からランダムに5件選ぶ。抽選結果は毎回変えたいのでキャッシュしないが、
+    # 母集団(科目ごとの最良楽単度)はcache.get_ease_extremes_cached()側でTTLキャッシュ済み
+    # (2026-09-03、リクエストの都度Subject×CourseSection×Review全件JOINしていた重い設計を解消)
+    extremes = await cache.get_ease_extremes_cached()
+    if not extremes:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
-    course_best: dict[int, tuple[str, str]] = {}
-    for sid, name, ease in rows:
-        if sid not in course_best or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(course_best[sid][1], 99):
-            course_best[sid] = (name, ease)
+    course_best: dict[int, tuple[str, str]] = {sid: (name, best) for sid, (name, best, _worst) in extremes.items()}
     tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: EASE_ORDER.get(e, 99))
     selected: list[tuple[int, str, str]] = []
     for tier in tiers:
@@ -586,21 +578,13 @@ async def _get_rakutan_ranking() -> list:
 
 
 async def _get_onitan_ranking() -> list:
-    # 「鬼単度が最も高い」(=楽単度が最も低い)科目群からランダムに5件選ぶ。毎回結果を変えたいのでキャッシュしない
-    async with AsyncSessionLocal() as _s:
-        rows = (await _s.execute(
-            select(Subject.id, Subject.name, Review.ease_rating)
-            .join(CourseSection, CourseSection.subject_id == Subject.id)
-            .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == ReviewStatus.APPROVED)
-            .group_by(Subject.id, Subject.name, Review.ease_rating)
-        )).all()
-    if not rows:
+    # 「鬼単度が最も高い」(=楽単度が最も低い)科目群からランダムに5件選ぶ。抽選結果は毎回変えたいので
+    # キャッシュしないが、母集団(科目ごとの最悪楽単度)はcache.get_ease_extremes_cached()側で
+    # TTLキャッシュ済み(2026-09-03、リクエストの都度全件JOINしていた重い設計を解消)
+    extremes = await cache.get_ease_extremes_cached()
+    if not extremes:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
-    course_best: dict[int, tuple[str, str]] = {}
-    for sid, name, ease in rows:
-        if sid not in course_best or EASE_ORDER.get(ease, -1) > EASE_ORDER.get(course_best[sid][1], -1):
-            course_best[sid] = (name, ease)
+    course_best: dict[int, tuple[str, str]] = {sid: (name, worst) for sid, (name, _best, worst) in extremes.items()}
     tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: -EASE_ORDER.get(e, -1))
     selected: list[tuple[int, str, str]] = []
     for tier in tiers:
