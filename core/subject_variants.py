@@ -47,6 +47,13 @@ TAG_PRIORITY = {"": 0, "（遠隔）": 1, "（再履修）": 2, "（遠隔）（
 REMOTE_TAG = "（遠隔）"
 _VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])((?:（遠隔）|（再履修）)*)$')
 _VSEM = re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
+# 「ライフコースの心理学1（発達心理学1）」のような、括弧付きの旧名・別名にも末尾数字を
+# 持つパターン用。_VNUMは文字列末尾が直接数字/ローマ数字であることを前提にしており、
+# 末尾が全角括弧で終わるこの形式にはマッチできないため別regexで扱う（2026-09-03、
+# ユーザー指示で表示バリアント統合方式に追加）。外側・内側の数字は独立に管理する
+# （「心の発達と教育2（教育・学校心理学1）」のように外側と内側の連番がずれている
+# ケースが実在するため、両者を別々の接尾辞として組み立てる）。
+_VNUM_PAREN = re.compile(r'^(.*?)[\s　]*(\d+|[Ⅰ-Ⅻ])（(.*?)[\s　]*(\d+|[Ⅰ-Ⅻ])）((?:（遠隔）|（再履修）)*)$')
 # 「微分積分1　Z（学番下3桁：001～110）」のような、大人数科目を学籍番号の下3桁で複数クラスに
 # 分割した際の接尾辞。同じ科目の別クラスでしかなく統合対象だが、末尾が数字/ローマ数字＋
 # （遠隔）（再履修）タグのみを想定する_VNUMではマッチできず、共通専門基礎科目（微分積分・
@@ -139,21 +146,62 @@ def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     return base, letter, int(raw), raw, tag
 
 
+def _sk_of(raw: str) -> int:
+    return _ROMAN_VAL[raw] if raw in _ROMAN_VAL else int(raw)
+
+
+def _vnum_paren_match(name: str) -> tuple[str, int, str, str, int, str, str] | None:
+    """"AAA1（BBB1）"のような括弧付き別名パターン用のマッチャー（_vnum_matchの姉妹関数）。
+    戻り値: (main_base, main_sk, main_raw, paren_base, paren_sk, paren_raw, tag)"""
+    name = _STUDENT_ID_SPLIT_RE.sub('', name)
+    m = _VNUM_PAREN.match(name)
+    if not m:
+        return None
+    main_base = m.group(1).strip()
+    main_raw = m.group(2)
+    paren_base = m.group(3).strip()
+    paren_raw = m.group(4)
+    tag = m.group(5) or ""
+    return main_base, _sk_of(main_raw), main_raw, paren_base, _sk_of(paren_raw), paren_raw, tag
+
+
+def paren_num_variant_suffixes(members: list[tuple[str, int, str, int, str, str]]) -> tuple[str, str]:
+    """paren_num_basesの1グループ分のmembersから、外側・内側それぞれの表示用接尾辞文字列
+    （例: ("1/2", "1/2")）を組み立てる。外側と内側の連番はずれうる（心の発達と教育の例）ため
+    独立に重複除去・ソートする。タグ（（遠隔）等）は同一グループ内で完全一致するため
+    （paren_num_basesのグループ化キーにtagを含む）、各要素の末尾に付加してnum_variant_suffix()と
+    同じ形式に揃える（line_bot/handler.py側のvariant_tag_in_suffix()がkind文字列全体から
+    タグを復元できるようにするため）。"""
+    tag = members[0][5] if members else ""
+    main_sorted = sorted({(sk, raw) for _n, sk, raw, _psk, _praw, _tag in members})
+    paren_sorted = sorted({(psk, praw) for _n, _sk, _raw, psk, praw, _tag in members})
+    return ("/".join(f"{raw}{tag}" for _sk, raw in main_sorted),
+            "/".join(f"{raw}{tag}" for _sk, raw in paren_sorted))
+
+
 def compute_variant_bases(
     names_with_faculty_dept: list[tuple[str, str, str]],
     num_excluded_names: frozenset[str] = NUM_MERGE_EXCLUDED_NAMES,
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
     dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]],
+    dict[tuple[str, str, str, str, str], list[tuple[str, int, str, int, str, str]]],
 ]:
     """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/
-    数字・ローマ数字の2種のバリアントグループを (base[+言語], faculty, department) キーで
-    束ねた辞書(sem_bases, num_bases)を返す（メンバーが2件未満のキーは含めない）。
-    num_basesのキーのみ、末尾のタグ（""/（遠隔）/（再履修）/（遠隔）（再履修）の4種）を
-    追加で持つ（授業形態が異なるクラスを同一視しないよう、タグが完全一致するクラス同士
+    数字・ローマ数字/括弧付き別名（数字・ローマ数字）の3種のバリアントグループを
+    (base[+言語], faculty, department) キーで束ねた辞書(sem_bases, num_bases, paren_num_bases)を
+    返す（メンバーが2件未満のキーは含めない）。
+    num_bases・paren_num_basesのキーは、末尾のタグ（""/（遠隔）/（再履修）/（遠隔）（再履修）の
+    4種）を追加で持つ（授業形態が異なるクラスを同一視しないよう、タグが完全一致するクラス同士
     でのみ統合する。2026-09-02にユーザー指示で「再履修は再履修のみで統合」に変更、
     無タグと再履修タグを混在させていた旧仕様（2026-08-31時点、REMOTE_TAG in tagの
     真偽値だけで区別）から4タグ完全一致に揃えた）。
+    paren_num_basesは「ライフコースの心理学1（発達心理学1）」のような、括弧付きの旧名・
+    別名にも末尾数字を持つ科目名を対象とする（2026-09-03追加、ユーザー指示で
+    このパターンはDB統合ではなく表示バリアント統合方式で扱うことにした）。キーは
+    (main_base, paren_base, faculty, department, tag)、valuesは
+    (name, main_sk, main_raw, paren_sk, paren_raw, tag)のリスト。外側・内側の数字は
+    連番がずれうる（「心の発達と教育2（教育・学校心理学1）」等）ため独立に管理する。
 
     末尾がA/B/C/Dのみ異なる「文字バリアント」の統合は2026-09-02にユーザー指示で恒常的に
     廃止した（並行クラスとトピック違いの独立科目が見分けられず誤統合が繰り返し問題に
@@ -199,7 +247,19 @@ def compute_variant_bases(
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
     num_bases = {k: v for k, v in num_bases.items() if len(v) >= 2}
 
-    return sem_bases, num_bases
+    paren_num_bases: dict[tuple[str, str, str, str, str], list[tuple[str, int, str, int, str, str]]] = {}
+    for name in names:
+        if name in num_excluded_names:
+            continue
+        m = _vnum_paren_match(name)
+        if m:
+            main_base, main_sk, main_raw, paren_base, paren_sk, paren_raw, tag = m
+            fac, dept = fd_by_name.get(name, ("", ""))
+            key = (main_base, paren_base, fac, dept, tag)
+            paren_num_bases.setdefault(key, []).append((name, main_sk, main_raw, paren_sk, paren_raw, tag))
+    paren_num_bases = {k: v for k, v in paren_num_bases.items() if len(v) >= 2}
+
+    return sem_bases, num_bases, paren_num_bases
 
 
 def compute_variant_groups(
@@ -210,7 +270,7 @@ def compute_variant_groups(
     マップを返す。グループに属さない（＝バリアントが1件だけ、または該当パターンなし）
     科目名はマップに含めない。
     """
-    sem_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
+    sem_bases, num_bases, paren_num_bases = compute_variant_bases(names_with_faculty_dept)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
@@ -221,6 +281,12 @@ def compute_variant_groups(
         for n, _letter, _sk, _disp, _tag in members:
             if n not in result:
                 result[n] = base
+
+    for (main_base, paren_base, _fac, _dept, _tag), members in paren_num_bases.items():
+        label = f"{main_base}（{paren_base}）"
+        for n, _msk, _mraw, _psk, _praw, _tag in members:
+            if n not in result:
+                result[n] = label
 
     return result
 
@@ -236,7 +302,7 @@ def compute_variant_full_labels(
     向けに追加した。判定基準はcompute_variant_groups()と同一（compute_variant_bases()を共有）。
     グループに属さない科目名はマップに含めない。
     """
-    sem_bases, num_bases = compute_variant_bases(names_with_faculty_dept)
+    sem_bases, num_bases, paren_num_bases = compute_variant_bases(names_with_faculty_dept)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
@@ -248,6 +314,13 @@ def compute_variant_full_labels(
     for (base, _fac, _dept, _tag), members in num_bases.items():
         label = f"{base}({num_variant_suffix(members)})"
         for n, _letter, _sk, _disp, _tag in members:
+            if n not in result:
+                result[n] = label
+
+    for (main_base, paren_base, _fac, _dept, _tag), members in paren_num_bases.items():
+        main_suffix, paren_suffix = paren_num_variant_suffixes(members)
+        label = f"{main_base}({main_suffix})（{paren_base}({paren_suffix})）"
+        for n, _msk, _mraw, _psk, _praw, _tag in members:
             if n not in result:
                 result[n] = label
 
@@ -311,6 +384,26 @@ def compute_variant_display_groups(
             continue
         label = f"{base} ({num_variant_suffix(members)})"
         for n, _letter, _sk, _disp, _tag in members:
+            result[(n, cls)] = label
+            assigned.add((n, cls))
+
+    # 3) 括弧付き別名バリアント（例: 障害児発達学1（障害者・障害児心理学1）→
+    # 障害児発達学(1/2)（障害者・障害児心理学(1/2)）、同一classification単位でグループ化）
+    paren_num_bases: dict[tuple[str, str, str, str], list[tuple[str, int, str, int, str, str]]] = {}
+    for name, cls in items:
+        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES:
+            continue
+        m = _vnum_paren_match(name)
+        if m:
+            main_base, main_sk, main_raw, paren_base, paren_sk, paren_raw, tag = m
+            key = (main_base, paren_base, cls, tag)
+            paren_num_bases.setdefault(key, []).append((name, main_sk, main_raw, paren_sk, paren_raw, tag))
+    for (main_base, paren_base, cls, _tag), members in paren_num_bases.items():
+        if len(members) < 2:
+            continue
+        main_suffix, paren_suffix = paren_num_variant_suffixes(members)
+        label = f"{main_base}({main_suffix})（{paren_base}({paren_suffix})）"
+        for n, _msk, _mraw, _psk, _praw, _tag in members:
             result[(n, cls)] = label
             assigned.add((n, cls))
 

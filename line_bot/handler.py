@@ -39,6 +39,7 @@ from core.subject_variants import (
     TAG_PRIORITY,
     compute_variant_bases,
     num_variant_suffix,
+    paren_num_variant_suffixes,
     variant_tag_in_suffix,
 )
 from database import AsyncSessionLocal
@@ -188,7 +189,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
     # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
     names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows
                       if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED]
-    _sem_bases, _num_bases = compute_variant_bases(names_with_fd)
+    _sem_bases, _num_bases, _paren_num_bases = compute_variant_bases(names_with_fd)
 
     _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}
     _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _, _ in _items}
@@ -197,6 +198,10 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
     _sem_variant_names = {n for _items in _sem_bases.values() for n, _ in _items}
     _sem_base_for = {n: _key for _key, _items in _sem_bases.items() for n, _ in _items}
     seen_sem_base: set[tuple[str, str, str]] = set()
+
+    _paren_num_variant_names = {n for _items in _paren_num_bases.values() for n, _, _, _, _, _ in _items}
+    _paren_num_base_for = {n: _key for _key, _items in _paren_num_bases.items() for n, _, _, _, _, _ in _items}
+    seen_paren_num_base: set[tuple[str, str, str, str, str]] = set()
 
     # syllabus_url は全件キャッシュから取得（DBアクセスなし）
     _sv_by_id = await cache.get_syllabus_urls_cached()
@@ -229,11 +234,23 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 suffix = num_variant_suffix(_num_bases[key])
                 groups[cls].append((key[0], f"numvariant:{suffix}", key[1], key[2]))
             continue
+        if name in _paren_num_variant_names:
+            key = _paren_num_base_for[name]
+            if key not in seen_paren_num_base:
+                seen_paren_num_base.add(key)
+                main_suffix, paren_suffix = paren_num_variant_suffixes(_paren_num_bases[key])
+                groups[cls].append((key[0], f"parennumvariant:{main_suffix}|{key[1]}|{paren_suffix}", key[2], key[3]))
+            continue
         groups[cls].append((name, "single", "", ""))
 
     def _cat_order(cls: str) -> int:
         return 0 if cls_category.get(cls, "") == "教養" else 1
     all_groups = sorted(groups.items(), key=lambda x: (_cat_order(x[0]), cls_sort(x[0])))
+
+    def _parse_parennum_kind(kind: str) -> tuple[str, str, str]:
+        """"parennumvariant:{main_suffix}|{paren_base}|{paren_suffix}"を分解する。"""
+        main_suffix, paren_base, paren_suffix = kind.split(":", 1)[1].split("|", 2)
+        return main_suffix, paren_base, paren_suffix
 
     def _entry_has_review(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> bool:
         if kind == "single":
@@ -250,6 +267,12 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             key = (name, fd[0], fd[1], variant_tag_in_suffix(kind))
             if key in _num_bases:
                 return any(n in reviewed_names for n, _, _, _, _ in _num_bases[key])
+            return False
+        if kind.startswith("parennumvariant:"):
+            _main_suffix, paren_base, _paren_suffix = _parse_parennum_kind(kind)
+            key = (name, paren_base, fd[0], fd[1], variant_tag_in_suffix(kind))
+            if key in _paren_num_bases:
+                return any(n in reviewed_names for n, _, _, _, _, _ in _paren_num_bases[key])
             return False
         return False
 
@@ -276,6 +299,14 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             key = (name, fd[0], fd[1], variant_tag_in_suffix(kind))
             if key in _num_bases:
                 for n, _, _, _, _ in sorted(_num_bases[key], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9))):
+                    url = course_syllabus_urls.get(n, "")
+                    if url:
+                        return url
+        if kind.startswith("parennumvariant:"):
+            _main_suffix, paren_base, _paren_suffix = _parse_parennum_kind(kind)
+            key = (name, paren_base, fd[0], fd[1], variant_tag_in_suffix(kind))
+            if key in _paren_num_bases:
+                for n, _, _, _, _, _ in sorted(_paren_num_bases[key], key=lambda x: (x[1], x[3])):
                     url = course_syllabus_urls.get(n, "")
                     if url:
                         return url
@@ -324,6 +355,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             if kind.startswith("variant:") or kind.startswith("numvariant:"):
                 suffix = kind.split(":", 1)[1]
                 display = f"{name} ({suffix})"
+            elif kind.startswith("parennumvariant:"):
+                main_suffix, paren_base, paren_suffix = _parse_parennum_kind(kind)
+                display = f"{name}({main_suffix})（{paren_base}({paren_suffix})）"
             else:
                 display = name
             has_review = _entry_has_review(name, kind, fd)
@@ -338,6 +372,14 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             elif kind.startswith("numvariant:") and (key := (name, fac, dept, variant_tag_in_suffix(kind))) in _num_bases:
                 first_name = min(_num_bases[key], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))[0]
                 liff_url = course_liff_urls.get(first_name, "")
+            elif kind.startswith("parennumvariant:"):
+                _main_suffix, paren_base, _paren_suffix = _parse_parennum_kind(kind)
+                pkey = (name, paren_base, fac, dept, variant_tag_in_suffix(kind))
+                if pkey in _paren_num_bases:
+                    first_name = min(_paren_num_bases[pkey], key=lambda x: (x[1], x[3]))[0]
+                    liff_url = course_liff_urls.get(first_name, "")
+                else:
+                    liff_url = ""
             else:
                 liff_url = ""
 

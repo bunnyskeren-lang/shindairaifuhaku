@@ -35,7 +35,7 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
         ("外国語セミナーB(英語)", "教養教育院", ""),
         ("単独科目", "教養教育院", ""),
     ]
-    sem_bases, num_bases = subject_variants.compute_variant_bases(names_with_fd)
+    sem_bases, num_bases, _paren_num_bases = subject_variants.compute_variant_bases(names_with_fd)
     flat = subject_variants.compute_variant_groups(names_with_fd)
 
     reconstructed: dict[str, str] = {}
@@ -249,3 +249,60 @@ def test_student_id_parity_split_classes_merge_into_base_numeral_group():
     assert labels["力学基礎1"] == "力学基礎(1/2)"
     assert labels["力学基礎1　Z　学籍番号：奇数"] == "力学基礎(1/2)"
     assert labels["力学基礎2　Z　学籍番号：偶数"] == "力学基礎(1/2)"
+
+
+def test_paren_alias_numeral_variants_are_grouped():
+    """「ライフコースの心理学1（発達心理学1）」のような、括弧付きの旧名・別名にも
+    末尾数字を持つ科目名は、_VNUM（文字列末尾が直接数字/ローマ数字である前提）では
+    マッチできないため、_VNUM_PARENによる別グループ(paren_num_bases)で扱う
+    （2026-09-03、ユーザー指示でこのパターンをDB統合ではなく表示バリアント統合方式に
+    変更した際に追加）。"""
+    names_with_fd = [
+        ("ライフコースの心理学1（発達心理学1）", "国際人間科学部", "発達コミュニティ学科"),
+        ("ライフコースの心理学2（発達心理学2）", "国際人間科学部", "発達コミュニティ学科"),
+        ("単独科目", "国際人間科学部", ""),
+    ]
+    groups = subject_variants.compute_variant_groups(names_with_fd)
+    assert groups["ライフコースの心理学1（発達心理学1）"] == "ライフコースの心理学（発達心理学）"
+    assert groups["ライフコースの心理学2（発達心理学2）"] == "ライフコースの心理学（発達心理学）"
+    assert "単独科目" not in groups
+
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
+    assert labels["ライフコースの心理学1（発達心理学1）"] == "ライフコースの心理学(1/2)（発達心理学(1/2)）"
+    assert labels["ライフコースの心理学2（発達心理学2）"] == "ライフコースの心理学(1/2)（発達心理学(1/2)）"
+
+
+def test_paren_alias_numeral_variants_allow_mismatched_inner_outer_numbering():
+    """「心の発達と教育2（教育・学校心理学1）」「心の発達と教育3（教育・学校心理学2）」の
+    ように、括弧の外側（科目番号）と内側（別名の番号）の連番がずれている実例が国際人間
+    科学部専門科目に存在するため、両者を独立した接尾辞として組み立てられることを確認する。"""
+    names_with_fd = [
+        ("心の発達と教育2（教育・学校心理学1）", "国際人間科学部", "発達コミュニティ学科"),
+        ("心の発達と教育3（教育・学校心理学2）", "国際人間科学部", "発達コミュニティ学科"),
+    ]
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
+    assert labels["心の発達と教育2（教育・学校心理学1）"] == "心の発達と教育(2/3)（教育・学校心理学(1/2)）"
+    assert labels["心の発達と教育3（教育・学校心理学2）"] == "心の発達と教育(2/3)（教育・学校心理学(1/2)）"
+
+
+def test_paren_alias_numeral_variant_single_member_not_grouped():
+    """括弧付き別名パターンでも、同じ(main_base, paren_base, faculty, department, tag)の
+    メンバーが1件だけならグループ化しない（他のバリアントパターンと同じ規則）。"""
+    names_with_fd = [
+        ("障害児発達学1（障害者・障害児心理学1）", "国際人間科学部", ""),
+    ]
+    groups = subject_variants.compute_variant_groups(names_with_fd)
+    assert "障害児発達学1（障害者・障害児心理学1）" not in groups
+
+
+def test_paren_alias_numeral_variants_in_display_groups():
+    """管理画面向けcompute_variant_display_groups()でも括弧付き別名パターンが
+    classification単位でグループ化されることを確認する。"""
+    names_with_cls = [
+        ("健康心理学1（健康・医療心理学1）", "国際人間科学部発達コミュニティ学科専門科目"),
+        ("健康心理学2（健康・医療心理学2）", "国際人間科学部発達コミュニティ学科専門科目"),
+    ]
+    result = subject_variants.compute_variant_display_groups(names_with_cls)
+    label = "健康心理学(1/2)（健康・医療心理学(1/2)）"
+    assert result[("健康心理学1（健康・医療心理学1）", "国際人間科学部発達コミュニティ学科専門科目")] == label
+    assert result[("健康心理学2（健康・医療心理学2）", "国際人間科学部発達コミュニティ学科専門科目")] == label
