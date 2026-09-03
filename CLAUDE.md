@@ -28,7 +28,7 @@
 
 1. **新規環境変数**: `git diff <旧本番コミット> <新dev内容> -- '*.py' | grep "os.environ\|os.getenv"` 等で新規追加された環境変数を全て洗い出し、Render本番Environmentへの登録が必要か案内する（上記「環境変数の追加ルール」参照）
 2. **新規LIFF ID**: 新設されたLIFF機能があれば、本番用LIFFアプリがLINE Developers Consoleで作成済みか・IDがRender本番に登録済みかを確認・案内する
-3. **リッチメニュー変更**: `programing files/assets/richmenu.png`や`setup_richmenu.py`のボタン配置が変わっていれば、`--env prod`の実行が必要なことを案内する（実行すると`RICHMENU_ID_PREREGISTER`が変わるため、`.env`とRender本番の両方の更新も忘れず案内する）
+3. **リッチメニュー変更**: `programing files/assets/richmenu.png`や`setup_richmenu.py`のボタン配置が変わっていれば、`--env prod`の実行が必要なことを案内する（実行すると`RICHMENU_ID_MAIN`と`RICHMENU_ID_PREREGISTER`の**両方**が新しいIDに変わるため、`.env`更新後、必ずRender本番Environmentの両方の値を実機で更新してもらう。この更新漏れは過去に複数回発生し、旧IDがLINE側で削除済みのため`link_rich_menu_id_to_user`が404「richmenu not found」を高頻度で出し続ける実害に直結した（2026-09-02〜03）。ユーザーから「更新済み」と口頭申告されても鵜呑みにせず、可能なら`curl`等で本番の動作を確認するか、Renderダッシュボードの値を直接見せてもらって新IDと一致するか照合すること。[[feedback_verify_prod_env_vars_live_not_memory]]）
 4. **DB同期**: 対象4テーブル（`display_orders`/`subjects`/`instructors`/`course_sections`）の同期（`sync_db_to_prod.py`）が必要なことを案内する
 5. **その他の外部サービス設定**: 新しい外部サービス連携（メール送信ドメイン認証、DNS設定等）が絡む場合、dev側で完了済みの設定が本番用にも別途必要かを確認し案内する
 
