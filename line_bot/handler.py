@@ -280,20 +280,25 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                         return url
         return ""
 
-    def _pill(emoji: str, label: str, bg: str, text_color: str, url: str) -> FlexBox:
-        # 絵文字だけでは何のリンクか分かりにくいというUX指摘を受け、短いラベルを併記する
-        # （2026-09-03、科目一覧カード見た目刷新）
-        return FlexBox(
+    def _pill(emoji: str, label: str, bg: str, text_color: str, url: str, border_color: str = "") -> FlexBox:
+        # 絵文字＋色だけでは何のボタンか分かりにくいというUX指摘を受け、レビュー＝塗りつぶし／
+        # シラバス＝アウトラインと形自体を変え、ラベル文字もxs幅に拡大して区別できるようにする
+        # （2026-09-03、色のみ・絵文字のみでは判別しづらいとの追加指摘への対応）
+        kwargs = dict(
             layout="horizontal", spacing="2px", flex=0,
             corner_radius="999px", background_color=bg,
             justify_content="center", align_items="center",
-            padding_all="4px", padding_start="9px", padding_end="9px",
+            padding_all="4px", padding_start="10px", padding_end="10px",
             action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
             contents=[
                 FlexText(text=emoji, size="xs", align="center", gravity="center"),
-                FlexText(text=label, size="xxs", weight="bold", color=text_color, align="center", gravity="center"),
+                FlexText(text=label, size="xs", weight="bold", color=text_color, align="center", gravity="center"),
             ],
         )
+        if border_color:
+            kwargs["border_width"] = "1.3px"
+            kwargs["border_color"] = border_color
+        return FlexBox(**kwargs)
 
     def _status_badge(has_review: bool) -> FlexBox:
         # ●○の点だけでは判別しづらいというUX指摘を受け、系統/学部ブラウズ等と同じ
@@ -346,9 +351,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
 
             pills = []
             if liff_url:
-                pills.append(_pill("📝", "レビュー", "#e0e7ff", "#4338ca", liff_url))
+                pills.append(_pill("📝", "レビュー", "#4338ca", "#ffffff", liff_url))
             if syl_url:
-                pills.append(_pill("📄", "シラバス", "#dbeafe", "#1e3a8a", syl_url))
+                pills.append(_pill("📄", "シラバス", "#ffffff", "#1e3a8a", syl_url, border_color="#1e3a8a"))
 
             row_children = [
                 _status_badge(has_review),
@@ -807,11 +812,18 @@ _MSG_SEARCH_LIMIT = 10
 
 
 async def _handle_course_search(t: str, user_id: str) -> list:
-    # 全操作をキャッシュから（DBアクセスなし）
-    _reviewed_names, (cbn, call), variant_map = await asyncio.gather(
+    # 全操作をキャッシュから（DBアクセスなし）。バリアントグループ化・表示名の曖昧さ解消は
+    # 検索語に依存しない前処理のため、cache.get_search_index_cached()側で事前計算済み
+    # （2026-09-03、自由入力メッセージのたびに5000件超を再計算していたレイテンシ改善で移設。
+    # バリアントグループ（末尾の数字/文字/セミナー言語のみが異なる科目、例:
+    # 生物学各論A1/A2/C1/C2、外国語セミナーA(英語)/B(英語)）は科目詳細ページ側で
+    # レビューを統合表示する([[project_review_view_variant_merge_20260824]])ため、
+    # どの変種を選んでも結果は同じになる。選択バブルは廃止し、検索結果ではグループを
+    # 1件（グループ内で名前が最も若い科目を代表）に集約して扱う詳細はcache.py参照）。
+    _reviewed_names, (cbn, _all_courses), search_rows = await asyncio.gather(
         cache.get_reviewed_cached(),
         cache.get_courses_cached(),
-        cache.get_variant_map_cached(),
+        cache.get_search_index_cached(),
     )
 
     # Exact course name match
@@ -820,63 +832,6 @@ async def _handle_course_search(t: str, user_id: str) -> list:
         if exact.name not in _reviewed_names:
             return [make_no_review_flex(exact, user_id)]
         return [await get_course_flex(exact, user_id)]
-
-    # バリアントグループ（末尾の数字/文字/セミナー言語のみが異なる科目、例:
-    # 生物学各論A1/A2/C1/C2、外国語セミナーA(英語)/B(英語)）は科目詳細ページ側で
-    # レビューを統合表示する([[project_review_view_variant_merge_20260824]])ため、
-    # どの変種を選んでも結果は同じになる。選択バブルは廃止し、検索結果ではグループを
-    # 1件（グループ内で名前が最も若い科目を代表）に集約して扱う。
-    # variant_map(compute_variant_groups)はベース名ラベルのみでfaculty/departmentを
-    # 区別しないため、同名ベースが学部違いで複数存在するケース（例: 工学部「制御工学Ⅰ/Ⅱ」と
-    # システム情報学部「制御工学1/2」）はここでfaculty+departmentも合わせてグループキーにする
-    # （routers/liff_api.py _group_subject_idsと同じ判定基準）。
-    _label_buckets: dict[str, list] = defaultdict(list)
-    for c in call:
-        label = variant_map.get(c.name, "")
-        if label:
-            _label_buckets[label].append(c)
-
-    seen_group_keys: set[tuple[str, str, str]] = set()
-    search_rows = []
-    for c in call:
-        label = variant_map.get(c.name, "")
-        if label:
-            key = (label, c.faculty or "", c.department or "")
-            if key in seen_group_keys:
-                continue
-            seen_group_keys.add(key)
-            members = [
-                m for m in _label_buckets[label]
-                if (m.faculty or "") == (c.faculty or "") and (m.department or "") == (c.department or "")
-            ]
-            rep = min(members, key=lambda m: m.name)
-            display = label
-        else:
-            members = [c]
-            rep = c
-            display = c.name
-        # 修正理由: 区切り文字なしで連結すると、境界をまたぐ検索語が意図せずマッチしうる
-        # （例: display末尾+先頭member名の一部が偶然一致する場合）。科目名には出現しない
-        # 制御文字を区切りに挟み、単一科目の場合は名前を二重連結しないようdisplay自体を
-        # membersに含めない
-        _parts = [display] if not label else [display] + [m.name for m in members]
-        text = "\x1f".join(_parts)
-        reading = "\x1f".join(m.reading or "" for m in members)
-        search_rows.append({
-            "display": display, "rep": rep, "members": members,
-            "faculty": c.faculty or "", "department": c.department or "",
-            "text": text.lower(), "reading": reading.lower(),
-        })
-
-    # 同名ベースのグループが学部違いで複数存在する場合、表示名だけでは区別できないため学部名を補う
-    _display_counts: dict[str, int] = defaultdict(int)
-    for r in search_rows:
-        _display_counts[r["display"]] += 1
-    for r in search_rows:
-        if _display_counts[r["display"]] > 1:
-            fac_label = f"{r['faculty']}{r['department']}"
-            if fac_label:
-                r["display"] = f"{r['display']}（{fac_label}）"
 
     # グループのベース名が一意に1件だけ一致する場合は、通常の科目名完全一致と同様に詳細カードへ直行
     _unique_exact = [r for r in search_rows if r["display"] == t]

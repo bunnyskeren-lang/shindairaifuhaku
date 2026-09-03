@@ -1,4 +1,5 @@
 import time
+from collections import defaultdict
 
 from sqlalchemy import func, select
 
@@ -303,6 +304,7 @@ def invalidate_courses_cache():
     global _preload_cache, _preload_cache_at
     global _variant_map_cache, _variant_map_cache_at
     global _variant_full_label_cache, _variant_full_label_cache_at
+    global _search_index_cache, _search_index_cache_at
     _course_by_name = {}
     _course_list_all = []
     _course_cache_at = 0.0
@@ -322,6 +324,9 @@ def invalidate_courses_cache():
     _variant_map_cache_at = 0.0
     _variant_full_label_cache = None
     _variant_full_label_cache_at = 0.0
+    # 自由入力検索インデックスもcourses/variant_mapの派生データのため一緒に無効化する
+    _search_index_cache = None
+    _search_index_cache_at = 0.0
 
 
 def invalidate_review_cache():
@@ -465,6 +470,77 @@ async def get_variant_full_label_map_cached() -> dict[str, str]:
     )
     _variant_full_label_cache_at = time.monotonic()
     return _variant_full_label_cache
+
+
+_search_index_cache: list[dict] | None = None
+_search_index_cache_at: float = 0.0
+
+
+async def get_search_index_cached() -> list[dict]:
+    """LINE bot自由入力検索(line_bot.handler._handle_course_search)向けの検索行インデックス。
+
+    バリアントグループ化（同一グループの代表科目への集約）・同名科目の学部名による表示名の
+    曖昧さ解消は検索語に依存しない前処理だが、従来は自由入力メッセージが来るたびに
+    course_sections全件（5000件超）に対しこの前処理を毎回再計算しており、1メッセージあたり
+    数十msの同期CPU処理としてイベントループを塞いでいた（2026-09-03、レイテンシ改善で導入）。
+    get_variant_map_cached()と同じ理由で、科目一覧と同じTTLでキャッシュする。
+    """
+    global _search_index_cache, _search_index_cache_at
+    if _search_index_cache is not None and time.monotonic() - _search_index_cache_at < _COURSE_CACHE_TTL:
+        return _search_index_cache
+
+    _, all_courses = await get_courses_cached()
+    variant_map = await get_variant_map_cached()
+
+    _label_buckets: dict[str, list] = defaultdict(list)
+    for c in all_courses:
+        label = variant_map.get(c.name, "")
+        if label:
+            _label_buckets[label].append(c)
+
+    seen_group_keys: set[tuple[str, str, str]] = set()
+    search_rows: list[dict] = []
+    for c in all_courses:
+        label = variant_map.get(c.name, "")
+        if label:
+            key = (label, c.faculty or "", c.department or "")
+            if key in seen_group_keys:
+                continue
+            seen_group_keys.add(key)
+            members = [
+                m for m in _label_buckets[label]
+                if (m.faculty or "") == (c.faculty or "") and (m.department or "") == (c.department or "")
+            ]
+            rep = min(members, key=lambda m: m.name)
+            display = label
+        else:
+            members = [c]
+            rep = c
+            display = c.name
+        # 区切り文字なしで連結すると、境界をまたぐ検索語が意図せずマッチしうるため、
+        # 科目名には出現しない制御文字を区切りに挟む
+        _parts = [display] if not label else [display] + [m.name for m in members]
+        text = "\x1f".join(_parts)
+        reading = "\x1f".join(m.reading or "" for m in members)
+        search_rows.append({
+            "display": display, "rep": rep, "members": members,
+            "faculty": c.faculty or "", "department": c.department or "",
+            "text": text.lower(), "reading": reading.lower(),
+        })
+
+    # 同名ベースのグループが学部違いで複数存在する場合、表示名だけでは区別できないため学部名を補う
+    _display_counts: dict[str, int] = defaultdict(int)
+    for r in search_rows:
+        _display_counts[r["display"]] += 1
+    for r in search_rows:
+        if _display_counts[r["display"]] > 1:
+            fac_label = f"{r['faculty']}{r['department']}"
+            if fac_label:
+                r["display"] = f"{r['display']}（{fac_label}）"
+
+    _search_index_cache = search_rows
+    _search_index_cache_at = time.monotonic()
+    return _search_index_cache
 
 
 # ── admin session revocation（core/security.pyのcheck_admin用） ──────────────
