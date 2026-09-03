@@ -601,37 +601,26 @@ async def _get_onitan_ranking() -> list:
 
 async def _get_omikuji() -> list:
     # 承認済みレビューがある科目からランダムに10件選ぶ(楽単度を表示)。抽選結果は毎回変えたいので
-    # キャッシュしないが、抽選対象の絞り込みはキャッシュ済みの科目名セットで行い(DBアクセスなし)、
-    # 実際にDBへ問い合わせるのは抽選で選ばれた10件の楽単度取得のみにする。
-    # 修正理由(2026-08-25): 一時的に、承認済みレビューがある全科目分のSubject×CourseSection×Review
-    # を毎回DBから全件取得してからPython側でシャッフルする実装になっていたが、レビュー件数が
-    # 増えるほどクエリ・メモリ負荷が線形に増える設計だった。2026-08-25以前の
-    # func.random() LIMIT 10方式と同じく、DBに触れる範囲を抽選後の10件だけに絞り戻す。
-    reviewed_names, (cbn, _call) = await asyncio.gather(
+    # キャッシュしないが、抽選対象の絞り込みはキャッシュ済みの科目名セットで行い、楽単度も
+    # cache.get_ease_extremes_cached()側でTTLキャッシュ済みの値を使うためDBアクセスなしで完結する。
+    # 修正理由(2026-09-03): 2026-08-25の修正で全件JOINは解消していたが、抽選で選ばれた10件の
+    # 楽単度取得のためだけに毎回DBへ問い合わせるセッション開閉コストが残っていた。楽単5選・鬼単5選
+    # (_get_rakutan_ranking/_get_onitan_ranking)と同じキャッシュを使い、DB往復自体を無くす。
+    reviewed_names, (cbn, _call), extremes = await asyncio.gather(
         cache.get_reviewed_cached(),
         cache.get_courses_cached(),
+        cache.get_ease_extremes_cached(),
     )
     if not reviewed_names:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     pool = [cbn[name] for name in reviewed_names if name in cbn]
     random.shuffle(pool)
     selected_subjects = pool[:10]
-    ids = [s.id for s in selected_subjects]
-    async with AsyncSessionLocal() as _s:
-        ease_rows = (await _s.execute(
-            select(CourseSection.subject_id, Review.ease_rating)
-            .join(Review, Review.course_section_id == CourseSection.id)
-            .where(Review.status == ReviewStatus.APPROVED, CourseSection.subject_id.in_(ids))
-        )).all()
-    best_ease: dict[int, str] = {}
-    for sid, ease in ease_rows:
-        if sid not in best_ease or EASE_ORDER.get(ease, 99) < EASE_ORDER.get(best_ease[sid], 99):
-            best_ease[sid] = ease
     items = [
         {
             "rank": i, "id": s.id, "name": s.name,
-            "stars": EASE_STARS.get(best_ease.get(s.id, ""), ""),
-            "ease": best_ease.get(s.id, ""),
+            "stars": EASE_STARS.get(extremes.get(s.id, ("", "", ""))[1], ""),
+            "ease": extremes.get(s.id, ("", "", ""))[1],
         }
         for i, s in enumerate(selected_subjects, 1)
     ]
