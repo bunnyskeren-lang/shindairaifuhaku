@@ -40,6 +40,7 @@ from core.subject_variants import (
     compute_variant_bases,
     num_variant_suffix,
     paren_num_variant_suffixes,
+    variant_letter_in_suffix,
     variant_tag_in_suffix,
 )
 from database import AsyncSessionLocal
@@ -232,7 +233,8 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             if key not in seen_num_base:
                 seen_num_base.add(key)
                 suffix = num_variant_suffix(_num_bases[key])
-                groups[cls].append((key[0], f"numvariant:{suffix}", key[1], key[2]))
+                # key = (base, letter, fac, dept, tag)。fd(fac, dept)はkey[2], key[3]
+                groups[cls].append((key[0], f"numvariant:{suffix}", key[2], key[3]))
             continue
         if name in _paren_num_variant_names:
             key = _paren_num_base_for[name]
@@ -312,23 +314,14 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                         return url
         return ""
 
-    def _pill(emoji: str, label: str, bg: str, text_color: str, url: str) -> FlexBox:
-        # 絵文字＋色だけでは何のボタンか分かりにくいというUX指摘を受け、ラベル文字を併記する。
-        # アウトライン（白背景+枠線）で塗りつぶしと差別化する案は、枠線の太さがLINEクライアント
-        # によっては目立たず「結局どちらも色付きの塗りつぶしにしか見えない」という指摘を受け、
-        # 枠線の描画品質に依存しない方式に変更: 両方とも塗りつぶしのまま、色相自体を大きく変えて
-        # （インディゴ⇔エメラルドグリーン）どのクライアントでも確実に見分けられるようにする
-        # （2026-09-03、色のみ・絵文字のみでは判別しづらいとの追加指摘への対応）
-        return FlexBox(
-            layout="horizontal", spacing="2px", flex=0,
-            corner_radius="999px", background_color=bg,
-            justify_content="center", align_items="center",
-            padding_all="4px", padding_start="10px", padding_end="10px",
-            action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
-            contents=[
-                FlexText(text=emoji, size="xs", align="center", gravity="center"),
-                FlexText(text=label, size="xs", weight="bold", color=text_color, align="center", gravity="center"),
-            ],
+    def _link_text(emoji: str, label: str, color: str, url: str) -> FlexText:
+        # 色付きの丸ピル（塗りつぶし/アウトライン）は複数回試したが、いずれも「結局色や
+        # 絵文字の違いにしか見えない」という指摘が続いたため、背景ボックスをやめて
+        # 「レビュー」「シラバス」という文字そのものをタップ対象にした下線付きテキスト
+        # リンクに変更する（2026-09-03）。
+        return FlexText(
+            text=f"{emoji} {label}", size="xs", weight="bold", color=color,
+            decoration="underline", action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
         )
 
     def _status_badge(has_review: bool) -> FlexBox:
@@ -407,9 +400,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
 
             pills = []
             if liff_url:
-                pills.append(_pill("📝", "レビュー", "#4338ca", "#ffffff", liff_url))
+                pills.append(_link_text("📝", "レビュー", "#4338ca", liff_url))
             if syl_url:
-                pills.append(_pill("📄", "シラバス", "#047857", "#ffffff", syl_url))
+                pills.append(_link_text("📄", "シラバス", "#047857", syl_url))
 
             row_children = [
                 _status_badge(has_review),
@@ -419,12 +412,11 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             if pills:
                 row_children.append(FlexBox(layout="horizontal", spacing="xs", contents=pills))
 
-            # 修正理由: 従来は科目名の細いテキスト部分のみがタップ対象で、📝📄リンクは
-            # xxsサイズの文字リンクで押しにくかった。1エントリー1行にまとめ、行全体を
-            # タップ対象にした上でアイコンピルのタップ領域も広げる（2026-09-03、科目一覧
-            # カードUI改善）。エントリーごとの背景色/枠線付きカード化は、件数×バブル数で
-            # 乗算されFlexメッセージのJSONサイズが膨らみすぎるため見送っている
-            # （個別エントリーではなくバッジ＋ラベル付きピルで視認性を確保する方針）。
+            # 修正理由: 従来は科目名の細いテキスト部分のみがタップ対象だった。1エントリー1行に
+            # まとめ、行全体をタップ対象にする（2026-09-03、科目一覧カードUI改善）。
+            # エントリーごとの背景色/枠線付きカード化は、件数×バブル数で乗算されFlexメッセージの
+            # JSONサイズが膨らみすぎるため見送っている（個別エントリーではなくバッジ＋下線付き
+            # テキストリンクで視認性を確保する方針）。
             if idx > 0:
                 btn_contents.append(FlexSeparator(margin="sm"))
             btn_contents.append(FlexBox(
