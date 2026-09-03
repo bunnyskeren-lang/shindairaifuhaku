@@ -281,11 +281,14 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                         return url
         return ""
 
-    def _pill(emoji: str, label: str, bg: str, text_color: str, url: str, border_color: str = "") -> FlexBox:
-        # 絵文字＋色だけでは何のボタンか分かりにくいというUX指摘を受け、レビュー＝塗りつぶし／
-        # シラバス＝アウトラインと形自体を変え、ラベル文字もxs幅に拡大して区別できるようにする
+    def _pill(emoji: str, label: str, bg: str, text_color: str, url: str) -> FlexBox:
+        # 絵文字＋色だけでは何のボタンか分かりにくいというUX指摘を受け、ラベル文字を併記する。
+        # アウトライン（白背景+枠線）で塗りつぶしと差別化する案は、枠線の太さがLINEクライアント
+        # によっては目立たず「結局どちらも色付きの塗りつぶしにしか見えない」という指摘を受け、
+        # 枠線の描画品質に依存しない方式に変更: 両方とも塗りつぶしのまま、色相自体を大きく変えて
+        # （インディゴ⇔エメラルドグリーン）どのクライアントでも確実に見分けられるようにする
         # （2026-09-03、色のみ・絵文字のみでは判別しづらいとの追加指摘への対応）
-        kwargs = dict(
+        return FlexBox(
             layout="horizontal", spacing="2px", flex=0,
             corner_radius="999px", background_color=bg,
             justify_content="center", align_items="center",
@@ -296,10 +299,6 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 FlexText(text=label, size="xs", weight="bold", color=text_color, align="center", gravity="center"),
             ],
         )
-        if border_color:
-            kwargs["border_width"] = "1.3px"
-            kwargs["border_color"] = border_color
-        return FlexBox(**kwargs)
 
     def _status_badge(has_review: bool) -> FlexBox:
         # ●○の点だけでは判別しづらいというUX指摘を受け、系統/学部ブラウズ等と同じ
@@ -354,7 +353,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             if liff_url:
                 pills.append(_pill("📝", "レビュー", "#4338ca", "#ffffff", liff_url))
             if syl_url:
-                pills.append(_pill("📄", "シラバス", "#ffffff", "#1e3a8a", syl_url, border_color="#1e3a8a"))
+                pills.append(_pill("📄", "シラバス", "#047857", "#ffffff", syl_url))
 
             row_children = [
                 _status_badge(has_review),
