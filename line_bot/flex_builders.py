@@ -686,7 +686,7 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
                 FlexText(text=label, size="sm", weight="bold", color=text_color, align="center"),
                 FlexBox(
                     layout="vertical", background_color=badge_bg, corner_radius="999px",
-                    padding_all="3px",
+                    padding_all="xs",
                     contents=[FlexText(text=f"全{count:,}件", size="xxs", weight="bold",
                                          color=text_color, align="center")],
                 ),
