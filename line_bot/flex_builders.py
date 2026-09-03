@@ -686,7 +686,7 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
                 FlexText(text=label, size="sm", weight="bold", color=text_color, align="center"),
                 FlexBox(
                     layout="vertical", background_color=badge_bg, corner_radius="999px",
-                    padding_all="xxs",
+                    padding_all="3px",
                     contents=[FlexText(text=f"全{count:,}件", size="xxs", weight="bold",
                                          color=text_color, align="center")],
                 ),
@@ -797,7 +797,7 @@ def make_classification_grid_flex(
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
-                spacing="xxs",
+                spacing="xs",
                 background_color="#6366f1",
                 padding_all="lg",
                 contents=[
