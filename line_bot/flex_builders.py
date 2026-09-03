@@ -669,34 +669,88 @@ def make_search_result_card(items: list[dict], title: str) -> FlexMessage:
 # ── Course list carousel ────────────────────────────────────────
 
 
-def make_category_browse_flex(
+def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
+    """科目一覧の入口画面。教養/専門どちらを見るか2タイルから選んでもらう
+    （2026-09-03、案A採用。以前はここと系統/学部選択を1画面に統合していた
+    （旧make_category_browse_flexの案B'）が、ユーザー判断で入口画面（この画面）と
+    系統/学部選択（make_classification_grid_flex）の2画面構成に戻した）。"""
+
+    def _tile(icon: str, label: str, data: str, count: int, sub: str,
+               bg: str, border: str, text_color: str, badge_bg: str) -> FlexBox:
+        return FlexBox(
+            layout="vertical",
+            action=PostbackAction(label=label[:20], data=data),
+            justify_content="center", align_items="center", spacing="xs",
+            contents=[
+                FlexText(text=icon, size="xxl", align="center"),
+                FlexText(text=label, size="sm", weight="bold", color=text_color, align="center"),
+                FlexBox(
+                    layout="vertical", background_color=badge_bg, corner_radius="999px",
+                    padding_all="xxs",
+                    contents=[FlexText(text=f"全{count:,}件", size="xxs", weight="bold",
+                                         color=text_color, align="center")],
+                ),
+                FlexText(text=sub, size="xxs", color="#64748b", align="center"),
+            ],
+            background_color=bg,
+            border_width="1.5px",
+            border_color=border,
+            corner_radius="16px",
+            padding_all="lg",
+            flex=1,
+        )
+
+    return FlexMessage(
+        alt_text="🔍 レビューを閲覧 — カテゴリを選んでください",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                spacing="sm",
+                background_color="#6366f1",
+                padding_all="lg",
+                contents=[
+                    FlexText(text="📚 科目一覧", weight="bold", color="#ffffff", size="lg"),
+                    FlexBox(
+                        layout="vertical",
+                        background_color="#ffffff",
+                        corner_radius="10px",
+                        padding_all="sm",
+                        contents=[FlexText(text="🔍 科目名をチャットに直接送っても検索できます", size="sm",
+                                             weight="bold", color="#312e81", align="center", wrap=True)],
+                    ),
+                ],
+            ),
+            body=FlexBox(
+                layout="vertical",
+                spacing="sm",
+                padding_all="md",
+                contents=[
+                    FlexText(text="カテゴリを選んでください", size="xs", color="#64748b", align="center"),
+                    FlexBox(
+                        layout="horizontal", spacing="sm",
+                        contents=[
+                            _tile("📚", "教養科目", "教養", edu_count, "系統から探す",
+                                   "#eef2ff", "#c7d2fe", "#4338ca", "#e0e7ff"),
+                            _tile("🎓", "専門科目", "専門", senmon_count, "学部から探す",
+                                   "#e0f2fe", "#bae6fd", "#0369a1", "#bae6fd"),
+                        ],
+                    ),
+                ],
+            ),
+        ),
+    )
+
+
+def make_classification_grid_flex(
     active_category: str,
     items: list[tuple[str, str, int]],
     reviewed_labels: set | None = None,
 ) -> FlexMessage:
-    """カテゴリ選択（教養/専門）と系統・学部選択を1画面に統合したブラウズ画面。
-    items は (表示ラベル, postbackデータ, 登録科目数) のタプルのリスト。
-    従来はカテゴリ選択→系統/学部選択の2画面を「戻る」を挟んで往復する必要が
-    あったが、ヘッダーに教養/専門タブを常設することでタップ1回で行き来できる
-    ようにし、2列グリッド化と件数表示で規模も選ぶ前に分かるようにした
-    （2026-09-02、既存メニューのUXレビューに基づく再設計。旧
-    make_review_browse_entry_flex/make_category_select_flexを統合）。"""
+    """系統・学部選択（2列グリッド＋件数表示）。items は (表示ラベル, postbackデータ,
+    登録科目数) のタプルのリスト。教養/専門の切り替えタブは持たず、入口画面
+    （make_category_entry_flex）に一度戻ってから選び直す2画面構成（2026-09-03、案A採用）。"""
     if reviewed_labels is None:
         reviewed_labels = set()
-
-    def _tab(label: str, data: str, is_active: bool) -> FlexBox:
-        return FlexBox(
-            layout="vertical",
-            action=PostbackAction(label=label[:20], data=data),
-            contents=[FlexText(
-                text=label, size="sm", weight="bold", align="center",
-                color="#0284c7" if is_active else "#e0f2fe",
-            )],
-            background_color="#ffffff" if is_active else None,
-            corner_radius="20px",
-            padding_all="7px",
-            flex=1,
-        )
 
     def _tile(label: str, data: str, count: int) -> FlexBox:
         reviewed = label in reviewed_labels
@@ -728,42 +782,28 @@ def make_category_browse_flex(
         for i in range(0, len(items), 2)
     ]
 
+    icon = "📚" if active_category == "教養" else "🎓"
     title = "教養科目" if active_category == "教養" else "専門科目"
-    subtitle = "系統を選んでください" if active_category == "教養" else "学部を選んでください"
+    unit_label = "系統" if active_category == "教養" else "学部"
+    total_count = sum(count for _, _, count in items)
+    subtitle = f"{unit_label}を選んでください・全{total_count:,}件"
 
     footer = None
     if reviewed_labels:
         footer = FlexBox(layout="vertical", padding_all="md", contents=[make_review_badge_legend()])
 
     return FlexMessage(
-        alt_text=f"🔍 レビューを閲覧 — {title}・{subtitle}",
+        alt_text=f"🔍 レビューを閲覧 — {title}・{unit_label}を選んでください",
         contents=FlexBubble(
             header=FlexBox(
                 layout="vertical",
-                spacing="sm",
-                background_color="#0284c7",
+                spacing="xxs",
+                background_color="#6366f1",
                 padding_all="lg",
                 contents=[
-                    FlexText(text=f"科目一覧 › {title}", size="xxs", color="#e0f2fe"),
-                    FlexBox(
-                        layout="vertical",
-                        background_color="#ffffff",
-                        corner_radius="10px",
-                        padding_all="sm",
-                        contents=[FlexText(text="🔍 科目名をチャットに直接送っても検索できます", size="sm",
-                                             weight="bold", color="#0c4a6e", align="center", wrap=True)],
-                    ),
-                    FlexBox(
-                        layout="horizontal",
-                        background_color="#1c6fa8",
-                        corner_radius="20px",
-                        padding_all="3px",
-                        spacing="xs",
-                        contents=[
-                            _tab("教養科目", "教養", active_category == "教養"),
-                            _tab("専門科目", "専門", active_category == "専門"),
-                        ],
-                    ),
+                    FlexText(text=f"科目一覧 › {title}", size="xxs", color="#c7d2fe"),
+                    FlexText(text=f"{icon} {title}", weight="bold", color="#ffffff", size="lg"),
+                    FlexText(text=subtitle, color="#c7d2fe", size="sm"),
                 ],
             ),
             body=FlexBox(layout="vertical", spacing="sm", padding_all="md", contents=rows),

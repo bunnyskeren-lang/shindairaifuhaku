@@ -44,7 +44,8 @@ from core.subject_variants import (
 from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
-    make_category_browse_flex,
+    make_category_entry_flex,
+    make_classification_grid_flex,
     make_classification_select_flex,
     make_help_flex,
     make_no_review_flex,
@@ -604,6 +605,20 @@ async def _get_omikuji() -> list:
 
 # ── Message handler ─────────────────────────────────────────────
 
+async def _handle_category_entry() -> list:
+    """科目一覧の入口画面（教養/専門どちらを見るか2タイルから選んでもらう、案A）。"""
+    _menu_key = "menu:entry"
+    _cached = cache.get_course_list_cache(_menu_key)
+    if _cached is not None:
+        return _cached
+    _, _all_courses = await cache.get_courses_cached()
+    edu_count = sum(1 for c in _all_courses if c.category == "教養")
+    senmon_count = sum(1 for c in _all_courses if c.category == "専門")
+    result = [make_category_entry_flex(edu_count, senmon_count)]
+    cache.set_course_list_cache(_menu_key, result)
+    return result
+
+
 async def _handle_kyoyo_menu() -> list:
     _menu_key = "menu:教養"
     _cached = cache.get_course_list_cache(_menu_key)
@@ -621,7 +636,7 @@ async def _handle_kyoyo_menu() -> list:
     if clss:
         counts = Counter(c.classification for c in edu_courses)
         items = [(cls, _make_nav_data(category="教養", classification=cls), counts[cls]) for cls in clss]
-        result = [make_category_browse_flex("教養", items, reviewed_cls)]
+        result = [make_classification_grid_flex("教養", items, reviewed_cls)]
     else:
         result = await handle_course_list(category="教養")
     cache.set_course_list_cache(_menu_key, result)
@@ -668,7 +683,7 @@ async def _handle_senmon_menu() -> list:
         cls_counts = {cls: sum(1 for c in sen_courses if c.classification == cls) for cls in other_clss}
         items = [(fac, _make_nav_data(category="専門", faculty=fac), fac_counts[fac]) for fac in faculties_present] + \
                 [(cls, _make_nav_data(category="専門", classification=cls), cls_counts[cls]) for cls in other_clss]
-        result = [make_category_browse_flex("専門", items, display_reviewed)]
+        result = [make_classification_grid_flex("専門", items, display_reviewed)]
     else:
         result = await handle_course_list(category="専門")
     cache.set_course_list_cache(_menu_key, result)
@@ -885,7 +900,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         t, _reading_row = t.split("::R:", 1)
 
     if t in ["レビュー閲覧", "レビューを閲覧", "科目一覧", "科目", "授業一覧", "一覧"]:
-        return await _handle_kyoyo_menu()
+        return await _handle_category_entry()
 
     if t in ["教養", "教養科目", "教養一覧"]:
         return await _handle_kyoyo_menu()
