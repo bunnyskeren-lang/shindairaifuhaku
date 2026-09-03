@@ -120,7 +120,7 @@ def _parse_nav_data(data: str) -> tuple[str, str, str, str] | None:
     return parts[0], parts[1], parts[2], parts[3]
 
 
-def _breadcrumb(category: str = "", faculty: str = "", department: str = "") -> str:
+def _breadcrumb(category: str = "", faculty: str = "", department: str = "", classification: str = "") -> str:
     parts = ["科目一覧"]
     if category:
         parts.append(f"{category}科目")
@@ -128,6 +128,8 @@ def _breadcrumb(category: str = "", faculty: str = "", department: str = "") -> 
         parts.append(faculty)
     if department:
         parts.append(department)
+    if classification:
+        parts.append(classification)
     return " › ".join(parts)
 
 
@@ -168,7 +170,7 @@ def _build_alpha_split_menu(rows: list, category: str, classification: str,
         title="📚 科目一覧",
         subtitle=f"{len(rows)}件あります。よみがな順で絞り込んでください",
         header_color="#6366f1",
-        breadcrumb=_breadcrumb(category, faculty, department),
+        breadcrumb=_breadcrumb(category, faculty, department, classification),
         back_label=back_label, back_data=back_data,
         home_label=home_label, home_data=home_data,
     )]
@@ -526,7 +528,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
     bubbles = await _build_course_bubbles(
         rows, reviewed_names, _cls_sort,
-        breadcrumb=_breadcrumb(category, faculty, department),
+        breadcrumb=_breadcrumb(category, faculty, department, classification),
         reading_label=reading_label, reading_count=reading_count,
     )
 
