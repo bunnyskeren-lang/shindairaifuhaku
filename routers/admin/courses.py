@@ -290,6 +290,7 @@ async def admin_courses(
         "page": page,
         "total_pages": total_pages,
         "url_prefix": "/admin/courses?page=",
+        "has_undo": undo.has_last_deleted(),
     })
 
 

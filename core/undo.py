@@ -25,3 +25,8 @@ def pop_last_deleted() -> list[dict] | None:
     if time.monotonic() - snap["created_at"] > _TTL_SECONDS:
         return None
     return snap["subjects"]
+
+
+def has_last_deleted() -> bool:
+    """「戻る」ボタンを常時表示する科目管理画面用に、消費せず存在有無だけ確認する。"""
+    return _last_deleted is not None and time.monotonic() - _last_deleted["created_at"] <= _TTL_SECONDS

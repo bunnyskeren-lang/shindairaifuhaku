@@ -184,6 +184,8 @@
     <a href="/admin/courses{% if active_category %}?category={{ active_category }}{% endif %}" class="btn" style="padding:6px 12px;background:#e5e7eb;color:#374151;text-decoration:none;white-space:nowrap">✕ クリア</a>
     {% endif %}
   </form>
+  <button type="button" id="undoBtn" class="btn" onclick="undoLastDelete()" {{ "" if has_undo else "disabled" }}
+          style="padding:6px 14px;white-space:nowrap;background:#fee2e2;color:#b91c1c">↩ 削除を戻す</button>
 </div>
 <div class="table-wrap">
 <table>
@@ -694,7 +696,7 @@ function deleteCourse(id, btn) {
           const row = document.getElementById(prefix + id);
           if (row) row.remove();
         });
-        showActionToast('科目を削除しました', '元に戻す', undoLastDelete);
+        document.getElementById('undoBtn').disabled = false;
       } else if (data.error === 'has_reviews') {
         btn.disabled = false;
         showErrorToast('レビューが紐づいているため削除できません');
@@ -704,6 +706,8 @@ function deleteCourse(id, btn) {
 }
 
 function undoLastDelete() {
+  const undoBtn = document.getElementById('undoBtn');
+  undoBtn.disabled = true;
   fetchJson('/admin/courses/undo', {
     method: 'POST',
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -713,7 +717,7 @@ function undoLastDelete() {
     } else {
       showErrorToast('元に戻せませんでした（時間切れの可能性があります）');
     }
-  }).catch(function() { showErrorToast(); });
+  }).catch(function() { undoBtn.disabled = false; showErrorToast(); });
 }
 
 function deleteGroup(key, btn) {
@@ -734,7 +738,7 @@ function deleteGroup(key, btn) {
           const row = document.getElementById(prefix + key);
           if (row) row.remove();
         });
-        showActionToast('科目（' + g.ids.length + '件）を削除しました', '元に戻す', undoLastDelete);
+        document.getElementById('undoBtn').disabled = false;
       } else if (data.error === 'has_reviews') {
         btn.disabled = false;
         showErrorToast('レビューが紐づいているため削除できません');

@@ -24,6 +24,7 @@ label{font-size:13px;font-weight:600;color:#374151}
 .btn-xs{padding:3px 9px;font-size:11px}
 .btn-icon{padding:2px 7px;font-size:13px;background:var(--accent-chip-bg);color:var(--accent-text)}
 .btn-icon:disabled{opacity:.35;cursor:default}
+.btn:disabled{opacity:.4;cursor:default}
 .empty{color:#9ca3af;text-align:center;padding:16px}
 .section-title{font-size:12px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:20px 0 8px}
 .actions{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
@@ -113,10 +114,6 @@ nav{margin-bottom:16px}
   </div>
 </div>
 <div id="errorToast" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:bold;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,.15);max-width:90%;text-align:center"></div>
-<div id="actionToast" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);align-items:center;gap:12px;background:#111827;color:#fff;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:bold;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,.15);max-width:90%">
-  <span id="actionToastMsg"></span>
-  <button id="actionToastBtn" type="button" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap"></button>
-</div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <script>
 // 修正理由: fetch()を使う管理画面の操作(並び替え・教員追加削除等)が通信エラー時に
@@ -146,28 +143,6 @@ function fetchJson(url, options) {
       throw new Error('Invalid JSON response (HTTP ' + r.status + ')');
     });
   });
-}
-
-// 削除操作の直後に「元に戻す」ボタン付きのトーストを表示する共通関数。
-// 一定時間内にボタンを押さなければ何もせず消える（ボタン連打での二重復元を防ぐため
-// クリック後は次のshowActionToast呼び出しまでハンドラを再利用しない）。
-var _actionToastTimer = null;
-var _actionToastHandler = null;
-function showActionToast(msg, actionLabel, onAction, duration) {
-  var el = document.getElementById('actionToast');
-  var btn = document.getElementById('actionToastBtn');
-  document.getElementById('actionToastMsg').textContent = msg;
-  btn.textContent = actionLabel;
-  el.style.display = 'flex';
-  if (_actionToastTimer) clearTimeout(_actionToastTimer);
-  if (_actionToastHandler) btn.removeEventListener('click', _actionToastHandler);
-  function hide() {
-    el.style.display = 'none';
-    if (_actionToastHandler) { btn.removeEventListener('click', _actionToastHandler); _actionToastHandler = null; }
-  }
-  _actionToastHandler = function() { clearTimeout(_actionToastTimer); hide(); onAction(); };
-  btn.addEventListener('click', _actionToastHandler);
-  _actionToastTimer = setTimeout(hide, duration || 8000);
 }
 
 function askConfirm(msg, okLabel) {
