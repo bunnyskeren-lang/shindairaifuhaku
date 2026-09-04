@@ -404,13 +404,13 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
     def _status_badge(has_review: bool, is_unlocked: bool = False) -> FlexBox:
         # ●○の点だけでは判別しづらいというUX指摘を受け、系統/学部ブラウズ等と同じ
         # チェックマークバッジ（make_review_badge相当）に統一する（2026-09-03）。
-        # 解除済み科目は✓の代わりに🔓を表示する（2026-09-04、優先表示。説明は不要とのユーザー指示）
+        # 解除済み科目は✓の代わりに🔓を表示する（2026-09-04、優先表示。説明は不要とのユーザー指示）。
+        # 🔓自体に視認性があるため、✓のような背景円は付けない
         if is_unlocked:
             return FlexBox(
                 layout="vertical", width="16px", height="16px", flex=0,
-                corner_radius="999px", background_color="#4f46e5",
                 justify_content="center", align_items="center",
-                contents=[FlexText(text="🔓", size="xxs", color="#ffffff", weight="bold", align="center")],
+                contents=[FlexText(text="🔓", size="xxs", align="center")],
             )
         if has_review:
             return FlexBox(
