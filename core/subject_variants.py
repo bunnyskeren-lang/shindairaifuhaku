@@ -146,6 +146,20 @@ def variant_tag_in_suffix(suffix: str) -> str:
     return ""
 
 
+def variant_letter_in_suffix(kind: str) -> str:
+    """num_variant_suffix()が組み立てた接尾辞を含むkind文字列（例:"numvariant:A1/A2"）から、
+    そのグループの先頭アルファベット（letter、無ければ""）を復元する。同一グループ内の
+    membersは全てletterが完全一致する（2026-09-03、num_basesのグループ化キーにletterを
+    追加したことに伴い新設。「数学科教育論A1/A2/C1/C2」のようなアルファベット＋数字の
+    二重枝分かれ科目で、A系列とC系列を別グループとして扱うため）。
+    line_bot/handler.py _build_course_bubbles()がkind文字列だけからnum_basesの元のキーを
+    引き直す際にvariant_tag_in_suffix()と対で使う。"""
+    suffix = kind.split(":", 1)[1] if ":" in kind else kind
+    if suffix and suffix[0].isascii() and suffix[0].isalpha():
+        return suffix[0].upper()
+    return ""
+
+
 def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     name = _STUDENT_ID_SPLIT_RE.sub('', name)
     m = _VNUM.match(name)
@@ -299,10 +313,14 @@ def compute_variant_groups(
         for n, _sk in members:
             result[n] = base_lang
 
-    for (base, _fac, _dept, _tag), members in num_bases.items():
-        for n, _letter, _sk, _disp, _tag in members:
+    for (base, letter, _fac, _dept, _tag), members in num_bases.items():
+        # letterが空でない場合はラベルに連結し、A系列/C系列のようにletterが異なる
+        # グループ同士が同じラベル文字列になって誤って再統合されないようにする
+        # （grouping label自体は画面に表示されず、キーとしてのみ使われるため連結でよい）
+        label = f"{base}{letter}" if letter else base
+        for n, _letter2, _sk, _disp, _tag in members:
             if n not in result:
-                result[n] = base
+                result[n] = label
 
     for (main_base, paren_base, _fac, _dept, _tag), members in paren_num_bases.items():
         label = f"{main_base}（{paren_base}）"
@@ -333,9 +351,9 @@ def compute_variant_full_labels(
         for n, _sk in members:
             result[n] = label
 
-    for (base, _fac, _dept, _tag), members in num_bases.items():
+    for (base, _letter, _fac, _dept, _tag), members in num_bases.items():
         label = f"{base}({num_variant_suffix(members)})"
-        for n, _letter, _sk, _disp, _tag in members:
+        for n, _letter2, _sk, _disp, _tag in members:
             if n not in result:
                 result[n] = label
 
@@ -392,16 +410,16 @@ def compute_variant_display_groups(
     # 2) 数字・ローマ数字バリアント（同一classification単位でグループ化。タグ（""/（遠隔）/
     # （再履修）/（遠隔）（再履修）の4種）が完全一致するクラス同士でのみ統合する）
     # NUM_MERGE_EXCLUDED_NAMESに属する科目名は数字バリアント統合の対象外（compute_variant_bases()参照）
-    num_bases: dict[tuple[str, str, str], list[tuple[str, str, int, str, str]]] = {}
+    num_bases: dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]] = {}
     for name, cls in items:
         if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES:
             continue
         m = _vnum_match(name)
         if m:
             base, letter, sk, disp, tag = m
-            key = (base, cls, tag)
+            key = (base, letter, cls, tag)
             num_bases.setdefault(key, []).append((name, letter, sk, disp, tag))
-    for (base, cls, _tag), members in num_bases.items():
+    for (base, _letter, cls, _tag), members in num_bases.items():
         if len(members) < 2:
             continue
         label = f"{base} ({num_variant_suffix(members)})"

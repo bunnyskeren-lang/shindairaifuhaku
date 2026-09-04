@@ -24,11 +24,14 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
     """compute_variant_bases()の3辞書から再構成したグループ化結果が、
     compute_variant_groups()（フラットなname→labelマップ）と一致することを確認する
     （line_bot/handler.py側は前者を、レビュー投稿フォーム等は後者を使うため、
-    両者が同じ判定規則から矛盾なく導出されていることの保証）。"""
+    両者が同じ判定規則から矛盾なく導出されていることの保証）。
+    num_basesのキーはletterを含む（2026-09-03）ため、reconstructed側もletterを
+    ラベルに反映して組み立てる。"""
     names_with_fd = [
         ("生物学各論A1", "教養教育院", ""),
         ("生物学各論A2", "教養教育院", ""),
         ("生物学各論C1", "教養教育院", ""),
+        ("生物学各論C2", "教養教育院", ""),
         ("微分積分1", "教養教育院", ""),
         ("微分積分2", "教養教育院", ""),
         ("外国語セミナーA(英語)", "教養教育院", ""),
@@ -42,12 +45,17 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
     for (base_lang, _fac, _dept), members in sem_bases.items():
         for n, _sk in members:
             reconstructed[n] = base_lang
-    for (base, _fac, _dept, _remote), members in num_bases.items():
+    for (base, letter, _fac, _dept, _tag), members in num_bases.items():
+        label = f"{base}{letter}" if letter else base
         for n, _letter, _sk, _disp, _tag in members:
-            reconstructed[n] = base
+            reconstructed[n] = label
 
     assert reconstructed == flat
     assert "単独科目" not in flat
+    # A系列とC系列は別グループ（letterがグループ化キーに含まれるため混ざらない）
+    assert flat["生物学各論A1"] == flat["生物学各論A2"]
+    assert flat["生物学各論C1"] == flat["生物学各論C2"]
+    assert flat["生物学各論A1"] != flat["生物学各論C1"]
 
 
 def test_compute_variant_full_labels_includes_bracketed_suffix():
@@ -69,6 +77,36 @@ def test_compute_variant_full_labels_includes_bracketed_suffix():
     assert labels["力学基礎1"] == labels["力学基礎2"] == "力学基礎(1/2)"
     assert labels["外国語セミナーA(英語)"] == "外国語セミナー(英語)(A/B)"
     assert "単独科目" not in labels
+
+
+def test_numeral_letter_dual_branch_splits_by_letter():
+    """「アルファベット＋数字」の二重枝分かれ（例:数学科教育論A1/A2/C1/C2）は、
+    2026-09-03にユーザー指示で恒常ルール化。アルファベット部分は並行クラス（担当教員・
+    内容が別）を表すことが多いため、数字部分（連番/クォーター）だけで束ねず、letterが
+    異なるグループ同士は分離する。従来はletterをグループ化キーに含めておらず
+    「数学科教育論(A1/A2/C1/C2)」のようにA系列とC系列が1グループに混ざって表示されて
+    いた不具合の再発防止テスト。"""
+    names_with_fd = [
+        ("数学科教育論A1", "国際人間科学部", ""),
+        ("数学科教育論A2", "国際人間科学部", ""),
+        ("数学科教育論C1", "国際人間科学部", ""),
+        ("数学科教育論C2", "国際人間科学部", ""),
+    ]
+    labels = subject_variants.compute_variant_full_labels(names_with_fd)
+    assert labels["数学科教育論A1"] == labels["数学科教育論A2"] == "数学科教育論(A1/A2)"
+    assert labels["数学科教育論C1"] == labels["数学科教育論C2"] == "数学科教育論(C1/C2)"
+
+    names_with_cls = [
+        ("数学科教育論A1", "国際人間科学部専門科目"),
+        ("数学科教育論A2", "国際人間科学部専門科目"),
+        ("数学科教育論C1", "国際人間科学部専門科目"),
+        ("数学科教育論C2", "国際人間科学部専門科目"),
+    ]
+    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
+    assert display_result[("数学科教育論A1", "国際人間科学部専門科目")] == "数学科教育論 (A1/A2)"
+    assert display_result[("数学科教育論A2", "国際人間科学部専門科目")] == "数学科教育論 (A1/A2)"
+    assert display_result[("数学科教育論C1", "国際人間科学部専門科目")] == "数学科教育論 (C1/C2)"
+    assert display_result[("数学科教育論C2", "国際人間科学部専門科目")] == "数学科教育論 (C1/C2)"
 
 
 def test_letter_only_variants_are_never_merged():
