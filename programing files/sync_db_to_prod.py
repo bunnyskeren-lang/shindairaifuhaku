@@ -1,18 +1,25 @@
 # -*- coding: utf-8 -*-
 """
 dev → 本番 DB の同期スクリプト
-同期対象テーブル（この4テーブルのみ）:
-  display_orders, subjects, instructors, course_sections
+同期対象テーブル（この5テーブルのみ）:
+  display_orders, subjects, instructors, course_sections, syllabi
 
 絶対に同期しないテーブル:
   reviews, message_logs, user_profiles, user_activity, error_logs,
-  push_subscriptions, richmenu_taps, syllabi 等
+  push_subscriptions, richmenu_taps 等
 
 UPSERTに加えて、本番のみに存在する行（devで削除・変更済みの行）も削除する。
 ただし display_orders 以外（subjects/instructors/course_sections）は、
 course_sections経由でsyllabi（時間割登録データ）やreviewsが紐づく場合、
 CASCADE/RESTRICTでユーザーデータを巻き込む恐れがあるため削除せず、
 「KEEP(要確認)」としてログ表示するのみに留める（手動での判断・対応が必要）。
+
+syllabiはcourse_sections経由の間接参照のため、course_section_idを devの id のまま
+コピーできない（course_sectionsはdev/本番で採番が独立しているため）。dev/本番双方で
+(科目のname+faculty+department, 担当教員name)の自然キーからcourse_section_idを
+引き直してから同期する（2026-09-05追加。それまでimport_syllabus.py --env prodで
+別途本番投入する設計だったが、実際には一度も実行されておらず本番syllabiが常に0件の
+まま放置されLINE botのシラバスリンクが機能していなかった実害が発覚したため）。
 
 実行方法（programing files/ から実行）:
   python -X utf8 sync_db_to_prod.py
@@ -273,6 +280,68 @@ async def main():
             deleted_cs += 1
         print(f"course_sections: 本番のみの{len(orphan_cs)}件中 {deleted_cs}件削除、"
               f"{kept_cs}件は時間割登録/レビューが紐づくため保持")
+
+        # ── 5. syllabi: (course_section自然キー, year, academic_term) でUPSERT ──
+        # course_section_idはdev/本番で採番が独立しているため直接コピーできない。
+        # (科目のname+faculty+department, 担当教員name) の自然キーで
+        # dev の course_section_id → 本番の course_section_id に引き直してから同期する。
+        dev_subj_id_to_key = {r["id"]: (r["name"], r["faculty"], r["department"]) for r in subj_rows}
+        dev_cs_id_to_key = {}
+        for r in cs_rows:
+            subj_key = dev_subj_id_to_key.get(r["subject_id"])
+            instr_name = dev_instr_name.get(r["instructor_id"])
+            if subj_key and instr_name:
+                dev_cs_id_to_key[r["id"]] = (subj_key, instr_name)
+
+        prod_subj_id_to_key = {pid: key for key, pid in prod_subj_map.items()}
+        prod_instr_id_to_name = {pid: name for name, pid in prod_instr_map.items()}
+        prod_cs_rows_final = await prod.fetch("SELECT id, subject_id, instructor_id FROM course_sections")
+        prod_key_to_cs_id = {}
+        for r in prod_cs_rows_final:
+            subj_key = prod_subj_id_to_key.get(r["subject_id"])
+            instr_name = prod_instr_id_to_name.get(r["instructor_id"])
+            if subj_key and instr_name:
+                prod_key_to_cs_id[(subj_key, instr_name)] = r["id"]
+
+        syl_rows = await dev.fetch(
+            "SELECT course_section_id, year, academic_term, timetable_code FROM syllabi ORDER BY id"
+        )
+        syl_params = []
+        skipped_syl = 0
+        for r in syl_rows:
+            key = dev_cs_id_to_key.get(r["course_section_id"])
+            prod_cs_id = prod_key_to_cs_id.get(key) if key else None
+            if prod_cs_id is None:
+                skipped_syl += 1
+                continue
+            syl_params.append((prod_cs_id, r["year"], r["academic_term"], r["timetable_code"]))
+
+        async with prod.transaction():
+            if syl_params:
+                await prod.executemany(
+                    """
+                    INSERT INTO syllabi (course_section_id, year, academic_term, timetable_code)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (course_section_id, year, academic_term) DO UPDATE SET
+                      timetable_code = EXCLUDED.timetable_code
+                    """,
+                    syl_params
+                )
+        print(f"syllabi: {len(syl_params)}件 upsert, {skipped_syl}件スキップ（対応するcourse_sectionが本番に無い）")
+
+        # syllabi: 本番のみに存在する行を削除（reviewsを参照されないためFK制約上安全）
+        desired_syl_keys = {(p[0], p[1], p[2]) for p in syl_params}
+        prod_syl_rows = await prod.fetch("SELECT id, course_section_id, year, academic_term FROM syllabi")
+        orphan_syl = [
+            r for r in prod_syl_rows
+            if (r["course_section_id"], r["year"], r["academic_term"]) not in desired_syl_keys
+        ]
+        if orphan_syl:
+            async with prod.transaction():
+                await prod.executemany(
+                    "DELETE FROM syllabi WHERE id=$1", [(r["id"],) for r in orphan_syl]
+                )
+        print(f"syllabi: 本番のみに存在した{len(orphan_syl)}件を削除")
 
     finally:
         await dev.close()

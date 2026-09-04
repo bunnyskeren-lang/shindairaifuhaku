@@ -98,11 +98,12 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 
 **本番デプロイ時は、コードのプッシュに加えて必ず dev → prod のDB同期も行うこと。**
 
-同期対象（この4テーブルのみ）：
+同期対象（この5テーブルのみ）：
 - `display_orders`
 - `subjects`
 - `instructors`
 - `course_sections`
+- `syllabi`（2026-09-05に同期対象へ追加。それまでは「import_syllabus.py --env prod で別途管理」としていたが、実際には一度も本番投入されておらず本番の`syllabi`が0件のままLINE botのシラバスリンクが機能していなかった実害が発覚したため方針転換した。`course_sections`はdev/本番でidが別採番（`(subject_id, instructor_id)`の自然キーでUPSERTするため）なので、`syllabi.course_section_id`は単純コピー不可。(科目名, faculty, department, 担当教員名)の自然キー経由で本番側のcourse_section_idに変換してから同期する）
 
 `credit_requirements`/`subject_credit_categories`は2026-07-30の大規模リニューアル（My時間割・単位チェッカー・CAP制・必修科目自動登録の全廃止）でテーブル自体をDROPしたため、同期対象からも削除した。
 
@@ -114,7 +115,6 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 - `error_logs`
 - `push_subscriptions`
 - `richmenu_taps`
-- `syllabi`（シラバスデータ・import_syllabus.py で別途管理）
 
 同期方法：
 ```bash
