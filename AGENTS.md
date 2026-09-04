@@ -42,7 +42,7 @@
   - `git push origin dev:shindairaifuhaku-dev`（dev環境へのデプロイ）
   - `python setup_richmenu.py --env dev`（devリッチメニュー更新）
   - その他 dev サービス・dev DB のみに影響する操作全般
-- `git push` の push先が `origin main` または `origin shindairaifuhaku`（本番相当ブランチ）の場合は必ず確認を取ること
+- `git push` の push先が `origin shindairaifuhaku-prod`（本番ブランチ）の場合は必ず確認を取ること。**本番は `shindairaifuhaku-prod` のみで、`main` ブランチは本番として使わない**
 
 ## ブランチとRenderサービスの対応
 
