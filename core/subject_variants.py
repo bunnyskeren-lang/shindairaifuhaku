@@ -54,6 +54,14 @@ REMOTE_TAG = "（遠隔）"
 # 誤爆は無く、むしろ経済学部・海洋政策科学部・文学部にも同種の未統合パターンが
 # 存在していたことが分かり、副次的にそれらも統合されるようになった）。
 _VNUM = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])?(\d+|[Ⅰ-Ⅻ])((?:（遠隔）|（再履修）)*(?:[\s　]*（[^（）]+）)?)$')
+# 「環境形成科学演習1A/1B/1C・2A/2B/2C」のような、数字が先・アルファベットが末尾の
+# 二重枝分かれパターン用（_VNUMとは逆順）。2026-09-04にユーザー指示で「アルファベットは
+# 別科目、数字は表示統合」の恒常ルールとした（同日の「アルファベット+数字」順パターン
+# ([[letterをグループ化キーに追加]]した恒常ルール)と方向を揃えるため）。_vnum_match()は
+# 末尾アルファベットをbase名に結合して返す（letterは""扱い）ことで、既存のnum_bases/
+# num_variant_suffix()の仕組みをそのまま再利用できるようにしている
+# （例:「環境形成科学演習A(1/2)」「環境形成科学演習B(1/2)」）。
+_VNUM_TRAILING_LETTER = re.compile(r'^(.*?)[\s　]*(\d+|[Ⅰ-Ⅻ])([A-ZＡ-Ｚ])((?:（遠隔）|（再履修）)*(?:[\s　]*（[^（）]+）)?)$')
 _VSEM = re.compile(r'^(.*?セミナー)([A-Z]|\d+)(\([^)]+\))$')
 # 「ライフコースの心理学1（発達心理学1）」のような、括弧付きの旧名・別名にも末尾数字を
 # 持つパターン用。_VNUMは文字列末尾が直接数字/ローマ数字であることを前提にしており、
@@ -176,15 +184,26 @@ def variant_letter_in_suffix(kind: str) -> str:
 def _vnum_match(name: str) -> tuple[str, str, int, str, str] | None:
     name = _STUDENT_ID_SPLIT_RE.sub('', name)
     m = _VNUM.match(name)
-    if not m:
-        return None
-    base = m.group(1).strip()
-    letter = (m.group(2) or "").translate(_FULLWIDTH_UPPER)
-    raw = m.group(3)
-    tag = m.group(4) or ""
-    if raw in _ROMAN_VAL:
-        return base, letter, _ROMAN_VAL[raw], raw, tag
-    return base, letter, int(raw), raw, tag
+    if m:
+        base = m.group(1).strip()
+        letter = (m.group(2) or "").translate(_FULLWIDTH_UPPER)
+        raw = m.group(3)
+        tag = m.group(4) or ""
+        if raw in _ROMAN_VAL:
+            return base, letter, _ROMAN_VAL[raw], raw, tag
+        return base, letter, int(raw), raw, tag
+    m2 = _VNUM_TRAILING_LETTER.match(name)
+    if m2:
+        # 末尾アルファベットをbase名に結合して返す（letter=""）。A系列/B系列が
+        # base名の時点で別文字列になるため、num_basesのグループ化キー
+        # (base, group_letter, fac, dept, tag) は変更せずそのまま系列ごとに分離される。
+        base = m2.group(1).strip() + m2.group(3).translate(_FULLWIDTH_UPPER)
+        raw = m2.group(2)
+        tag = m2.group(4) or ""
+        if raw in _ROMAN_VAL:
+            return base, "", _ROMAN_VAL[raw], raw, tag
+        return base, "", int(raw), raw, tag
+    return None
 
 
 def _sk_of(raw: str) -> int:

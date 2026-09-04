@@ -75,6 +75,9 @@ async def verify_liff_id_token(id_token: str, request: Request | None = None) ->
     if client is None:
         # startup()未実行（テスト等）の場合のフォールバック
         client = httpx.AsyncClient(timeout=3.0)
+    # 全client_id試行後もLINE側の実際の拒否理由がerror_logsから追えなかったため、
+    # 最後に得られた失敗理由（LINEのレスポンス本文 or 通信エラー）を保持しログに残す
+    last_failure = "unknown"
     for client_id in LIFF_CHANNEL_IDS:
         resp = None
         # タイムアウト・接続エラーなど一時的な障害のみ1回だけ再試行する。
@@ -86,7 +89,8 @@ async def verify_liff_id_token(id_token: str, request: Request | None = None) ->
                     data={"id_token": id_token, "client_id": client_id},
                 )
                 break
-            except httpx.HTTPError:
+            except httpx.HTTPError as exc:
+                last_failure = f"client_id={client_id} {type(exc).__name__}: {exc}"
                 if attempt == 1:
                     resp = None
                     break
@@ -101,9 +105,11 @@ async def verify_liff_id_token(id_token: str, request: Request | None = None) ->
                             del _verify_cache[key]
                 _verify_cache[id_token] = (sub, time.monotonic())
                 return sub
+        if resp is not None:
+            last_failure = f"client_id={client_id} status={resp.status_code} body={resp.text[:200]}"
     if request is not None:
         await save_error_log(
-            RuntimeError("LIFF ID token verification failed"),
+            RuntimeError(f"LIFF ID token verification failed: {last_failure}"),
             action=f"liff_auth_failed:{client_ip(request)}:{request.url.path}",
         )
     return None
