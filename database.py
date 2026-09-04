@@ -3,7 +3,6 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
 
 from core.db_ssl import make_ssl_context
 
@@ -22,32 +21,29 @@ ssl_ctx = make_ssl_context()
 # バックエンドに乗り合わせると番号が衝突し、DuplicatePreparedStatementErrorで
 # クエリ自体が失敗する（2026-08-31、devをsession mode 5432→transaction mode 6543へ
 # 切り替えた際に発生を確認。SQLAlchemy公式ドキュメントに同名の既知の非互換性として記載あり）。
-# 対処はSQLAlchemy公式ガイド通り、(1) prepared statement名を都度ランダム化して衝突を避け、
-# (2) SQLAlchemy自身の接続プールは持たずNullPoolにしてPgBouncer側に物理接続の多重化を
-# 任せる（transactionモードは元々そのために存在するため、二重にプールする必要がない）。
-# 直接接続（本番のport 5432等、プーラーを経由しない構成）ではこの問題が起きないため、
-# 従来通りSQLAlchemy側のプールを使う
+# 対処は(1) prepared statement名を都度ランダム化して衝突を避けること。
 _is_pgbouncer_transaction_mode = ":6543/" in _url
 
 _connect_args = {"ssl": ssl_ctx, "command_timeout": 30, "statement_cache_size": 0}
 if _is_pgbouncer_transaction_mode:
     _connect_args["prepared_statement_name_func"] = lambda: f"__asyncpg_{uuid4()}__"
 
-_engine_kwargs: dict = {"echo": False, "connect_args": _connect_args}
-if _is_pgbouncer_transaction_mode:
-    _engine_kwargs["poolclass"] = NullPool
-else:
-    _engine_kwargs.update(
-        # 修正理由: pool_pre_pingはチェックアウト毎にSELECT 1を1往復追加するため、
-        # Render(Singapore)⇄Supabase(東京/大阪)間のようにDB往復のコストが高い構成では
-        # クエリのレイテンシを実質2倍にしていた。pool_recycle=270で定期的に接続を
-        # 更新しているため、古い接続を掴むリスクは残るがpre_pingほど高頻度ではない
-        pool_recycle=270,
-        # Supabase pooler側の上限に合わせて調整できるよう環境変数で上書き可能にする
-        # （既定値はSupabase無料/Starterプランのpooler接続上限を踏まえた控えめな値）
-        pool_size=int(os.environ.get("DB_POOL_SIZE", "10")),
-        max_overflow=int(os.environ.get("DB_POOL_MAX_OVERFLOW", "20")),
-    )
+_engine_kwargs: dict = {
+    "echo": False,
+    "connect_args": _connect_args,
+    # 修正理由(2026-09-04): 従来はtransactionモード側だけNullPool（毎リクエスト新規TCP+TLS
+    # ハンドシェイク）にしていた。Render(Singapore)⇄Supabase(東京/大阪)間のハンドシェイクが
+    # 1回あたり数百ms〜1秒近くかかり、/api/course/{id}が4秒台になる実害の主因になっていた。
+    # prepared_statement_name_funcで名前衝突自体は解消済みなので、NullPoolにする理由は
+    # 「二重にプールしない」という設計上の綺麗さだけで、EMAXCONNSESSION
+    # ([[project_dev_db_pooler_session_mode_fix_20260831]]参照、こちらはsession modeの
+    # 接続数上限が原因でtransactionモードには適用されない)の再発リスクは無い。
+    # そのためtransactionモードでもSQLAlchemy側で小さめのプールを持ち、物理接続を
+    # 使い回すことでハンドシェイクを毎回払わずに済むようにする。
+    "pool_recycle": 270,
+    "pool_size": int(os.environ.get("DB_POOL_SIZE", "5" if _is_pgbouncer_transaction_mode else "10")),
+    "max_overflow": int(os.environ.get("DB_POOL_MAX_OVERFLOW", "10" if _is_pgbouncer_transaction_mode else "20")),
+}
 
 engine = create_async_engine(_url, **_engine_kwargs)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
