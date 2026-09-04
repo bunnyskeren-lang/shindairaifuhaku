@@ -17,6 +17,7 @@ from linebot.v3.messaging import (
     URIAction,
 )
 from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
+from sqlalchemy import select
 
 from core import cache, line_client, moderation
 from core.activity_log import save_error_log, save_log_bg
@@ -60,11 +61,24 @@ from line_bot.flex_builders import (
     make_review_badge_legend,
     make_search_result_card,
 )
-from models import UserProfile
+from models import SubjectUnlock, UserProfile
 
 
 async def _user_banned(user_id: str) -> bool:
     return await moderation.is_banned(user_id)
+
+
+async def _get_unlocked_subject_ids(user_id: str) -> set[int]:
+    """指定ユーザーがレビュー閲覧権を消費して解除済みのsubject_id集合を返す。
+    ユーザー個別のデータなのでキャッシュせず毎回引く（subject_unlocksはline_user_id
+    始まりの複合主キーのため軽量）。"""
+    if not user_id:
+        return set()
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(SubjectUnlock.subject_id).where(SubjectUnlock.line_user_id == user_id)
+        )).scalars().all()
+    return set(rows)
 
 
 async def _registration_incomplete(user_id: str) -> bool:
@@ -182,12 +196,16 @@ def _build_alpha_split_menu(rows: list, category: str, classification: str,
 
 
 async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
-                                 breadcrumb: str = "", reading_label: str = "", reading_count: int = 0) -> list:
+                                 breadcrumb: str = "", reading_label: str = "", reading_count: int = 0,
+                                 unlocked_names: frozenset = frozenset()) -> list:
     """絞り込み・ソート済みのSubject行から、末尾バリアント統合・シラバス/レビューURL付与済みの
     FlexBubble一覧を組み立てる（8バブル単位のカルーセル分割は呼び出し側で行う）。
     breadcrumb/reading_label/reading_countはヘッダーの現在地表示（パンくず・よみがな
     範囲チップ）に使う。よみがな絞り込みを経由していない場合reading_labelは空文字になり
-    チップは表示されない（2026-09-03、科目一覧カードUI改善）。"""
+    チップは表示されない（2026-09-03、科目一覧カードUI改善）。
+    unlocked_namesはリクエスト元ユーザーが解除済みの科目名集合（ユーザー個別、既定は空）。
+    非空の場合のみ呼び出し側でキャッシュを迂回して都度組み立てる想定
+    （2026-09-04、解除済み科目の可視化対応）。"""
     # バリアント判定・束ね方の実体はcore.subject_variants.compute_variant_bases()に一本化済み
     # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
     names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows
@@ -293,34 +311,42 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         main_suffix, paren_base, paren_suffix = kind.split(":", 1)[1].split("|", 2)
         return main_suffix, paren_base, paren_suffix
 
-    def _entry_has_review(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> bool:
+    def _entry_any_in(name: str, kind: str, fd: tuple[str, str], names: set) -> bool:
+        """kindが表すバリアントグループ内のいずれかの科目名がnamesに含まれるか判定する
+        共通ロジック（レビュー有無・解除済み判定の両方で使う、2026-09-04）。"""
         if kind == "single":
-            return name in reviewed_names
+            return name in names
         if kind.startswith("variant:"):
             suffixes = kind.split(":", 1)[1].split("/")
-            if any(name + s in reviewed_names for s in suffixes):
+            if any(name + s in names for s in suffixes):
                 return True
             key = (name, fd[0], fd[1])
             if key in _sem_bases:
-                return any(n in reviewed_names for n, _ in _sem_bases[key])
+                return any(n in names for n, _ in _sem_bases[key])
             return False
         if kind.startswith("numvariant:"):
             key = _resolve_num_key(name, kind, fd)
             if key in _num_bases:
-                return any(n in reviewed_names for n, _, _, _, _ in _num_bases[key])
+                return any(n in names for n, _, _, _, _ in _num_bases[key])
             return False
         if kind.startswith("parennumvariant:"):
             _main_suffix, paren_base, _paren_suffix = _parse_parennum_kind(kind)
             key = (name, paren_base, fd[0], fd[1], variant_tag_in_suffix(kind))
             if key in _paren_num_bases:
-                return any(n in reviewed_names for n, _, _, _, _, _ in _paren_num_bases[key])
+                return any(n in names for n, _, _, _, _, _ in _paren_num_bases[key])
             return False
         if kind.startswith("lettervariant:"):
             key = (name, fd[0], fd[1], variant_tag_in_suffix(kind))
             if key in _letter_only_bases:
-                return any(n in reviewed_names for n, _, _ in _letter_only_bases[key])
+                return any(n in names for n, _, _ in _letter_only_bases[key])
             return False
         return False
+
+    def _entry_has_review(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> bool:
+        return _entry_any_in(name, kind, fd, reviewed_names)
+
+    def _entry_is_unlocked(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> bool:
+        return _entry_any_in(name, kind, fd, unlocked_names)
 
     def _group_syllabus_url(name: str, kind: str, fd: tuple[str, str] = ("", "")) -> str:
         # 統合表示（variant/numvariant）はbase名がそのままSubject.nameと一致しないため、
@@ -394,6 +420,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
 
     def _make_bubble(classification: str, entries: list) -> FlexBubble:
         btn_contents = []
+        any_unlocked_in_bubble = False
         for idx, (name, kind, fac, dept) in enumerate(entries):
             fd = (fac, dept)
             if kind.startswith("variant:"):
@@ -429,6 +456,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             else:
                 display = name
             has_review = _entry_has_review(name, kind, fd)
+            is_unlocked = _entry_is_unlocked(name, kind, fd)
+            if is_unlocked:
+                any_unlocked_in_bubble = True
             syl_url = _group_syllabus_url(name, kind, fd)
             has_content = has_review or bool(syl_url)
             text_color = "#0f172a" if has_content else "#94a3b8"
@@ -471,6 +501,11 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 pills.append(_link_text("📝", "レビュー", "#4338ca", liff_url))
             if syl_url:
                 pills.append(_link_text("📄", "シラバス", "#047857", syl_url))
+            if is_unlocked:
+                # レビュー閲覧権を消費して解除済みの科目を示すマーク（タップ動作は無く表示のみ）。
+                # ✓バッジ（誰かがレビュー投稿済みかどうか）とは別軸の情報なので、既存のバッジ色
+                # （インディゴ）とは別色にして混同を避ける（2026-09-04）
+                pills.append(FlexText(text="🔓解除済み", size="xs", weight="bold", color="#b45309"))
 
             row_children = [
                 _status_badge(has_review),
@@ -538,6 +573,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         # ✓バッジの意味がバブル単体では分からないというUX指摘を受け、系統/学部ブラウズ等と
         # 同じ凡例（make_review_badge_legend）を必ず添える（2026-09-03）。
         footer_contents = [make_review_badge_legend()]
+        if any_unlocked_in_bubble:
+            footer_contents.append(FlexText(text="🔓解除済み＝レビュー閲覧権を消費して解除済みの科目",
+                                             size="xxs", color="#94a3b8"))
         if home_category:
             footer_contents.append(FlexBox(
                 layout="vertical", justify_content="center", align_items="center",
@@ -593,10 +631,16 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
 
 
 async def handle_course_list(category: str = "", classification: str = "", faculty: str = "",
-                              department: str = "", reading_row: str = "") -> list:
+                              department: str = "", reading_row: str = "", line_user_id: str = "") -> list:
     _cl_key = f"{category}:{classification}:{faculty}:{department}:{reading_row}"
+    # 解除済み科目バッジ（line_user_id依存）はユーザー個別の情報なので、通常の全ユーザー共通
+    # キャッシュ（_cl_key）とは相性が悪い。解除済みが1件もないユーザーが大半のため、
+    # unlocked_idsが空の間は従来どおりキャッシュを使い、非空のときだけこのリクエストに限り
+    # キャッシュを迂回して都度組み立てる（共有キャッシュへは書き込まない）
+    # （2026-09-04、解除済み科目の可視化対応）
+    unlocked_ids = await _get_unlocked_subject_ids(line_user_id)
     _cached = cache.get_course_list_cache(_cl_key)
-    if _cached is not None:
+    if _cached is not None and not unlocked_ids:
         return _cached
 
     cls_map, (_, _all_c), reviewed_names = await asyncio.gather(
@@ -634,6 +678,12 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             reading_count = len(rows)
 
     rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
+    unlocked_names = frozenset(c.name for c in rows if c.id in unlocked_ids) if unlocked_ids else frozenset()
+
+    if _cached is not None and not unlocked_names:
+        # unlocked_idsは非空だったが、この絞り込み範囲(rows)には該当が無かった → 個人化不要、
+        # 通常どおり共有キャッシュを返してよい
+        return _cached
 
     if not rows:
         if faculty:
@@ -650,6 +700,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
         rows, reviewed_names, _cls_sort,
         breadcrumb=_breadcrumb(category, faculty, department, classification),
         reading_label=reading_label, reading_count=reading_count,
+        unlocked_names=unlocked_names,
     )
 
     alt = f"📚 {category}一覧" if category else "📚 科目一覧"
@@ -663,7 +714,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             result.append(FlexMessage(alt_text=alt, contents=chunk[0]))
         else:
             result.append(FlexMessage(alt_text=alt, contents=FlexCarousel(contents=chunk)))
-    cache.set_course_list_cache(_cl_key, result)
+    if not unlocked_names:
+        cache.set_course_list_cache(_cl_key, result)
     return result
 
 
@@ -759,10 +811,14 @@ async def _handle_category_entry() -> list:
     return result
 
 
-async def _handle_kyoyo_menu() -> list:
+async def _handle_kyoyo_menu(user_id: str = "") -> list:
     _menu_key = "menu:教養"
+    # 解除済みバッジはユーザー個別のため、解除済みが1件でもあるユーザーはこのメニューレベルの
+    # 共有キャッシュを迂回する（fallback先のhandle_course_listで個別に反映される。
+    # 2026-09-04、解除済み科目の可視化対応）
+    unlocked_ids = await _get_unlocked_subject_ids(user_id)
     _cached = cache.get_course_list_cache(_menu_key)
-    if _cached is not None:
+    if _cached is not None and not unlocked_ids:
         return _cached
     cls_map = await cache.get_cls_order_map()
     _cls_sort = make_cls_sort(cls_map)
@@ -777,16 +833,18 @@ async def _handle_kyoyo_menu() -> list:
         counts = Counter(c.classification for c in edu_courses)
         items = [(cls, _make_nav_data(category="教養", classification=cls), counts[cls]) for cls in clss]
         result = [make_classification_grid_flex("教養", items, reviewed_cls)]
-    else:
-        result = await handle_course_list(category="教養")
-    cache.set_course_list_cache(_menu_key, result)
-    return result
+        cache.set_course_list_cache(_menu_key, result)
+        return result
+    # 分類が1つも無い（登録科目0件）場合の即時一覧フォールバック。個別化されうるので
+    # メニュー単位のキャッシュには書き込まない（handle_course_list側で自身のキャッシュを管理）
+    return await handle_course_list(category="教養", line_user_id=user_id)
 
 
-async def _handle_senmon_menu() -> list:
+async def _handle_senmon_menu(user_id: str = "") -> list:
     _menu_key = "menu:専門"
+    unlocked_ids = await _get_unlocked_subject_ids(user_id)
     _cached = cache.get_course_list_cache(_menu_key)
-    if _cached is not None:
+    if _cached is not None and not unlocked_ids:
         return _cached
     reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
         cache.get_reviewed_cached(),
@@ -824,16 +882,16 @@ async def _handle_senmon_menu() -> list:
         items = [(fac, _make_nav_data(category="専門", faculty=fac), fac_counts[fac]) for fac in faculties_present] + \
                 [(cls, _make_nav_data(category="専門", classification=cls), cls_counts[cls]) for cls in other_clss]
         result = [make_classification_grid_flex("専門", items, display_reviewed)]
-    else:
-        result = await handle_course_list(category="専門")
-    cache.set_course_list_cache(_menu_key, result)
-    return result
+        cache.set_course_list_cache(_menu_key, result)
+        return result
+    return await handle_course_list(category="専門", line_user_id=user_id)
 
 
-async def _handle_faculty_menu(t: str) -> list:
+async def _handle_faculty_menu(t: str, user_id: str = "") -> list:
     _menu_key = f"menu:fac:{t}"
+    unlocked_ids = await _get_unlocked_subject_ids(user_id)
     _cached = cache.get_course_list_cache(_menu_key)
-    if _cached is not None:
+    if _cached is not None and not unlocked_ids:
         return _cached
     reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
         cache.get_reviewed_cached(),
@@ -890,8 +948,10 @@ async def _handle_faculty_menu(t: str) -> list:
             back_data="専門",
         )]
     else:
-        # 学科・専攻も複数分類も無い学部 → 即座に科目一覧（件数が多ければ内部で50音行選択に切替）
-        result = await handle_course_list(category="専門", classification=next(iter(cls_values)))
+        # 学科・専攻も複数分類も無い学部 → 即座に科目一覧（件数が多ければ内部で50音行選択に切替）。
+        # 個別化されうるのでメニュー単位のキャッシュには書き込まない
+        return await handle_course_list(category="専門", classification=next(iter(cls_values)),
+                                         line_user_id=user_id)
     cache.set_course_list_cache(_menu_key, result)
     return result
 
@@ -993,7 +1053,7 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await _handle_category_entry()
 
     if t in ["教養", "教養科目", "教養一覧"]:
-        return await _handle_kyoyo_menu()
+        return await _handle_kyoyo_menu(user_id)
 
     # 系統/学部タップ後のドリルダウン（統一postbackデータ形式、2026-09-02〜）。
     # (category, faculty, department, classification) の4要素から、どの粒度の画面へ
@@ -1003,13 +1063,15 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if _nav is not None:
         _cat, _fac, _dept, _cls = _nav
         if _dept:
-            return await handle_course_list(category="専門", faculty=_fac, department=_dept, reading_row=_reading_row)
+            return await handle_course_list(category="専門", faculty=_fac, department=_dept,
+                                             reading_row=_reading_row, line_user_id=user_id)
         if _cls:
-            return await handle_course_list(category=_cat, classification=_cls, reading_row=_reading_row)
+            return await handle_course_list(category=_cat, classification=_cls,
+                                             reading_row=_reading_row, line_user_id=user_id)
         if _fac:
-            return await _handle_faculty_menu(_fac)
+            return await _handle_faculty_menu(_fac, user_id)
         if _cat:
-            return await handle_course_list(category=_cat, reading_row=_reading_row)
+            return await handle_course_list(category=_cat, reading_row=_reading_row, line_user_id=user_id)
 
     # ここから下は旧形式（"教養:"/"専門:"/"専門F:"/分類名そのまま）のpostbackデータ用の
     # 後方互換フォールバック。新規生成するボタンはすべて上のnav:形式に統一済みだが、
@@ -1017,30 +1079,33 @@ async def handle_message(text: str, user_id: str = "") -> list:
     # 解釈だけは残す（新規追加時にこの節を増やす必要はない）。
     if t.startswith("教養:"):
         cls = t[len("教養:"):]
-        return await handle_course_list(category="教養", classification=cls, reading_row=_reading_row)
+        return await handle_course_list(category="教養", classification=cls,
+                                         reading_row=_reading_row, line_user_id=user_id)
 
     if t.startswith("専門:"):
         cls = t[len("専門:"):]
-        return await handle_course_list(category="専門", classification=cls, reading_row=_reading_row)
+        return await handle_course_list(category="専門", classification=cls,
+                                         reading_row=_reading_row, line_user_id=user_id)
 
     if t.startswith("専門F:"):
         fac_dept = t[len("専門F:"):]
         fac, _, dept = fac_dept.partition("|")
-        return await handle_course_list(category="専門", faculty=fac, department=dept, reading_row=_reading_row)
+        return await handle_course_list(category="専門", faculty=fac, department=dept,
+                                         reading_row=_reading_row, line_user_id=user_id)
 
     # 分類名の直接タップ（例：「教養(社会)」、旧形式）
     if t in await cache.get_cls_set():
-        return await handle_course_list(classification=t, reading_row=_reading_row)
+        return await handle_course_list(classification=t, reading_row=_reading_row, line_user_id=user_id)
 
     if t == "専門comingsoon":
         return [TextMessage(text="🚧 専門科目一覧は現在準備中です。\nもうしばらくお待ちください！")]
 
     if t in ["専門科目", "専門", "専門一覧"]:
-        return await _handle_senmon_menu()
+        return await _handle_senmon_menu(user_id)
 
     # 学部名タップ（例："経営学部"、旧形式。現在は生成しないが後方互換のため残す）
     if t in await cache.get_faculty_order():
-        return await _handle_faculty_menu(t)
+        return await _handle_faculty_menu(t, user_id)
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
         url = make_review_liff_url(user_id=user_id)
