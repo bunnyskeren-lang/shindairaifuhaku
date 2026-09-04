@@ -6,12 +6,49 @@
   python -X utf8 fetch_syllabus_info.py --env dev --force   # 既取得分も上書き
 """
 import asyncio
+import datetime
 import re
 import time
 import urllib.request
 import urllib.error
 
 from _env import load_env
+
+# クォーターの開催（開始）月。境界の月は「休み明けに次に開催されるクォーター」を
+# 現在最も参照価値が高いものとして扱う（例: 8-9月の夏休み中は次の第3クォーターを優先）
+_QUARTER_TERMS = ["第1クォーター", "第2クォーター", "第3クォーター", "第4クォーター"]
+_MONTH_TO_QUARTER_IDX = {
+    1: 3, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1,
+    8: 2, 9: 2, 10: 2, 11: 2, 12: 3,
+}
+
+
+def current_quarter_priority(today: datetime.date | None = None) -> list[str]:
+    """本日時点で最も参照価値が高い（開催中/次に開催される）クォーターを先頭に、
+    第1〜第4クォーターを循環的にローテーションした優先順のリストを返す。
+    年度が変わっても再計算だけで自動的に追従する（ハードコードした年度は無し）。
+    例: 2026-09-04（夏休み中、次は第3Q）→ [第3Q, 第4Q, 第1Q, 第2Q]
+        2027-04-05（新年度開始、第1Qが開催中）→ [第1Q, 第2Q, 第3Q, 第4Q]"""
+    today = today or datetime.date.today()
+    idx = _MONTH_TO_QUARTER_IDX[today.month]
+    return _QUARTER_TERMS[idx:] + _QUARTER_TERMS[:idx]
+
+
+def pick_priority_syllabus(syllabi: list, quarter_order: list[str]):
+    """同一科目に複数クォーター/年度のSyllabusがある場合、最新年度を優先し、
+    同年度内ではcurrent_quarter_priority()の順で最も優先度の高い1件を返す。
+    クォーター以外の開講区分（前期/後期/通年/集中等）はローテーション対象外のため最後尾扱い。"""
+    if not syllabi:
+        return None
+
+    def key(s):
+        try:
+            term_rank = quarter_order.index(s.academic_term)
+        except ValueError:
+            term_rank = len(quarter_order)
+        return (-s.year, term_rank)
+
+    return min(syllabi, key=key)
 
 SYLLABUS_BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.html"
 
@@ -165,16 +202,18 @@ async def run_credits(dry_run: bool = False, force: bool = False):
 
     print(f"単位数取得対象: {len(subjects)}件")
     counts = {"updated": 0, "skipped": 0, "not_found": 0}
+    quarter_order = current_quarter_priority()
 
     async def process_subject(session, subj):
-        syl = (await session.execute(
+        syllabi = (await session.execute(
             select(Syllabus)
             .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
             .where(
                 CourseSection.subject_id == subj.id,
                 Syllabus.timetable_code.isnot(None),
-            ).limit(1)
-        )).scalar_one_or_none()
+            )
+        )).scalars().all()
+        syl = pick_priority_syllabus(syllabi, quarter_order)
         url = make_syllabus_url(syl.timetable_code, f"{subj.faculty or ''}{subj.department or ''}") if syl else None
         if not url:
             counts["skipped"] += 1
@@ -244,16 +283,18 @@ async def run_senmon_classification(dry_run: bool = False, force: bool = False):
     print(f"群判定対象: {len(subjects)}件")
     counts = {"updated": 0, "review": 0, "skipped": 0, "not_found": 0}
     review_list: list[str] = []
+    quarter_order = current_quarter_priority()
 
     async def process_subject(session, subj):
-        syl = (await session.execute(
+        syllabi = (await session.execute(
             select(Syllabus)
             .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
             .where(
                 CourseSection.subject_id == subj.id,
                 Syllabus.timetable_code.isnot(None),
-            ).limit(1)
-        )).scalar_one_or_none()
+            )
+        )).scalars().all()
+        syl = pick_priority_syllabus(syllabi, quarter_order)
         url = make_syllabus_url(syl.timetable_code, f"{subj.faculty or ''}{subj.department or ''}") if syl else None
         if not url:
             counts["skipped"] += 1
