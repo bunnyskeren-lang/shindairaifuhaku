@@ -694,12 +694,26 @@ function deleteCourse(id, btn) {
           const row = document.getElementById(prefix + id);
           if (row) row.remove();
         });
+        showActionToast('科目を削除しました', '元に戻す', undoLastDelete);
       } else if (data.error === 'has_reviews') {
         btn.disabled = false;
         showErrorToast('レビューが紐づいているため削除できません');
       }
     }).catch(function() { btn.disabled = false; showErrorToast(); });
   });
+}
+
+function undoLastDelete() {
+  fetchJson('/admin/courses/undo', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  }).then(function(data) {
+    if (data.ok) {
+      location.reload();
+    } else {
+      showErrorToast('元に戻せませんでした（時間切れの可能性があります）');
+    }
+  }).catch(function() { showErrorToast(); });
 }
 
 function deleteGroup(key, btn) {
@@ -720,6 +734,7 @@ function deleteGroup(key, btn) {
           const row = document.getElementById(prefix + key);
           if (row) row.remove();
         });
+        showActionToast('科目（' + g.ids.length + '件）を削除しました', '元に戻す', undoLastDelete);
       } else if (data.error === 'has_reviews') {
         btn.disabled = false;
         showErrorToast('レビューが紐づいているため削除できません');

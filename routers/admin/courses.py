@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import case, func, or_, select
 
-from core import cache
+from core import cache, undo
 from core.config import escape_like, make_cls_sort, make_syllabus_url, reading, syllabus_department_key
 from core.security import check_admin
 from core.subject_variants import CLASSIFICATION_MERGE_EXCLUDED, compute_variant_display_groups
@@ -437,6 +437,41 @@ async def admin_courses_update(
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
+async def _snapshot_subject(session, course: Subject) -> dict:
+    """「元に戻す」用に、削除直前の科目1件分の状態（本体+セクション+シラバス）を保存する。
+    reviews/subject_unlocksは復元対象外（reviews紐づき科目はそもそも削除がブロックされるため
+    喪失しない。subject_unlocksの解除記録が失われるのは許容する）。"""
+    sections = (await session.execute(
+        select(CourseSection).where(CourseSection.subject_id == course.id)
+    )).scalars().all()
+    section_snapshots = []
+    for sec in sections:
+        syllabi = (await session.execute(
+            select(Syllabus).where(Syllabus.course_section_id == sec.id)
+        )).scalars().all()
+        section_snapshots.append({
+            "instructor_id": sec.instructor_id,
+            "syllabi": [
+                {"year": s.year, "academic_term": s.academic_term, "timetable_code": s.timetable_code}
+                for s in syllabi
+            ],
+        })
+    return {
+        "subject": {
+            "name": course.name,
+            "reading": course.reading,
+            "faculty": course.faculty,
+            "department": course.department,
+            "classification": course.classification,
+            "category": course.category,
+            "sort_order": course.sort_order,
+            "term_type": course.term_type,
+            "credits": course.credits,
+        },
+        "sections": section_snapshots,
+    }
+
+
 @router.post("/admin/courses/delete/{course_id}")
 async def admin_courses_delete(course_id: int, request: Request, _: str = Depends(check_admin)):
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -456,13 +491,48 @@ async def admin_courses_delete(course_id: int, request: Request, _: str = Depend
                     if is_ajax:
                         return JSONResponse({"ok": False, "error": "has_reviews"})
                     return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
+            snapshot = await _snapshot_subject(session, course)
             await session.delete(course)
             await session.commit()
+            undo.set_last_deleted([snapshot])
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
     if is_ajax:
         return JSONResponse({"ok": True})
     return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@router.post("/admin/courses/undo")
+async def admin_courses_undo(_: str = Depends(check_admin)):
+    """直前に削除した科目（単独/統合表示の一括削除どちらも）を1回だけ元に戻す。"""
+    snapshots = undo.pop_last_deleted()
+    if not snapshots:
+        return JSONResponse({"ok": False, "error": "nothing_to_undo"})
+    async with AsyncSessionLocal() as session:
+        for snap in snapshots:
+            new_course = Subject(**snap["subject"])
+            session.add(new_course)
+            await session.flush()
+            for sec_snap in snap["sections"]:
+                instructor_exists = (await session.execute(
+                    select(Instructor.id).where(Instructor.id == sec_snap["instructor_id"])
+                )).scalar_one_or_none()
+                if instructor_exists is None:
+                    continue
+                new_section = CourseSection(subject_id=new_course.id, instructor_id=sec_snap["instructor_id"])
+                session.add(new_section)
+                await session.flush()
+                for syl in sec_snap["syllabi"]:
+                    session.add(Syllabus(
+                        course_section_id=new_section.id,
+                        year=syl["year"],
+                        academic_term=syl["academic_term"],
+                        timetable_code=syl["timetable_code"],
+                    ))
+        await session.commit()
+    cache.invalidate_courses_cache()
+    cache.invalidate_cls_caches()
+    return JSONResponse({"ok": True})
 
 
 def _parse_group_ids(ids: str) -> list[int]:
@@ -523,9 +593,11 @@ async def admin_courses_group_delete(request: Request, _: str = Depends(check_ad
         member_courses = (await session.execute(
             select(Subject).where(Subject.id.in_(id_list))
         )).scalars().all()
+        snapshots = [await _snapshot_subject(session, course) for course in member_courses]
         for course in member_courses:
             await session.delete(course)
         await session.commit()
+        undo.set_last_deleted(snapshots)
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
     if is_ajax:
