@@ -17,7 +17,6 @@ from linebot.v3.messaging import (
     URIAction,
 )
 from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
-from sqlalchemy import select
 
 from core import cache, line_client, moderation
 from core.activity_log import save_error_log, save_log_bg
@@ -59,7 +58,7 @@ from line_bot.flex_builders import (
     make_review_badge_legend,
     make_search_result_card,
 )
-from models import CourseSection, Review, ReviewStatus, Subject, UserProfile
+from models import UserProfile
 
 
 async def _user_banned(user_id: str) -> bool:
