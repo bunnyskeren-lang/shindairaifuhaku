@@ -401,9 +401,17 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             decoration="underline", action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
         )
 
-    def _status_badge(has_review: bool) -> FlexBox:
+    def _status_badge(has_review: bool, is_unlocked: bool = False) -> FlexBox:
         # ●○の点だけでは判別しづらいというUX指摘を受け、系統/学部ブラウズ等と同じ
-        # チェックマークバッジ（make_review_badge相当）に統一する（2026-09-03）
+        # チェックマークバッジ（make_review_badge相当）に統一する（2026-09-03）。
+        # 解除済み科目は✓の代わりに🔓を表示する（2026-09-04、優先表示。説明は不要とのユーザー指示）
+        if is_unlocked:
+            return FlexBox(
+                layout="vertical", width="16px", height="16px", flex=0,
+                corner_radius="999px", background_color="#4f46e5",
+                justify_content="center", align_items="center",
+                contents=[FlexText(text="🔓", size="xxs", color="#ffffff", weight="bold", align="center")],
+            )
         if has_review:
             return FlexBox(
                 layout="vertical", width="16px", height="16px", flex=0,
@@ -420,7 +428,6 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
 
     def _make_bubble(classification: str, entries: list) -> FlexBubble:
         btn_contents = []
-        any_unlocked_in_bubble = False
         for idx, (name, kind, fac, dept) in enumerate(entries):
             fd = (fac, dept)
             if kind.startswith("variant:"):
@@ -457,8 +464,6 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 display = name
             has_review = _entry_has_review(name, kind, fd)
             is_unlocked = _entry_is_unlocked(name, kind, fd)
-            if is_unlocked:
-                any_unlocked_in_bubble = True
             syl_url = _group_syllabus_url(name, kind, fd)
             has_content = has_review or bool(syl_url)
             text_color = "#0f172a" if has_content else "#94a3b8"
@@ -501,14 +506,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 pills.append(_link_text("📝", "レビュー", "#4338ca", liff_url))
             if syl_url:
                 pills.append(_link_text("📄", "シラバス", "#047857", syl_url))
-            if is_unlocked:
-                # レビュー閲覧権を消費して解除済みの科目を示すマーク（タップ動作は無く表示のみ）。
-                # ✓バッジ（誰かがレビュー投稿済みかどうか）とは別軸の情報なので、既存のバッジ色
-                # （インディゴ）とは別色にして混同を避ける（2026-09-04）
-                pills.append(FlexText(text="🔓解除済み", size="xs", weight="bold", color="#b45309"))
 
             row_children = [
-                _status_badge(has_review),
+                _status_badge(has_review, is_unlocked),
                 FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1,
                           weight="bold" if has_review else "regular"),
             ]
@@ -573,9 +573,6 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         # ✓バッジの意味がバブル単体では分からないというUX指摘を受け、系統/学部ブラウズ等と
         # 同じ凡例（make_review_badge_legend）を必ず添える（2026-09-03）。
         footer_contents = [make_review_badge_legend()]
-        if any_unlocked_in_bubble:
-            footer_contents.append(FlexText(text="🔓解除済み＝レビュー閲覧権を消費して解除済みの科目",
-                                             size="xxs", color="#94a3b8"))
         if home_category:
             footer_contents.append(FlexBox(
                 layout="vertical", justify_content="center", align_items="center",
@@ -587,7 +584,9 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             ))
         footer = FlexBox(layout="vertical", spacing="sm", padding_all="md", contents=footer_contents)
         return FlexBubble(
-            size="kilo",
+            # 「レビュー」「シラバス」の下線テキストリンクが折り返して見切れるため横幅を拡大
+            # （2026-09-04）。カルーセル内バブルはgiga不可のためmegaが最大
+            size="mega",
             header=FlexBox(
                 layout="vertical",
                 contents=header_contents,
