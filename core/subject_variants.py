@@ -152,6 +152,35 @@ LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS = frozenset({
 })
 
 
+# 海洋政策科学部「経済学基礎論」「経営学基礎論」等、科目名自体が「N-M」形式で枝分かれし、
+# かつ枝ごとに（海洋ガバナンス領域）タグの有無や「1-(1/2)」のような表記揺れが不揃いなケース
+# （2026-09-04、ユーザー指示）。_VNUM系の正規表現はタグ完全一致を要求するため機械的には
+# 統合できず、個別にグループを列挙する手動オーバーライド方式にした。表示のみの統合
+# （LINE bot科目一覧・管理画面科目一覧のみ）で、compute_variant_groups()（レビュー投稿・
+# 閲覧チケット共有等の機能面）には一切適用しない（LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS
+# と同じ設計方針）。グループ内の全科目名がその時点の対象リストに揃っていない場合は
+# 適用しない（一部科目が別分類にフィルタされて渡された場合等の誤爆防止）。
+MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
+    {
+        "names": (
+            "経済学基礎論1-(1/2)(海洋ガバナンス領域)",
+            "経済学基礎論2-1(海洋ガバナンス領域)",
+            "経済学基礎論2-2（海洋ガバナンス領域）",
+        ),
+        "label": "経済学基礎論(1-1,1-2,2-1,2-2)",
+    },
+    {
+        "names": (
+            "経営学基礎論1-1(海洋ガバナンス領域)",
+            "経営学基礎論1-2（海洋ガバナンス領域）",
+            "経営学基礎論2-1（海洋ガバナンス領域）",
+            "経営学基礎論2-2",
+        ),
+        "label": "経営学基礎論(1-1,1-2,2-1,2-2)",
+    },
+)
+
+
 def num_variant_suffix(members: list[tuple[str, str, int, str, str]]) -> str:
     """num_basesの1グループ分のmembersから、表示用の接尾辞文字列（例:"1/2/3/4"）を組み立てる。
     学番分割クラス（_STUDENT_ID_SPLIT_RE）はベース科目と同じ(letter, disp, tag)に潰れて
@@ -598,5 +627,17 @@ def compute_variant_display_groups(
         for n, _letter, _tag in members:
             result[(n, cls)] = label
             assigned.add((n, cls))
+
+    # 5) 手動グループ（MANUAL_VARIANT_GROUPS）。グループ内の全科目名が対象リストに揃っている
+    # 場合のみ適用する。
+    names_present = {n for n, _c in items}
+    for group in MANUAL_VARIANT_GROUPS:
+        if not all(n in names_present for n in group["names"]):
+            continue
+        for n, c in items:
+            if (n, c) in assigned or n not in group["names"]:
+                continue
+            result[(n, c)] = group["label"]
+            assigned.add((n, c))
 
     return result

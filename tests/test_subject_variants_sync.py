@@ -418,6 +418,28 @@ def test_paren_alias_numeral_variant_single_member_not_grouped():
     assert "障害児発達学1（障害者・障害児心理学1）" not in groups
 
 
+def test_manual_variant_groups_apply_in_display_groups():
+    """海洋政策科学部「経済学基礎論」「経営学基礎論」等、科目名自体が「N-M」形式で枝分かれし、
+    かつタグの有無が不揃いなケースはMANUAL_VARIANT_GROUPSによる手動オーバーライドで
+    統合される（2026-09-04、ユーザー指示）。全メンバーが揃っている場合のみ適用され、
+    一部だけの場合は適用されない（誤爆防止）ことも確認する。"""
+    names_with_cls = [
+        ("経営学基礎論1-1(海洋ガバナンス領域)", "海洋専門基礎科目"),
+        ("経営学基礎論1-2（海洋ガバナンス領域）", "海洋専門基礎科目"),
+        ("経営学基礎論2-1（海洋ガバナンス領域）", "海洋専門基礎科目"),
+        ("経営学基礎論2-2", "海洋専門基礎科目"),
+    ]
+    result = subject_variants.compute_variant_display_groups(names_with_cls)
+    label = "経営学基礎論(1-1,1-2,2-1,2-2)"
+    for name, cls in names_with_cls:
+        assert result[(name, cls)] == label
+
+    # 一部のメンバーしか渡されない場合は適用しない
+    partial = names_with_cls[:2]
+    partial_result = subject_variants.compute_variant_display_groups(partial)
+    assert partial_result == {}
+
+
 def test_paren_alias_numeral_variants_in_display_groups():
     """管理画面向けcompute_variant_display_groups()でも括弧付き別名パターンが
     classification単位でグループ化されることを確認する。"""

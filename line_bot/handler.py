@@ -38,6 +38,7 @@ from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
     LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS,
     LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
+    MANUAL_VARIANT_GROUPS,
     TAG_PRIORITY,
     compute_variant_bases,
     letter_variant_suffix,
@@ -253,6 +254,18 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
     _letter_only_base_for = {n: _key for _key, _items in _letter_only_bases.items() for n, _, _ in _items}
     seen_letter_only_base: set[tuple[str, str, str, str]] = set()
 
+    # 手動グループ（MANUAL_VARIANT_GROUPS）。グループ内の全科目名が今回のrowsに揃っている
+    # 場合のみ適用する（core.subject_variants.MANUAL_VARIANT_GROUPS参照）。
+    _rows_name_set = {c.name for c in rows}
+    _manual_group_members: dict[str, tuple[str, ...]] = {}
+    _manual_name_to_label: dict[str, str] = {}
+    for _mg in MANUAL_VARIANT_GROUPS:
+        if all(n in _rows_name_set for n in _mg["names"]):
+            _manual_group_members[_mg["label"]] = _mg["names"]
+            for n in _mg["names"]:
+                _manual_name_to_label[n] = _mg["label"]
+    seen_manual_label: set[str] = set()
+
     # syllabus_url は全件キャッシュから取得（DBアクセスなし）
     _sv_by_id = await cache.get_syllabus_urls_cached()
     course_syllabus_urls: dict[str, str] = {c.name: _sv_by_id[c.id] for c in rows if c.id in _sv_by_id}
@@ -269,6 +282,12 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         cls_category[cls] = course.category or ""
         if course.faculty:
             cls_faculty[cls] = course.faculty
+        if name in _manual_name_to_label:
+            label = _manual_name_to_label[name]
+            if label not in seen_manual_label:
+                seen_manual_label.add(label)
+                groups[cls].append((label, "manual", "", ""))
+            continue
         if name in _sem_variant_names:
             base = _sem_base_for[name]
             if base not in seen_sem_base:
@@ -316,6 +335,8 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         共通ロジック（レビュー有無・解除済み判定の両方で使う、2026-09-04）。"""
         if kind == "single":
             return name in names
+        if kind == "manual":
+            return any(n in names for n in _manual_group_members.get(name, ()))
         if kind.startswith("variant:"):
             suffixes = kind.split(":", 1)[1].split("/")
             if any(name + s in names for s in suffixes):
@@ -354,6 +375,12 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         # （左側が無ければ右側の変種のURLで代替する）。
         if kind == "single":
             return course_syllabus_urls.get(name, "")
+        if kind == "manual":
+            for n in _manual_group_members.get(name, ()):
+                url = course_syllabus_urls.get(n, "")
+                if url:
+                    return url
+            return ""
         if kind.startswith("variant:"):
             key = (name, fd[0], fd[1])
             if key in _sem_bases:
@@ -469,6 +496,10 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             text_color = "#0f172a" if has_content else "#94a3b8"
             if kind == "single":
                 liff_url = course_liff_urls.get(name, "")
+            elif kind == "manual":
+                members = _manual_group_members.get(name, ())
+                first_name = members[0] if members else ""
+                liff_url = course_liff_urls.get(first_name, "") if first_name else ""
             elif kind.startswith("variant:"):
                 first_suffix = kind.split(":", 1)[1].split("/")[0]
                 liff_url = course_liff_urls.get(name + first_suffix, "")
