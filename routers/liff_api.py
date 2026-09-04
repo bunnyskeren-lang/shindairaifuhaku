@@ -1,4 +1,3 @@
-import asyncio
 import re as _re
 from datetime import datetime, timezone
 
@@ -293,9 +292,15 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
         # レビュー閲覧そのものも封じる(2026-08-29、閲覧だけは素通りしていた不備の修正)
         if uid and await moderation.is_banned(uid):
             raise HTTPException(status_code=403, detail=BAN_MESSAGE_TEXT)
-        # 修正理由: subject取得とcs_instr取得は元々別々のAsyncSessionLocal()を開いており、
-        # どちらもcourse_id確定後に順番に実行するだけの依存関係なので、DB接続の往復を
-        # 1回分減らすため同じセッションにまとめる。
+        # 修正理由(2026-09-04): PgBouncer transaction mode（database.py参照）ではSQLAlchemy
+        # 側のプールを持たずNullPoolにしているため、AsyncSessionLocal()を開く度にSupabase
+        # poolerへの新規TCP+TLSハンドシェイクが発生する。従来はsubject取得・agg/ease集計・
+        # レビュー本体・シラバスコード・教員別シラバスURL・閲覧数記録の6クエリをそれぞれ
+        # 別セッション（一部はasyncio.gatherで並行）に分けており、1リクエストで最大6回の
+        # ハンドシェイクが発生していた（LINEの「詳細・レビューを見る」タップから表示まで
+        # 4秒台かかる実害の主因と判明）。asyncio.gatherによる並行クエリは同一セッションでは
+        # 使えない（InterfaceError、非同期クエリのルール参照）ため、並行実行を諦めて
+        # 全クエリを1本のセッションで順次実行し、ハンドシェイク回数を1回に減らす。
         async with AsyncSessionLocal() as session:
             subject = await session.get(Subject, course_id)
             if not subject:
@@ -313,32 +318,26 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 .where(CourseSection.subject_id.in_(group_subject_ids))
                 .order_by(CourseSection.id)
             )).all()
+            cs_ids = [cs.id for cs, _ in cs_instr_rows]
 
-        # 修正理由: agg(平均・件数)とease内訳は同じReviewテーブル・同じ絞り込み条件に対する集計で、
-        # 別々のAsyncSessionLocal()×2本（＝DBコネクション2本）に分ける必要が無かった。
-        # SUM(rating)/COUNT(rating)はSQLのNULL無視の挙動によりgroup byありでも全体平均に正しく
-        # 再合成できるため、ease_rating別の内訳クエリ1本に統合しコネクション使用数を1本減らす
-        # （/api/course/{id}は1リクエストあたり最大6本のDBコネクションを個別セッションで並行して
-        # 掴んでおり、一斉アクセス時にDB接続プールを圧迫しやすい経路だったため）。
-        async def _agg_and_ease(cs_ids: list):
-            if not cs_ids:
-                return None, {}, {}, 0
-            async with AsyncSessionLocal() as s:
-                # 評価の内訳表示（充実度★1〜5・楽単度SS〜Cそれぞれの件数分布）のため、
-                # ease_rating単独ではなく(ease_rating, rating)の2軸でgroup byする。
-                # 平均・総件数はどちらもこの1本の結果から再合成できる
-                rows = (await s.execute(
+            # 評価の内訳表示（充実度★1〜5・楽単度SS〜Cそれぞれの件数分布）のため、
+            # ease_rating単独ではなく(ease_rating, rating)の2軸でgroup byする。
+            # 平均・総件数はどちらもこの1本の結果から再合成できる
+            if cs_ids:
+                ease_rows = (await session.execute(
                     select(Review.ease_rating, Review.rating, func.count(Review.id))
                     .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
                     .group_by(Review.ease_rating, Review.rating)
                 )).all()
+            else:
+                ease_rows = []
             ease_counts: dict = {}
             rating_counts: dict = {}
             rating_sum = 0
             rating_total = 0
-            total_count = 0
-            for ease, rating, cnt in rows:
-                total_count += cnt
+            review_count = 0
+            for ease, rating, cnt in ease_rows:
+                review_count += cnt
                 if ease:
                     ease_counts[ease] = ease_counts.get(ease, 0) + cnt
                 if rating is not None:
@@ -346,61 +345,48 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     rating_sum += rating * cnt
                     rating_total += cnt
             avg_rating = (rating_sum / rating_total) if rating_total else None
-            return avg_rating, ease_counts, rating_counts, total_count
 
-        async def _reviews(cs_ids: list):
-            if not cs_ids:
-                return []
-            async with AsyncSessionLocal() as s:
-                return (await s.execute(
+            if cs_ids:
+                reviews_raw = (await session.execute(
                     select(Review)
                     .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
                     .order_by(Review.selected_instructor.nulls_last(), Review.academic_year.desc())
                     .limit(20)
                 )).scalars().all()
+            else:
+                reviews_raw = []
 
-        async def _syllabus_code():
-            async with AsyncSessionLocal() as s:
-                return (await s.execute(
-                    select(Syllabus.timetable_code)
-                    .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
-                    .where(CourseSection.subject_id == course_id, Syllabus.timetable_code.isnot(None))
-                    .order_by(Syllabus.year.desc())
-                    .limit(1)
-                )).first()
+            sc_row = (await session.execute(
+                select(Syllabus.timetable_code)
+                .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
+                .where(CourseSection.subject_id == course_id, Syllabus.timetable_code.isnot(None))
+                .order_by(Syllabus.year.desc())
+                .limit(1)
+            )).first()
 
-        async def _instructor_syllabus_urls(cs_ids_: list) -> dict[int, str]:
-            async with AsyncSessionLocal() as s:
-                return await _latest_syllabus_urls(s, cs_ids_)
+            cs_syllabus_urls = await _latest_syllabus_urls(session, cs_ids)
+            # 教員別のシラバスURL（絞り込みチップで教員を選んだ際、その教員のシラバスに切り替えるため）。
+            # 同じ教員が複数course_section（バリアント違い等）を持つ場合は最初に見つかった方を採用する
+            instructor_syllabus_urls: dict[str, str] = {}
+            for cs, instr in cs_instr_rows:
+                url = cs_syllabus_urls.get(cs.id)
+                if url and instr.name not in instructor_syllabus_urls:
+                    instructor_syllabus_urls[instr.name] = url
 
-        cs_ids = [cs.id for cs, _ in cs_instr_rows]
-
-        (avg_rating, ease_counts, rating_counts, review_count), reviews_raw, sc_row, cs_syllabus_urls = await asyncio.gather(
-            _agg_and_ease(cs_ids), _reviews(cs_ids), _syllabus_code(), _instructor_syllabus_urls(cs_ids)
-        )
-        # 教員別のシラバスURL（絞り込みチップで教員を選んだ際、その教員のシラバスに切り替えるため）。
-        # 同じ教員が複数course_section（バリアント違い等）を持つ場合は最初に見つかった方を採用する
-        instructor_syllabus_urls: dict[str, str] = {}
-        for cs, instr in cs_instr_rows:
-            url = cs_syllabus_urls.get(cs.id)
-            if url and instr.name not in instructor_syllabus_urls:
-                instructor_syllabus_urls[instr.name] = url
-
-        # ビューカウント記録
-        # 修正理由: バリアントグループでcs_idsはグループ全体にまたがるため、閲覧数は
-        # 実際にリクエストされた科目自身のcourse_sectionに記録する（無ければグループ内の
-        # 代表にフォールバック）。
-        own_cs_ids = [cs.id for cs, _ in cs_instr_rows if cs.subject_id == course_id]
-        if cs_ids:
-            main_cs_id = own_cs_ids[0] if own_cs_ids else cs_ids[0]
-            async with AsyncSessionLocal() as s:
+            # ビューカウント記録
+            # 修正理由: バリアントグループでcs_idsはグループ全体にまたがるため、閲覧数は
+            # 実際にリクエストされた科目自身のcourse_sectionに記録する（無ければグループ内の
+            # 代表にフォールバック）。
+            own_cs_ids = [cs.id for cs, _ in cs_instr_rows if cs.subject_id == course_id]
+            if cs_ids:
+                main_cs_id = own_cs_ids[0] if own_cs_ids else cs_ids[0]
                 _now = datetime.now(timezone.utc)
                 _ins = pg_insert(CourseSectionView).values(
                     course_section_id=main_cs_id,
                     view_count=1,
                     last_viewed_at=_now,
                 )
-                await s.execute(
+                await session.execute(
                     _ins.on_conflict_do_update(
                         index_elements=["course_section_id"],
                         set_={
@@ -409,7 +395,28 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                         },
                     )
                 )
-                await s.commit()
+
+            # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
+            # REVIEW_APPROVAL_UNLOCK_CREDITS枚の閲覧権が付与される。閲覧権はsubject単位・
+            # バリアントグループ内で共有）
+            unlock_credits = None
+            # 閲覧中の本人が投稿したレビューをハイライト表示するため、自分のstudent_idを控えておく
+            # （reviewsテーブルにline_user_idは無いため、user_profiles.student_idとの一致で判定する）
+            my_student_id = None
+            unlocked = review_count == 0
+            if not unlocked and uid:
+                profile = await session.get(UserProfile, uid)
+                unlock_credits = profile.unlock_credits if profile else 0
+                my_student_id = profile.student_id if profile else None
+                unlocked = (await session.execute(
+                    select(SubjectUnlock.subject_id).where(
+                        SubjectUnlock.line_user_id == uid,
+                        SubjectUnlock.subject_id.in_(group_subject_ids),
+                    )
+                )).scalars().first() is not None
+            locked = not unlocked
+
+            await session.commit()
 
         # 最新年度のsyllabiからtimetable_codeを取得しシラバスURLを動的生成
         syllabus_url = make_syllabus_url(sc_row[0], syllabus_department_key(subject)) if sc_row else ""
@@ -424,27 +431,6 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
         top_ease = None
         if ease_counts:
             top_ease = sorted(ease_counts.items(), key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
-
-        # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
-        # REVIEW_APPROVAL_UNLOCK_CREDITS枚の閲覧権が付与される。閲覧権はsubject単位・
-        # バリアントグループ内で共有）
-        unlock_credits = None
-        # 閲覧中の本人が投稿したレビューをハイライト表示するため、自分のstudent_idを控えておく
-        # （reviewsテーブルにline_user_idは無いため、user_profiles.student_idとの一致で判定する）
-        my_student_id = None
-        unlocked = review_count == 0
-        if not unlocked and uid:
-            async with AsyncSessionLocal() as s:
-                profile = await s.get(UserProfile, uid)
-                unlock_credits = profile.unlock_credits if profile else 0
-                my_student_id = profile.student_id if profile else None
-                unlocked = (await s.execute(
-                    select(SubjectUnlock.subject_id).where(
-                        SubjectUnlock.line_user_id == uid,
-                        SubjectUnlock.subject_id.in_(group_subject_ids),
-                    )
-                )).scalars().first() is not None
-        locked = not unlocked
 
         return {
             "id": subject.id,
