@@ -38,7 +38,7 @@ def test_shared_variant_bases_grouping_matches_flat_group_map():
         ("外国語セミナーB(英語)", "教養教育院", ""),
         ("単独科目", "教養教育院", ""),
     ]
-    sem_bases, num_bases, _paren_num_bases = subject_variants.compute_variant_bases(names_with_fd)
+    sem_bases, num_bases, _paren_num_bases, _letter_only_bases = subject_variants.compute_variant_bases(names_with_fd)
     flat = subject_variants.compute_variant_groups(names_with_fd)
 
     reconstructed: dict[str, str] = {}
@@ -163,6 +163,58 @@ def test_letter_only_variants_are_never_merged():
     assert "心理学A" not in labels
     assert "心理学B" not in labels
     assert labels["力学基礎1"] == "力学基礎(1/2)"
+
+
+def test_letter_only_merge_opt_in_for_kokusai_ningen_senmon_classification():
+    """2026-09-04にユーザー指示で、末尾アルファベットのみが異なる文字バリアント統合の
+    恒常廃止ルール（2026-09-02）に「国際人間科学部専門科目」classification限定の
+    オプトイン例外を追加した。DB上のSubject行は分けたまま（レビュー投稿・閲覧は
+    引き続き別科目扱い）、LINE bot科目一覧・管理画面科目一覧の表示のみ統合する。
+    letter_only_included_namesを渡さなければ引き続き統合されないことも確認する
+    （compute_variant_groups/compute_variant_full_labels＝レビュー関連機能が使う経路には
+    一切影響しないことの保証）。"""
+    names_with_fd = [
+        ("日本文化交流論A", "国際人間科学部", ""),
+        ("日本文化交流論B", "国際人間科学部", ""),
+        ("保健体育科教育論A", "国際人間科学部", ""),
+        ("保健体育科教育論B", "国際人間科学部", ""),
+        ("保健体育科教育論C", "国際人間科学部", ""),
+        ("保健体育科教育論D", "国際人間科学部", ""),
+    ]
+    included_names = frozenset(n for n, _, _ in names_with_fd)
+
+    # letter_only_included_namesを渡した場合のみ統合される
+    _sem, _num, _paren, letter_only = subject_variants.compute_variant_bases(
+        names_with_fd, letter_only_included_names=included_names)
+    assert len(letter_only) == 2  # 日本文化交流論・保健体育科教育論の2グループ
+    day = next(v for k, v in letter_only.items() if k[0] == "日本文化交流論")
+    assert {n for n, _, _ in day} == {"日本文化交流論A", "日本文化交流論B"}
+    hoken = next(v for k, v in letter_only.items() if k[0] == "保健体育科教育論")
+    assert {n for n, _, _ in hoken} == {"保健体育科教育論A", "保健体育科教育論B", "保健体育科教育論C", "保健体育科教育論D"}
+
+    # 渡さなければ（既定）従来通り統合されない
+    _sem2, _num2, _paren2, letter_only_default = subject_variants.compute_variant_bases(names_with_fd)
+    assert letter_only_default == {}
+
+    # レビュー投稿フォーム/api/preload等が使うcompute_variant_groups/full_labelsは
+    # letter_only_included_namesを受け付けないため、この例外の影響を一切受けない
+    groups = subject_variants.compute_variant_groups(names_with_fd)
+    assert "日本文化交流論A" not in groups
+    assert "保健体育科教育論A" not in groups
+
+    # 管理画面向けcompute_variant_display_groups()はclassification単位でオプトインする
+    names_with_cls = [(n, "国際人間科学部専門科目") for n, _, _ in names_with_fd]
+    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
+    assert display_result[("日本文化交流論A", "国際人間科学部専門科目")] == "日本文化交流論 (A/B)"
+    assert display_result[("日本文化交流論B", "国際人間科学部専門科目")] == "日本文化交流論 (A/B)"
+    assert display_result[("保健体育科教育論A", "国際人間科学部専門科目")] == "保健体育科教育論 (A/B/C/D)"
+    assert display_result[("保健体育科教育論D", "国際人間科学部専門科目")] == "保健体育科教育論 (A/B/C/D)"
+
+    # 他のclassificationでは引き続き統合されない（恒常廃止ルールはそのまま）
+    other_cls = [(n, "教養(人文)") for n, _, _ in names_with_fd]
+    other_result = subject_variants.compute_variant_display_groups(other_cls)
+    assert ("日本文化交流論A", "教養(人文)") not in other_result
+    assert ("保健体育科教育論A", "教養(人文)") not in other_result
 
 
 def test_num_excluded_names_keeps_health_sports_jisshu_separate():

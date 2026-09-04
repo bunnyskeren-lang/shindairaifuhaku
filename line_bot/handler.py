@@ -35,9 +35,11 @@ from core.config import (
 )
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
+    LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS,
     LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
     TAG_PRIORITY,
     compute_variant_bases,
+    letter_variant_suffix,
     num_variant_suffix,
     paren_num_variant_suffixes,
     variant_letter_in_suffix,
@@ -192,8 +194,14 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                       if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED]
     _letter_split_excluded_names = frozenset(
         c.name for c in rows if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
-    _sem_bases, _num_bases, _paren_num_bases = compute_variant_bases(
-        names_with_fd, letter_split_excluded_names=_letter_split_excluded_names)
+    # LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS（国際人間科学部専門科目のみ）に属する科目名は
+    # 末尾アルファベットのみが異なる文字バリアントも統合対象に含める（2026-09-04追加、
+    # 表示のみの例外。core.subject_variants.LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS参照）
+    _letter_only_included_names = frozenset(
+        c.name for c in rows if (c.classification or "") in LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS)
+    _sem_bases, _num_bases, _paren_num_bases, _letter_only_bases = compute_variant_bases(
+        names_with_fd, letter_split_excluded_names=_letter_split_excluded_names,
+        letter_only_included_names=_letter_only_included_names)
 
     _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}
     _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _, _ in _items}
@@ -222,6 +230,10 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
     _paren_num_variant_names = {n for _items in _paren_num_bases.values() for n, _, _, _, _, _ in _items}
     _paren_num_base_for = {n: _key for _key, _items in _paren_num_bases.items() for n, _, _, _, _, _ in _items}
     seen_paren_num_base: set[tuple[str, str, str, str, str]] = set()
+
+    _letter_only_variant_names = {n for _items in _letter_only_bases.values() for n, _, _ in _items}
+    _letter_only_base_for = {n: _key for _key, _items in _letter_only_bases.items() for n, _, _ in _items}
+    seen_letter_only_base: set[tuple[str, str, str, str]] = set()
 
     # syllabus_url は全件キャッシュから取得（DBアクセスなし）
     _sv_by_id = await cache.get_syllabus_urls_cached()
@@ -262,6 +274,14 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 main_suffix, paren_suffix = paren_num_variant_suffixes(_paren_num_bases[key])
                 groups[cls].append((key[0], f"parennumvariant:{main_suffix}|{key[1]}|{paren_suffix}", key[2], key[3]))
             continue
+        if name in _letter_only_variant_names:
+            key = _letter_only_base_for[name]
+            if key not in seen_letter_only_base:
+                seen_letter_only_base.add(key)
+                suffix = letter_variant_suffix(_letter_only_bases[key])
+                # key = (base, fac, dept, tag)
+                groups[cls].append((key[0], f"lettervariant:{suffix}", key[1], key[2]))
+            continue
         groups[cls].append((name, "single", "", ""))
 
     def _cat_order(cls: str) -> int:
@@ -294,6 +314,11 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             key = (name, paren_base, fd[0], fd[1], variant_tag_in_suffix(kind))
             if key in _paren_num_bases:
                 return any(n in reviewed_names for n, _, _, _, _, _ in _paren_num_bases[key])
+            return False
+        if kind.startswith("lettervariant:"):
+            key = (name, fd[0], fd[1], variant_tag_in_suffix(kind))
+            if key in _letter_only_bases:
+                return any(n in reviewed_names for n, _, _ in _letter_only_bases[key])
             return False
         return False
 
@@ -328,6 +353,13 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             key = (name, paren_base, fd[0], fd[1], variant_tag_in_suffix(kind))
             if key in _paren_num_bases:
                 for n, _, _, _, _, _ in sorted(_paren_num_bases[key], key=lambda x: (x[1], x[3])):
+                    url = course_syllabus_urls.get(n, "")
+                    if url:
+                        return url
+        if kind.startswith("lettervariant:"):
+            key = (name, fd[0], fd[1], variant_tag_in_suffix(kind))
+            if key in _letter_only_bases:
+                for n, _letter, _tag in sorted(_letter_only_bases[key], key=lambda x: x[1]):
                     url = course_syllabus_urls.get(n, "")
                     if url:
                         return url
@@ -384,6 +416,16 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             elif kind.startswith("parennumvariant:"):
                 main_suffix, paren_base, paren_suffix = _parse_parennum_kind(kind)
                 display = f"{name}({main_suffix})（{paren_base}({paren_suffix})）"
+            elif kind.startswith("lettervariant:"):
+                # numvariantと同じタグ剥がしロジック（要素側の個別タグを取り除き、
+                # グループ全体の末尾に半角括弧で1回だけ付け直す）
+                suffix = kind.split(":", 1)[1]
+                tag = variant_tag_in_suffix(kind)
+                if tag:
+                    letters = "/".join(p[:-len(tag)] for p in suffix.split("/"))
+                    display = f"{name}({letters}){tag.replace('（', '(').replace('）', ')')}"
+                else:
+                    display = f"{name}({suffix})"
             else:
                 display = name
             has_review = _entry_has_review(name, kind, fd)
@@ -403,6 +445,13 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 pkey = (name, paren_base, fac, dept, variant_tag_in_suffix(kind))
                 if pkey in _paren_num_bases:
                     first_name = min(_paren_num_bases[pkey], key=lambda x: (x[1], x[3]))[0]
+                    liff_url = course_liff_urls.get(first_name, "")
+                else:
+                    liff_url = ""
+            elif kind.startswith("lettervariant:"):
+                lkey = (name, fac, dept, variant_tag_in_suffix(kind))
+                if lkey in _letter_only_bases:
+                    first_name = min(_letter_only_bases[lkey], key=lambda x: x[1])[0]
                     liff_url = course_liff_urls.get(first_name, "")
                 else:
                     liff_url = ""

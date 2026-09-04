@@ -84,6 +84,11 @@ _STUDENT_ID_SPLIT_RE = re.compile(
     r'[\s　]*(?:Z|T機械|[A-Z])[（(]学番[^）)]*[）)](?:[，,][A-Z])?(?=(?:（遠隔）|（再履修）)*$)'
     r'|[\s　]*(?:Z|T機械|[A-Z])?[\s　]*学籍番号[：:](?:奇数|偶数)(?=(?:（遠隔）|（再履修）)*$)'
 )
+# LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS向け。末尾に数字を伴わずアルファベット
+# 1文字のみが異なるパターン（例:"日本文化交流論A"/"日本文化交流論B"）。_VNUMは末尾の
+# 数字/ローマ数字を必須とするためこのパターンにはマッチしない（数字が無い時点で
+# 排他的なので、_VNUM等より判定順が前後しても互いに衝突しない）。
+_VLETTER_ONLY = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])((?:（遠隔）|（再履修）)*(?:[\s　]*（[^（）]+）)?)$')
 
 
 def is_remote_tagged(name: str) -> bool:
@@ -129,6 +134,24 @@ LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS = frozenset({
 })
 
 
+# 末尾がA/B/C/Dのみ異なる「文字バリアント」統合は2026-09-02に恒常廃止したが、
+# 2026-09-04にユーザー指示で「国際人間科学部専門科目」classification限定の例外を追加した。
+# このclassification配下（教育系・語学系の専門科目）は、A/B/C/Dが並行クラス（担当教員・
+# 内容が別）ではなく同一科目の複数開講枠を表すケースが多いことをユーザーが確認済み。
+# 他のclassificationには一切影響しない（例えば数学科教育論A1/A2/C1/C2のような
+# アルファベット+数字パターンは、そもそもこのオプトイン集合とは別のマッチャー
+# (_vnum_match/_VNUM)が扱うため対象外のまま）。
+# 表示統合のみ（DB上のSubject行は分けたまま）: レビュー投稿・閲覧・チケット共有は
+# 引き続きA/B/C/Dそれぞれ別科目として扱う（core.cache.get_variant_map_cached()・
+# get_variant_group_subject_ids()はこのモジュールのcompute_variant_groups()を使うが、
+# letter_only_included_namesを渡していないため無関係）。影響するのはLINE bot科目一覧
+# （line_bot/handler.py _build_course_bubbles）と管理画面科目一覧
+# （routers/admin/courses.py compute_variant_display_groups()）の2画面のみ。
+LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS = frozenset({
+    "国際人間科学部専門科目",
+})
+
+
 def num_variant_suffix(members: list[tuple[str, str, int, str, str]]) -> str:
     """num_basesの1グループ分のmembersから、表示用の接尾辞文字列（例:"1/2/3/4"）を組み立てる。
     学番分割クラス（_STUDENT_ID_SPLIT_RE）はベース科目と同じ(letter, disp, tag)に潰れて
@@ -144,6 +167,22 @@ def num_variant_suffix(members: list[tuple[str, str, int, str, str]]) -> str:
             continue
         seen.add(key)
         parts.append(f"{letter}{disp}{tag}")
+    return "/".join(parts)
+
+
+def letter_variant_suffix(members: list[tuple[str, str, str]]) -> str:
+    """letter_only_basesの1グループ分のmembersから、表示用の接尾辞文字列（例:"A/B"）を組み立てる。
+    num_variant_suffix()と同じ形式（各要素末尾にタグを個別付与してから重複除去・連結）にし、
+    line_bot/handler.py _make_bubble()側のタグ剥がしロジック（numvariantと共通）を
+    そのまま再利用できるようにする。"""
+    members_sorted = sorted(members, key=lambda x: x[1])
+    seen: set[str] = set()
+    parts = []
+    for _n, letter, tag in members_sorted:
+        if letter in seen:
+            continue
+        seen.add(letter)
+        parts.append(f"{letter}{tag}")
     return "/".join(parts)
 
 
@@ -225,6 +264,20 @@ def _vnum_paren_match(name: str) -> tuple[str, int, str, str, int, str, str] | N
     return main_base, _sk_of(main_raw), main_raw, paren_base, _sk_of(paren_raw), paren_raw, tag
 
 
+def _vletter_only_match(name: str) -> tuple[str, str, str] | None:
+    """LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS向け。"AAA""B"のような末尾アルファベット
+    1文字のみのパターンをマッチさせる（_vnum_matchの姉妹関数）。
+    戻り値: (base, letter, tag)"""
+    name = _STUDENT_ID_SPLIT_RE.sub('', name)
+    m = _VLETTER_ONLY.match(name)
+    if not m:
+        return None
+    base = m.group(1).strip()
+    letter = m.group(2).translate(_FULLWIDTH_UPPER)
+    tag = m.group(3) or ""
+    return base, letter, tag
+
+
 def paren_num_variant_suffixes(members: list[tuple[str, int, str, int, str, str]]) -> tuple[str, str]:
     """paren_num_basesの1グループ分のmembersから、外側・内側それぞれの表示用接尾辞文字列
     （例: ("1/2", "1/2")）を組み立てる。外側と内側の連番はずれうる（心の発達と教育の例）ため
@@ -243,10 +296,12 @@ def compute_variant_bases(
     names_with_faculty_dept: list[tuple[str, str, str]],
     num_excluded_names: frozenset[str] = NUM_MERGE_EXCLUDED_NAMES,
     letter_split_excluded_names: frozenset[str] = frozenset(),
+    letter_only_included_names: frozenset[str] = frozenset(),
 ) -> tuple[
     dict[tuple[str, str, str], list[tuple[str, str]]],
     dict[tuple[str, str, str, str, str], list[tuple[str, str, int, str, str]]],
     dict[tuple[str, str, str, str, str], list[tuple[str, int, str, int, str, str]]],
+    dict[tuple[str, str, str, str], list[tuple[str, str, str]]],
 ]:
     """バリアント判定の実体。(科目名, faculty, department)のリストから、セミナー系/
     数字・ローマ数字/括弧付き別名（数字・ローマ数字）の3種のバリアントグループを
@@ -298,6 +353,14 @@ def compute_variant_bases(
     （呼び出し側がclassificationを見て名前集合を組み立てる。この関数自体はclassificationを
     引数に取らないため）。メンバー個々のletter（表示接尾辞の組み立てに使う）自体は
     変更しない。
+
+    letter_only_included_names（既定で空集合）に含まれる名前のみ、4つ目の辞書
+    letter_only_basesの対象となる。末尾がA/B/C/Dのみ異なる「文字バリアント」の統合は
+    2026-09-02にユーザー指示で恒常廃止したが、2026-09-04にユーザー指示で
+    LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS（国際人間科学部専門科目のみ）限定の
+    オプトイン例外を追加した。呼び出し側がclassificationを見て名前集合を組み立てて渡す
+    （letter_split_excluded_namesと同じ設計）。キーは(base, faculty, department, tag)、
+    valuesは(name, letter, tag)のリスト。既定は空集合＝従来通り一切統合しない。
     """
     names = [n for n, _, _ in names_with_faculty_dept]
     fd_by_name = {n: (f, d) for n, f, d in names_with_faculty_dept}
@@ -336,7 +399,19 @@ def compute_variant_bases(
             paren_num_bases.setdefault(key, []).append((name, main_sk, main_raw, paren_sk, paren_raw, tag))
     paren_num_bases = {k: v for k, v in paren_num_bases.items() if len(v) >= 2}
 
-    return sem_bases, num_bases, paren_num_bases
+    letter_only_bases: dict[tuple[str, str, str, str], list[tuple[str, str, str]]] = {}
+    for name in names:
+        if name not in letter_only_included_names:
+            continue
+        m = _vletter_only_match(name)
+        if m:
+            base, letter, tag = m
+            fac, dept = fd_by_name.get(name, ("", ""))
+            key = (base, fac, dept, tag)
+            letter_only_bases.setdefault(key, []).append((name, letter, tag))
+    letter_only_bases = {k: v for k, v in letter_only_bases.items() if len(v) >= 2}
+
+    return sem_bases, num_bases, paren_num_bases, letter_only_bases
 
 
 def compute_variant_groups(
@@ -347,8 +422,14 @@ def compute_variant_groups(
     だけが異なる2件以上の科目名をグループ化し、科目名→表示用グループラベル（ベース名）の
     マップを返す。グループに属さない（＝バリアントが1件だけ、または該当パターンなし）
     科目名はマップに含めない。letter_split_excluded_namesはcompute_variant_bases()参照。
+    letter_only_included_namesを渡さない（既定空集合）ため、末尾アルファベットのみが
+    異なる文字バリアントは常に統合されない（レビュー投稿フォーム/api/preload・LINE bot
+    メッセージ検索・レビュー閲覧チケット共有はこの関数の結果に依存するため、
+    LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONSの例外は意図的にここには適用しない。
+    表示のみ統合したいline_bot/handler.py _build_course_bubbles()・
+    compute_variant_display_groups()は別途letter_only_included_namesを渡す）。
     """
-    sem_bases, num_bases, paren_num_bases = compute_variant_bases(
+    sem_bases, num_bases, paren_num_bases, _letter_only_bases = compute_variant_bases(
         names_with_faculty_dept, letter_split_excluded_names=letter_split_excluded_names)
     result: dict[str, str] = {}
 
@@ -385,9 +466,10 @@ def compute_variant_full_labels(
     ベースラベルだけでは元の科目名と見分けがつかない画面（管理画面のレビュー科目別集計等）
     向けに追加した。判定基準はcompute_variant_groups()と同一（compute_variant_bases()を共有）。
     グループに属さない科目名はマップに含めない。letter_split_excluded_namesは
-    compute_variant_bases()参照。
+    compute_variant_bases()参照。letter_only_included_namesを渡さない理由は
+    compute_variant_groups()のdocstring参照（レビュー関連機能への意図しない波及を防ぐため）。
     """
-    sem_bases, num_bases, paren_num_bases = compute_variant_bases(
+    sem_bases, num_bases, paren_num_bases, _letter_only_bases = compute_variant_bases(
         names_with_faculty_dept, letter_split_excluded_names=letter_split_excluded_names)
     result: dict[str, str] = {}
 
@@ -451,7 +533,9 @@ def compute_variant_display_groups(
             assigned.add((n, c))
 
     # 末尾がA/B/C/Dのみ異なる「文字バリアント」の統合は2026-09-02にユーザー指示で恒常的に
-    # 廃止した（compute_variant_bases()のモジュールdocstring参照）。
+    # 廃止した（compute_variant_bases()のモジュールdocstring参照）。ただし2026-09-04に
+    # LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS（国際人間科学部専門科目のみ）限定の
+    # オプトイン例外を追加した（本関数末尾のブロック4参照）。
 
     # 2) 数字・ローマ数字バリアント（同一classification単位でグループ化。タグ（""/（遠隔）/
     # （再履修）/（遠隔）（再履修）の4種）が完全一致するクラス同士でのみ統合する）
@@ -491,6 +575,27 @@ def compute_variant_display_groups(
         main_suffix, paren_suffix = paren_num_variant_suffixes(members)
         label = f"{main_base}({main_suffix})（{paren_base}({paren_suffix})）"
         for n, _msk, _mraw, _psk, _praw, _tag in members:
+            result[(n, cls)] = label
+            assigned.add((n, cls))
+
+    # 4) アルファベットのみ末尾が異なる「文字バリアント」統合（2026-09-04、ユーザー指示で
+    # LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS（国際人間科学部専門科目のみ）限定の
+    # オプトイン例外として追加。恒常廃止ルールの対象外はこのclassificationのみで、
+    # 他のclassificationには一切影響しない）。
+    letter_only_bases: dict[tuple[str, str, str], list[tuple[str, str, str]]] = {}
+    for name, cls in items:
+        if (name, cls) in assigned or cls not in LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS:
+            continue
+        m = _vletter_only_match(name)
+        if m:
+            base, letter, tag = m
+            key = (base, cls, tag)
+            letter_only_bases.setdefault(key, []).append((name, letter, tag))
+    for (base, cls, _tag), members in letter_only_bases.items():
+        if len(members) < 2:
+            continue
+        label = f"{base} ({letter_variant_suffix(members)})"
+        for n, _letter, _tag in members:
             result[(n, cls)] = label
             assigned.add((n, cls))
 
