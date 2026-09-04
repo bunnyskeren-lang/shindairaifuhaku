@@ -292,15 +292,13 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
         # レビュー閲覧そのものも封じる(2026-08-29、閲覧だけは素通りしていた不備の修正)
         if uid and await moderation.is_banned(uid):
             raise HTTPException(status_code=403, detail=BAN_MESSAGE_TEXT)
-        # 修正理由(2026-09-04): PgBouncer transaction mode（database.py参照）ではSQLAlchemy
-        # 側のプールを持たずNullPoolにしているため、AsyncSessionLocal()を開く度にSupabase
-        # poolerへの新規TCP+TLSハンドシェイクが発生する。従来はsubject取得・agg/ease集計・
-        # レビュー本体・シラバスコード・教員別シラバスURL・閲覧数記録の6クエリをそれぞれ
-        # 別セッション（一部はasyncio.gatherで並行）に分けており、1リクエストで最大6回の
-        # ハンドシェイクが発生していた（LINEの「詳細・レビューを見る」タップから表示まで
-        # 4秒台かかる実害の主因と判明）。asyncio.gatherによる並行クエリは同一セッションでは
-        # 使えない（InterfaceError、非同期クエリのルール参照）ため、並行実行を諦めて
-        # 全クエリを1本のセッションで順次実行し、ハンドシェイク回数を1回に減らす。
+        # 修正理由(2026-09-04): 従来はsubject取得・agg/ease集計・レビュー本体・シラバスコード・
+        # 教員別シラバスURL・閲覧数記録の6クエリをそれぞれ別セッション（一部はasyncio.gatherで
+        # 並行）に分けており、Render(Singapore)⇄Supabase(東京/大阪)間のDB往復コストが高い構成
+        # では1リクエストで最大6往復分のレイテンシが積み重なっていた（LINEの「詳細・レビューを
+        # 見る」タップから表示まで4秒台かかる実害の主因と判明）。asyncio.gatherによる並行クエリは
+        # 同一セッションでは使えない（InterfaceError、非同期クエリのルール参照）ため、並行実行を
+        # 諦めて全クエリを1本のセッションで順次実行し、DB往復回数を減らす。
         async with AsyncSessionLocal() as session:
             subject = await session.get(Subject, course_id)
             if not subject:

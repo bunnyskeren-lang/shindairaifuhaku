@@ -657,7 +657,12 @@ def invalidate_ban_cache(line_user_id: str) -> None:
 
 async def warm_query_caches() -> None:
     import asyncio
-    await asyncio.gather(
+    # 修正理由: 11個を一度にasyncio.gatherすると起動時にDBセッションが11本同時に開き、
+    # Supabase poolerの「セッションモード」（DATABASE_URLのポート5432、1クライアント接続＝
+    # 1バックエンド固定）が持つ同時セッション数上限に達しEMAXCONNSESSIONで失敗する
+    # （2026-08-31に発生確認済み）。3件ずつのバッチに分けて直列に実行することで
+    # 同時に開くセッション数を抑える
+    _tasks = [
         get_cls_order_map(),
         get_cls_parent_map(),
         get_cls_set(),
@@ -669,4 +674,7 @@ async def warm_query_caches() -> None:
         get_syllabus_urls_cached(),
         get_variant_map_cached(),
         get_ease_extremes_cached(),
-    )
+    ]
+    _BATCH = 3
+    for i in range(0, len(_tasks), _BATCH):
+        await asyncio.gather(*_tasks[i:i + _BATCH])

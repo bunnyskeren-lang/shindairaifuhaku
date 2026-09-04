@@ -1,9 +1,7 @@
 import os
-from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool
 
 from core.db_ssl import make_ssl_context
 
@@ -15,39 +13,39 @@ elif _url.startswith("postgresql://") and "+asyncpg" not in _url:
 
 ssl_ctx = make_ssl_context()
 
-# SupabaseのTransaction pooler（ポート6543、pooler.supabase.com）はPgBouncerの
-# transactionモードで動作しており、バックエンド接続が別クライアントのトランザクションと
-# 使い回される。asyncpgはデフォルトで"__asyncpg_stmt_1__"のような連番のprepared statement名を
-# 接続オブジェクトごとに1から採番するため、複数のSQLAlchemy側プール接続が同じ
-# バックエンドに乗り合わせると番号が衝突し、DuplicatePreparedStatementErrorで
-# クエリ自体が失敗する（2026-08-31、devをsession mode 5432→transaction mode 6543へ
-# 切り替えた際に発生を確認。SQLAlchemy公式ドキュメントに同名の既知の非互換性として記載あり）。
-# 対処はSQLAlchemy公式ガイド通り、(1) prepared statement名を都度ランダム化して衝突を避け、
-# (2) SQLAlchemy自身の接続プールは持たずNullPoolにしてPgBouncer側に物理接続の多重化を
-# 任せる（transactionモードは元々そのために存在するため、二重にプールする必要がない）。
-# 直接接続（本番のport 5432等、プーラーを経由しない構成）ではこの問題が起きないため、
-# 従来通りSQLAlchemy側のプールを使う
-_is_pgbouncer_transaction_mode = ":6543/" in _url
+# 注意: devのDATABASE_URLはSupabase poolerの「セッションモード」（ポート5432、
+# pooler.supabase.com）を使うこと。1クライアント接続＝1バックエンドが接続の生存期間中
+# 固定されるため、SQLAlchemy側の通常プールで物理接続を使い回しても安全。
+#
+# 「transactionモード」（ポート6543）に切り替えたことが過去2回あるが、いずれも
+# 障害に直結したため絶対に切り替えないこと:
+# - 2026-08-31: transactionモードはバックエンド接続が別クライアントのトランザクションと
+#   使い回されるため、SQLAlchemy側でプールしたままだとasyncpgのprepared statement名が
+#   衝突しDuplicatePreparedStatementErrorが発生（当時はNullPool+prepared_statement_name_func
+#   で対処し、SQLAlchemy側のプールを完全に手放すことで解決した）。
+# - 2026-09-04: 上記の対処（NullPool）はハンドシェイクのオーバーヘッドが大きいという理由で
+#   NullPoolだけ外しQueuePoolに変更したところ、prepared_statement_name_funcで名前衝突は
+#   避けていたにもかかわらずInvalidSQLStatementNameError（あるリクエストでprepareした
+#   statementを、プールから同じ接続を再取得した別リクエストが使おうとした時点で
+#   バックエンドが差し替わっており存在しない）が再発した。NullPoolとprepared_statement_name_func
+#   は必ずセットで使う必要があり、transactionモードでSQLAlchemy側の接続プールを持つこと自体が
+#   そもそも成立しない。
+# 本番（直接接続、プーラーを経由しない構成）はこの問題の対象外。
+_connect_args = {"ssl": ssl_ctx, "command_timeout": 30}
 
-_connect_args = {"ssl": ssl_ctx, "command_timeout": 30, "statement_cache_size": 0}
-if _is_pgbouncer_transaction_mode:
-    _connect_args["prepared_statement_name_func"] = lambda: f"__asyncpg_{uuid4()}__"
-
-_engine_kwargs: dict = {"echo": False, "connect_args": _connect_args}
-if _is_pgbouncer_transaction_mode:
-    _engine_kwargs["poolclass"] = NullPool
-else:
-    _engine_kwargs.update(
-        # 修正理由: pool_pre_pingはチェックアウト毎にSELECT 1を1往復追加するため、
-        # Render(Singapore)⇄Supabase(東京/大阪)間のようにDB往復のコストが高い構成では
-        # クエリのレイテンシを実質2倍にしていた。pool_recycle=270で定期的に接続を
-        # 更新しているため、古い接続を掴むリスクは残るがpre_pingほど高頻度ではない
-        pool_recycle=270,
-        # Supabase pooler側の上限に合わせて調整できるよう環境変数で上書き可能にする
-        # （既定値はSupabase無料/Starterプランのpooler接続上限を踏まえた控えめな値）
-        pool_size=int(os.environ.get("DB_POOL_SIZE", "10")),
-        max_overflow=int(os.environ.get("DB_POOL_MAX_OVERFLOW", "20")),
-    )
+_engine_kwargs: dict = {
+    "echo": False,
+    "connect_args": _connect_args,
+    # 修正理由: pool_pre_pingはチェックアウト毎にSELECT 1を1往復追加するため、
+    # Render(Singapore)⇄Supabase(東京/大阪)間のようにDB往復のコストが高い構成では
+    # クエリのレイテンシを実質2倍にしていた。pool_recycle=270で定期的に接続を
+    # 更新しているため、古い接続を掴むリスクは残るがpre_pingほど高頻度ではない
+    "pool_recycle": 270,
+    # Supabase pooler側の上限に合わせて調整できるよう環境変数で上書き可能にする
+    # （既定値はSupabase無料/Starterプランのpooler接続上限を踏まえた控えめな値）
+    "pool_size": int(os.environ.get("DB_POOL_SIZE", "10")),
+    "max_overflow": int(os.environ.get("DB_POOL_MAX_OVERFLOW", "20")),
+}
 
 engine = create_async_engine(_url, **_engine_kwargs)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
