@@ -36,6 +36,7 @@ from core.config import (
 )
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
+    LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
     TAG_PRIORITY,
     compute_variant_bases,
     num_variant_suffix,
@@ -190,11 +191,30 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
     # （faculty+department単位でグループ化する理由等は同関数のdocstring参照）
     names_with_fd = [(c.name, c.faculty or "", c.department or "") for c in rows
                       if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED]
-    _sem_bases, _num_bases, _paren_num_bases = compute_variant_bases(names_with_fd)
+    _letter_split_excluded_names = frozenset(
+        c.name for c in rows if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
+    _sem_bases, _num_bases, _paren_num_bases = compute_variant_bases(
+        names_with_fd, letter_split_excluded_names=_letter_split_excluded_names)
 
     _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}
     _num_base_for = {n: _key for _key, _items in _num_bases.items() for n, _, _, _, _ in _items}
     seen_num_base: set[tuple[str, str, str, str, str]] = set()
+
+    def _resolve_num_key(name: str, kind: str, fd: tuple[str, str]) -> tuple[str, str, str, str, str] | None:
+        """"numvariant:<suffix>"のkind文字列から_num_basesの元のキーを引き直す。
+        通常はvariant_letter_in_suffix(kind)（接尾辞の先頭文字）がそのままletterと一致するが、
+        LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS対象科目（語学科目等）はletterをグループ化キーに
+        含めない（letter=""）ため、まず実際のletterで試し、見つからなければ""でも試す
+        （2026-09-04追加。呼び出し側3箇所の重複ロジックをここに一本化）。"""
+        tag = variant_tag_in_suffix(kind)
+        letter = variant_letter_in_suffix(kind)
+        key = (name, letter, fd[0], fd[1], tag)
+        if key in _num_bases:
+            return key
+        key2 = (name, "", fd[0], fd[1], tag)
+        if key2 in _num_bases:
+            return key2
+        return None
 
     _sem_variant_names = {n for _items in _sem_bases.values() for n, _ in _items}
     _sem_base_for = {n: _key for _key, _items in _sem_bases.items() for n, _ in _items}
@@ -266,7 +286,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                 return any(n in reviewed_names for n, _ in _sem_bases[key])
             return False
         if kind.startswith("numvariant:"):
-            key = (name, variant_letter_in_suffix(kind), fd[0], fd[1], variant_tag_in_suffix(kind))
+            key = _resolve_num_key(name, kind, fd)
             if key in _num_bases:
                 return any(n in reviewed_names for n, _, _, _, _ in _num_bases[key])
             return False
@@ -298,7 +318,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                     return url
             return ""
         if kind.startswith("numvariant:"):
-            key = (name, variant_letter_in_suffix(kind), fd[0], fd[1], variant_tag_in_suffix(kind))
+            key = _resolve_num_key(name, kind, fd)
             if key in _num_bases:
                 for n, _, _, _, _ in sorted(_num_bases[key], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9))):
                     url = course_syllabus_urls.get(n, "")
@@ -376,7 +396,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             elif kind.startswith("variant:"):
                 first_suffix = kind.split(":", 1)[1].split("/")[0]
                 liff_url = course_liff_urls.get(name + first_suffix, "")
-            elif kind.startswith("numvariant:") and (key := (name, variant_letter_in_suffix(kind), fac, dept, variant_tag_in_suffix(kind))) in _num_bases:
+            elif kind.startswith("numvariant:") and (key := _resolve_num_key(name, kind, fd)) in _num_bases:
                 first_name = min(_num_bases[key], key=lambda x: (x[1], x[2], TAG_PRIORITY.get(x[4], 9)))[0]
                 liff_url = course_liff_urls.get(first_name, "")
             elif kind.startswith("parennumvariant:"):

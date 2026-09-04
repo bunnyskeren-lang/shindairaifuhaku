@@ -26,6 +26,18 @@
   数字だけで束ねていたため`数学科教育論(A1/A2/C1/C2)`のように1グループに混ざって表示される
   不具合があった。`compute_variant_bases()`のnum_basesキーに`letter`を追加して修正した。
 
+**ただし教養(外国語第1)・教養(外国語第2)（Academic English・ドイツ語/フランス語/ロシア語/
+中国語の初級・中級等）はこのletter分離の対象外**（2026-09-04、ユーザー指示）。これらの科目は
+語尾が同じ「アルファベット＋数字」形式（例: `Academic English Communication A1/A2/B1/B2`、
+`ドイツ語初級A1/A2/A3/A4/B1/B2/B3/B4`）だが、アルファベット部分は数学科教育論のような並行
+クラス（内容が別）ではなく、同一内容のクラス分けを表す。letter分離ルール導入時にこれらの
+語学科目もA系列/B系列に分裂する副作用が発覚したため、`LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS`
+（`core/subject_variants.py`）に属するclassificationの科目はletterをグループ化キーから除外し、
+従来通り数字部分だけで束ねる（統合自体は維持、letter分離だけを対象外にする）。
+- `Academic English Communication A1/A2/B1/B2` → `Academic English Communication(A1/A2/B1/B2)` のまま1グループ
+- 新しい学部・語学科目を追加する際、同様に「アルファベット部分がクラス分けであり並行クラスでない」
+  パターンだと分かれば、`LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS`に対象classificationを追記すること。
+
 末尾の数字の後ろに（遠隔）（再履修）以外の任意の説明書き括弧が付く科目名（例:
 `環境基礎科学実験A1（主に地学）`）も、その説明書きが完全一致するメンバー同士でのみ
 統合対象になる（2026-09-03、国際人間科学部「科目名(1/2)（説明書き）」をバリアント統合

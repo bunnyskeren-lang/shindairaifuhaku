@@ -109,6 +109,39 @@ def test_numeral_letter_dual_branch_splits_by_letter():
     assert display_result[("数学科教育論C2", "国際人間科学部専門科目")] == "数学科教育論 (C1/C2)"
 
 
+def test_letter_split_excluded_classifications_keep_letters_merged():
+    """教養(外国語第1)/(外国語第2)（Academic English・ドイツ語/フランス語/ロシア語/中国語初級等）は
+    語尾が「アルファベット＋数字」形式だが、アルファベット部分は数学科教育論のような並行クラス
+    ではなくクラス分け（同一内容）を表す。2026-09-04にtest_numeral_letter_dual_branch_splits_by_letter
+    のletter分離ルールを導入した際、語学科目もA系列/B系列に分裂する副作用が発覚したため、
+    LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS対象はletterをグループ化キーから除外し、
+    従来通り数字部分だけで束ねる（ユーザー指示、2026-09-04）。"""
+    names_with_fd = [
+        ("Academic English Communication A1", "教養教育院", ""),
+        ("Academic English Communication A2", "教養教育院", ""),
+        ("Academic English Communication B1", "教養教育院", ""),
+        ("Academic English Communication B2", "教養教育院", ""),
+    ]
+    excluded_names = frozenset(n for n, _, _ in names_with_fd)
+    labels = subject_variants.compute_variant_full_labels(names_with_fd, letter_split_excluded_names=excluded_names)
+    expected = "Academic English Communication(A1/A2/B1/B2)"
+    assert labels["Academic English Communication A1"] == expected
+    assert labels["Academic English Communication A2"] == expected
+    assert labels["Academic English Communication B1"] == expected
+    assert labels["Academic English Communication B2"] == expected
+
+    names_with_cls = [
+        ("ドイツ語初級A1", "教養(外国語第2)"),
+        ("ドイツ語初級A2", "教養(外国語第2)"),
+        ("ドイツ語初級B1", "教養(外国語第2)"),
+        ("ドイツ語初級B2", "教養(外国語第2)"),
+    ]
+    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
+    expected_display = "ドイツ語初級 (A1/A2/B1/B2)"
+    for name, cls in names_with_cls:
+        assert display_result[(name, cls)] == expected_display
+
+
 def test_letter_only_variants_are_never_merged():
     """末尾がA/B/C/Dのみ異なる「文字バリアント」の統合は2026-09-02にユーザー指示で
     恒常的に廃止した（並行クラスとトピック違いの独立科目が語尾アルファベットだけでは
