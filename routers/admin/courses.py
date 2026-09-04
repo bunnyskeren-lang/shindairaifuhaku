@@ -405,6 +405,7 @@ async def admin_course_move(course_id: int, request: Request, _=Depends(check_ad
 @router.post("/admin/courses/update/{course_id}")
 async def admin_courses_update(
     course_id: int,
+    request: Request,
     _: str = Depends(check_admin),
     name: str = Form(...),
     classification: str = Form(""),
@@ -413,6 +414,7 @@ async def admin_courses_update(
     credits: float = Form(0),
     faculty: str = Form(""),
 ):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Subject).where(Subject.id == course_id))).scalar_one_or_none()
         if course:
@@ -430,6 +432,8 @@ async def admin_courses_update(
             await session.commit()
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
+    if is_ajax:
+        return JSONResponse({"ok": True})
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 
@@ -467,6 +471,7 @@ def _parse_group_ids(ids: str) -> list[int]:
 
 @router.post("/admin/courses/group/update")
 async def admin_courses_group_update(
+    request: Request,
     _: str = Depends(check_admin),
     ids: str = Form(...),
     classification: str = Form(""),
@@ -475,6 +480,7 @@ async def admin_courses_group_update(
     credits: float = Form(0),
     faculty: str = Form(""),
 ):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     # 統合表示（生物学各論A1/A2/C1/C2等）の編集モーダルはグループ内の全科目に同じ内容を
     # 一括適用する（科目名はバリアントごとに異なるためここでは変更しない）
     id_list = _parse_group_ids(ids)
@@ -491,6 +497,8 @@ async def admin_courses_group_update(
         await session.commit()
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
+    if is_ajax:
+        return JSONResponse({"ok": True})
     return RedirectResponse(url="/admin/courses", status_code=303)
 
 

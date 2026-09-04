@@ -495,6 +495,7 @@ function toggleCard(id, headerEl) {
   const arrow = headerEl.querySelector('.card-arrow');
   if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
 }
+let editContext = null;
 function openEdit(id) {
   const c = COURSES[id];
   const nameInput = document.getElementById('editName');
@@ -509,6 +510,7 @@ function openEdit(id) {
   document.getElementById('editCredits').value = c.credits || 0;
   document.getElementById('editFaculty').value = c.faculty || '';
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
+  editContext = { type: 'course', id: id };
   document.getElementById('editModal').classList.add('open');
 }
 function openEditGroup(key) {
@@ -525,6 +527,7 @@ function openEditGroup(key) {
   document.getElementById('editCredits').value = g.credits || 0;
   document.getElementById('editFaculty').value = g.faculty || '';
   document.getElementById('editForm').action = '/admin/courses/group/update';
+  editContext = { type: 'group', key: key };
   document.getElementById('editModal').classList.add('open');
 }
 function closeModal() {
@@ -533,6 +536,69 @@ function closeModal() {
 document.getElementById('editModal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
+// 修正理由: 通常のform submitだとページ全体がリロードされ、展開していたグループの
+// 開閉状態や絞り込み・スクロール位置が毎回失われていた。分類・カテゴリ（グループ化や
+// 上部タブの絞り込みに影響する）を変更した場合のみ整合性のため再読み込みし、それ以外
+// （単位・開講区分・学部学科・科目名）はAJAX保存後に該当行だけを直接書き換える
+document.getElementById('editForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!editContext) return;
+  const form = e.target;
+  const btn = form.querySelector('[type=submit]');
+  const orig = editContext.type === 'course' ? COURSES[editContext.id] : GROUPS[editContext.key];
+  const newClassification = document.getElementById('editClassification').value.trim();
+  const newCategory = document.getElementById('editCategory').value;
+  const structuralChange = (orig.classification || '') !== newClassification || (orig.category || '') !== newCategory;
+  btn.disabled = true;
+  fetchJson(form.action, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: new FormData(form)
+  }).then(function() {
+    btn.disabled = false;
+    closeModal();
+    if (structuralChange) {
+      location.reload();
+      return;
+    }
+    const name = document.getElementById('editName').value.trim();
+    const termType = document.getElementById('editTermType').value;
+    const credits = document.getElementById('editCredits').value;
+    const faculty = document.getElementById('editFaculty').value.trim();
+    orig.term_type = termType;
+    orig.credits = credits;
+    orig.faculty = faculty;
+    if (editContext.type === 'course') {
+      orig.name = name;
+      patchCourseRow(editContext.id, name, termType, credits);
+    }
+  }).catch(function() {
+    btn.disabled = false;
+    showErrorToast();
+  });
+});
+function patchCourseRow(id, name, termType, credits) {
+  const row = document.getElementById('course-row-' + id);
+  if (!row) return;
+  const cell = row.querySelector('td:first-child');
+  cell.textContent = '';
+  cell.appendChild(document.createTextNode(name));
+  if (termType) {
+    const span = document.createElement('span');
+    span.className = 'badge-term';
+    span.style.marginLeft = '4px';
+    span.textContent = termType;
+    cell.appendChild(span);
+  }
+  if (credits && Number(credits) > 0) {
+    const span = document.createElement('span');
+    span.className = 'badge-credit';
+    span.style.marginLeft = '2px';
+    span.textContent = credits + '単位';
+    cell.appendChild(span);
+  }
+}
 {% endraw %}
 
 function addInstructor(courseId) {
