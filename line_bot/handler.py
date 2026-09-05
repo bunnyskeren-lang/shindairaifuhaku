@@ -727,7 +727,7 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             reading_label = f"{first_ch}〜{last_ch}" if first_ch != last_ch else first_ch
             reading_count = len(rows)
 
-    rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
+    rows = sorted(rows, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, _reading_key(c)))
     unlocked_names = frozenset(c.name for c in rows if c.id in unlocked_ids) if unlocked_ids else frozenset()
 
     if _cached is not None and not unlocked_names:

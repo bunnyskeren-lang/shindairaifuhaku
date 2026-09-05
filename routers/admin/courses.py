@@ -59,7 +59,9 @@ async def admin_courses(
         )).scalars().all()
         cls_map = await cache.get_cls_order_map()
         _cls_sort = make_cls_sort(cls_map)
-        courses = sorted(courses, key=lambda c: (_cls_sort(c.classification or ""), c.sort_order, c.name or ""))
+        courses = sorted(courses, key=lambda c: (
+            _cls_sort(c.classification or ""), c.sort_order, (c.reading or "").strip() or (c.name or "")
+        ))
         total = len(courses)
         # 「すべて」タブでもページネーションなしで全件を一度に表示する
         # （以前は4000件超のレンダリング負荷対策で50件単位に分割していたが、
