@@ -48,7 +48,9 @@
     border-left: 3px solid var(--accent-light); padding: 2px 0 2px 12px;
     font-size: 13.5px; color: #334155; line-height: 1.75;
     white-space: pre-wrap; word-break: break-word;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
   }
+  .no-copy { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .comment-box.clamped {
     display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
   }
@@ -587,7 +589,7 @@ async function main() {
       for (const part of gmParts) {
         const { main, extra } = splitGradingText(part.text);
         const extraHtml = extra
-          ? `<div style="font-size:12.5px;color:#374151;line-height:1.55;margin-top:3px">補足: ${esc(extra)}</div>`
+          ? `<div class="no-copy" style="font-size:12.5px;color:#374151;line-height:1.55;margin-top:3px">補足: ${esc(extra)}</div>`
           : "";
         if (!part.label) {
           gmHtml += `<div style="font-size:12.5px;color:#374151;line-height:1.55">${esc(main)}${extraHtml}</div>`;
