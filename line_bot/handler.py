@@ -418,7 +418,10 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                         return url
         return ""
 
-    _LINK_SLOT_WIDTH = "66px"
+    # 66pxでは「📝 レビュー」「📄 シラバス」(絵文字+太字4文字)がぎりぎり収まらず見切れて
+    # いたため、余裕を持たせた値に拡大する（2026-09-05）。バブルはmega幅で余白が十分あるため
+    # 科目名側を圧迫する心配はない。
+    _LINK_SLOT_WIDTH = "90px"
 
     def _link_slot(emoji: str, label: str, color: str, url: str) -> FlexBox:
         # 色付きの丸ピル（塗りつぶし/アウトライン）は複数回試したが、いずれも「結局色や
