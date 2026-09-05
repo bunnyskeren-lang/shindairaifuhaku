@@ -242,6 +242,13 @@ function esc(s) {
     .replace(/'/g, "&#39;");
 }
 
+// grading_methodのtextは「本文(補足:自由記述)」形式で末尾に補足が埋め込まれることがある
+// （templates/form_index.html withExtraText参照）。補足部分だけ改行して表示するため分離する。
+function splitGradingText(text) {
+  const m = /^([\s\S]*)\(補足:([\s\S]*)\)$/.exec(text);
+  return m ? { main: m[1], extra: m[2] } : { main: text, extra: null };
+}
+
 const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★☆☆", S: "★★★★☆", SS: "★★★★★" };
 // 楽単順ソート用。数字が小さいほど楽単（SSが最も楽）。未評価は最後に回す
 const EASE_ORDER = { SS: 0, S: 1, A: 2, B: 3, C: 4 };
@@ -575,12 +582,16 @@ async function main() {
       gmHtml += '<div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.04em;margin-bottom:10px">📋 成績評価方法</div>';
       gmHtml += '<div style="display:flex;flex-direction:column;gap:10px">';
       for (const part of gmParts) {
+        const { main, extra } = splitGradingText(part.text);
+        const extraHtml = extra
+          ? `<div style="font-size:12.5px;color:#374151;line-height:1.55;margin-top:3px">補足: ${esc(extra)}</div>`
+          : "";
         if (!part.label) {
-          gmHtml += `<div style="font-size:12.5px;color:#374151;line-height:1.55">${esc(part.text)}</div>`;
+          gmHtml += `<div style="font-size:12.5px;color:#374151;line-height:1.55">${esc(main)}${extraHtml}</div>`;
         } else {
           gmHtml += `<div style="display:flex;align-items:flex-start;gap:8px">
             <span style="font-size:10.5px;font-weight:700;color:#fff;background:var(--accent-light);padding:3px 8px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:1px">${esc(part.label)}</span>
-            <span style="font-size:12.5px;color:#374151;line-height:1.55">${esc(part.text)}</span>
+            <div style="font-size:12.5px;color:#374151;line-height:1.55">${esc(main)}${extraHtml}</div>
           </div>`;
         }
       }
