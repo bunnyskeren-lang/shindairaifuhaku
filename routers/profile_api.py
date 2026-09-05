@@ -2,7 +2,8 @@ import asyncio
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Request
-from sqlalchemy import select
+from sqlalchemy import literal_column, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, line_client, moderation
 from core.activity_log import save_error_log
@@ -133,31 +134,39 @@ async def register_profile(
         if taken is not None and taken != uid:
             return _form_error("この学籍番号はすでに別のアカウントで登録されています")
 
-        profile = await session.get(UserProfile, uid)
-        is_new_registration = profile is None
-        promo_subject_name = None
-        if is_new_registration:
-            # 会員登録直後、もらったチケットの使い方を体験してもらうための案内科目
-            promo_subject_name = (await session.execute(
-                select(Subject.name).where(Subject.id == WELCOME_PROMO_SUBJECT_ID)
-            )).scalar_one_or_none()
-        if profile:
-            profile.name = name[:100]
-            profile.student_id = sid
-            profile.faculty = faculty
-            profile.department = department
-        else:
+        # 修正理由: 従来はSELECTで存在確認してからINSERT/UPDATEを分岐していたため、
+        # 同一ユーザーからのほぼ同時の二重送信（ボタン連打・LIFF多重初期化等）で
+        # 両方が「未登録」と判定しどちらもINSERTを試み、後勝ちがuser_profiles_pkey
+        # 重複違反で失敗していた(2026-09-05)。ON CONFLICT DO UPDATEで1文にまとめ
+        # DBレベルでアトミックにする。新規登録判定は挿入行かどうかを示すxmaxで行う
+        # （xmax=0はこのトランザクションで新規挿入された行）
+        stmt = pg_insert(UserProfile).values(
+            line_user_id=uid,
+            name=name[:100],
+            student_id=sid,
+            faculty=faculty,
+            department=department,
             # 会員登録（UserProfile初回作成）した全員へ、レビュー閲覧権チケットをプレゼントする
-            profile = UserProfile(
-                line_user_id=uid,
-                name=name[:100],
-                student_id=sid,
-                faculty=faculty,
-                department=department,
-                unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
-            )
-            session.add(profile)
+            unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[UserProfile.line_user_id],
+            set_={
+                "name": stmt.excluded.name,
+                "student_id": stmt.excluded.student_id,
+                "faculty": stmt.excluded.faculty,
+                "department": stmt.excluded.department,
+            },
+        ).returning(literal_column("(xmax = 0)"))
+
         try:
+            is_new_registration = (await session.execute(stmt)).scalar_one()
+            promo_subject_name = None
+            if is_new_registration:
+                # 会員登録直後、もらったチケットの使い方を体験してもらうための案内科目
+                promo_subject_name = (await session.execute(
+                    select(Subject.name).where(Subject.id == WELCOME_PROMO_SUBJECT_ID)
+                )).scalar_one_or_none()
             await session.commit()
         except Exception as exc:
             await session.rollback()
