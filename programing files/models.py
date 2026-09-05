@@ -60,7 +60,12 @@ class UserProfile(Base):
 
 class Subject(Base):
     __tablename__ = "subjects"
-    __table_args__ = (UniqueConstraint("name", "faculty", "department", name="uq_subjects_name_faculty_department"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "name", "faculty", "department", "classification",
+            name="uq_subjects_name_faculty_department_classification",
+        ),
+    )
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

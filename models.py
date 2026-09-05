@@ -114,7 +114,14 @@ class PushSubscription(TimestampMixin, Base):
 class Subject(Base):
     __tablename__ = "subjects"
     __table_args__ = (
-        UniqueConstraint("name", "faculty", "department", name="uq_subjects_name_faculty_department"),
+        # 2026-09-05: classificationを制約に追加。管理画面の科目編集で科目名を別分類に
+        # 存在するのと全く同じ(name, faculty, department)に変更しようとするとIntegrityErrorに
+        # なっていたが、分類ごとに同名科目を意図的に登録できるよう緩和した
+        # （classificationはNULL許容のため、未分類同士は従来通りUNIQUE判定から除外される）
+        UniqueConstraint(
+            "name", "faculty", "department", "classification",
+            name="uq_subjects_name_faculty_department_classification",
+        ),
         # 教養教育院の分類絞り込み(classification==/LIKE)向け
         Index("ix_subjects_faculty_classification", "faculty", "classification"),
         # 管理画面(/admin/courses)のclassification単体GROUP BY・完全一致検索向け
@@ -122,7 +129,8 @@ class Subject(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    # name/facultyの単独indexは張らない。uq_subjects_name_faculty_department（name, faculty, department）と
+    # name/facultyの単独indexは張らない。uq_subjects_name_faculty_department_classification
+    # （name, faculty, department, classification）と
     # ix_subjects_faculty_classification（facultyが先頭列）が既にある以上、単独indexは
     # 先頭列プレフィックスとして完全に重複し検索速度に寄与せず書き込みコストだけ増やす
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -239,6 +247,13 @@ class Review(TimestampMixin, Base):
     # レビュー閲覧権チケットを付与済みかどうか（承認時に1度だけ付与するための冪等性チェック用）。
     # 却下・待機中への差し戻し後に再承認しても二重付与しないよう、一度付与したら値は変更しない
     credit_granted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 全く同じ科目名を別分類にも登録する際、既存科目のレビューをそのまま複製して見せるための
+    # コピー元レビューid（NULL＝通常の投稿）。買取（支払い）対象クエリはpayment_request_id IS NULLで
+    # 判定するため、そのまま複製すると1件の投稿が二重に支払い対象としてカウントされてしまう。
+    # このコピー印を持つレビューは常に買取対象クエリから除外する（routers/payment_api.py参照）
+    copied_from_review_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("reviews.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class CourseSectionView(Base):

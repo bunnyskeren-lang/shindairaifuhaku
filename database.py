@@ -597,3 +597,37 @@ async def init_db():
             EXCEPTION WHEN duplicate_object OR check_violation THEN NULL;
             END $$
         """))
+
+        # ── 2026-09-05: 全く同じ科目名を別の分類にも登録できるようにする ──
+        # 管理画面の科目編集で、科目名を別の分類に存在するのと全く同じ(name, faculty, department)に
+        # 変更しようとするとUNIQUE制約違反(IntegrityError)が発生し、フロント側では
+        # 汎用的な「通信エラー」としか表示されなかった。分類ごとに同名科目を意図的に
+        # 登録できるようUNIQUE制約にclassificationを追加して緩和する
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE subjects DROP CONSTRAINT uq_subjects_name_faculty_department;
+            EXCEPTION WHEN undefined_object THEN NULL;
+            END $$
+        """))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE subjects ADD CONSTRAINT uq_subjects_name_faculty_department_classification
+                UNIQUE (name, faculty, department, classification);
+            EXCEPTION WHEN duplicate_object OR duplicate_table OR unique_violation THEN NULL;
+            END $$
+        """))
+        # 上記で同名科目を別分類に登録する際、管理画面から確認の上で既存科目のレビューを
+        # 複製して見せるための列。そのまま複製すると買取対象クエリ(payment_request_id IS NULL)が
+        # コピーも独立した未払いレビューとしてカウントし、1件の投稿に対して二重に支払われる
+        # リスクがあるため、コピーである印を残し支払い対象クエリから常に除外する
+        # （routers/payment_api.py参照）
+        await conn.execute(text(
+            "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS copied_from_review_id BIGINT"
+        ))
+        await conn.execute(text("""
+            DO $$ BEGIN
+              ALTER TABLE reviews ADD CONSTRAINT fk_reviews_copied_from
+                FOREIGN KEY (copied_from_review_id) REFERENCES reviews(id) ON DELETE SET NULL;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+        """))

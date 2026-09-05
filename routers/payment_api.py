@@ -27,6 +27,9 @@ async def _unpaid_count(session, sid: str) -> int:
             Review.student_id == sid,
             Review.status == ReviewStatus.APPROVED,
             Review.payment_request_id.is_(None),
+            # 同名科目を別分類にも登録した際に複製されたレビュー（copied_from_review_id）は
+            # 元の投稿と同一内容のため、買取対象から除外し二重支払いを防ぐ
+            Review.copied_from_review_id.is_(None),
         )
     )).scalar_one()
 
@@ -38,6 +41,7 @@ async def _submitted_count(session, sid: str) -> int:
         select(func.count(Review.id)).where(
             Review.student_id == sid,
             Review.payment_request_id.is_(None),
+            Review.copied_from_review_id.is_(None),
         )
     )).scalar_one()
 
@@ -138,6 +142,7 @@ async def payment_apply_submit(
                 Review.student_id == sid,
                 Review.status == ReviewStatus.APPROVED,
                 Review.payment_request_id.is_(None),
+                Review.copied_from_review_id.is_(None),
             ).order_by(Review.created_at.asc()).limit(apply_count)
         )).scalars().all()
 

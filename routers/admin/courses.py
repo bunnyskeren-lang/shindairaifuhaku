@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import case, func, or_, select
 
 from core import cache, undo
-from core.config import escape_like, make_cls_sort, make_syllabus_url, reading, syllabus_department_key
+from core.config import escape_like, make_cls_sort, make_syllabus_url, normalize_subject_name, reading, syllabus_department_key
 from core.security import check_admin
 from core.subject_variants import CLASSIFICATION_MERGE_EXCLUDED, compute_variant_display_groups
 from core.templates import templates
@@ -127,6 +127,7 @@ async def admin_courses(
                 "classification": c.classification or "",
                 "category": c.category or "",
                 "faculty": c.faculty or "",
+                "department": c.department or "",
                 "term_type": c.term_type or "",
                 "credits": float(c.credits) if c.credits is not None else 0,
             }
@@ -405,6 +406,79 @@ async def admin_course_move(course_id: int, request: Request, _=Depends(check_ad
     return JSONResponse({"ok": True})
 
 
+async def _find_duplicate_subject(session, course_id: int, name: str, faculty: str, department: str) -> Subject | None:
+    """(name, faculty, department)が完全に一致する他のSubjectを探す。classification違いのみの
+    「全く同じ科目名」を検出するための判定（2026-09-05、UNIQUE制約からclassificationを
+    除いた3列で一致する行がこれに当たる）。"""
+    return (await session.execute(
+        select(Subject).where(
+            Subject.id != course_id,
+            Subject.name == name,
+            Subject.faculty == faculty,
+            Subject.department == department,
+        )
+    )).scalars().first()
+
+
+async def _copy_approved_reviews(session, source: Subject, target: Subject) -> None:
+    """全く同じ科目名を別分類にも登録する際、確認の上で既存科目(source)の承認済みレビューを
+    target側にも複製して見せる。買取（支払い）対象からは常に除外するため
+    payment_request_id/credit_granted_atは付与せず、copied_from_review_idにコピー元を記録する
+    （routers/payment_api.pyの買取対象クエリはこの列で除外している）。"""
+    source_sections = (await session.execute(
+        select(CourseSection).where(CourseSection.subject_id == source.id)
+    )).scalars().all()
+    if not source_sections:
+        return
+    target_sections = (await session.execute(
+        select(CourseSection).where(CourseSection.subject_id == target.id)
+    )).scalars().all()
+    target_section_by_instructor = {cs.instructor_id: cs for cs in target_sections}
+
+    # 同じ操作が繰り返されても同じレビューを何度も複製しないためのガード
+    already_copied_ids: set[int] = set()
+    if target_sections:
+        already_copied_ids = set((await session.execute(
+            select(Review.copied_from_review_id).where(
+                Review.course_section_id.in_([cs.id for cs in target_sections]),
+                Review.copied_from_review_id.isnot(None),
+            )
+        )).scalars().all())
+
+    for src_section in source_sections:
+        target_section = target_section_by_instructor.get(src_section.instructor_id)
+        if target_section is None:
+            target_section = CourseSection(subject_id=target.id, instructor_id=src_section.instructor_id)
+            session.add(target_section)
+            await session.flush()
+            target_section_by_instructor[src_section.instructor_id] = target_section
+
+        src_reviews = (await session.execute(
+            select(Review).where(
+                Review.course_section_id == src_section.id,
+                Review.status == ReviewStatus.APPROVED,
+            )
+        )).scalars().all()
+        for r in src_reviews:
+            if r.id in already_copied_ids:
+                continue
+            session.add(Review(
+                course_section_id=target_section.id,
+                content=r.content,
+                rating=r.rating,
+                ease_rating=r.ease_rating,
+                grading_method=r.grading_method,
+                submitter_name=r.submitter_name,
+                nickname=r.nickname,
+                student_id=r.student_id,
+                academic_year=r.academic_year,
+                selected_instructor=r.selected_instructor,
+                status=ReviewStatus.APPROVED,
+                copied_from_review_id=r.id,
+            ))
+    await session.commit()
+
+
 @router.post("/admin/courses/update/{course_id}")
 async def admin_courses_update(
     course_id: int,
@@ -416,23 +490,49 @@ async def admin_courses_update(
     term_type: str = Form(""),
     credits: float = Form(0),
     faculty: str = Form(""),
+    department: str = Form(""),
+    force_duplicate: str = Form(""),
 ):
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Subject).where(Subject.id == course_id))).scalar_one_or_none()
         if course:
-            new_name = name.strip()
+            # normalize_subject_name()はSubject.nameのvalidatorと同じ正規化（ローマ数字の半角→全角）。
+            # 重複判定はDB保存後の正規化済み値どうしで比較する必要があるため事前に揃えておく
+            new_name = normalize_subject_name(name.strip())
+            # 修正理由: department列はnullable=False+空文字プレースホルダ方式なのに対し、
+            # facultyだけ空欄保存でNULLになる非対称な状態だった。UNIQUE制約はNULL同士を
+            # 区別しないため空文字に揃えておく(将来faculty列をNOT NULL化する際の前提)
+            new_faculty = faculty.strip()
+            new_department = department.strip()
+
+            duplicate = await _find_duplicate_subject(session, course_id, new_name, new_faculty, new_department)
+            if duplicate is not None and not force_duplicate:
+                # 2026-09-05: 全く同じ科目名（学部・学科も同一）を別分類に登録しようとした場合、
+                # 誤操作の可能性があるため確認なしでは保存させない。フロントはこのエラーを
+                # 検知して確認ダイアログを出し、「はい」ならforce_duplicate付きで再送する
+                message = (
+                    f"同じ科目名が既に「{duplicate.classification or '未分類'}」にあります"
+                    f"（学部：{duplicate.faculty or '未設定'}、学科：{duplicate.department or '未設定'}）。"
+                    "このまま別の分類として保存しますか？"
+                    "（保存すると、既存科目の承認済みレビューがこの科目にもコピーされます）"
+                )
+                if is_ajax:
+                    return JSONResponse({"ok": False, "error": "duplicate_name", "message": message})
+                return RedirectResponse(url="/admin/courses?msg=duplicate_name", status_code=303)
+
             course.name = new_name
             course.classification = classification.strip() or None
             course.category = category
             course.reading = reading(new_name)
             course.term_type = term_type.strip() or None
             course.credits = credits if credits else None
-            # 修正理由: department列はnullable=False+空文字プレースホルダ方式なのに対し、
-            # facultyだけ空欄保存でNULLになる非対称な状態だった。UNIQUE制約はNULL同士を
-            # 区別しないため空文字に揃えておく(将来faculty列をNOT NULL化する際の前提)
-            course.faculty = faculty.strip()
+            course.faculty = new_faculty
+            course.department = new_department
             await session.commit()
+
+            if duplicate is not None and force_duplicate:
+                await _copy_approved_reviews(session, source=duplicate, target=course)
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
     if is_ajax:

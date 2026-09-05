@@ -100,12 +100,15 @@ async def main():
                 )
         print(f"display_orders: 本番のみに存在した{len(orphan_do)}件を削除")
 
-        # ── 2. subjects: UPSERT by (name, faculty, department) ─────────────────
+        # ── 2. subjects: UPSERT by (name, faculty, department, classification) ─
         # id直接UPSERTだと、devとprodのシーケンスが独立して進むため、本番管理画面から
         # 個別追加された科目のidとdevの新規科目idが偶然一致すると、無関係な科目が
         # 無警告に上書きされる事故が起こりうる（instructorsと同じく名前で名寄せする）。
         # 「卒業研究」等、学部をまたいで同名科目が実在するため、名寄せキーはnameだけでなく
-        # (name, faculty, department)の組で行う（DB側もuq_subjects_name_faculty_departmentに変更済み）。
+        # (name, faculty, department, classification)の組で行う
+        # （2026-09-05、DB側もuq_subjects_name_faculty_department_classificationに変更済み。
+        # 管理画面から全く同じ科目名を別分類にも登録できるようになったため、classificationを
+        # 含めないと同名科目のどちらか一方がON CONFLICTで上書きされてしまう）。
         # 2026-08-25にsubjects.facultyをNOT NULL化(database.py init_db())したため、
         # 従来あったfaculty=NULL行によるON CONFLICT不発火の懸念は解消済み。
         # course_sections/subject_credit_categories は下でdev id→prod idに変換して同期する。
@@ -115,9 +118,9 @@ async def main():
             "FROM subjects ORDER BY id"
         )
         dup_keys = [key for key, cnt in
-                    Counter((r["name"], r["faculty"], r["department"]) for r in subj_rows).items() if cnt > 1]
+                    Counter((r["name"], r["faculty"], r["department"], r["classification"]) for r in subj_rows).items() if cnt > 1]
         if dup_keys:
-            raise RuntimeError(f"dev subjects.(name,faculty,department) に重複があるため同期を中止しました: {dup_keys[:10]}")
+            raise RuntimeError(f"dev subjects.(name,faculty,department,classification) に重複があるため同期を中止しました: {dup_keys[:10]}")
 
         async with prod.transaction():
             await prod.executemany(
@@ -126,9 +129,8 @@ async def main():
                   (name, reading, faculty, department, classification,
                    category, sort_order, term_type, credits)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                ON CONFLICT (name, faculty, department) DO UPDATE SET
+                ON CONFLICT (name, faculty, department, classification) DO UPDATE SET
                   reading=EXCLUDED.reading,
-                  classification=EXCLUDED.classification,
                   category=EXCLUDED.category,
                   sort_order=EXCLUDED.sort_order,
                   term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
@@ -140,27 +142,28 @@ async def main():
             )
         print(f"subjects: {len(subj_rows)}件 upsert")
 
-        # prod の subject (name,faculty,department)→id マッピングを取得（devとprodでidが異なりうる）
+        # prod の subject (name,faculty,department,classification)→id マッピングを取得
+        # （devとprodでidが異なりうる）
         prod_subj_map: dict[tuple, int] = {
-            (r["name"], r["faculty"], r["department"]): r["id"]
-            for r in await prod.fetch("SELECT id, name, faculty, department FROM subjects")
+            (r["name"], r["faculty"], r["department"], r["classification"]): r["id"]
+            for r in await prod.fetch("SELECT id, name, faculty, department, classification FROM subjects")
         }
         dev_subj_id_to_prod_id: dict[int, int] = {
-            r["id"]: prod_subj_map[(r["name"], r["faculty"], r["department"])]
-            for r in subj_rows if (r["name"], r["faculty"], r["department"]) in prod_subj_map
+            r["id"]: prod_subj_map[(r["name"], r["faculty"], r["department"], r["classification"])]
+            for r in subj_rows if (r["name"], r["faculty"], r["department"], r["classification"]) in prod_subj_map
         }
 
         # subjects: 本番のみに存在する科目を削除。ただし course_sections 経由で
         # syllabi（時間割データ）や reviews が紐づく場合は、CASCADE/RESTRICTで
         # ユーザーデータを巻き込む恐れがあるため削除せず一覧表示のみに留める。
-        dev_subj_keys = {(r["name"], r["faculty"], r["department"]) for r in subj_rows}
+        dev_subj_keys = {(r["name"], r["faculty"], r["department"], r["classification"]) for r in subj_rows}
         orphan_subjects = [
-            (name_faculty_dept, pid) for name_faculty_dept, pid in prod_subj_map.items()
-            if name_faculty_dept not in dev_subj_keys
+            (key, pid) for key, pid in prod_subj_map.items()
+            if key not in dev_subj_keys
         ]
         deleted_subj = 0
         kept_subj = []
-        for (name, faculty, department), pid in orphan_subjects:
+        for (name, faculty, department, classification), pid in orphan_subjects:
             cs_ids = [x["id"] for x in await prod.fetch(
                 "SELECT id FROM course_sections WHERE subject_id=$1", pid)]
             if cs_ids:
@@ -171,14 +174,14 @@ async def main():
             else:
                 syllabi_count = reviews_count = 0
             if syllabi_count or reviews_count:
-                kept_subj.append((name, faculty, department, syllabi_count, reviews_count))
+                kept_subj.append((name, faculty, department, classification, syllabi_count, reviews_count))
                 continue
             await prod.execute("DELETE FROM subjects WHERE id=$1", pid)
             deleted_subj += 1
         print(f"subjects: 本番のみの{len(orphan_subjects)}件中 {deleted_subj}件削除、"
               f"{len(kept_subj)}件は時間割登録/レビューが紐づくため保持")
-        for name, faculty, department, sc, rc in kept_subj:
-            print(f"  KEEP(要確認): {name} ({faculty}{department}) syllabi={sc} reviews={rc}")
+        for name, faculty, department, classification, sc, rc in kept_subj:
+            print(f"  KEEP(要確認): {name} ({faculty}{department}/{classification or '未分類'}) syllabi={sc} reviews={rc}")
 
         # ── 3. instructors: UPSERT by name ────────────────────────────────────
         instr_rows = await dev.fetch("SELECT id, name, sort_order FROM instructors ORDER BY id")
@@ -285,7 +288,7 @@ async def main():
         # course_section_idはdev/本番で採番が独立しているため直接コピーできない。
         # (科目のname+faculty+department, 担当教員name) の自然キーで
         # dev の course_section_id → 本番の course_section_id に引き直してから同期する。
-        dev_subj_id_to_key = {r["id"]: (r["name"], r["faculty"], r["department"]) for r in subj_rows}
+        dev_subj_id_to_key = {r["id"]: (r["name"], r["faculty"], r["department"], r["classification"]) for r in subj_rows}
         dev_cs_id_to_key = {}
         for r in cs_rows:
             subj_key = dev_subj_id_to_key.get(r["subject_id"])

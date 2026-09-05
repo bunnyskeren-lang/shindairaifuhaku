@@ -53,7 +53,25 @@
 - 科目管理画面（admin）は元々このロジックを使っておらず、統合前の個別科目のまま選択・表示される。
 - これは意図的な仕様であり、LINE bot一覧とadmin画面の見た目の違いを不具合と誤認しないこと。
 
-## 3. 未解決の別問題（保留中・要注意）
+## 3. 同じ科目名を複数の分類に登録する（2026-09-05）
+
+`subjects`のUNIQUE制約は`(name, faculty, department, classification)`（`uq_subjects_name_faculty_department_classification`）。
+以前は`classification`を含まない3列制約だったため、管理画面の科目編集（`/admin/courses/update/{id}`）で
+科目名・学部・学科を別の分類に既にある科目と全く同じ値に変更しようとすると`IntegrityError`が発生し、
+汎用的な「通信エラー」トーストしか出なかった。
+
+現在は`classification`を制約に含めることで、**意図的であれば全く同じ科目名を別の分類にも
+別レコードとして登録できる**（`routers/admin/courses.py`の`_find_duplicate_subject`が
+name+faculty+department一致を検出し、確認ダイアログを出してから保存する）。確認後は
+既存科目（コピー元）の承認済みレビューを新しい分類側の科目にも複製する
+（`_copy_approved_reviews`。複製したレビューは`Review.copied_from_review_id`で識別され、
+買取（支払い）対象からは常に除外する。`routers/payment_api.py`参照）。
+
+- `programing files/sync_db_to_prod.py`のdev→本番同期も、この4列を自然キーとして
+  UPSERT・孤立行判定を行うよう追随済み。この領域をさらに変更する際は同スクリプトの
+  名寄せキーも忘れず更新すること。
+
+## 4. 未解決の別問題（保留中・要注意）
 
 DB内で科目名に「/」を含むSubjectは2グループに分かれる：
 

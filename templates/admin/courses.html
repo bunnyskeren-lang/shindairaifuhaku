@@ -325,7 +325,11 @@
         <label>分類<input type="text" id="editClassification" name="classification" maxlength="50"></label>
       </div>
       <div style="margin-bottom:10px">
-        <label>学部・学科（任意）<input type="text" id="editFaculty" name="faculty" maxlength="100" placeholder="例：経営学部"></label>
+        <label>学部（任意）<input type="text" id="editFaculty" name="faculty" maxlength="100" placeholder="例：経営学部"></label>
+      </div>
+      <div id="editDepartmentWrap" style="margin-bottom:10px">
+        <label>学科（任意）<input type="text" id="editDepartment" name="department" maxlength="100" placeholder="例：建築学科"></label>
+        <p style="font-size:11px;color:#6b7280;margin:4px 0 0">同じ科目名が別の分類に既にある場合、学部・学科を分ければ別科目として登録できます</p>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:10px">
         <label style="flex:1">開講区分
@@ -511,6 +515,8 @@ function openEdit(id) {
   document.getElementById('editTermType').value = c.term_type || '';
   document.getElementById('editCredits').value = c.credits || 0;
   document.getElementById('editFaculty').value = c.faculty || '';
+  document.getElementById('editDepartment').value = c.department || '';
+  document.getElementById('editDepartmentWrap').style.display = 'block';
   document.getElementById('editForm').action = '/admin/courses/update/' + id;
   editContext = { type: 'course', id: id };
   document.getElementById('editModal').classList.add('open');
@@ -528,6 +534,8 @@ function openEditGroup(key) {
   document.getElementById('editTermType').value = g.term_type || '';
   document.getElementById('editCredits').value = g.credits || 0;
   document.getElementById('editFaculty').value = g.faculty || '';
+  document.getElementById('editDepartment').value = '';
+  document.getElementById('editDepartmentWrap').style.display = 'none';
   document.getElementById('editForm').action = '/admin/courses/group/update';
   editContext = { type: 'group', key: key };
   document.getElementById('editModal').classList.add('open');
@@ -546,18 +554,36 @@ document.getElementById('editForm').addEventListener('submit', function(e) {
   e.preventDefault();
   e.stopPropagation();
   if (!editContext) return;
-  const form = e.target;
+  submitEditForm(e.target, {});
+});
+// 修正理由: 全く同じ科目名を別分類に保存しようとするとUNIQUE制約違反で汎用的な
+// 「通信エラー」トーストしか出なかった。バックエンドが{"ok":false,"error":"duplicate_name"}を
+// 返した場合は確認ダイアログを出し、「はい」ならforce_duplicate付きで再送する
+function submitEditForm(form, extraFields) {
   const btn = form.querySelector('[type=submit]');
   const orig = editContext.type === 'course' ? COURSES[editContext.id] : GROUPS[editContext.key];
   const newClassification = document.getElementById('editClassification').value.trim();
   const newCategory = document.getElementById('editCategory').value;
   const structuralChange = (orig.classification || '') !== newClassification || (orig.category || '') !== newCategory;
+  const fd = new FormData(form);
+  Object.keys(extraFields).forEach(function(k) { fd.set(k, extraFields[k]); });
   btn.disabled = true;
   fetchJson(form.action, {
     method: 'POST',
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    body: new FormData(form)
-  }).then(function() {
+    body: fd
+  }).then(function(data) {
+    if (data && data.ok === false) {
+      btn.disabled = false;
+      if (data.error === 'duplicate_name') {
+        askConfirm(data.message, 'はい').then(function(ok) {
+          if (ok) submitEditForm(form, { force_duplicate: '1' });
+        });
+      } else {
+        showErrorToast(data.message);
+      }
+      return;
+    }
     btn.disabled = false;
     closeModal();
     if (structuralChange) {
@@ -579,7 +605,7 @@ document.getElementById('editForm').addEventListener('submit', function(e) {
     btn.disabled = false;
     showErrorToast();
   });
-});
+}
 function patchCourseRow(id, name, termType, credits) {
   const row = document.getElementById('course-row-' + id);
   if (!row) return;
