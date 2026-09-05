@@ -539,12 +539,15 @@ async function main() {
     // ニックネームは一目でニックネームだと分かるよう明示する（匿名は表記だけで自明なのでそのまま）
     const byLabel = r.nickname ? `ニックネーム: ${esc(r.nickname)}` : "匿名";
     const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
+    const letterBadge = r.variant_letter
+      ? `<span style="font-size:11px;font-weight:700;color:var(--accent);background:#eef2ff;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle">${esc(r.variant_letter)}クラス</span>`
+      : "";
     const yearLabel = r.academic_year ? `${r.academic_year}年度` : "";
     let html = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;min-width:0">
         <span style="font-size:22px;flex-shrink:0">👨‍🏫</span>
         <div style="min-width:0">
-          <div style="font-size:15px;font-weight:700;color:#1f2937">${instrLabel}</div>
+          <div style="font-size:15px;font-weight:700;color:#1f2937">${instrLabel}${letterBadge}</div>
           <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap">
             ${yearLabel ? `<span style="font-size:11px;font-weight:600;color:var(--accent);background:#eef2ff;padding:3px 9px;border-radius:999px">${yearLabel}</span>` : ""}
             <span style="font-size:11px;color:#64748b;background:#f1f5f9;padding:3px 9px;border-radius:999px">${byLabel}</span>

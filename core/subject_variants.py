@@ -149,6 +149,23 @@ LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS = frozenset({
 # （routers/admin/courses.py compute_variant_display_groups()）の2画面のみ。
 LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS = frozenset({
     "国際人間科学部専門科目",
+    "教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)",
+})
+
+
+# 教養科目の4大分類（人文/社会/自然/総合）配下の「アジア史A/B」のような文字バリアントは、
+# 並行クラス（担当教員が異なるだけで同一内容）であることをユーザーが確認済み（2026-09-05）。
+# LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONSに追加したことでLINE bot科目一覧・管理画面
+# 科目一覧では「(A/B)」とまとめて表示されるが、レビュー投稿の募集枠共有・重複投稿防止
+# （get_variant_map_cached()が担う）には一切影響しない（compute_variant_groups()には
+# letter_only_included_namesを渡していないため）。一方でこのユーザー要望は「投稿枠はA/B別だが
+# 閲覧は1つのLIFFページにまとめたい」というもので、既存のLETTER_ONLY_MERGE_INCLUDED_
+# CLASSIFICATIONS（国際人間科学部専門科目）は閲覧も意図的に分離したままにする設計だったため、
+# 閲覧統合の可否だけを別軸のオプトイン集合として切り出した。この集合に属する科目のみ
+# routers/liff_api.py `_group_subject_ids()`がcompute_letter_view_groups()の結果を使って
+# レビュー閲覧・チケット共有をA/B全体でまとめる。
+LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS = frozenset({
+    "教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)",
 })
 
 
@@ -489,6 +506,34 @@ def compute_variant_groups(
             if n not in result:
                 result[n] = label
 
+    return result
+
+
+def compute_letter_view_groups(
+    names_with_faculty_dept: list[tuple[str, str, str]],
+) -> dict[str, tuple[str, list[str], dict[str, str]]]:
+    """LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS向け。末尾アルファベットのみが異なる科目名を
+    グループ化し、科目名 → (ベースラベル, グループ内科目名リスト(A→B→C順), 科目名→letterの辞書)
+    のマップを返す。呼び出し側（core/cache.py）がLETTER_ONLY_VIEW_MERGE_CLASSIFICATIONSに
+    属する科目のみを渡す想定（この関数自体はclassificationを引数に取らない）。
+
+    compute_variant_groups()（レビュー投稿フォーム・重複防止・募集枠共有向け）とは意図的に
+    別関数にしている。教養科目のA/B並行クラスは「投稿枠・重複防止は引き続きA/B別科目のまま、
+    レビュー閲覧だけを1つのLIFFページにまとめたい」という要望（2026-09-05）のため、
+    compute_variant_groups()の結果（get_variant_map_cached()経由でレビュー投稿フォーム・
+    募集枠共有にも波及する）とは混ぜられない。
+
+    グループに属さない（バリアントが1件だけ）科目名はマップに含めない。"""
+    all_names = frozenset(n for n, _, _ in names_with_faculty_dept)
+    _, _, _, letter_only_bases = compute_variant_bases(
+        names_with_faculty_dept, letter_only_included_names=all_names)
+    result: dict[str, tuple[str, list[str], dict[str, str]]] = {}
+    for (base, _fac, _dept, _tag), members in letter_only_bases.items():
+        members_sorted = sorted(members, key=lambda x: x[1])
+        names_sorted = [n for n, _letter, _tag2 in members_sorted]
+        letters = {n: letter for n, letter, _tag2 in members}
+        for n in names_sorted:
+            result[n] = (base, names_sorted, letters)
     return result
 
 

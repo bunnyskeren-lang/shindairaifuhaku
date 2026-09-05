@@ -6,7 +6,9 @@ from sqlalchemy import func, select
 from core.config import EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION, make_syllabus_url
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
+    LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS,
     LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
+    compute_letter_view_groups,
     compute_variant_full_labels,
     compute_variant_groups,
 )
@@ -345,6 +347,7 @@ def invalidate_courses_cache():
     global _preload_cache, _preload_cache_at
     global _variant_map_cache, _variant_map_cache_at
     global _variant_full_label_cache, _variant_full_label_cache_at
+    global _letter_view_group_cache, _letter_view_group_cache_at
     global _search_index_cache, _search_index_cache_at
     _course_by_name = {}
     _course_list_all = []
@@ -365,6 +368,10 @@ def invalidate_courses_cache():
     _variant_map_cache_at = 0.0
     _variant_full_label_cache = None
     _variant_full_label_cache_at = 0.0
+    # 教養科目A/Bのレビュー閲覧統合グループ(compute_letter_view_groups)もcourses依存の
+    # 派生データのため一緒に無効化する
+    _letter_view_group_cache = None
+    _letter_view_group_cache_at = 0.0
     # 自由入力検索インデックスもcourses/variant_mapの派生データのため一緒に無効化する
     _search_index_cache = None
     _search_index_cache_at = 0.0
@@ -494,6 +501,35 @@ async def get_variant_group_subject_ids(subject: Subject) -> list[int]:
         and (c.faculty or "") == (subject.faculty or "")
         and (c.department or "") == (subject.department or "")
     ]
+
+
+_letter_view_group_cache: dict[str, tuple[str, list[str], dict[str, str]]] | None = None
+_letter_view_group_cache_at: float = 0.0
+
+
+async def get_letter_view_group_cached() -> dict[str, tuple[str, list[str], dict[str, str]]]:
+    """LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS（教養科目の人文/社会/自然/総合）向け。
+    科目名 → (グループベースラベル, グループ内科目名リスト(A→B→C順), 科目名→letterの辞書)
+    のマップ（compute_letter_view_groups()の結果）。
+
+    get_variant_map_cached()（レビュー投稿・募集枠共有）とは意図的に別系統のキャッシュ。
+    routers/liff_api.py `_group_subject_ids()`がレビュー"閲覧"のみをA/B全体でまとめるために使う
+    （core.subject_variants.LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS docstring参照）。
+    """
+    global _letter_view_group_cache, _letter_view_group_cache_at
+    if _letter_view_group_cache is not None and time.monotonic() - _letter_view_group_cache_at < _COURSE_CACHE_TTL:
+        return _letter_view_group_cache
+    _, all_courses = await get_courses_cached()
+    by_cls: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
+    for c in all_courses:
+        if (c.classification or "") in LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS:
+            by_cls[c.classification].append((c.name, c.faculty or "", c.department or ""))
+    result: dict[str, tuple[str, list[str], dict[str, str]]] = {}
+    for names_fd in by_cls.values():
+        result.update(compute_letter_view_groups(names_fd))
+    _letter_view_group_cache = result
+    _letter_view_group_cache_at = time.monotonic()
+    return _letter_view_group_cache
 
 
 _variant_full_label_cache: dict[str, str] | None = None

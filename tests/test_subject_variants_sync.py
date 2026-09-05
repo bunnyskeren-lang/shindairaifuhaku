@@ -165,6 +165,56 @@ def test_letter_only_variants_are_never_merged():
     assert labels["力学基礎1"] == "力学基礎(1/2)"
 
 
+def test_kyoyo_classifications_opted_into_letter_only_display_merge():
+    """教養科目の4大分類（人文/社会/自然/総合）は2026-09-05にユーザー指示で
+    LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONSにオプトインした（例:「アジア史A/B」は
+    並行クラスであることを確認済み）。LINE bot科目一覧・管理画面科目一覧では「(A/B)」に
+    統合表示されるが、compute_variant_groups()（レビュー投稿の重複防止・募集枠共有）には
+    一切影響しない（国際人間科学部専門科目と同じ設計）。"""
+    for cls in ("教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)"):
+        assert cls in subject_variants.LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS
+
+    names_with_fd = [("アジア史A", "教養教育院", ""), ("アジア史B", "教養教育院", "")]
+    groups = subject_variants.compute_variant_groups(names_with_fd)
+    assert "アジア史A" not in groups
+    assert "アジア史B" not in groups
+
+    names_with_cls = [("アジア史A", "教養(人文)"), ("アジア史B", "教養(人文)")]
+    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
+    assert display_result[("アジア史A", "教養(人文)")] == "アジア史 (A/B)"
+    assert display_result[("アジア史B", "教養(人文)")] == "アジア史 (A/B)"
+
+
+def test_compute_letter_view_groups_merges_kyoyo_review_viewing_only():
+    """教養科目のA/B文字バリアントは、レビュー"閲覧"のみ1つのLIFFページにまとめたいという
+    要望（2026-09-05）のため、compute_variant_groups()とは独立したcompute_letter_view_groups()
+    を新設した。科目名→(ベースラベル, グループ内科目名リスト, 科目名→letter辞書)を返し、
+    レビュー投稿・募集枠共有には一切使われない（routers/liff_api.py `_group_subject_ids()`が
+    レビュー閲覧の科目まとめにのみ使う）。"""
+    names_with_fd = [
+        ("アジア史A", "教養教育院", ""),
+        ("アジア史B", "教養教育院", ""),
+        ("心理学A", "教養教育院", ""),
+        ("心理学B", "教養教育院", ""),
+        ("心理学C", "教養教育院", ""),
+    ]
+    result = subject_variants.compute_letter_view_groups(names_with_fd)
+    label, names, letters = result["アジア史A"]
+    assert label == "アジア史"
+    assert names == ["アジア史A", "アジア史B"]
+    assert letters == {"アジア史A": "A", "アジア史B": "B"}
+    assert result["アジア史B"] == result["アジア史A"]
+
+    label2, names2, letters2 = result["心理学A"]
+    assert label2 == "心理学"
+    assert names2 == ["心理学A", "心理学B", "心理学C"]
+    assert letters2 == {"心理学A": "A", "心理学B": "B", "心理学C": "C"}
+
+    # 単独科目（バリアントなし）はマップに含まれない
+    solo = subject_variants.compute_letter_view_groups([("単独科目", "教養教育院", "")])
+    assert "単独科目" not in solo
+
+
 def test_letter_only_merge_opt_in_for_kokusai_ningen_senmon_classification():
     """2026-09-04にユーザー指示で、末尾アルファベットのみが異なる文字バリアント統合の
     恒常廃止ルール（2026-09-02）に「国際人間科学部専門科目」classification限定の
@@ -210,11 +260,13 @@ def test_letter_only_merge_opt_in_for_kokusai_ningen_senmon_classification():
     assert display_result[("保健体育科教育論A", "国際人間科学部専門科目")] == "保健体育科教育論 (A/B/C/D)"
     assert display_result[("保健体育科教育論D", "国際人間科学部専門科目")] == "保健体育科教育論 (A/B/C/D)"
 
-    # 他のclassificationでは引き続き統合されない（恒常廃止ルールはそのまま）
-    other_cls = [(n, "教養(人文)") for n, _, _ in names_with_fd]
+    # 他のclassificationでは引き続き統合されない（恒常廃止ルールはそのまま。
+    # 教養(人文)等の教養科目4分類は2026-09-05にオプトインされたため、ここでは未オプトインの
+    # classificationを使う）
+    other_cls = [(n, "工学部専門科目") for n, _, _ in names_with_fd]
     other_result = subject_variants.compute_variant_display_groups(other_cls)
-    assert ("日本文化交流論A", "教養(人文)") not in other_result
-    assert ("保健体育科教育論A", "教養(人文)") not in other_result
+    assert ("日本文化交流論A", "工学部専門科目") not in other_result
+    assert ("保健体育科教育論A", "工学部専門科目") not in other_result
 
 
 def test_num_excluded_names_keeps_health_sports_jisshu_separate():
@@ -249,16 +301,14 @@ def test_num_excluded_names_keeps_health_sports_jisshu_separate():
 
 def test_compute_variant_display_groups_never_merges_letter_only_variants():
     """管理画面向けcompute_variant_display_groups()も、末尾がA/B/C/Dのみ異なる
-    文字バリアントは（分類を問わず）統合しない（2026-09-02に恒常廃止）。"""
+    文字バリアントは、LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONSにオプトインされた
+    classification以外では統合しない（2026-09-02に恒常廃止、以後は明示的なオプトイン
+    classificationのみ例外）。"""
     names_with_cls = [
-        ("心理学A", "教養(人文)"),
-        ("心理学B", "教養(人文)"),
         ("構造設計A", "工学部専門科目"),
         ("構造設計B", "工学部専門科目"),
     ]
     result = subject_variants.compute_variant_display_groups(names_with_cls)
-    assert ("心理学A", "教養(人文)") not in result
-    assert ("心理学B", "教養(人文)") not in result
     assert ("構造設計A", "工学部専門科目") not in result
     assert ("構造設計B", "工学部専門科目") not in result
 

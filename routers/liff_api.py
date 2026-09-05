@@ -273,15 +273,32 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
     に属する場合、グループラベル・グループ内の全subject_id・全科目名を返す。
     属さない場合はラベル""・[subject.id]のみを返す（レビュー閲覧では単独科目として扱う）。
     グループ判定の実体はcache.get_variant_group_subject_ids()（レビュー投稿の重複防止・
-    募集枠共有と共通化済み、2026-09-01）。"""
+    募集枠共有と共通化済み、2026-09-01）。
+
+    上記のグループに属さない場合でも、LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS（教養科目の
+    人文/社会/自然/総合、2026-09-05）対象の科目は、cache.get_letter_view_group_cached()
+    （投稿枠共有には一切影響しない別系統のグループ判定）でA/B文字バリアントをまとめる。
+    レビュー閲覧・チケット解除は1つのLIFFページに合算するが、レビュー投稿の募集枠・
+    重複防止はA/B別科目のまま（この関数の結果を使わない）。"""
     variant_map = await cache.get_variant_map_cached()
     label = variant_map.get(subject.name, "")
     ids = await cache.get_variant_group_subject_ids(subject)
-    if not label or len(ids) < 2:
-        return "", [subject.id], [subject.name]
-    _, all_courses = await cache.get_courses_cached()
-    names_by_id = {c.id: c.name for c in all_courses}
-    return label, ids, [names_by_id[i] for i in ids]
+    if label and len(ids) >= 2:
+        _, all_courses = await cache.get_courses_cached()
+        names_by_id = {c.id: c.name for c in all_courses}
+        return label, ids, [names_by_id[i] for i in ids]
+
+    letter_view = await cache.get_letter_view_group_cached()
+    entry = letter_view.get(subject.name)
+    if entry:
+        letter_label, letter_names, _letters = entry
+        _, all_courses = await cache.get_courses_cached()
+        name_to_id = {c.name: c.id for c in all_courses}
+        letter_ids = [name_to_id[n] for n in letter_names if n in name_to_id]
+        if len(letter_ids) >= 2:
+            return letter_label, letter_ids, letter_names
+
+    return "", [subject.id], [subject.name]
 
 
 @router.get("/api/course/{course_id}")
@@ -317,6 +334,21 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 .order_by(CourseSection.id)
             )).all()
             cs_ids = [cs.id for cs, _ in cs_instr_rows]
+
+            # 教養科目のA/B文字バリアント統合（LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS）では、
+            # レビューカードごとに担当教員がA/Bどちらのクラスのものかを明記する（2026-09-05、
+            # ユーザー指示。並行クラスで担当教員が異なることが多いため、統合表示だけだと
+            # レビューがどちらのクラスのものか分からなくなる不備の対策）。
+            letter_view = await cache.get_letter_view_group_cached()
+            _letter_entry = letter_view.get(subject.name)
+            cs_id_to_letter: dict[int, str] = {}
+            if _letter_entry:
+                _, _letter_names, name_to_letter = _letter_entry
+                id_to_name = dict(zip(group_subject_ids, group_names))
+                cs_id_to_letter = {
+                    cs.id: name_to_letter.get(id_to_name.get(cs.subject_id, ""), "")
+                    for cs, _instr in cs_instr_rows
+                }
 
             # 評価の内訳表示（充実度★1〜5・楽単度SS〜Cそれぞれの件数分布）のため、
             # ease_rating単独ではなく(ease_rating, rating)の2軸でgroup byする。
@@ -460,6 +492,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     "grading_method": parse_grading_method(r.grading_method),
                     "comment": r.content or "",
                     "instructor": r.selected_instructor or "",
+                    "variant_letter": cs_id_to_letter.get(r.course_section_id, ""),
                     "nickname": r.nickname or "",
                     "academic_year": r.academic_year or 0,
                     "created_at": r.created_at.isoformat(),
