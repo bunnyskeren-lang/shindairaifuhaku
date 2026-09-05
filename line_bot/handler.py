@@ -424,7 +424,7 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
         # 「レビュー」「シラバス」という文字そのものをタップ対象にした下線付きテキスト
         # リンクに変更する（2026-09-03）。
         return FlexText(
-            text=f"{emoji} {label}", size="xs", weight="bold", color=color,
+            text=f"{emoji} {label}", size="xs", weight="bold", color=color, flex=0,
             decoration="underline", action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
         )
 
@@ -544,7 +544,10 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                           weight="bold" if has_review else "regular"),
             ]
             if pills:
-                row_children.append(FlexBox(layout="horizontal", spacing="xs", contents=pills))
+                # flex=0で「必要な幅だけ」に固定しないと、科目名テキスト(flex=1)と
+                # デフォルトのflex=1同士で横幅を50/50に分け合ってしまい、科目名が
+                # 長い行では「レビュー」「シラバス」の文字が見切れる（2026-09-05）。
+                row_children.append(FlexBox(layout="horizontal", spacing="xs", flex=0, contents=pills))
 
             # 修正理由: 従来は科目名の細いテキスト部分のみがタップ対象だった。1エントリー1行に
             # まとめ、行全体をタップ対象にする（2026-09-03、科目一覧カードUI改善）。
