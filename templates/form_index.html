@@ -1760,19 +1760,7 @@
     }
 
     let saveTimer;
-    let formSubmitted = false;
-    function saveData() {
-      document.getElementById('saveStatus').textContent = '保存中...';
-      updateProgressUI();
-      updateGradingProgress();
-      updateErrorBanner();
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        // 修正理由: 送信ボタン押下直後、debounce待ち(500ms)中のsaveTimerが
-        // localStorage.removeItem()の後に発火し、送信済みの内容を下書きとして
-        // 復活させてしまうバグがあった（「別の授業もレビューする」で戻ると
-        // 投稿直後の科目が再選択された状態になる原因）。formSubmittedフラグで抑止する
-        if (formSubmitted) return;
+    function persistDraft() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           nickname: document.getElementById('nickname').value,
           academic_year: document.getElementById('academic_year').value,
@@ -1802,7 +1790,15 @@
           evalExtra: document.getElementById('evalExtraInput').value,
         }));
         document.getElementById('saveStatus').textContent = '自動保存済み ✓';
-      }, 500);
+    }
+
+    function saveData() {
+      document.getElementById('saveStatus').textContent = '保存中...';
+      updateProgressUI();
+      updateGradingProgress();
+      updateErrorBanner();
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(persistDraft, 500);
     }
 
     function loadData() {
@@ -2111,9 +2107,13 @@
         return;
       }
 
-      formSubmitted = true;
+      // 修正理由: 以前はここで下書きを消してから送信していたが、送信後に
+      // サーバー側でLINEトークン検証が失敗するケース（期限切れ等）があり、
+      // 「レビュー投稿」から開き直すと入力内容が全て消えてしまっていた。
+      // 送信成功はform_success.html側で確定してから消すことにし、
+      // ここでは直前の入力（debounce待ち分）を確実に保存するだけに留める
       clearTimeout(saveTimer);
-      localStorage.removeItem(STORAGE_KEY);
+      persistDraft();
       e.target.submit();
     });
 
