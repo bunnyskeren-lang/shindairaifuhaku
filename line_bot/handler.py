@@ -418,15 +418,25 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
                         return url
         return ""
 
-    def _link_text(emoji: str, label: str, color: str, url: str) -> FlexText:
+    _LINK_SLOT_WIDTH = "66px"
+
+    def _link_slot(emoji: str, label: str, color: str, url: str) -> FlexBox:
         # 色付きの丸ピル（塗りつぶし/アウトライン）は複数回試したが、いずれも「結局色や
         # 絵文字の違いにしか見えない」という指摘が続いたため、背景ボックスをやめて
         # 「レビュー」「シラバス」という文字そのものをタップ対象にした下線付きテキスト
         # リンクに変更する（2026-09-03）。
-        return FlexText(
-            text=f"{emoji} {label}", size="xs", weight="bold", color=color, flex=0,
-            decoration="underline", action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
+        # 固定幅のスロットに1つずつ配置し、片方しか無い行でも空スロットで位置を
+        # 埋めることで、シラバス単独の行・レビュー単独の行・両方ある行のいずれでも
+        # 「シラバス」「レビュー」の文字位置（＝科目名の右端）が縦にそろうようにする
+        # （2026-09-05、両方あるときに科目名の右端がそろわないというUX指摘への対応）。
+        content = (
+            FlexText(
+                text=f"{emoji} {label}", size="xs", weight="bold", color=color,
+                decoration="underline", align="end",
+                action=URIAction(label=f"{emoji}{label}"[:20], uri=url),
+            ) if url else FlexText(text=" ", size="xs")
         )
+        return FlexBox(layout="vertical", width=_LINK_SLOT_WIDTH, flex=0, contents=[content])
 
     def _status_badge(has_review: bool, is_unlocked: bool = False) -> FlexBox:
         # ●○の点だけでは判別しづらいというUX指摘を受け、系統/学部ブラウズ等と同じ
@@ -532,22 +542,22 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
             else:
                 name_action = PostbackAction(label=display[:20], data=name)
 
-            pills = []
-            if liff_url:
-                pills.append(_link_text("📝", "レビュー", "#4338ca", liff_url))
-            if syl_url:
-                pills.append(_link_text("📄", "シラバス", "#047857", syl_url))
-
             row_children = [
                 _status_badge(has_review, is_unlocked),
                 FlexText(text=display, wrap=True, size="sm", color=text_color, flex=1,
                           weight="bold" if has_review else "regular"),
             ]
-            if pills:
-                # flex=0で「必要な幅だけ」に固定しないと、科目名テキスト(flex=1)と
-                # デフォルトのflex=1同士で横幅を50/50に分け合ってしまい、科目名が
-                # 長い行では「レビュー」「シラバス」の文字が見切れる（2026-09-05）。
-                row_children.append(FlexBox(layout="horizontal", spacing="xs", flex=0, contents=pills))
+            if liff_url or syl_url:
+                # 両方の項目を固定幅スロットで並べる（flex=0で「必要な幅だけ」に固定しないと、
+                # 科目名テキスト(flex=1)とデフォルトのflex=1同士で横幅を50/50に分け合ってしまい、
+                # 科目名が長い行では文字が見切れる。2026-09-05）。
+                row_children.append(FlexBox(
+                    layout="horizontal", spacing="xs", flex=0,
+                    contents=[
+                        _link_slot("📝", "レビュー", "#4338ca", liff_url),
+                        _link_slot("📄", "シラバス", "#047857", syl_url),
+                    ],
+                ))
 
             # 修正理由: 従来は科目名の細いテキスト部分のみがタップ対象だった。1エントリー1行に
             # まとめ、行全体をタップ対象にする（2026-09-03、科目一覧カードUI改善）。
