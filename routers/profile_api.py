@@ -2,7 +2,7 @@ import asyncio
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Request
-from sqlalchemy import literal_column, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, line_client, moderation
@@ -138,8 +138,16 @@ async def register_profile(
         # 同一ユーザーからのほぼ同時の二重送信（ボタン連打・LIFF多重初期化等）で
         # 両方が「未登録」と判定しどちらもINSERTを試み、後勝ちがuser_profiles_pkey
         # 重複違反で失敗していた(2026-09-05)。ON CONFLICT DO UPDATEで1文にまとめ
-        # DBレベルでアトミックにする。新規登録判定は挿入行かどうかを示すxmaxで行う
-        # （xmax=0はこのトランザクションで新規挿入された行）
+        # DBレベルでアトミックにする（unlock_creditsはON CONFLICT時のSET対象に
+        # 含めていないため、チケット付与は初回INSERT時のみで二重送信時も1回だけ）。
+        # 新規/既存の判定はレスポンス文言・プロモ表示用の付随情報でしかなく、この
+        # UPSERT自体の原子性には影響しないため、書き込み前の軽いSELECTで済ませる
+        # （ここが稀に競合してis_newの判定がずれても、実害はプロモ表示が二重に出る
+        # 程度でDB整合性には影響しない）
+        is_new_registration = (await session.execute(
+            select(UserProfile.line_user_id).where(UserProfile.line_user_id == uid)
+        )).scalar_one_or_none() is None
+
         stmt = pg_insert(UserProfile).values(
             line_user_id=uid,
             name=name[:100],
@@ -157,10 +165,10 @@ async def register_profile(
                 "faculty": stmt.excluded.faculty,
                 "department": stmt.excluded.department,
             },
-        ).returning(literal_column("(xmax = 0)"))
+        )
 
         try:
-            is_new_registration = (await session.execute(stmt)).scalar_one()
+            await session.execute(stmt)
             promo_subject_name = None
             if is_new_registration:
                 # 会員登録直後、もらったチケットの使い方を体験してもらうための案内科目
