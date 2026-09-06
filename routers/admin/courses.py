@@ -437,6 +437,26 @@ async def admin_course_move(course_id: int, request: Request, _=Depends(check_ad
     return JSONResponse({"ok": True})
 
 
+async def _determine_new_subject_sort_order(session, classification: str | None) -> int:
+    """新規科目のsort_orderを、その分類の既存の並び順の流儀に合わせて決める。
+    科目一覧は分類内で(sort_order, よみがな)順に並ぶため、ほとんどの分類（sort_order未着手＝
+    全科目0のまま）では新規科目もsort_order=0にすればよみがな順の適切な位置に自動的に
+    収まる。一方、上へ/下へボタンで全科目を個別に並び替え済みの分類（例：
+    工学部電気電子工学科専門科目、0〜46の完全な連番）では、0で追加すると先頭付近に
+    割り込んでしまうため末尾に追加する。判定は「sort_order=0の科目が2件以上あるか」で行う
+    （2件以上なら「まだ手を付けていない科目の集団」とみなしよみがな順に委ねる。
+    0件・1件なら個別に並び替え済みとみなし末尾に追加する。2026-09-06）。"""
+    cls_filter = Subject.classification.is_(None) if classification is None else Subject.classification == classification
+    sort_orders = (await session.execute(
+        select(Subject.sort_order).where(cls_filter)
+    )).scalars().all()
+    if not sort_orders:
+        return 0
+    if sum(1 for so in sort_orders if so == 0) >= 2:
+        return 0
+    return max(sort_orders) + 1
+
+
 async def _find_duplicate_subject(session, course_id: int, name: str, faculty: str, department: str) -> Subject | None:
     """(name, faculty, department)が完全に一致する他のSubjectを探す。classification違いのみの
     「全く同じ科目名」を検出するための判定（2026-09-05、UNIQUE制約からclassificationを
@@ -554,6 +574,7 @@ async def admin_courses_create(
             credits=credits if credits else None,
             faculty=new_faculty,
             department=new_department,
+            sort_order=await _determine_new_subject_sort_order(session, new_classification),
         )
         session.add(course)
         await session.commit()
