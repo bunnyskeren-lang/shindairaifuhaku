@@ -185,6 +185,32 @@ def test_kyoyo_classifications_opted_into_letter_only_display_merge():
     assert display_result[("アジア史B", "教養(人文)")] == "アジア史 (A/B)"
 
 
+def test_bungakubu_senmon_opted_into_paren_letter_display_merge():
+    """文学部専門科目は2026-09-06にユーザー指示でLETTER_ONLY_MERGE_INCLUDED_
+    CLASSIFICATIONSにオプトインした（例:「アメリカ文学史（a）/（b）」は担当教員が
+    完全一致する並行開講であることを確認済み）。_VLETTER_ONLY（括弧なし大文字）とは
+    別記法の_VLETTER_PARENが担う。"""
+    assert "文学部専門科目" in subject_variants.LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS
+
+    names_with_fd = [
+        ("アメリカ文学史（a）", "文学部", ""),
+        ("アメリカ文学史（b）", "文学部", ""),
+        ("国語学演習（a）", "文学部", ""),  # (b)が存在しない単独科目
+    ]
+    groups = subject_variants.compute_variant_groups(names_with_fd)
+    assert "アメリカ文学史（a）" not in groups  # レビュー系には影響しない
+
+    names_with_cls = [
+        ("アメリカ文学史（a）", "文学部専門科目"),
+        ("アメリカ文学史（b）", "文学部専門科目"),
+        ("国語学演習（a）", "文学部専門科目"),
+    ]
+    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
+    assert display_result[("アメリカ文学史（a）", "文学部専門科目")] == "アメリカ文学史 (A/B)"
+    assert display_result[("アメリカ文学史（b）", "文学部専門科目")] == "アメリカ文学史 (A/B)"
+    assert ("国語学演習（a）", "文学部専門科目") not in display_result
+
+
 def test_compute_letter_view_groups_merges_kyoyo_review_viewing_only():
     """教養科目のA/B文字バリアントは、レビュー"閲覧"のみ1つのLIFFページにまとめたいという
     要望（2026-09-05）のため、compute_variant_groups()とは独立したcompute_letter_view_groups()

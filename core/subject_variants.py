@@ -89,6 +89,11 @@ _STUDENT_ID_SPLIT_RE = re.compile(
 # 数字/ローマ数字を必須とするためこのパターンにはマッチしない（数字が無い時点で
 # 排他的なので、_VNUM等より判定順が前後しても互いに衝突しない）。
 _VLETTER_ONLY = re.compile(r'^(.*?)[\s　]*([A-ZＡ-Ｚ])((?:（遠隔）|（再履修）)*(?:[\s　]*（[^（）]+）)?)$')
+# 文学部専門科目「アメリカ文学史（a）」「アメリカ文学史（b）」のような、末尾が小文字1文字を
+# 括弧で囲んだ形式の文字バリアント（_VLETTER_ONLYとは別記法のため専用regexにした）。
+# 2026-09-06、ユーザー指示で対象58ペア全件のcourse_sections担当教員を突き合わせ、
+# (a)/(b)間で教員が完全一致することを確認済み（並行クラスではなく同一内容の複数開講枠）。
+_VLETTER_PAREN = re.compile(r'^(.*?)[\s　]*[（(]([a-zA-Z])[）)]((?:（遠隔）|（再履修）)*(?:[\s　]*（[^（）]+）)?)$')
 
 
 def is_remote_tagged(name: str) -> bool:
@@ -150,9 +155,16 @@ LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS = frozenset({
 # letter_only_included_namesを渡していないため無関係）。影響するのはLINE bot科目一覧
 # （line_bot/handler.py _build_course_bubbles）と管理画面科目一覧
 # （routers/admin/courses.py compute_variant_display_groups()）の2画面のみ。
+#
+# 「文学部専門科目」は2026-09-06にユーザー指示で追加。末尾が"（a）""（b）"（小文字1文字を
+# 全角/半角括弧で囲む記法、_VLETTER_PAREN）の58ペア（アメリカ文学史等）全件について
+# course_sectionsの担当教員を突き合わせ、(a)/(b)間で教員が完全一致することを確認済み
+# （並行クラスではなく同一内容の複数開講枠と判断）。「国語学演習（a）」のみ（b）が存在せず
+# 単独のため統合対象外（メンバー2件未満は自動的にグループ化されない）。
 LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS = frozenset({
     "国際人間科学部専門科目",
     "教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)",
+    "文学部専門科目",
 })
 
 
@@ -386,14 +398,21 @@ def _vnum_paren_match(name: str) -> tuple[str, int, str, str, int, str, str] | N
 
 def _vletter_only_match(name: str) -> tuple[str, str, str] | None:
     """LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS向け。"AAA""B"のような末尾アルファベット
-    1文字のみのパターンをマッチさせる（_vnum_matchの姉妹関数）。
+    1文字のみのパターン、および"AAA（a）""AAA（b）"のような括弧付き小文字1文字のパターン
+    （_VLETTER_PAREN）をマッチさせる（_vnum_matchの姉妹関数）。
     戻り値: (base, letter, tag)"""
     name = _STUDENT_ID_SPLIT_RE.sub('', name)
     m = _VLETTER_ONLY.match(name)
+    if m:
+        base = m.group(1).strip()
+        letter = m.group(2).translate(_FULLWIDTH_UPPER)
+        tag = m.group(3) or ""
+        return base, letter, tag
+    m = _VLETTER_PAREN.match(name)
     if not m:
         return None
     base = m.group(1).strip()
-    letter = m.group(2).translate(_FULLWIDTH_UPPER)
+    letter = m.group(2).upper()
     tag = m.group(3) or ""
     return base, letter, tag
 
