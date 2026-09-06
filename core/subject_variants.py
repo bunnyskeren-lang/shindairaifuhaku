@@ -278,14 +278,14 @@ MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
         ),
         "label": "惑星学基礎(Ⅰ-(1/2)/Ⅱ/Ⅲ/Ⅳ/Ⅴ)",
     },
-    # 国際人間科学部グローバル文化学科専門科目「英語A/B」系5科目（2026-09-06、ユーザー指示）。
+    # 国際人間科学部グローバル文化学科専門科目のA/B系6科目（2026-09-06、ユーザー指示）。
     # classification="国際人間科学部グローバル文化学科専門科目"は2026-09-02の学科別分類
     # 導入で「国際人間科学部専門科目」から分割済みのため、LETTER_ONLY_MERGE_INCLUDED_
-    # CLASSIFICATIONS（分割前の親classification名のみを含む）には含まれない。全5ペアとも
-    # course_sectionsの担当教員がA/B間で完全一致し、シラバスも同一科目が第3クォーター(A)/
-    # 第4クォーター(B)に分割されただけと確認済み（並行クラスではない）。他の同classification
-    # 内の未確認A/Bペアまで一括で巻き込まないよう、classification単位のオプトインではなく
-    # 個別ペアのみをここに列挙する。
+    # CLASSIFICATIONS（分割前の親classification名のみを含む）には含まれない。全6ペアとも
+    # course_sectionsの担当教員がA/B間で完全一致し（英語3科目はシラバスも同一科目が
+    # 第3クォーター(A)/第4クォーター(B)に分割されただけと確認済み）、並行クラスではない。
+    # 他の同classification内の未確認A/Bペアまで一括で巻き込まないよう、classification単位の
+    # オプトインではなく個別ペアのみをここに列挙する。
     {
         "names": ("English for Professional Purposes A", "English for Professional Purposes B"),
         "label": "English for Professional Purposes (A/B)",
@@ -305,6 +305,10 @@ MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
     {
         "names": ("オセアニア社会文化論A", "オセアニア社会文化論B"),
         "label": "オセアニア社会文化論(A/B)",
+    },
+    {
+        "names": ("環大西洋文化論A", "環大西洋文化論B"),
+        "label": "環大西洋文化論(A/B)",
     },
 )
 
