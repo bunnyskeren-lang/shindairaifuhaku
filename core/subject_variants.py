@@ -150,12 +150,15 @@ LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS = frozenset({
 
 
 # 末尾がA/B/C/Dのみ異なる「文字バリアント」統合は2026-09-02に恒常廃止したが、
-# 2026-09-04にユーザー指示で「国際人間科学部専門科目」classification限定の例外を追加した。
-# このclassification配下（教育系・語学系の専門科目）は、A/B/C/Dが並行クラス（担当教員・
-# 内容が別）ではなく同一科目の複数開講枠を表すケースが多いことをユーザーが確認済み。
-# 他のclassificationには一切影響しない（例えば数学科教育論A1/A2/C1/C2のような
-# アルファベット+数字パターンは、そもそもこのオプトイン集合とは別のマッチャー
-# (_vnum_match/_VNUM)が扱うため対象外のまま）。
+# 2026-09-04にユーザー指示で「国際人間科学部専門科目」classification限定の例外を追加した
+# （このclassification配下（教育系・語学系の専門科目）は、A/B/C/Dが並行クラス（担当教員・
+# 内容が別）ではなく同一科目の複数開講枠を表すケースが多いことをユーザーが確認済み）。
+# ただしこのclassification単位のオプトインは教員一致を個別確認せずに機械的に統合して
+# しまうため、2026-09-06に全件突き合わせで3件の教員不一致が発覚し、以降は
+# 個別ペア単位のMANUAL_VARIANT_GROUPSへ移行した（下記LETTER_ONLY_MERGE_INCLUDED_
+# CLASSIFICATIONSのコメント参照）。他のclassificationには一切影響しない（例えば
+# 数学科教育論A1/A2/C1/C2のようなアルファベット+数字パターンは、そもそもこのオプトイン
+# 集合とは別のマッチャー(_vnum_match/_VNUM)が扱うため対象外のまま）。
 # 表示統合のみ（DB上のSubject行は分けたまま）: レビュー投稿・閲覧・チケット共有は
 # 引き続きA/B/C/Dそれぞれ別科目として扱う（core.cache.get_variant_map_cached()・
 # get_variant_group_subject_ids()はこのモジュールのcompute_variant_groups()を使うが、
@@ -168,8 +171,16 @@ LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS = frozenset({
 # course_sectionsの担当教員を突き合わせ、(a)/(b)間で教員が完全一致することを確認済み
 # （並行クラスではなく同一内容の複数開講枠と判断）。「国語学演習（a）」のみ（b）が存在せず
 # 単独のため統合対象外（メンバー2件未満は自動的にグループ化されない）。
+#
+# 「国際人間科学部専門科目」は2026-09-06にこの集合から除外した。classification単位の
+# オプトインは教員一致を個別確認しないまま全ペアを機械的に統合してしまうため、同じ日に
+# ユーザー指示で全19ベースのcourse_sections担当教員を実際に突き合わせたところ、
+# 保健体育科教育論（A/B/C=前田正登、D=高見和至）・理科教育論（A/B=岡部舞、C=三宅志穂）・
+# 社会調査法（A=永田夏来、B=中川理季、完全不一致）の3ベースで教員不一致が発覚した
+# （並行クラスを誤統合していた）。教員が完全一致する16ベースと、部分一致する2ベースの
+# 一致する枝のみをMANUAL_VARIANT_GROUPSへ個別移行し、社会調査法は統合対象から外した
+# （下記MANUAL_VARIANT_GROUPS参照）。
 LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS = frozenset({
-    "国際人間科学部専門科目",
     "教養(人文)", "教養(社会)", "教養(自然)", "教養(総合)",
     "文学部専門科目",
 })
@@ -441,6 +452,59 @@ MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
         "names": ("グローバル社会動態発展演習C", "グローバル社会動態発展演習D"),
         "label": "グローバル社会動態発展演習(C/D)",
     },
+    # 「国際人間科学部専門科目」classification（学科不明分。2026-09-04にLETTER_ONLY_MERGE_
+    # INCLUDED_CLASSIFICATIONSへ追加されていたが、2026-09-06に全19ベースの
+    # course_sections担当教員を突き合わせたところ3ベースで不一致が発覚したため、この
+    # classificationを同集合から除外し個別ペアへ移行した。以下16ベースは教員完全一致を確認済み。
+    {"names": ("Academic Communication（仏）A", "Academic Communication（仏）B"),
+     "label": "Academic Communication（仏）(A/B)"},
+    {"names": ("Academic Communication（独）A", "Academic Communication（独）B"),
+     "label": "Academic Communication（独）(A/B)"},
+    {"names": ("Academic Writing（仏）A", "Academic Writing（仏）B"),
+     "label": "Academic Writing（仏）(A/B)"},
+    {"names": ("Academic Writing（独）A", "Academic Writing（独）B"),
+     "label": "Academic Writing（独）(A/B)"},
+    {"names": ("Academic Writing（英）A", "Academic Writing（英）B"),
+     "label": "Academic Writing（英）(A/B)"},
+    {"names": ("Cultures and Societies in Japan A", "Cultures and Societies in Japan B"),
+     "label": "Cultures and Societies in Japan (A/B)"},
+    {"names": ("グローバル正義論A", "グローバル正義論B"), "label": "グローバル正義論(A/B)"},
+    {"names": ("ジェンダー社会文化論A", "ジェンダー社会文化論B"), "label": "ジェンダー社会文化論(A/B)"},
+    {"names": ("メディア社会文化論A", "メディア社会文化論B"), "label": "メディア社会文化論(A/B)"},
+    {"names": ("中学校教育実地研究A", "中学校教育実地研究B"), "label": "中学校教育実地研究(A/B)"},
+    {"names": ("国際コミュニケーション演習A", "国際コミュニケーション演習B"), "label": "国際コミュニケーション演習(A/B)"},
+    {"names": ("国際関係論A", "国際関係論B"), "label": "国際関係論(A/B)"},
+    {"names": ("家庭科教育論A", "家庭科教育論B"), "label": "家庭科教育論(A/B)"},
+    {"names": ("日本文化交流論A", "日本文化交流論B"), "label": "日本文化交流論(A/B)"},
+    {"names": ("視覚文化論A", "視覚文化論B"), "label": "視覚文化論(A/B)"},
+    {"names": ("近現代政治思想論A", "近現代政治思想論B"), "label": "近現代政治思想論(A/B)"},
+    # 保健体育科教育論はA/B/C=前田正登、D=高見和至と判明したため、A/B/Cのみを1グループにし
+    # Dは統合対象から外す。理科教育論はA/B=岡部舞、C=三宅志穂のためA/Bのみ統合しCは外す。
+    # 社会調査法（A=永田夏来、B=中川理季）は完全不一致のため統合対象に含めない。
+    {"names": ("保健体育科教育論A", "保健体育科教育論B", "保健体育科教育論C"),
+     "label": "保健体育科教育論(A/B/C)"},
+    {"names": ("理科教育論A", "理科教育論B"), "label": "理科教育論(A/B)"},
+    # 「国際人間科学部環境共生学科専門科目」classification（2026-09-06、ユーザー指示）。
+    # 全15ベースをcourse_sections担当教員で突き合わせ、以下7ベースが教員完全一致と確認済み。
+    # 残り8ベース（数理科学研究・環境地球科学・環境形成科学演習1/2・環境物理学・環境物質科学・
+    # 環境生命科学、いずれも教員不一致）は統合対象に含めない。
+    {"names": ("かたちの数理A", "かたちの数理B"), "label": "かたちの数理(A/B)"},
+    {"names": ("ライフスタイル論A", "ライフスタイル論B"), "label": "ライフスタイル論(A/B)"},
+    {"names": ("環境モデル解析A", "環境モデル解析B"), "label": "環境モデル解析(A/B)"},
+    {"names": ("環境基礎物理学A", "環境基礎物理学B"), "label": "環境基礎物理学(A/B)"},
+    {"names": ("衣環境論A", "衣環境論B"), "label": "衣環境論(A/B)"},
+    {"names": ("計算代数A", "計算代数B"), "label": "計算代数(A/B)"},
+    {"names": ("食環境論A", "食環境論B"), "label": "食環境論(A/B)"},
+    # 環境形成科学実験はA=井上真理、B=島田良子、C=D=福田博也と判明したため、C/Dのみ統合する。
+    {"names": ("環境形成科学実験C", "環境形成科学実験D"), "label": "環境形成科学実験(C/D)"},
+    # 「国際人間科学部発達コミュニティ学科専門科目」classification（2026-09-06、ユーザー指示）。
+    # 全3ベースを突き合わせ、以下2ベースが教員完全一致と確認済み（創造の発想とプロセスは
+    # 岸本吉弘/塚脇淳で不一致のため対象外）。
+    {"names": ("ESD生涯学習論A", "ESD生涯学習論B"), "label": "ESD生涯学習論(A/B)"},
+    {"names": ("近現代文化言説論A", "近現代文化言説論B"), "label": "近現代文化言説論(A/B)"},
+    # 工学部電気電子工学科専門科目（2026-09-06、ユーザー指示）。
+    # course_sections担当教員が両方とも服部吉晃で一致することを確認済み。
+    {"names": ("固体物性工学A", "固体物性工学B"), "label": "固体物性工学(A/B)"},
 )
 
 # MANUAL_VARIANT_GROUPSに属する科目名の集合。これらは自動グループ化（_VNUM等）に
