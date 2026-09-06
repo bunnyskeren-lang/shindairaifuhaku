@@ -17,7 +17,7 @@ from core.config import (
 from core.grading_method import parse_grading_method
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
-from core.subject_variants import is_remote_tagged
+from core.subject_variants import hoken_gakka_senko_label, is_hoken_gakka_senko, is_remote_tagged
 from database import AsyncSessionLocal
 from models import (
     CourseSection, CourseSectionView, Instructor, Review, ReviewStatus,
@@ -279,7 +279,12 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
     人文/社会/自然/総合、2026-09-05）対象の科目は、cache.get_letter_view_group_cached()
     （投稿枠共有には一切影響しない別系統のグループ判定）でA/B文字バリアントをまとめる。
     レビュー閲覧・チケット解除は1つのLIFFページに合算するが、レビュー投稿の募集枠・
-    重複防止はA/B別科目のまま（この関数の結果を使わない）。"""
+    重複防止はA/B別科目のまま（この関数の結果を使わない）。
+
+    医学部保健学科の4専攻をまたいだ完全同名科目（2026-09-06、ユーザー指示）はcache.
+    get_variant_group_subject_ids()側で合流済みのidsが返るが、科目名自体は全メンバー
+    共通でラベル文字列を持たないため、その場合はグループラベルに元の科目名をそのまま使い、
+    科目名の代わりに専攻名（department から「保健学科」を除いた部分）を返す。"""
     variant_map = await cache.get_variant_map_cached()
     label = variant_map.get(subject.name, "")
     ids = await cache.get_variant_group_subject_ids(subject)
@@ -287,6 +292,12 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
         _, all_courses = await cache.get_courses_cached()
         names_by_id = {c.id: c.name for c in all_courses}
         return label, ids, [names_by_id[i] for i in ids]
+
+    if len(ids) >= 2 and is_hoken_gakka_senko(subject.faculty or "", subject.department or ""):
+        _, all_courses = await cache.get_courses_cached()
+        courses_by_id = {c.id: c for c in all_courses}
+        senko_labels = [hoken_gakka_senko_label(courses_by_id[i].department or "") for i in ids]
+        return subject.name, ids, senko_labels
 
     letter_view = await cache.get_letter_view_group_cached()
     entry = letter_view.get(subject.name)

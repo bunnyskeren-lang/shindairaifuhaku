@@ -169,6 +169,29 @@ LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS = frozenset({
 })
 
 
+# 医学部保健学科は「看護学専攻」「理学療法学専攻」「作業療法学専攻」「検査技術科学専攻」の
+# 4専攻がdepartment違いの別Subjectとして登録されている。専攻をまたいで科目名が完全一致する
+# 科目は、レビューを共有し1件集まった時点で他専攻分も含めて募集を締め切る恒常ルールとした
+# （2026-09-06、ユーザー指示）。上記のLETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS等と異なり、
+# これは「閲覧だけ統合」ではなく募集枠（MAX_REVIEWS_PER_COURSE_SECTION）そのものを専攻横断で
+# 共有する必要があるため、compute_variant_groups()の結果を使うcore.cache.
+# get_variant_group_subject_ids()（レビュー投稿の重複防止・募集枠共有・レビュー閲覧統合の
+# 実体）側でfaculty/department完全一致という通常の絞り込みに対する例外として扱う
+# （department自体が専攻ごとに異なる値のため、通常の同一department絞り込みでは統合できない）。
+HOKEN_GAKKA_FACULTY = "医学部"
+HOKEN_GAKKA_DEPARTMENT_PREFIX = "保健学科"
+
+
+def is_hoken_gakka_senko(faculty: str, department: str) -> bool:
+    """医学部保健学科の専攻（看護学/理学療法学/作業療法学/検査技術科学）配下の科目か判定する。"""
+    return faculty == HOKEN_GAKKA_FACULTY and (department or "").startswith(HOKEN_GAKKA_DEPARTMENT_PREFIX)
+
+
+def hoken_gakka_senko_label(department: str) -> str:
+    """department文字列から「保健学科」プレフィックスを除いた専攻名部分を返す（表示用）。"""
+    return (department or "").removeprefix(HOKEN_GAKKA_DEPARTMENT_PREFIX) or department
+
+
 # 海洋政策科学部「経済学基礎論」「経営学基礎論」等、科目名自体が「N-M」形式で枝分かれし、
 # かつ枝ごとに（海洋ガバナンス領域）タグの有無や「1-(1/2)」のような表記揺れが不揃いなケース
 # （2026-09-04、ユーザー指示）。_VNUM系の正規表現はタグ完全一致を要求するため機械的には

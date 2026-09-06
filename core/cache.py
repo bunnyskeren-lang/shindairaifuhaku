@@ -11,6 +11,7 @@ from core.subject_variants import (
     compute_letter_view_groups,
     compute_variant_full_labels,
     compute_variant_groups,
+    is_hoken_gakka_senko,
 )
 from database import AsyncSessionLocal
 from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
@@ -491,16 +492,30 @@ async def get_variant_group_subject_ids(subject: Subject) -> list[int]:
     variant_map = await get_variant_map_cached()
     label = variant_map.get(subject.name, "")
     if not label:
-        return [subject.id]
-    # compute_variant_groups()はラベル文字列（ベース名）しか返さないため、別学部の科目が
-    # 偶然同じベース名グループを持つ場合の誤統合を避け、対象subjectと同じfaculty/departmentの
-    # 科目だけに絞り込む（liff_api.py _group_subject_ids参照）
-    return [
-        c.id for c in all_courses
-        if variant_map.get(c.name) == label
-        and (c.faculty or "") == (subject.faculty or "")
-        and (c.department or "") == (subject.department or "")
-    ]
+        ids = [subject.id]
+    else:
+        # compute_variant_groups()はラベル文字列（ベース名）しか返さないため、別学部の科目が
+        # 偶然同じベース名グループを持つ場合の誤統合を避け、対象subjectと同じfaculty/departmentの
+        # 科目だけに絞り込む（liff_api.py _group_subject_ids参照）
+        ids = [
+            c.id for c in all_courses
+            if variant_map.get(c.name) == label
+            and (c.faculty or "") == (subject.faculty or "")
+            and (c.department or "") == (subject.department or "")
+        ]
+
+    # 医学部保健学科の4専攻（看護学/理学療法学/作業療法学/検査技術科学）は、専攻ごとに
+    # departmentが異なる別Subjectとして登録されているため、上記の同一department絞り込みでは
+    # 統合されない。科目名が完全一致する専攻横断科目はレビューを共有する恒常ルール
+    # （2026-09-06、ユーザー指示）のため、ここだけ同一department縛りを外して合流させる。
+    if is_hoken_gakka_senko(subject.faculty or "", subject.department or ""):
+        cross_ids = {
+            c.id for c in all_courses
+            if c.name == subject.name and is_hoken_gakka_senko(c.faculty or "", c.department or "")
+        }
+        if len(cross_ids) > 1:
+            ids = sorted(set(ids) | cross_ids)
+    return ids
 
 
 _letter_view_group_cache: dict[str, tuple[str, list[str], dict[str, str]]] | None = None

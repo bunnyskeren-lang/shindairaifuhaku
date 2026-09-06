@@ -51,6 +51,26 @@ async def _seed_variant_courses(test_sessionmaker, names, instructor="山田太�
         await session.commit()
 
 
+async def _seed_hoken_gakka_courses(test_sessionmaker, name="生理学", category="教養"):
+    """医学部保健学科4専攻の完全同名科目（専攻ごとに別Subject・別担当教員）をシードする。"""
+    departments = [
+        ("保健学科看護学専攻", "看護太郎"),
+        ("保健学科理学療法学専攻", "理学花子"),
+        ("保健学科作業療法学専攻", "作業次郎"),
+        ("保健学科検査技術科学専攻", "検査三郎"),
+    ]
+    async with test_sessionmaker() as session:
+        for department, instructor_name in departments:
+            subj = Subject(name=name, faculty="医学部", department=department, category=category)
+            session.add(subj)
+            await session.flush()
+            instr = Instructor(name=instructor_name)
+            session.add(instr)
+            await session.flush()
+            session.add(CourseSection(subject_id=subj.id, instructor_id=instr.id))
+        await session.commit()
+
+
 async def _seed_profile(test_sessionmaker, user_id: str = UID, student_id: str = "2345678S", name: str = "神戸太郎"):
     async with test_sessionmaker() as session:
         session.add(UserProfile(
@@ -267,6 +287,58 @@ async def test_submit_variant_group_blocks_same_student_dup(http_client_factory,
     assert resp1.status_code == 200
 
     resp2 = await client.post("/submit", data=dict(VALID_FORM, course_name="線形代数2"))
+    assert resp2.status_code == 400
+    assert "投稿済み" in resp2.text
+
+    async with test_sessionmaker() as session:
+        reviews = (await session.execute(select(Review))).scalars().all()
+        assert len(reviews) == 1
+
+
+# ── 医学部保健学科4専攻をまたいだ完全同名科目のレビュー共有 ──────────────────────
+
+@pytest.mark.asyncio
+async def test_submit_hoken_gakka_cross_department_shares_recruitment_slot(http_client_factory, monkeypatch, test_sessionmaker):
+    """看護学専攻の「生理学」で枠が埋まったら、担当教員（専攻）が別の理学療法学専攻
+    「生理学」への投稿も上限扱いで拒否されるべき（専攻をまたいだ完全同名科目はレビューを共有する）。"""
+    _fake_verify(monkeypatch, user_id="U1".ljust(33, "0"))
+    _stub_push_notification(monkeypatch)
+    await _seed_hoken_gakka_courses(test_sessionmaker)
+    await _seed_profile(test_sessionmaker, user_id="U1".ljust(33, "0"), student_id="1111111S")
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp1 = await client.post("/submit", data=dict(
+        VALID_FORM, course_name="生理学", student_id="1111111S", selected_instructor="看護太郎",
+    ))
+    assert resp1.status_code == 200
+
+    _fake_verify(monkeypatch, user_id="U2".ljust(33, "0"))
+    await _seed_profile(test_sessionmaker, user_id="U2".ljust(33, "0"), student_id="2222222S", name="別学生")
+    resp2 = await client.post("/submit", data=dict(
+        VALID_FORM, course_name="生理学", student_id="2222222S", selected_instructor="理学花子",
+    ))
+    assert resp2.status_code == 400
+    assert "上限に達した" in resp2.text
+
+    async with test_sessionmaker() as session:
+        reviews = (await session.execute(select(Review))).scalars().all()
+        assert len(reviews) == 1
+
+
+@pytest.mark.asyncio
+async def test_submit_hoken_gakka_cross_department_blocks_same_student_dup(http_client_factory, monkeypatch, test_sessionmaker):
+    """同じ学生が看護学専攻の「生理学」に投稿済みなら、専攻違いの同名科目への投稿も
+    「既に投稿済み」として拒否されるべき（別専攻への迂回で上限をすり抜けられない）。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_hoken_gakka_courses(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp1 = await client.post("/submit", data=dict(VALID_FORM, course_name="生理学", selected_instructor="看護太郎"))
+    assert resp1.status_code == 200
+
+    resp2 = await client.post("/submit", data=dict(VALID_FORM, course_name="生理学", selected_instructor="理学花子"))
     assert resp2.status_code == 400
     assert "投稿済み" in resp2.text
 

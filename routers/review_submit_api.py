@@ -15,6 +15,7 @@ from core.config import (
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
 from core.rate_limit import rate_limiter
+from core.subject_variants import is_hoken_gakka_senko
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
@@ -135,12 +136,19 @@ async def submit(
         group_subject_ids = await cache.get_variant_group_subject_ids(subject)
         group_cs_ids = [cs_obj.id]
         if len(group_subject_ids) > 1:
-            group_cs_ids = (await session.execute(
-                select(CourseSection.id).where(
-                    CourseSection.subject_id.in_(group_subject_ids),
-                    CourseSection.instructor_id == cs_obj.instructor_id,
-                )
-            )).scalars().all()
+            if is_hoken_gakka_senko(subject.faculty or "", subject.department or ""):
+                # 保健学科4専攻をまたいだ完全同名科目は、担当教員（専攻）が異なっていても
+                # レビュー1件で全専攻分の募集を締め切る共有プールとして扱う（2026-09-06、ユーザー指示）
+                group_cs_ids = (await session.execute(
+                    select(CourseSection.id).where(CourseSection.subject_id.in_(group_subject_ids))
+                )).scalars().all()
+            else:
+                group_cs_ids = (await session.execute(
+                    select(CourseSection.id).where(
+                        CourseSection.subject_id.in_(group_subject_ids),
+                        CourseSection.instructor_id == cs_obj.instructor_id,
+                    )
+                )).scalars().all()
 
         # 修正理由: 同じ学籍番号の人が同じ科目×担当教員の組み合わせへ複数回レビュー投稿できてしまっていたため、
         # 既に投稿済み（待機中+承認済み）があればサーバー側で拒否する（フォーム側のグレーアウトは補助的なもの）

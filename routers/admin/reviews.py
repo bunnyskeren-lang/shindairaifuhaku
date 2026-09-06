@@ -10,6 +10,7 @@ from core import cache
 from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS, normalize_instructor_name
 from core.grading_method import build_grading_method_from_edit_text
 from core.security import check_admin
+from core.subject_variants import is_hoken_gakka_senko
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
@@ -252,12 +253,17 @@ async def admin_review_reassign(
                 group_subject_ids = await cache.get_variant_group_subject_ids(subject)
                 group_cs_ids = [cs.id]
                 if len(group_subject_ids) > 1:
-                    group_cs_ids = (await session.execute(
-                        select(CourseSection.id).where(
-                            CourseSection.subject_id.in_(group_subject_ids),
-                            CourseSection.instructor_id == cs.instructor_id,
-                        )
-                    )).scalars().all()
+                    if is_hoken_gakka_senko(subject.faculty or "", subject.department or ""):
+                        group_cs_ids = (await session.execute(
+                            select(CourseSection.id).where(CourseSection.subject_id.in_(group_subject_ids))
+                        )).scalars().all()
+                    else:
+                        group_cs_ids = (await session.execute(
+                            select(CourseSection.id).where(
+                                CourseSection.subject_id.in_(group_subject_ids),
+                                CourseSection.instructor_id == cs.instructor_id,
+                            )
+                        )).scalars().all()
                 dup = (await session.execute(
                     select(Review.id).where(
                         Review.course_section_id.in_(group_cs_ids),
