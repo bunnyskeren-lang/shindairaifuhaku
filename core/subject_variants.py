@@ -510,6 +510,9 @@ MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
     # INCLUDED_CLASSIFICATIONSに未登録のためオプトインされない）。course_sections担当教員が
     # 両方とも片岡武で一致することを確認済み。
     {"names": ("機械工学実験(a)", "機械工学実験(b)"), "label": "機械工学実験(a/b)"},
+    # 工学部応用化学科専門科目（2026-09-06、ユーザー指示）。
+    # course_sections担当教員がA/B/Cとも大村直人で一致することを確認済み。
+    {"names": ("移動現象論A", "移動現象論B", "移動現象論C"), "label": "移動現象論(A/B/C)"},
 )
 
 # MANUAL_VARIANT_GROUPSに属する科目名の集合。これらは自動グループ化（_VNUM等）に
