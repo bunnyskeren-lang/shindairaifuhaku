@@ -115,13 +115,17 @@
 
 {% if all_instructors %}
 <div class="card" style="margin-top:16px">
-  <h2 style="margin-top:0;cursor:pointer;user-select:none" onclick="toggleCard('instructorList', this)">
+  <h2 style="margin-top:0;cursor:pointer;user-select:none" onclick="toggleInstructorList(this)">
     <span class="card-arrow" id="instructorListArrow">▶</span>
     教員一覧 <span style="font-size:12px;font-weight:normal;color:#6b7280">（{{ all_instructors | length }}人。↑↓で並び替え可。検索・カテゴリ絞り込み時は非表示）</span>
   </h2>
   <div class="table-wrap" id="instructorList" style="display:none">
   <table style="margin-top:0">
     <tr><th>順番</th><th>教員名</th></tr>
+    <tbody id="instructorRows"></tbody>
+  </table>
+  </div>
+  <template id="tpl-instructorList">
     {% for inst in all_instructors %}
     <tr>
       <td style="white-space:nowrap;width:64px">
@@ -131,8 +135,7 @@
       <td>{{ inst.name }}</td>
     </tr>
     {% endfor %}
-  </table>
-  </div>
+  </template>
 </div>
 {% endif %}
 
@@ -513,6 +516,24 @@ function toggleRow(key, ids, editable, isGroup, btn) {
 function toggleCard(id, headerEl) {
   const el = document.getElementById(id);
   const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  const arrow = headerEl.querySelector('.card-arrow');
+  if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
+}
+// 修正理由: 教員一覧(1300人超)も分類同様、初回に全行を<tr>で埋め込むとボタン要素だけで
+// 2700個超になり、ページ全体の重さに寄与していた。初めて開いた時だけ<template>から
+// 複製して挿入する（一度開いたら十分軽いので閉じても複製自体は残したままにする）
+function toggleInstructorList(headerEl) {
+  const el = document.getElementById('instructorList');
+  const isHidden = el.style.display === 'none';
+  if (isHidden) {
+    const tbody = document.getElementById('instructorRows');
+    if (tbody && !tbody.dataset.mounted) {
+      const tpl = document.getElementById('tpl-instructorList');
+      if (tpl) tbody.appendChild(document.importNode(tpl.content, true));
+      tbody.dataset.mounted = '1';
+    }
+  }
   el.style.display = isHidden ? 'block' : 'none';
   const arrow = headerEl.querySelector('.card-arrow');
   if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
