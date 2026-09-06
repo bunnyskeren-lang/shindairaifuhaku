@@ -7,7 +7,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import case, func, or_, select
 
 from core import cache, undo
-from core.config import escape_like, make_cls_sort, make_syllabus_url, normalize_subject_name, reading, syllabus_department_key
+from core.config import (
+    escape_like,
+    make_cls_sort,
+    make_syllabus_url,
+    normalize_subject_name,
+    reading,
+    subject_sort_reading_key,
+    syllabus_department_key,
+)
 from core.security import check_admin
 from core.subject_variants import CLASSIFICATION_MERGE_EXCLUDED, compute_variant_display_groups
 from core.templates import templates
@@ -60,7 +68,7 @@ async def admin_courses(
         cls_map = await cache.get_cls_order_map()
         _cls_sort = make_cls_sort(cls_map)
         courses = sorted(courses, key=lambda c: (
-            _cls_sort(c.classification or ""), c.sort_order, (c.reading or "").strip() or (c.name or "")
+            _cls_sort(c.classification or ""), c.sort_order, subject_sort_reading_key(c)
         ))
         total = len(courses)
         # 「すべて」タブでもページネーションなしで全件を一度に表示する
@@ -505,24 +513,38 @@ async def admin_courses_update(
             # 区別しないため空文字に揃えておく(将来faculty列をNOT NULL化する際の前提)
             new_faculty = faculty.strip()
             new_department = department.strip()
+            new_classification = classification.strip() or None
 
-            duplicate = await _find_duplicate_subject(session, course_id, new_name, new_faculty, new_department)
-            if duplicate is not None and not force_duplicate:
-                # 2026-09-05: 全く同じ科目名（学部・学科も同一）を別分類に登録しようとした場合、
-                # 誤操作の可能性があるため確認なしでは保存させない。フロントはこのエラーを
-                # 検知して確認ダイアログを出し、「はい」ならforce_duplicate付きで再送する
-                message = (
-                    f"同じ科目名が既に「{duplicate.classification or '未分類'}」にあります"
-                    f"（学部：{duplicate.faculty or '未設定'}、学科：{duplicate.department or '未設定'}）。"
-                    "このまま別の分類として保存しますか？"
-                    "（保存すると、既存科目の承認済みレビューがこの科目にもコピーされます）"
-                )
-                if is_ajax:
-                    return JSONResponse({"ok": False, "error": "duplicate_name", "message": message})
-                return RedirectResponse(url="/admin/courses?msg=duplicate_name", status_code=303)
+            # 2026-09-06: 名前・学部・学科・分類のいずれも変わらない編集（単位数だけの修正等）では
+            # 重複チェック自体を行わない。分類またぎの同名科目は一度確認すれば恒久的に共存する設計
+            # なので、これが無いと既に確認済みの組み合わせについて無関係な編集のたびに
+            # 「同じ科目名が既にあります」の確認ダイアログが毎回再発火してしまう
+            identity_changed = (
+                new_name != course.name
+                or new_faculty != (course.faculty or "")
+                or new_department != (course.department or "")
+                or new_classification != course.classification
+            )
+
+            duplicate = None
+            if identity_changed:
+                duplicate = await _find_duplicate_subject(session, course_id, new_name, new_faculty, new_department)
+                if duplicate is not None and not force_duplicate:
+                    # 2026-09-05: 全く同じ科目名（学部・学科も同一）を別分類に登録しようとした場合、
+                    # 誤操作の可能性があるため確認なしでは保存させない。フロントはこのエラーを
+                    # 検知して確認ダイアログを出し、「はい」ならforce_duplicate付きで再送する
+                    message = (
+                        f"同じ科目名が既に「{duplicate.classification or '未分類'}」にあります"
+                        f"（学部：{duplicate.faculty or '未設定'}、学科：{duplicate.department or '未設定'}）。"
+                        "このまま別の分類として保存しますか？"
+                        "（保存すると、既存科目の承認済みレビューがこの科目にもコピーされます）"
+                    )
+                    if is_ajax:
+                        return JSONResponse({"ok": False, "error": "duplicate_name", "message": message})
+                    return RedirectResponse(url="/admin/courses?msg=duplicate_name", status_code=303)
 
             course.name = new_name
-            course.classification = classification.strip() or None
+            course.classification = new_classification
             course.category = category
             course.reading = reading(new_name)
             course.term_type = term_type.strip() or None
@@ -652,22 +674,55 @@ async def admin_courses_group_update(
     term_type: str = Form(""),
     credits: float = Form(0),
     faculty: str = Form(""),
+    force_duplicate: str = Form(""),
 ):
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     # 統合表示（生物学各論A1/A2/C1/C2等）の編集モーダルはグループ内の全科目に同じ内容を
     # 一括適用する（科目名はバリアントごとに異なるためここでは変更しない）
     id_list = _parse_group_ids(ids)
+    new_faculty = faculty.strip()
+    new_classification = classification.strip() or None
     async with AsyncSessionLocal() as session:
         member_courses = (await session.execute(
             select(Subject).where(Subject.id.in_(id_list))
         )).scalars().all()
+
+        # 2026-09-06: 単独科目編集(admin_courses_update)と同じ理由で、学部または分類が変わる
+        # メンバーについては分類またぎの同名科目衝突をUNIQUE制約違反(通信エラー)にせず確認を挟む。
+        # 名前・学科はこのエンドポイントでは変更しないため、それらが不変なメンバーは対象外
+        duplicates: list[tuple[Subject, Subject]] = []
         for course in member_courses:
-            course.classification = classification.strip() or None
+            identity_changed = (
+                new_faculty != (course.faculty or "") or new_classification != course.classification
+            )
+            if not identity_changed:
+                continue
+            dup = await _find_duplicate_subject(session, course.id, course.name, new_faculty, course.department or "")
+            if dup is not None:
+                duplicates.append((course, dup))
+
+        if duplicates and not force_duplicate:
+            names = "、".join(f"「{c.name}」" for c, _ in duplicates[:5])
+            message = (
+                f"{names} は既に同じ科目名が別の分類にあります。"
+                "このまま別の分類として保存しますか？"
+                "（保存すると、既存科目の承認済みレビューがこの科目にもコピーされます）"
+            )
+            if is_ajax:
+                return JSONResponse({"ok": False, "error": "duplicate_name", "message": message})
+            return RedirectResponse(url="/admin/courses?msg=duplicate_name", status_code=303)
+
+        for course in member_courses:
+            course.classification = new_classification
             course.category = category
             course.term_type = term_type.strip() or None
             course.credits = credits if credits else None
-            course.faculty = faculty.strip()
+            course.faculty = new_faculty
         await session.commit()
+
+        if duplicates and force_duplicate:
+            for course, dup in duplicates:
+                await _copy_approved_reviews(session, source=dup, target=course)
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
     if is_ajax:

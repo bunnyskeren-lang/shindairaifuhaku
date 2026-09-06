@@ -4,6 +4,10 @@
 保存させず（IntegrityErrorではなく明示的なduplicate_nameエラーを返す）、確認後
 （force_duplicate）は保存した上で既存科目の承認済みレビューを複製して見せる
 （買取対象からは常に除外する）仕様を検証する。
+
+2026-09-06: 一度確認して分類またぎの同名科目を保存した後、名前・学部・学科・分類の
+どれも変えない編集（単位数の修正等）では確認ダイアログを再発火させないこと、および
+一括編集（統合表示グループ）でも同じ確認フローが働くことを追加で検証する。
 """
 import pytest
 from sqlalchemy import select
@@ -145,3 +149,90 @@ async def test_duplicate_name_force_is_idempotent(http_client_factory, monkeypat
             )
         )).scalars().all()
         assert len(copies) == 1
+
+
+@pytest.mark.asyncio
+async def test_unrelated_edit_after_confirmation_does_not_reask(http_client_factory, monkeypatch, test_sessionmaker):
+    """分類またぎの同名科目を一度確認して保存した後、名前・学部・学科・分類を変えない
+    編集（単位数だけの修正）では確認ダイアログが再発火しないこと。"""
+    _, target_id, _ = await _seed(test_sessionmaker)
+    client = _admin_client(http_client_factory, monkeypatch)
+
+    base_form = {
+        "name": "経済学入門", "classification": "新分類", "category": "専門",
+        "faculty": "経済学部", "department": "",
+    }
+    resp = await client.post(
+        f"/admin/courses/update/{target_id}",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={**base_form, "force_duplicate": "1"},
+    )
+    assert resp.json() == {"ok": True}
+
+    # 名前・学部・学科・分類は同じまま、単位数だけを変更する後続編集
+    resp2 = await client.post(
+        f"/admin/courses/update/{target_id}",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={**base_form, "credits": "2"},
+    )
+    assert resp2.json() == {"ok": True}
+
+    async with test_sessionmaker() as session:
+        target = await session.get(Subject, target_id)
+        assert target.credits == 2
+
+
+@pytest.mark.asyncio
+async def test_group_update_duplicate_name_requires_confirmation_then_copies(
+    http_client_factory, monkeypatch, test_sessionmaker
+):
+    """統合表示グループの一括編集でも、分類/学部変更が同名科目衝突を起こす場合は
+    確認を挟み、確認後は既存科目の承認済みレビューを複製すること。"""
+    _, target_id, review_id = await _seed(test_sessionmaker)
+    client = _admin_client(http_client_factory, monkeypatch)
+
+    async with test_sessionmaker() as session:
+        target = await session.get(Subject, target_id)
+        target.name = "経済学入門"
+        await session.commit()
+
+    resp = await client.post(
+        "/admin/courses/group/update",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={
+            "ids": str(target_id), "classification": "第三分類", "category": "専門",
+            "faculty": "経済学部",
+        },
+    )
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error"] == "duplicate_name"
+
+    async with test_sessionmaker() as session:
+        target = await session.get(Subject, target_id)
+        assert target.classification == "新分類"  # 確認前なので保存されていない
+
+    resp2 = await client.post(
+        "/admin/courses/group/update",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={
+            "ids": str(target_id), "classification": "第三分類", "category": "専門",
+            "faculty": "経済学部", "force_duplicate": "1",
+        },
+    )
+    assert resp2.json() == {"ok": True}
+
+    async with test_sessionmaker() as session:
+        target = await session.get(Subject, target_id)
+        assert target.classification == "第三分類"
+
+        target_cs = (await session.execute(
+            select(CourseSection).where(CourseSection.subject_id == target_id)
+        )).scalars().all()
+        copied = (await session.execute(
+            select(Review).where(
+                Review.course_section_id.in_([c.id for c in target_cs]),
+                Review.copied_from_review_id == review_id,
+            )
+        )).scalars().first()
+        assert copied is not None
