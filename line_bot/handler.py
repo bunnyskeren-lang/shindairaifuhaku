@@ -33,6 +33,7 @@ from core.config import (
     make_course_liff_url,
     make_register_url,
     make_review_liff_url,
+    subject_sort_reading_key,
 )
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
@@ -153,8 +154,7 @@ def _breadcrumb(category: str = "", faculty: str = "", department: str = "", cla
     return " › ".join(parts)
 
 
-def _reading_key(subj) -> str:
-    return (subj.reading or "").strip() or (subj.name or "")
+_reading_key = subject_sort_reading_key
 
 
 def _build_alpha_split_menu(rows: list, category: str, classification: str,

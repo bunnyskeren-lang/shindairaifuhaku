@@ -321,3 +321,10 @@ try:
 except Exception:
     def reading(text: str) -> str:
         return ""
+
+
+def subject_sort_reading_key(subj) -> str:
+    """科目一覧のよみがな順ソート用キー。readingが空文字の科目（バックフィル前後の一瞬）は
+    name（漢字）にフォールバックする。line_bot/handler.pyとrouters/admin/courses.pyで
+    同じ規則を共有するための一元化（2026-09-06、旧・両ファイルへの重複実装を統合）。"""
+    return (subj.reading or "").strip() or (subj.name or "")
