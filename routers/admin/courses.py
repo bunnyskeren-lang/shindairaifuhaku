@@ -51,11 +51,18 @@ async def admin_courses(
          if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
         extra_excluded_names=_excluded_names,
     )
-    members_by_label: dict[str, list] = defaultdict(list)
+    # 修正理由: labelはベース名+接尾辞の文字列（例:"水理学 (Ⅰ/Ⅱ)"）でしかなく、別のclassification
+    # （別学部）に同名バリアントが偶然存在すると同じ文字列になりうる。label_by_name自体は
+    # (科目名, classification)ペアで正しく別グループに分けているのに、ここをlabel文字列だけで
+    # キーイングすると別classificationの科目同士が1グループに混ざってしまう
+    # （2026-09-06発覚：工学部市民工学科「水理学Ⅰ/Ⅱ」と農学部食料環境システム学科「水理学Ⅰ/Ⅱ」が
+    # 同じラベルに統合され、分類ソート順が早い農学部側の見出しの下に工学部側まで表示されるバグ）。
+    # キーを(label, classification)のペアにして分類ごとに独立したグループにする。
+    members_by_label: dict[tuple[str, str], list] = defaultdict(list)
     for c in all_courses_for_variant:
         label = label_by_name.get((c.name, c.classification or ""))
         if label:
-            members_by_label[label].append(c)
+            members_by_label[(label, c.classification or "")].append(c)
 
     # 「統合解除」ボタン（subjects.variant_merge_excluded、2026-09-06）で個別除外された科目に
     # 「元に戻す」ボタンを出すため、除外を一切適用しなかった場合に本来どのグループへ統合される
@@ -65,11 +72,11 @@ async def admin_courses(
         [(c.name, c.classification or "") for c in all_courses_for_variant
          if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
     )
-    potential_members_by_label: dict[str, list] = defaultdict(list)
+    potential_members_by_label: dict[tuple[str, str], list] = defaultdict(list)
     for c in all_courses_for_variant:
         label = potential_label_by_name.get((c.name, c.classification or ""))
         if label:
-            potential_members_by_label[label].append(c)
+            potential_members_by_label[(label, c.classification or "")].append(c)
 
     async with AsyncSessionLocal() as session:
         base_stmt = select(Subject)
@@ -105,13 +112,15 @@ async def admin_courses(
         # 「このページに表示される科目のうち、グループの代表としてどのidを問い合わせに含める必要が
         # あるか」だけを先に確定させ、担当教員・レビューのDBクエリ対象idに反映する）
         course_ids = [c.id for c in courses]
-        seen_labels_for_query: set[str] = set()
+        seen_labels_for_query: set[tuple[str, str]] = set()
         extra_ids: set[int] = set()
         for c in courses:
             label = label_by_name.get((c.name, c.classification or ""))
-            if label and label not in seen_labels_for_query:
-                seen_labels_for_query.add(label)
-                extra_ids.update(m.id for m in members_by_label.get(label, []))
+            if label:
+                label_key = (label, c.classification or "")
+                if label_key not in seen_labels_for_query:
+                    seen_labels_for_query.add(label_key)
+                    extra_ids.update(m.id for m in members_by_label.get(label_key, []))
         query_ids = sorted(set(course_ids) | extra_ids)
 
         # 担当教員・レビューの中身（教員URL・レビュー本文）は科目管理画面を開いた時点では
@@ -204,9 +213,12 @@ async def admin_courses(
     group_rows_by_label: dict = {}
     for c in courses:
         label = label_by_name.get((c.name, c.classification or ""))
-        if not label or label in group_rows_by_label:
+        if not label:
             continue
-        members = members_by_label.get(label, [c])
+        label_key = (label, c.classification or "")
+        if label_key in group_rows_by_label:
+            continue
+        members = members_by_label.get(label_key, [c])
         ids = [m.id for m in members]
 
         combined_instr_ids: set = set()
@@ -232,7 +244,7 @@ async def admin_courses(
         review_total = sum(s.total for s in review_summary)
 
         primary = members[0]
-        group_rows_by_label[label] = SimpleNamespace(
+        group_rows_by_label[label_key] = SimpleNamespace(
             type="group",
             key=f"g{len(group_rows_by_label) + 1}",
             label=label,
@@ -251,22 +263,24 @@ async def admin_courses(
 
     parent_subgroups: dict = defaultdict(lambda: defaultdict(list))
     regular_grouped: dict = defaultdict(list)
-    seen_labels_rendered: set = set()
+    seen_labels_rendered: set[tuple[str, str]] = set()
     for c in courses:
         cls = c.classification or "（未分類）"
         label = label_by_name.get((c.name, c.classification or ""))
         if label:
-            if label in seen_labels_rendered:
+            label_key = (label, c.classification or "")
+            if label_key in seen_labels_rendered:
                 continue
-            seen_labels_rendered.add(label)
-            row = group_rows_by_label[label]
+            seen_labels_rendered.add(label_key)
+            row = group_rows_by_label[label_key]
         else:
             can_remerge = False
             remerge_ids: list[int] = []
             if c.variant_merge_excluded:
                 potential_label = potential_label_by_name.get((c.name, c.classification or ""))
                 if potential_label:
-                    remerge_ids = [m.id for m in potential_members_by_label.get(potential_label, [])]
+                    potential_key = (potential_label, c.classification or "")
+                    remerge_ids = [m.id for m in potential_members_by_label.get(potential_key, [])]
                     can_remerge = bool(remerge_ids)
             row = SimpleNamespace(type="single", course=c, can_remerge=can_remerge, remerge_ids=remerge_ids)
         if cls in child_cls_set:
