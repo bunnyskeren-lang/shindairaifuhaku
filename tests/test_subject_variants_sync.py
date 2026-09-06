@@ -241,12 +241,10 @@ def test_compute_letter_view_groups_merges_kyoyo_review_viewing_only():
     assert "単独科目" not in solo
 
 
-def test_letter_only_merge_opt_in_for_kokusai_ningen_senmon_classification():
-    """2026-09-04にユーザー指示で、末尾アルファベットのみが異なる文字バリアント統合の
-    恒常廃止ルール（2026-09-02）に「国際人間科学部専門科目」classification限定の
-    オプトイン例外を追加した。DB上のSubject行は分けたまま（レビュー投稿・閲覧は
-    引き続き別科目扱い）、LINE bot科目一覧・管理画面科目一覧の表示のみ統合する。
-    letter_only_included_namesを渡さなければ引き続き統合されないことも確認する
+def test_letter_only_merge_bases_is_a_general_purpose_opt_in_mechanism():
+    """compute_variant_bases()のletter_only_included_names機構自体は汎用の低レベル関数で、
+    渡された名前集合を機械的にグループ化するだけ（教員一致等の意味的な確認は行わない）。
+    letter_only_included_namesを渡さなければ既定で統合されないことも確認する
     （compute_variant_groups/compute_variant_full_labels＝レビュー関連機能が使う経路には
     一切影響しないことの保証）。"""
     names_with_fd = [
@@ -278,21 +276,31 @@ def test_letter_only_merge_opt_in_for_kokusai_ningen_senmon_classification():
     assert "日本文化交流論A" not in groups
     assert "保健体育科教育論A" not in groups
 
-    # 管理画面向けcompute_variant_display_groups()はclassification単位でオプトインする
-    names_with_cls = [(n, "国際人間科学部専門科目") for n, _, _ in names_with_fd]
-    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
-    assert display_result[("日本文化交流論A", "国際人間科学部専門科目")] == "日本文化交流論 (A/B)"
-    assert display_result[("日本文化交流論B", "国際人間科学部専門科目")] == "日本文化交流論 (A/B)"
-    assert display_result[("保健体育科教育論A", "国際人間科学部専門科目")] == "保健体育科教育論 (A/B/C/D)"
-    assert display_result[("保健体育科教育論D", "国際人間科学部専門科目")] == "保健体育科教育論 (A/B/C/D)"
 
-    # 他のclassificationでは引き続き統合されない（恒常廃止ルールはそのまま。
-    # 教養(人文)等の教養科目4分類は2026-09-05にオプトインされたため、ここでは未オプトインの
-    # classificationを使う）
-    other_cls = [(n, "工学部専門科目") for n, _, _ in names_with_fd]
-    other_result = subject_variants.compute_variant_display_groups(other_cls)
-    assert ("日本文化交流論A", "工学部専門科目") not in other_result
-    assert ("保健体育科教育論A", "工学部専門科目") not in other_result
+def test_kokusai_ningen_senmon_letter_only_merge_moved_to_manual_groups_per_instructor():
+    """2026-09-04に追加した「国際人間科学部専門科目」classification限定のLETTER_ONLY_MERGE_
+    INCLUDED_CLASSIFICATIONSオプトインは、教員一致を確認せず機械的に全ペアを統合してしまう
+    ため、2026-09-06に全19ベースの担当教員を実際に突き合わせたところ3ベースで教員不一致が
+    発覚した（保健体育科教育論はA/B/C=前田正登・D=高見和至、理科教育論はA/B=岡部舞・
+    C=三宅志穂、社会調査法は完全不一致）。このclassificationはLETTER_ONLY_MERGE_INCLUDED_
+    CLASSIFICATIONSから除外し、教員が一致する枝のみをMANUAL_VARIANT_GROUPSへ個別移行した。
+    このテストはその状態（classification単位の自動統合が起きないこと・MANUAL_VARIANT_GROUPS
+    経由で教員一致した枝のみ統合されること）を保証する。"""
+    assert "国際人間科学部専門科目" not in subject_variants.LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS
+
+    names_with_cls = [
+        (n, "国際人間科学部専門科目") for n in (
+            "日本文化交流論A", "日本文化交流論B",
+            "保健体育科教育論A", "保健体育科教育論B", "保健体育科教育論C", "保健体育科教育論D",
+        )
+    ]
+    display_result = subject_variants.compute_variant_display_groups(names_with_cls)
+    # 教員完全一致の日本文化交流論A/BはMANUAL_VARIANT_GROUPSのラベルで統合される
+    assert display_result[("日本文化交流論A", "国際人間科学部専門科目")] == "日本文化交流論(A/B)"
+    assert display_result[("日本文化交流論B", "国際人間科学部専門科目")] == "日本文化交流論(A/B)"
+    # 保健体育科教育論はA/B/Cのみ統合され、教員が異なるDは統合対象に含まれない
+    assert display_result[("保健体育科教育論A", "国際人間科学部専門科目")] == "保健体育科教育論(A/B/C)"
+    assert ("保健体育科教育論D", "国際人間科学部専門科目") not in display_result
 
 
 def test_num_excluded_names_keeps_health_sports_jisshu_separate():
