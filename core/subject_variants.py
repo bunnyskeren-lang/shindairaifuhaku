@@ -525,6 +525,11 @@ MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
     # 工学部応用化学科専門科目（2026-09-06、ユーザー指示）。
     # course_sections担当教員がA/B/Cとも大村直人で一致することを確認済み。
     {"names": ("移動現象論A", "移動現象論B", "移動現象論C"), "label": "移動現象論(A/B/C)"},
+    # 法学部専門科目（2026-09-06、ユーザー指示）。
+    # course_sections担当教員が法哲学A/Bは森悠一郎、英米法A/Bは板持研吾でそれぞれ一致することを
+    # 確認済み（同classification内で末尾がA/Bの科目はこの2組のみ）。
+    {"names": ("法哲学A", "法哲学B"), "label": "法哲学(A/B)"},
+    {"names": ("英米法A", "英米法B"), "label": "英米法(A/B)"},
 )
 
 # MANUAL_VARIANT_GROUPSに属する科目名の集合。これらは自動グループ化（_VNUM等）に
