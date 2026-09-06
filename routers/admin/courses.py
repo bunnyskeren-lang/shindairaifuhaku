@@ -510,6 +510,64 @@ async def _copy_approved_reviews(session, source: Subject, target: Subject) -> N
     await session.commit()
 
 
+@router.post("/admin/courses/create")
+async def admin_courses_create(
+    request: Request,
+    _: str = Depends(check_admin),
+    name: str = Form(...),
+    classification: str = Form(""),
+    category: str = Form("専門"),
+    term_type: str = Form(""),
+    credits: float = Form(0),
+    faculty: str = Form(""),
+    department: str = Form(""),
+    force_duplicate: str = Form(""),
+):
+    """管理画面から科目を新規作成する（2026-09-06追加。従来は編集・削除のみでシラバス
+    インポート経由でしか科目を追加できなかった）。重複チェック・レビューコピーの挙動は
+    admin_courses_update()の別分類への変更時と同じロジックを流用する。"""
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    new_name = normalize_subject_name(name.strip())
+    new_faculty = faculty.strip()
+    new_department = department.strip()
+    new_classification = classification.strip() or None
+
+    async with AsyncSessionLocal() as session:
+        duplicate = await _find_duplicate_subject(session, 0, new_name, new_faculty, new_department)
+        if duplicate is not None and not force_duplicate:
+            message = (
+                f"同じ科目名が既に「{duplicate.classification or '未分類'}」にあります"
+                f"（学部：{duplicate.faculty or '未設定'}、学科：{duplicate.department or '未設定'}）。"
+                "このまま別の分類として登録しますか？"
+                "（登録すると、既存科目の承認済みレビューがこの科目にもコピーされます）"
+            )
+            if is_ajax:
+                return JSONResponse({"ok": False, "error": "duplicate_name", "message": message})
+            return RedirectResponse(url="/admin/courses?msg=duplicate_name", status_code=303)
+
+        course = Subject(
+            name=new_name,
+            classification=new_classification,
+            category=category,
+            reading=reading(new_name),
+            term_type=term_type.strip() or None,
+            credits=credits if credits else None,
+            faculty=new_faculty,
+            department=new_department,
+        )
+        session.add(course)
+        await session.commit()
+
+        if duplicate is not None and force_duplicate:
+            await _copy_approved_reviews(session, source=duplicate, target=course)
+
+    cache.invalidate_courses_cache()
+    cache.invalidate_cls_caches()
+    if is_ajax:
+        return JSONResponse({"ok": True, "id": course.id})
+    return RedirectResponse(url="/admin/courses", status_code=303)
+
+
 @router.post("/admin/courses/update/{course_id}")
 async def admin_courses_update(
     course_id: int,

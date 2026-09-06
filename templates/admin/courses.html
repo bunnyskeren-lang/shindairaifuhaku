@@ -191,6 +191,7 @@
   </form>
   <button type="button" id="undoBtn" class="btn" onclick="undoLastDelete()" {{ "" if has_undo else "disabled" }}
           style="padding:6px 14px;white-space:nowrap;background:#fee2e2;color:#b91c1c">↩ 削除を戻す</button>
+  <button type="button" class="btn btn-primary" onclick="openCreate()" style="padding:6px 14px;white-space:nowrap">＋ 新規科目を追加</button>
 </div>
 <div class="table-wrap">
 <table>
@@ -558,6 +559,24 @@ function openEdit(id) {
   editContext = { type: 'course', id: id };
   document.getElementById('editModal').classList.add('open');
 }
+function openCreate() {
+  const nameInput = document.getElementById('editName');
+  nameInput.value = '';
+  nameInput.disabled = false;
+  document.getElementById('editGroupIds').value = '';
+  document.getElementById('editGroupNote').style.display = 'none';
+  document.getElementById('editModalTitle').textContent = '＋ 科目を新規追加';
+  document.getElementById('editClassification').value = '';
+  document.getElementById('editCategory').value = '専門';
+  document.getElementById('editTermType').value = '';
+  document.getElementById('editCredits').value = 0;
+  document.getElementById('editFaculty').value = '';
+  document.getElementById('editDepartment').value = '';
+  document.getElementById('editDepartmentWrap').style.display = 'block';
+  document.getElementById('editForm').action = '/admin/courses/create';
+  editContext = { type: 'create' };
+  document.getElementById('editModal').classList.add('open');
+}
 function openEditGroup(key) {
   const g = GROUPS[key];
   const nameInput = document.getElementById('editName');
@@ -598,10 +617,11 @@ document.getElementById('editForm').addEventListener('submit', function(e) {
 // 返した場合は確認ダイアログを出し、「はい」ならforce_duplicate付きで再送する
 function submitEditForm(form, extraFields) {
   const btn = form.querySelector('[type=submit]');
-  const orig = editContext.type === 'course' ? COURSES[editContext.id] : GROUPS[editContext.key];
+  const isCreate = editContext.type === 'create';
+  const orig = isCreate ? null : (editContext.type === 'course' ? COURSES[editContext.id] : GROUPS[editContext.key]);
   const newClassification = document.getElementById('editClassification').value.trim();
   const newCategory = document.getElementById('editCategory').value;
-  const structuralChange = (orig.classification || '') !== newClassification || (orig.category || '') !== newCategory;
+  const structuralChange = isCreate || (orig.classification || '') !== newClassification || (orig.category || '') !== newCategory;
   const fd = new FormData(form);
   Object.keys(extraFields).forEach(function(k) { fd.set(k, extraFields[k]); });
   btn.disabled = true;
