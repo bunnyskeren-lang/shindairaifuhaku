@@ -242,6 +242,33 @@ MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
         ),
         "label": "惑星学基礎演習(Ⅰ/Ⅱ/Ⅲ/Ⅳ/Ⅴ)",
     },
+    # 理学部惑星学科「惑星学基礎」（2026-09-06、ユーザー指示）。単独の「惑星学基礎Ⅰ」
+    # （通年2単位）は削除しクォーター分割の「Ⅰ-1」「Ⅰ-2」（各1単位）を残す方針にしたため、
+    # 元々別々の自動グループだった「惑星学基礎Ⅰ-(1/2)」（_VNUM基底"惑星学基礎Ⅰ-"）と
+    # 「惑星学基礎(Ⅱ/Ⅲ/Ⅳ/Ⅴ)」（_VNUM基底"惑星学基礎"）を1つの表示グループへ統合する。
+    # どちらも_VNUMに単独でマッチし2件以上の自動グループを構成してしまうため、
+    # _MANUAL_VARIANT_GROUP_NAMESによる自動グループ化除外と組み合わせて使う。
+    {
+        "names": (
+            "惑星学基礎Ⅰ-1",
+            "惑星学基礎Ⅰ-2",
+            "惑星学基礎Ⅱ",
+            "惑星学基礎Ⅲ",
+            "惑星学基礎Ⅳ",
+            "惑星学基礎Ⅴ",
+        ),
+        "label": "惑星学基礎(Ⅰ-(1/2)/Ⅱ/Ⅲ/Ⅳ/Ⅴ)",
+    },
+)
+
+# MANUAL_VARIANT_GROUPSに属する科目名の集合。これらは自動グループ化（_VNUM等）に
+# 単独でマッチしてしまうケースがあるため、compute_variant_display_groups()の自動ステップ
+# （2〜4）では素通りさせ、必ずステップ5の手動グループにのみ割り当てさせる
+# （2026-09-06、惑星学基礎で導入。自動ステップが先に一部だけを別グループとして
+# 確定させてしまうと、ステップ5の「グループ内の全科目名が揃っている場合のみ適用」
+# 判定に失敗し手動グループが適用されなくなるため）。
+_MANUAL_VARIANT_GROUP_NAMES: frozenset[str] = frozenset(
+    n for group in MANUAL_VARIANT_GROUPS for n in group["names"]
 )
 
 
@@ -678,7 +705,8 @@ def compute_variant_display_groups(
     # NUM_MERGE_EXCLUDED_NAMESに属する科目名は数字バリアント統合の対象外（compute_variant_bases()参照）
     num_bases: dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]] = {}
     for name, cls in items:
-        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES or name in extra_excluded_names:
+        if ((name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES
+                or name in extra_excluded_names or name in _MANUAL_VARIANT_GROUP_NAMES):
             continue
         m = _vnum_match(name)
         if m:
@@ -698,7 +726,8 @@ def compute_variant_display_groups(
     # 障害児発達学(1/2)（障害者・障害児心理学(1/2)）、同一classification単位でグループ化）
     paren_num_bases: dict[tuple[str, str, str, str], list[tuple[str, int, str, int, str, str]]] = {}
     for name, cls in items:
-        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES or name in extra_excluded_names:
+        if ((name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES
+                or name in extra_excluded_names or name in _MANUAL_VARIANT_GROUP_NAMES):
             continue
         m = _vnum_paren_match(name)
         if m:
@@ -721,7 +750,7 @@ def compute_variant_display_groups(
     letter_only_bases: dict[tuple[str, str, str], list[tuple[str, str, str]]] = {}
     for name, cls in items:
         if ((name, cls) in assigned or cls not in LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS
-                or name in extra_excluded_names):
+                or name in extra_excluded_names or name in _MANUAL_VARIANT_GROUP_NAMES):
             continue
         m = _vletter_only_match(name)
         if m:
