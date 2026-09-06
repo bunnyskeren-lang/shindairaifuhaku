@@ -16,7 +16,7 @@
 {% else %}
 {% set main_attrs = 'class="' ~ gid ~ '" data-gid="' ~ gid ~ '"' %}
 {% endif %}
-<tr id="group-row-{{ row.key }}" {{ main_attrs|safe }} data-member-count="{{ row.members | length }}" style="display:none">
+<tr id="group-row-{{ row.key }}" {{ main_attrs|safe }} data-member-count="{{ row.members | length }}">
   <td>
     🔗 {{ row.label }}
   </td>
@@ -211,13 +211,14 @@
       <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ sub_list | length }}科目）</span>
     </td>
   </tr>
+  <template id="tpl-{{ sgid }}">
   {% for row in sub_list %}
   {% if row.type == 'group' %}
   {{ group_row(row, sgid, pgid) }}
   {% else %}
   {% set c = row.course %}
   {% set pending_count = pending_count_by_course.get(c.id, 0) %}
-  <tr id="course-row-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}" style="display:none">
+  <tr id="course-row-{{ c.id }}" data-sg="{{ sgid }}" data-pg="{{ pgid }}">
     <td>
       {{ c.name }}
       {% if c.term_type %}<span class="badge-term" style="margin-left:4px">{{ c.term_type }}</span>{% endif %}
@@ -246,6 +247,7 @@
   </tr>
   {% endif %}
   {% endfor %}
+  </template>
   {% endfor %}
   {% endfor %}
   {% for classification, group_courses in grouped_courses %}
@@ -259,13 +261,14 @@
       <span style="font-weight:normal;color:#6b7280;font-size:12px">（{{ group_list | length }}科目）</span>
     </td>
   </tr>
+  <template id="tpl-{{ gid }}">
   {% for row in group_list %}
   {% if row.type == 'group' %}
   {{ group_row(row, gid=gid) }}
   {% else %}
   {% set c = row.course %}
   {% set pending_count = pending_count_by_course.get(c.id, 0) %}
-  <tr id="course-row-{{ c.id }}" class="{{ gid }}" data-gid="{{ gid }}" style="display:none">
+  <tr id="course-row-{{ c.id }}" class="{{ gid }}" data-gid="{{ gid }}">
     <td>
       {{ c.name }}
       {% if c.term_type %}<span class="badge-term" style="margin-left:4px">{{ c.term_type }}</span>{% endif %}
@@ -296,6 +299,7 @@
   </tr>
   {% endif %}
   {% endfor %}
+  </template>
   {% endfor %}
   {% else %}
   <tr><td colspan="4" class="empty">科目なし</td></tr>
@@ -366,12 +370,20 @@
 const COURSES = {{ courses_data | safe }};
 const GROUPS = {{ groups_data | safe }};
 {% raw %}
+// 修正理由: 科目数3000件超を初回HTMLに<tr style="display:none">で全件埋め込むと、
+// 折りたたんでいても要素数4万超のDOMが常に存在し続け、実際のキー入力（CDP経由の
+// 本物のキーイベントで確認）だけでレンダラーが数十秒〜数分単位でフリーズする重大な
+// パフォーマンス問題があった。分類・分類グループごとの科目行は<template>タグ（ブラウザの
+// レンダーツリー・アクセシビリティツリーに一切含まれない不活性なDOM）に格納しておき、
+// 展開した時だけimportNodeで複製しテーブルへ挿入する。折りたたむ時は複製した行を
+// （担当教員・レビューの遅延生成行も含めて）DOMから完全に削除し、初期表示にだけでなく
+// 常時のDOMサイズも小さく保つ。
 function toggleParentGrp(pgid, headerTr) {
   var subHdrs = document.querySelectorAll('tr.' + pgid);
   var isExpanded = subHdrs.length > 0 && subHdrs[0].style.display !== 'none';
   if (isExpanded) {
     subHdrs.forEach(function(tr) { tr.style.display = 'none'; });
-    document.querySelectorAll('[data-pg="' + pgid + '"]').forEach(function(tr) { tr.style.display = 'none'; });
+    document.querySelectorAll('[data-pg="' + pgid + '"]').forEach(function(tr) { tr.remove(); });
     document.querySelectorAll('.sub-arrow-' + pgid).forEach(function(a) { a.textContent = '▶'; });
   } else {
     subHdrs.forEach(function(tr) { tr.style.display = 'table-row'; });
@@ -381,30 +393,24 @@ function toggleParentGrp(pgid, headerTr) {
 }
 function toggleSubGrp(sgid, pgid, headerTr) {
   event.stopPropagation();
-  var rows = document.querySelectorAll('[data-sg="' + sgid + '"]');
-  var courseRows = Array.from(rows).filter(function(tr) { return !tr.classList.contains('review-row') && !tr.classList.contains('inst-row'); });
-  var isExpanded = courseRows.length > 0 && courseRows[0].style.display !== 'none';
-  rows.forEach(function(tr) {
-    if (tr.classList.contains('review-row') || tr.classList.contains('inst-row')) {
-      tr.style.display = 'none';
-    } else {
-      tr.style.display = isExpanded ? 'none' : 'table-row';
-    }
-  });
+  var isExpanded = !!document.querySelector('[data-sg="' + sgid + '"]');
+  if (isExpanded) {
+    document.querySelectorAll('[data-sg="' + sgid + '"]').forEach(function(tr) { tr.remove(); });
+  } else {
+    var tpl = document.getElementById('tpl-' + sgid);
+    if (tpl) headerTr.after(document.importNode(tpl.content, true));
+  }
   var arrow = headerTr.querySelector('.sub-arrow-' + pgid);
   if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
 }
 function toggleGroup(id, headerTr) {
-  var allRows = document.querySelectorAll('tr.' + id);
-  var courseRows = document.querySelectorAll('tr.' + id + ':not(.review-row):not(.inst-row)');
-  var isExpanded = courseRows.length > 0 && courseRows[0].style.display !== 'none';
-  allRows.forEach(function(tr) {
-    if (tr.classList.contains('review-row') || tr.classList.contains('inst-row')) {
-      tr.style.display = 'none';
-    } else {
-      tr.style.display = isExpanded ? 'none' : 'table-row';
-    }
-  });
+  var isExpanded = !!document.querySelector('tr.' + id);
+  if (isExpanded) {
+    document.querySelectorAll('tr.' + id).forEach(function(tr) { tr.remove(); });
+  } else {
+    var tpl = document.getElementById('tpl-' + id);
+    if (tpl) headerTr.after(document.importNode(tpl.content, true));
+  }
   var arrow = headerTr.querySelector('.grp-arrow');
   if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
 }
@@ -606,9 +612,7 @@ function submitEditForm(form, extraFields) {
     showErrorToast();
   });
 }
-function patchCourseRow(id, name, termType, credits) {
-  const row = document.getElementById('course-row-' + id);
-  if (!row) return;
+function patchCourseRowNode(row, name, termType, credits) {
   const cell = row.querySelector('td:first-child');
   cell.textContent = '';
   cell.appendChild(document.createTextNode(name));
@@ -626,6 +630,17 @@ function patchCourseRow(id, name, termType, credits) {
     span.textContent = credits + '単位';
     cell.appendChild(span);
   }
+}
+// 修正理由: 科目行は<template>から展開のたびに複製されるようになったため、現在表示中の
+// 行（あれば）だけでなく、複製元の<template>側の内容もあわせて書き換えないと、
+// 折りたたんで開き直した時に編集前の科目名に戻って見えてしまう
+function patchCourseRow(id, name, termType, credits) {
+  const liveRow = document.getElementById('course-row-' + id);
+  if (liveRow) patchCourseRowNode(liveRow, name, termType, credits);
+  document.querySelectorAll('template[id^="tpl-"]').forEach(function(tpl) {
+    const row = tpl.content.querySelector('#course-row-' + id);
+    if (row) patchCourseRowNode(row, name, termType, credits);
+  });
 }
 {% endraw %}
 
@@ -709,6 +724,15 @@ function deleteInstructor(courseId, instId, btn) {
   }).catch(function() { showErrorToast(); });
 }
 
+// 修正理由: 科目行は<template>から複製される方式になったため、削除時は表示中の行だけでなく
+// 複製元の<template>側からも取り除かないと、折りたたんで開き直した時に削除済みの科目が
+// 亡霊のように再表示されてしまう
+function removeFromTemplates(elementId) {
+  document.querySelectorAll('template[id^="tpl-"]').forEach(function(tpl) {
+    const el = tpl.content.querySelector('#' + elementId);
+    if (el) el.remove();
+  });
+}
 function deleteCourse(id, btn) {
   askConfirm('削除しますか？').then(function(ok) {
     if (!ok) return;
@@ -722,6 +746,7 @@ function deleteCourse(id, btn) {
           const row = document.getElementById(prefix + id);
           if (row) row.remove();
         });
+        removeFromTemplates('course-row-' + id);
         document.getElementById('undoBtn').disabled = false;
       } else if (data.error === 'has_reviews') {
         btn.disabled = false;
@@ -764,6 +789,7 @@ function deleteGroup(key, btn) {
           const row = document.getElementById(prefix + key);
           if (row) row.remove();
         });
+        removeFromTemplates('group-row-' + key);
         document.getElementById('undoBtn').disabled = false;
       } else if (data.error === 'has_reviews') {
         btn.disabled = false;
