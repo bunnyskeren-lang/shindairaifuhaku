@@ -103,11 +103,11 @@ def is_remote_tagged(name: str) -> bool:
 # 独立した科目のため、2026-08-31にユーザー指示で数字バリアント統合対象から除外した。
 # 分類単位ではなく科目名単位の除外（同分類内の他の数字バリアント科目までは対象にしない、
 # というユーザー指示のため）。
-# 工学部建築学科「建築計画Ⅰ〜Ⅳ」も同様にローマ数字違いで内容が異なる独立科目のため、
-# 2026-09-06にユーザー指示で除外した。
+# 2026-09-06以降、同種の個別除外は管理画面の「統合解除」ボタン（subjects.variant_merge_excluded
+# 列、routers/admin/courses.py）で管理者がその場で切り替えられるようにしたため、
+# このハードコード集合には追加しない（既存の健康・スポーツ科学実習1/2のみ後方互換で残す）。
 NUM_MERGE_EXCLUDED_NAMES = frozenset({
     "健康・スポーツ科学実習1", "健康・スポーツ科学実習2",
-    "建築計画Ⅰ", "建築計画Ⅱ", "建築計画Ⅲ", "建築計画Ⅳ",
 })
 
 
@@ -497,6 +497,7 @@ def compute_variant_bases(
 def compute_variant_groups(
     names_with_faculty_dept: list[tuple[str, str, str]],
     letter_split_excluded_names: frozenset[str] = frozenset(),
+    num_excluded_names: frozenset[str] = NUM_MERGE_EXCLUDED_NAMES,
 ) -> dict[str, str]:
     """(科目名, faculty, department)のリストから、末尾の数字/ローマ数字/セミナー言語
     だけが異なる2件以上の科目名をグループ化し、科目名→表示用グループラベル（ベース名）の
@@ -508,9 +509,14 @@ def compute_variant_groups(
     LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONSの例外は意図的にここには適用しない。
     表示のみ統合したいline_bot/handler.py _build_course_bubbles()・
     compute_variant_display_groups()は別途letter_only_included_namesを渡す）。
+    num_excluded_names（既定でNUM_MERGE_EXCLUDED_NAMES）は数字・ローマ数字バリアントの
+    統合対象から除外する科目名の集合。呼び出し側がsubjects.variant_merge_excluded=trueの
+    科目名をNUM_MERGE_EXCLUDED_NAMESと合わせて渡すことで、管理画面の「統合解除」ボタン
+    （2026-09-06）による動的な除外にも対応する。
     """
     sem_bases, num_bases, paren_num_bases, _letter_only_bases = compute_variant_bases(
-        names_with_faculty_dept, letter_split_excluded_names=letter_split_excluded_names)
+        names_with_faculty_dept, num_excluded_names=num_excluded_names,
+        letter_split_excluded_names=letter_split_excluded_names)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
@@ -566,6 +572,7 @@ def compute_letter_view_groups(
 def compute_variant_full_labels(
     names_with_faculty_dept: list[tuple[str, str, str]],
     letter_split_excluded_names: frozenset[str] = frozenset(),
+    num_excluded_names: frozenset[str] = NUM_MERGE_EXCLUDED_NAMES,
 ) -> dict[str, str]:
     """(科目名, faculty, department)のリストから、科目名 → 括弧付き接尾辞込みの完全な
     グループ表示名（例: "力学基礎(1/2)"、"生物学各論(A1/A2/C1/C2)"）のマップを返す。
@@ -573,12 +580,13 @@ def compute_variant_full_labels(
     compute_variant_groups()はベースラベル（接尾辞を含まない科目名の共通部分）のみを返すため、
     ベースラベルだけでは元の科目名と見分けがつかない画面（管理画面のレビュー科目別集計等）
     向けに追加した。判定基準はcompute_variant_groups()と同一（compute_variant_bases()を共有）。
-    グループに属さない科目名はマップに含めない。letter_split_excluded_namesは
-    compute_variant_bases()参照。letter_only_included_namesを渡さない理由は
+    グループに属さない科目名はマップに含めない。letter_split_excluded_names/num_excluded_namesは
+    compute_variant_groups()参照。letter_only_included_namesを渡さない理由は
     compute_variant_groups()のdocstring参照（レビュー関連機能への意図しない波及を防ぐため）。
     """
     sem_bases, num_bases, paren_num_bases, _letter_only_bases = compute_variant_bases(
-        names_with_faculty_dept, letter_split_excluded_names=letter_split_excluded_names)
+        names_with_faculty_dept, num_excluded_names=num_excluded_names,
+        letter_split_excluded_names=letter_split_excluded_names)
     result: dict[str, str] = {}
 
     for (base_lang, _fac, _dept), members in sem_bases.items():
@@ -605,6 +613,7 @@ def compute_variant_full_labels(
 
 def compute_variant_display_groups(
     names_with_classification: list[tuple[str, str]],
+    extra_excluded_names: frozenset[str] = frozenset(),
 ) -> dict[tuple[str, str], str]:
     """(科目名, classification)のリストから、同一classification内で末尾のみが異なる2件以上の
     科目名をグループ化し、(科目名, classification) → 表示用グループラベル
@@ -620,6 +629,10 @@ def compute_variant_display_groups(
     本来別グループのバリアントが誤って1グループに結合される
     （2026-08-28、「病理学 (Ⅰ/Ⅰ/Ⅰ/Ⅱ/Ⅱ/Ⅱ)」のような重複ラベルが出るバグとして発覚し修正）。
     グループに属さない（バリアントが1件だけ、または該当パターンなし）科目はマップに含めない。
+    extra_excluded_names（既定で空集合）はNUM_MERGE_EXCLUDED_NAMESに加えて数字・ローマ数字
+    バリアント統合対象から除外する科目名の集合。呼び出し側（routers/admin/courses.py）が
+    subjects.variant_merge_excluded=trueの科目名を渡すことで、管理画面の「統合解除」ボタン
+    （2026-09-06）による動的な除外を反映する。
     """
     result: dict[tuple[str, str], str] = {}
     assigned: set[tuple[str, str]] = set()
@@ -628,6 +641,8 @@ def compute_variant_display_groups(
     # 1) セミナー系（外国語セミナーA(英語) → 外国語セミナー(英語) (A/B/C/D)）
     sem_bases: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
     for name, cls in items:
+        if name in NUM_MERGE_EXCLUDED_NAMES or name in extra_excluded_names:
+            continue
         m = _VSEM.match(name)
         if m:
             sem_bases.setdefault((m.group(1) + m.group(3), cls), []).append((name, cls, m.group(2)))
@@ -650,7 +665,7 @@ def compute_variant_display_groups(
     # NUM_MERGE_EXCLUDED_NAMESに属する科目名は数字バリアント統合の対象外（compute_variant_bases()参照）
     num_bases: dict[tuple[str, str, str, str], list[tuple[str, str, int, str, str]]] = {}
     for name, cls in items:
-        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES:
+        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES or name in extra_excluded_names:
             continue
         m = _vnum_match(name)
         if m:
@@ -670,7 +685,7 @@ def compute_variant_display_groups(
     # 障害児発達学(1/2)（障害者・障害児心理学(1/2)）、同一classification単位でグループ化）
     paren_num_bases: dict[tuple[str, str, str, str], list[tuple[str, int, str, int, str, str]]] = {}
     for name, cls in items:
-        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES:
+        if (name, cls) in assigned or name in NUM_MERGE_EXCLUDED_NAMES or name in extra_excluded_names:
             continue
         m = _vnum_paren_match(name)
         if m:
@@ -692,7 +707,8 @@ def compute_variant_display_groups(
     # 他のclassificationには一切影響しない）。
     letter_only_bases: dict[tuple[str, str, str], list[tuple[str, str, str]]] = {}
     for name, cls in items:
-        if (name, cls) in assigned or cls not in LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS:
+        if ((name, cls) in assigned or cls not in LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS
+                or name in extra_excluded_names):
             continue
         m = _vletter_only_match(name)
         if m:
@@ -712,6 +728,8 @@ def compute_variant_display_groups(
     names_present = {n for n, _c in items}
     for group in MANUAL_VARIANT_GROUPS:
         if not all(n in names_present for n in group["names"]):
+            continue
+        if any(n in extra_excluded_names for n in group["names"]):
             continue
         for n, c in items:
             if (n, c) in assigned or n not in group["names"]:

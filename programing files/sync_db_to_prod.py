@@ -114,7 +114,7 @@ async def main():
         # course_sections/subject_credit_categories は下でdev id→prod idに変換して同期する。
         subj_rows = await dev.fetch(
             "SELECT id, name, reading, faculty, department, classification, "
-            "category, sort_order, term_type, credits "
+            "category, sort_order, term_type, credits, variant_merge_excluded "
             "FROM subjects ORDER BY id"
         )
         dup_keys = [key for key, cnt in
@@ -127,17 +127,18 @@ async def main():
                 """
                 INSERT INTO subjects
                   (name, reading, faculty, department, classification,
-                   category, sort_order, term_type, credits)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                   category, sort_order, term_type, credits, variant_merge_excluded)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 ON CONFLICT (name, faculty, department, classification) DO UPDATE SET
                   reading=EXCLUDED.reading,
                   category=EXCLUDED.category,
                   sort_order=EXCLUDED.sort_order,
-                  term_type=EXCLUDED.term_type, credits=EXCLUDED.credits
+                  term_type=EXCLUDED.term_type, credits=EXCLUDED.credits,
+                  variant_merge_excluded=EXCLUDED.variant_merge_excluded
                 """,
                 [(r["name"], r["reading"], r["faculty"], r["department"],
                   r["classification"], r["category"], r["sort_order"],
-                  r["term_type"], r["credits"])
+                  r["term_type"], r["credits"], r["variant_merge_excluded"])
                  for r in subj_rows]
             )
         print(f"subjects: {len(subj_rows)}件 upsert")

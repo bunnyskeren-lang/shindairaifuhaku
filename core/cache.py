@@ -8,6 +8,7 @@ from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
     LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS,
     LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
+    NUM_MERGE_EXCLUDED_NAMES,
     compute_letter_view_groups,
     compute_variant_full_labels,
     compute_variant_groups,
@@ -472,10 +473,13 @@ async def get_variant_map_cached() -> dict[str, str]:
     _, all_courses = await get_courses_cached()
     _letter_split_excluded_names = frozenset(
         c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
+    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
+        c.name for c in all_courses if c.variant_merge_excluded)
     _variant_map_cache = compute_variant_groups(
         [(c.name, c.faculty or "", c.department or "") for c in all_courses
          if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
         letter_split_excluded_names=_letter_split_excluded_names,
+        num_excluded_names=_num_excluded_names,
     )
     _variant_map_cache_at = time.monotonic()
     return _variant_map_cache
@@ -564,10 +568,13 @@ async def get_variant_full_label_map_cached() -> dict[str, str]:
     _, all_courses = await get_courses_cached()
     _letter_split_excluded_names = frozenset(
         c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
+    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
+        c.name for c in all_courses if c.variant_merge_excluded)
     _variant_full_label_cache = compute_variant_full_labels(
         [(c.name, c.faculty or "", c.department or "") for c in all_courses
          if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
         letter_split_excluded_names=_letter_split_excluded_names,
+        num_excluded_names=_num_excluded_names,
     )
     _variant_full_label_cache_at = time.monotonic()
     return _variant_full_label_cache

@@ -45,15 +45,31 @@ async def admin_courses(
     # 同じ規則で1行に統合表示するための判定（現在の検索・ページングとは独立した全科目データが
     # 対象。一部だけ検索にヒットした場合でもグループ全体を対象に統合する）
     _, all_courses_for_variant = await cache.get_courses_cached()
+    _excluded_names = frozenset(c.name for c in all_courses_for_variant if c.variant_merge_excluded)
     label_by_name = compute_variant_display_groups(
         [(c.name, c.classification or "") for c in all_courses_for_variant
-         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED]
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
+        extra_excluded_names=_excluded_names,
     )
     members_by_label: dict[str, list] = defaultdict(list)
     for c in all_courses_for_variant:
         label = label_by_name.get((c.name, c.classification or ""))
         if label:
             members_by_label[label].append(c)
+
+    # 「統合解除」ボタン（subjects.variant_merge_excluded、2026-09-06）で個別除外された科目に
+    # 「元に戻す」ボタンを出すため、除外を一切適用しなかった場合に本来どのグループへ統合される
+    # はずだったかを別途計算しておく（NUM_MERGE_EXCLUDED_NAMES等のコード側の恒常除外は
+    # 対象外のまま＝そちらは「元に戻す」ボタンを出さない）
+    potential_label_by_name = compute_variant_display_groups(
+        [(c.name, c.classification or "") for c in all_courses_for_variant
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
+    )
+    potential_members_by_label: dict[str, list] = defaultdict(list)
+    for c in all_courses_for_variant:
+        label = potential_label_by_name.get((c.name, c.classification or ""))
+        if label:
+            potential_members_by_label[label].append(c)
 
     async with AsyncSessionLocal() as session:
         base_stmt = select(Subject)
@@ -245,7 +261,14 @@ async def admin_courses(
             seen_labels_rendered.add(label)
             row = group_rows_by_label[label]
         else:
-            row = SimpleNamespace(type="single", course=c)
+            can_remerge = False
+            remerge_ids: list[int] = []
+            if c.variant_merge_excluded:
+                potential_label = potential_label_by_name.get((c.name, c.classification or ""))
+                if potential_label:
+                    remerge_ids = [m.id for m in potential_members_by_label.get(potential_label, [])]
+                    can_remerge = bool(remerge_ids)
+            row = SimpleNamespace(type="single", course=c, can_remerge=can_remerge, remerge_ids=remerge_ids)
         if cls in child_cls_set:
             parent_subgroups[cls_parent_map[cls]][cls].append(row)
         elif cls in parent_names_set:
@@ -662,6 +685,48 @@ async def admin_courses_undo(_: str = Depends(check_admin)):
 
 def _parse_group_ids(ids: str) -> list[int]:
     return [int(x) for x in ids.split(",") if x.strip().isdigit()]
+
+
+@router.post("/admin/courses/group/unmerge")
+async def admin_courses_group_unmerge(request: Request, _: str = Depends(check_admin), ids: str = Form(...)):
+    """統合表示（生物学各論A1/A2/C1/C2等）の「統合解除」ボタン。指定した科目群を
+    subjects.variant_merge_excluded=trueにし、末尾バリアント統合（LINE bot科目一覧・
+    管理画面科目一覧の表示のみ）の対象から外す。DB上のSubject行自体は変更しない。
+    従来はcore/subject_variants.pyのNUM_MERGE_EXCLUDED_NAMESにコードでハードコードして
+    いたが、都度コード変更・デプロイが要るため管理者がボタンで切り替えられるようにした
+    （2026-09-06）。"""
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    id_list = _parse_group_ids(ids)
+    async with AsyncSessionLocal() as session:
+        member_courses = (await session.execute(
+            select(Subject).where(Subject.id.in_(id_list))
+        )).scalars().all()
+        for course in member_courses:
+            course.variant_merge_excluded = True
+        await session.commit()
+    cache.invalidate_courses_cache()
+    if is_ajax:
+        return JSONResponse({"ok": True})
+    return RedirectResponse(url="/admin/courses", status_code=303)
+
+
+@router.post("/admin/courses/group/remerge")
+async def admin_courses_group_remerge(request: Request, _: str = Depends(check_admin), ids: str = Form(...)):
+    """admin_courses_group_unmerge()で解除した統合を元に戻す「元に戻す」ボタン。
+    指定した科目群のsubjects.variant_merge_excludedをfalseに戻す。"""
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    id_list = _parse_group_ids(ids)
+    async with AsyncSessionLocal() as session:
+        member_courses = (await session.execute(
+            select(Subject).where(Subject.id.in_(id_list))
+        )).scalars().all()
+        for course in member_courses:
+            course.variant_merge_excluded = False
+        await session.commit()
+    cache.invalidate_courses_cache()
+    if is_ajax:
+        return JSONResponse({"ok": True})
+    return RedirectResponse(url="/admin/courses", status_code=303)
 
 
 @router.post("/admin/courses/group/update")

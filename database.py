@@ -631,3 +631,10 @@ async def init_db():
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$
         """))
+
+        # ── 2026-09-06: 管理画面の「統合解除」「元に戻す」ボタン向け ──
+        # 末尾バリアント統合（core/subject_variants.py）を科目名単位でON/OFFする従来の
+        # NUM_MERGE_EXCLUDED_NAMESハードコードに代えて、管理者がボタンで切り替えられるようにする列
+        await conn.execute(text(
+            "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS variant_merge_excluded BOOLEAN NOT NULL DEFAULT FALSE"
+        ))

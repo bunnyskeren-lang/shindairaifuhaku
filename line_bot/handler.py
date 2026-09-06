@@ -40,6 +40,7 @@ from core.subject_variants import (
     LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS,
     LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
     MANUAL_VARIANT_GROUPS,
+    NUM_MERGE_EXCLUDED_NAMES,
     TAG_PRIORITY,
     compute_variant_bases,
     letter_variant_suffix,
@@ -218,8 +219,13 @@ async def _build_course_bubbles(rows: list, reviewed_names: set, cls_sort,
     # 表示のみの例外。core.subject_variants.LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS参照）
     _letter_only_included_names = frozenset(
         c.name for c in rows if (c.classification or "") in LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS)
+    # 管理画面の「統合解除」ボタン（subjects.variant_merge_excluded、2026-09-06）で
+    # 個別に除外された科目名も、コード上の恒常除外(NUM_MERGE_EXCLUDED_NAMES)と合わせて渡す
+    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
+        c.name for c in rows if c.variant_merge_excluded)
     _sem_bases, _num_bases, _paren_num_bases, _letter_only_bases = compute_variant_bases(
-        names_with_fd, letter_split_excluded_names=_letter_split_excluded_names,
+        names_with_fd, num_excluded_names=_num_excluded_names,
+        letter_split_excluded_names=_letter_split_excluded_names,
         letter_only_included_names=_letter_only_included_names)
 
     _num_variant_names = {n for _items in _num_bases.values() for n, _, _, _, _ in _items}

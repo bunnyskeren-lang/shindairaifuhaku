@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, func, UniqueConstraint, ForeignKey, Index
+from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
 from core.config import normalize_instructor_name, normalize_subject_name
@@ -146,6 +146,15 @@ class Subject(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
+    # 管理画面の「統合解除」「元に戻す」ボタン（routers/admin/courses.py）向け。
+    # 末尾バリアント統合（core/subject_variants.py compute_variant_bases等）の判定は
+    # 通常「科目名の文字列」だけを見て機械的に行われるが、実際には並行クラス（統合してよい）
+    # なのかトピック違いの独立科目（統合してはいけない）なのかは科目ごとの実態次第で
+    # 判定できない。従来はNUM_MERGE_EXCLUDED_NAMES（core/subject_variants.py）に科目名を
+    # ハードコードして例外扱いしていたが、都度コード変更・デプロイが要るため、
+    # 管理者がボタン一つで切り替えられるようDBフラグ化した（2026-09-06）。
+    # True＝この科目名を数字・ローマ数字バリアント統合の対象から除外する。
+    variant_merge_excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
     @validates("name")
     def _normalize_name(self, key, value):

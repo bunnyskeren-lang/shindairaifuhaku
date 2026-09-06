@@ -44,6 +44,8 @@
     {% endif %}
     <button type="button" class="btn btn-primary" style="padding:4px 10px"
             onclick="event.stopPropagation();openEditGroup('{{ row.key }}')">編集</button>
+    <button type="button" class="btn" style="padding:4px 10px;background:#fef3c7;color:#92400e"
+            onclick="event.stopPropagation();unmergeGroup('{{ row.key }}',this)">統合解除</button>
     <button type="button" class="btn btn-danger" style="padding:4px 10px"
             onclick="event.stopPropagation();deleteGroup('{{ row.key }}',this)">削除</button>
   </td>
@@ -241,6 +243,10 @@
       {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
+      {% if row.can_remerge %}
+      <button type="button" class="btn" style="padding:4px 10px;background:#fef3c7;color:#92400e"
+              onclick="event.stopPropagation();remergeCourse('{{ row.remerge_ids | join(',') }}',this)">🔗 統合に戻す</button>
+      {% endif %}
       <button type="button" class="btn btn-danger" style="padding:4px 10px"
               onclick="event.stopPropagation();deleteCourse({{ c.id }},this)">削除</button>
     </td>
@@ -293,6 +299,10 @@
       {{ review_summary_badges(c.id) }}
       <button type="button" class="btn btn-primary" style="padding:4px 10px"
               onclick="event.stopPropagation();openEdit({{ c.id }})">編集</button>
+      {% if row.can_remerge %}
+      <button type="button" class="btn" style="padding:4px 10px;background:#fef3c7;color:#92400e"
+              onclick="event.stopPropagation();remergeCourse('{{ row.remerge_ids | join(',') }}',this)">🔗 統合に戻す</button>
+      {% endif %}
       <button type="button" class="btn btn-danger" style="padding:4px 10px"
               onclick="event.stopPropagation();deleteCourse({{ c.id }},this)">削除</button>
     </td>
@@ -795,6 +805,41 @@ function deleteGroup(key, btn) {
         btn.disabled = false;
         showErrorToast('レビューが紐づいているため削除できません');
       }
+    }).catch(function() { btn.disabled = false; showErrorToast(); });
+  });
+}
+
+function unmergeGroup(key, btn) {
+  const g = GROUPS[key];
+  askConfirm('「' + g.label + '」の統合表示を解除しますか？（' + g.ids.length + '件が別々の科目として表示されます。いつでも「統合に戻す」から元に戻せます）').then(function(ok) {
+    if (!ok) return;
+    btn.disabled = true;
+    fetchJson('/admin/courses/group/unmerge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: 'ids=' + encodeURIComponent(g.ids.join(','))
+    }).then(function(data) {
+      if (data.ok) location.reload(); else { btn.disabled = false; showErrorToast(); }
+    }).catch(function() { btn.disabled = false; showErrorToast(); });
+  });
+}
+
+function remergeCourse(ids, btn) {
+  askConfirm('バリアント統合を元に戻しますか？').then(function(ok) {
+    if (!ok) return;
+    btn.disabled = true;
+    fetchJson('/admin/courses/group/remerge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: 'ids=' + encodeURIComponent(ids)
+    }).then(function(data) {
+      if (data.ok) location.reload(); else { btn.disabled = false; showErrorToast(); }
     }).catch(function() { btn.disabled = false; showErrorToast(); });
   });
 }

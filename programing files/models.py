@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 import re as _re
-from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, func, UniqueConstraint, ForeignKey
+from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
 
@@ -76,6 +76,7 @@ class Subject(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
+    variant_merge_excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
     @validates("name")
     def _normalize_name(self, key, value):
