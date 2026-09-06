@@ -505,6 +505,11 @@ MANUAL_VARIANT_GROUPS: tuple[dict, ...] = (
     # 工学部電気電子工学科専門科目（2026-09-06、ユーザー指示）。
     # course_sections担当教員が両方とも服部吉晃で一致することを確認済み。
     {"names": ("固体物性工学A", "固体物性工学B"), "label": "固体物性工学(A/B)"},
+    # 工学部機械工学科専門科目（2026-09-06、ユーザー指示）。末尾が半角括弧小文字の
+    # "(a)"/"(b)"表記（_VLETTER_PARENは検出するが、このclassificationはLETTER_ONLY_MERGE_
+    # INCLUDED_CLASSIFICATIONSに未登録のためオプトインされない）。course_sections担当教員が
+    # 両方とも片岡武で一致することを確認済み。
+    {"names": ("機械工学実験(a)", "機械工学実験(b)"), "label": "機械工学実験(a/b)"},
 )
 
 # MANUAL_VARIANT_GROUPSに属する科目名の集合。これらは自動グループ化（_VNUM等）に
