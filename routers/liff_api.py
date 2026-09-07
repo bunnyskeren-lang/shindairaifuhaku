@@ -11,7 +11,7 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT, EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE, ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
-    REVIEW_SUBMISSION_CATEGORY,
+    REVIEW_SUBMISSION_CATEGORY, REVIEW_VIEW_CATEGORY,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.grading_method import parse_grading_method
@@ -440,12 +440,16 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
             # REVIEW_APPROVAL_UNLOCK_CREDITS枚の閲覧権が付与される。閲覧権はsubject単位・
             # バリアントグループ内で共有）
+            # 専門科目は投稿解禁後もチケット解除・件数/評価集計表示を含め一切閲覧不可にする
+            # （2026-09-06、ユーザー指示。閲覧解禁は別途指示があるまで行わない）
+            view_restricted = subject.category != REVIEW_VIEW_CATEGORY
+
             unlock_credits = None
             # 閲覧中の本人が投稿したレビューをハイライト表示するため、自分のstudent_idを控えておく
             # （reviewsテーブルにline_user_idは無いため、user_profiles.student_idとの一致で判定する）
             my_student_id = None
-            unlocked = review_count == 0
-            if not unlocked and uid:
+            unlocked = review_count == 0 and not view_restricted
+            if not unlocked and not view_restricted and uid:
                 profile = await session.get(UserProfile, uid)
                 unlock_credits = profile.unlock_credits if profile else 0
                 my_student_id = profile.student_id if profile else None
@@ -456,6 +460,8 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     )
                 )).scalars().first() is not None
             locked = not unlocked
+            if view_restricted:
+                review_count = 0
 
             await session.commit()
 
@@ -488,6 +494,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "instructor_syllabus_urls": instructor_syllabus_urls,
             "review_count": review_count,
             "locked": locked,
+            "view_restricted": view_restricted,
             "unlock_credits": unlock_credits,
             "avg_rating": avg_rating if not locked else None,
             "top_ease": top_ease if not locked else None,
@@ -533,6 +540,8 @@ async def unlock_course(course_id: int, request: Request, _rl=Depends(_unlock_ra
         subject = await session.get(Subject, course_id)
         if not subject:
             raise HTTPException(status_code=404, detail="course not found")
+        if subject.category != REVIEW_VIEW_CATEGORY:
+            raise HTTPException(status_code=403, detail="専門科目のレビューは現在閲覧できません")
         profile = await session.get(UserProfile, uid)
         if not profile:
             raise HTTPException(status_code=403, detail="プロフィール未登録です")

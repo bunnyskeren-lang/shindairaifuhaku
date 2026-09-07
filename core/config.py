@@ -80,6 +80,12 @@ BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止してお
 REVIEW_SUBMISSION_CATEGORY = "教養"
 REVIEW_SUBMISSION_RESTRICTED_MESSAGE = "現在、レビュー投稿は教養科目のみ受け付けています"
 
+# レビューを閲覧可能な科目のcategory（Subject.category）。2026-09-06より専門科目は
+# チケット解除・件数/評価集計表示を含め一切閲覧不可にする（ユーザー指示。将来的に専門科目の
+# レビュー投稿自体は解禁予定だが、閲覧解禁は別途指示があるまで行わない）。
+REVIEW_VIEW_CATEGORY = "教養"
+REVIEW_VIEW_RESTRICTED_MESSAGE = "専門科目のレビュー閲覧機能は、現在準備中です🙇‍♀️\n\nレビュー投稿は募集中です！✨"
+
 
 def student_email(student_id: str) -> str:
     """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""

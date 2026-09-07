@@ -123,6 +123,7 @@
 {% if IS_DEV %}<div style="background:#ea580c;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:bold">🚧 開発環境</div>{% endif %}
 <div id="loading">読み込み中...</div>
 <div id="error">科目情報を取得できませんでした。</div>
+<div id="restricted" style="display:none;text-align:center;padding:60px 20px;font-size:14px;color:#475569;line-height:1.9;white-space:pre-wrap"></div>
 <div id="authOverlay"><div class="box" id="authOverlayBox">
   <div class="icon">⏳</div>
   <p>確認中...</p>
@@ -395,6 +396,16 @@ async function main() {
     const errEl = document.getElementById("error");
     if (e && e.detail) errEl.textContent = e.detail;
     errEl.style.display = "block";
+    return;
+  }
+
+  // 専門科目はレビュー閲覧機能自体を準備中のため、詳細ページの通常表示は行わず
+  // 案内メッセージのみを表示する（2026-09-07、ユーザー指示）
+  if (data.view_restricted) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("restricted").textContent =
+      "専門科目のレビュー閲覧機能は、現在準備中です🙇‍♀️\n\nレビュー投稿は募集中です！✨";
+    document.getElementById("restricted").style.display = "block";
     return;
   }
 

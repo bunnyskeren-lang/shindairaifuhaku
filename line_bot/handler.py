@@ -28,6 +28,8 @@ from core.config import (
     EASE_STARS,
     RICHMENU_ID_MAIN,
     RICHMENU_ID_PREREGISTER,
+    REVIEW_VIEW_CATEGORY,
+    REVIEW_VIEW_RESTRICTED_MESSAGE,
     is_profile_complete,
     make_cls_sort,
     make_course_liff_url,
@@ -1033,6 +1035,8 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     # Exact course name match
     exact = cbn.get(t)
     if exact:
+        if exact.category != REVIEW_VIEW_CATEGORY:
+            return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
         if exact.name not in _reviewed_names:
             return [make_no_review_flex(exact, user_id)]
         return [await get_course_flex(exact, user_id)]
@@ -1041,6 +1045,8 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     _unique_exact = [r for r in search_rows if r["display"] == t]
     if len(_unique_exact) == 1:
         rep = _unique_exact[0]["rep"]
+        if rep.category != REVIEW_VIEW_CATEGORY:
+            return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
         if rep.name not in _reviewed_names:
             return [make_no_review_flex(rep, user_id)]
         return [await get_course_flex(rep, user_id)]
