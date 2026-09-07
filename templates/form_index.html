@@ -2345,12 +2345,27 @@
       // ここでは直前の入力（debounce待ち分）を確実に保存するだけに留める
       clearTimeout(saveTimer);
       persistDraft();
+      // 次回以降のレビュー投稿でニックネームを自動入力するため、下書き（送信成功時に
+      // form_success.html 側でクリアされる）とは別キーに保持する。学籍番号と違い
+      // 読み取り専用にはせず、次回そのまま書き換えられるようにしておく。
+      try { localStorage.setItem('kobe_nickname', document.getElementById('nickname').value.trim()); } catch (_) {}
       e.target.submit();
     });
 
     buildStars();
     buildEaseStars();
     loadData();
+    // 前回投稿したニックネームを自動入力（下書きに残っていればそちらを優先。
+    // 学籍番号と違い readOnly にはしないので、その場で自由に書き換えられる）
+    (function() {
+      try {
+        const nickEl = document.getElementById('nickname');
+        if (nickEl && !nickEl.value) {
+          const saved = localStorage.getItem('kobe_nickname');
+          if (saved) nickEl.value = saved;
+        }
+      } catch (_) {}
+    })();
     updateProgressUI();
     updateGradingProgress();
 
