@@ -3,13 +3,20 @@ from collections import defaultdict
 
 from sqlalchemy import func, select
 
-from core.config import EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION, make_syllabus_url
+from core.config import (
+    EASE_ORDER,
+    MAX_REVIEWS_PER_COURSE_SECTION,
+    ON_DEMAND_SAME_CONTENT_SUBJECTS,
+    REVIEW_SUBMISSION_SENMON_CATEGORY,
+    make_syllabus_url,
+)
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
     LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS,
     LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
     NUM_MERGE_EXCLUDED_NAMES,
     compute_letter_view_groups,
+    compute_variant_display_groups,
     compute_variant_full_labels,
     compute_variant_groups,
     compute_variant_member_suffix_map,
@@ -142,6 +149,17 @@ async def get_courses_cached():
     _course_by_name = {c.name: c for c in courses}
     _course_cache_at = time.monotonic()
     return _course_by_name, _course_list_all
+
+
+async def get_on_demand_subject_ids_cached() -> frozenset[int]:
+    """ON_DEMAND_SAME_CONTENT_SUBJECTS（科目名, 学部）を現在の subjects.id へ解決した集合。
+    subjects の再インポートで id が振り直されても追従する（get_courses_cached() に相乗り
+    するので専用 TTL は持たない）。"""
+    _, all_courses = await get_courses_cached()
+    return frozenset(
+        c.id for c in all_courses
+        if (c.name, c.faculty or "") in ON_DEMAND_SAME_CONTENT_SUBJECTS
+    )
 
 
 async def get_reviewed_cached() -> set[str]:
@@ -286,8 +304,16 @@ async def get_review_remaining_cached() -> dict[tuple[int, str], int]:
 
     _, all_courses = await get_courses_cached()
     variant_map = await get_variant_map_cached()
+    # 専門科目は管理画面と同じ compute_variant_display_groups() 単位で募集枠を共有する
+    # （2026-09-08、ユーザー指示。教養科目は従来どおり compute_variant_groups() 単位）
+    senmon_group = await get_senmon_variant_group_cached()
     group_key_by_sid: dict[int, tuple] = {}
     for c in all_courses:
+        if (c.category or "") == REVIEW_SUBMISSION_SENMON_CATEGORY:
+            g = senmon_group.get(c.id)
+            if g:
+                group_key_by_sid[c.id] = ("senmon", tuple(g[2]))
+            continue
         label = variant_map.get(c.name)
         if label:
             group_key_by_sid[c.id] = (label, c.faculty or "", c.department or "")
@@ -351,6 +377,7 @@ def invalidate_courses_cache():
     global _variant_map_cache, _variant_map_cache_at
     global _variant_full_label_cache, _variant_full_label_cache_at
     global _variant_member_suffix_cache, _variant_member_suffix_cache_at
+    global _senmon_variant_group_cache, _senmon_variant_group_cache_at
     global _letter_view_group_cache, _letter_view_group_cache_at
     global _search_index_cache, _search_index_cache_at
     _course_by_name = {}
@@ -373,6 +400,9 @@ def invalidate_courses_cache():
     _variant_full_label_cache_at = 0.0
     _variant_member_suffix_cache = None
     _variant_member_suffix_cache_at = 0.0
+    # 専門科目の管理画面互換バリアントグループ(compute_variant_display_groups)もcourses依存
+    _senmon_variant_group_cache = None
+    _senmon_variant_group_cache_at = 0.0
     # 教養科目A/Bのレビュー閲覧統合グループ(compute_letter_view_groups)もcourses依存の
     # 派生データのため一緒に無効化する
     _letter_view_group_cache = None
@@ -523,8 +553,18 @@ async def get_variant_group_subject_ids(subject: Subject) -> list[int]:
     レビュー閲覧統合(routers/liff_api.py _group_subject_ids)とレビュー投稿の重複防止・
     募集枠共有(get_review_remaining_cached()、routers/review_submit_api.py)の両方が
     同じグループ判定を使うための共通実装（2026-09-01、両者が別々にロジックを持つと
-    line_bot/handler.py同様の同期漏れが起きうるため一本化）。"""
+    line_bot/handler.py同様の同期漏れが起きうるため一本化）。
+
+    専門科目（REVIEW_SUBMISSION_SENMON_CATEGORY、共通専門基礎含む）は2026-09-08の
+    ユーザー指示で、フォーム候補の統合表示・投稿の重複防止/募集枠共有を管理画面の科目一覧
+    （compute_variant_display_groups()）と完全一致させることにしたため、専門科目だけは
+    get_senmon_variant_group_cached()（＝compute_variant_display_groups()の結果）を使う。
+    教養科目は従来通りcompute_variant_groups()（variant_map）を使う。"""
     _, all_courses = await get_courses_cached()
+    if (subject.category or "") == REVIEW_SUBMISSION_SENMON_CATEGORY:
+        senmon_group = await get_senmon_variant_group_cached()
+        g = senmon_group.get(subject.id)
+        return list(g[2]) if g else [subject.id]
     variant_map = await get_variant_map_cached()
     label = variant_map.get(subject.name, "")
     if not label:
@@ -552,6 +592,74 @@ async def get_variant_group_subject_ids(subject: Subject) -> list[int]:
         if len(cross_ids) > 1:
             ids = sorted(set(ids) | cross_ids)
     return ids
+
+
+def _longest_common_prefix(strings: list[str]) -> str:
+    if not strings:
+        return ""
+    lo, hi = min(strings), max(strings)
+    for i, ch in enumerate(lo):
+        if i >= len(hi) or hi[i] != ch:
+            return lo[:i]
+    return lo
+
+
+_senmon_variant_group_cache: dict[int, tuple[str, str, list[int]]] | None = None
+_senmon_variant_group_cache_at: float = 0.0
+
+
+async def get_senmon_variant_group_cached() -> dict[int, tuple[str, str, list[int]]]:
+    """専門科目（REVIEW_SUBMISSION_SENMON_CATEGORY、共通専門基礎含む）向けの
+    subject_id → (共通プレフィックス, 管理画面と同一のグループ表示ラベル, グループ内全subject_id)。
+    グループ（メンバー2件以上）に属さない専門科目はマップに含めない。
+
+    レビュー投稿フォームの専門科目候補の統合表示、および投稿の重複防止・募集枠共有を、
+    管理画面の科目一覧（routers/admin/courses.py が compute_variant_display_groups() で
+    生成する統合グループ）と完全に一致させるための派生キャッシュ（2026-09-08、ユーザー指示）。
+    従来フォームが使っていた compute_variant_groups() は、
+    (1) 末尾アルファベットのみのバリアント（例: 国際人間科学部 Academic Writing（英）A/B）を
+        統合せず、A/B を別々に投稿できてしまっていた、
+    (2) グループラベルがタグ抜きのベース名だったため「線形代数(1/2)」と
+        「線形代数(1/2)(再履修)」がフロント側で同一ラベル文字列になり1セットに混在していた、
+    という2つの不具合があった。管理画面と同じ compute_variant_display_groups() は
+    (科目名, classification) 単位・タグ完全一致でグループ化し、MANUAL_VARIANT_GROUPS や
+    LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS も反映するため、両方が解消する。
+    教養科目は従来どおり compute_variant_groups()（get_variant_map_cached()）を使う。
+
+    管理画面と完全一致させるため、compute_variant_display_groups() には
+    routers/admin/courses.py と同一の入力（全科目・CLASSIFICATION_MERGE_EXCLUDED 除外・
+    variant_merge_excluded の動的除外）を渡し、結果を (label, classification) 単位で束ねてから
+    専門科目メンバーを含むグループだけを残す。"""
+    global _senmon_variant_group_cache, _senmon_variant_group_cache_at
+    if (_senmon_variant_group_cache is not None
+            and time.monotonic() - _senmon_variant_group_cache_at < _COURSE_CACHE_TTL):
+        return _senmon_variant_group_cache
+    _, all_courses = await get_courses_cached()
+    _excluded_names = frozenset(c.name for c in all_courses if c.variant_merge_excluded)
+    label_by_name = compute_variant_display_groups(
+        [(c.name, c.classification or "") for c in all_courses
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
+        extra_excluded_names=_excluded_names,
+    )
+    members_by_label: dict[tuple[str, str], list] = defaultdict(list)
+    for c in all_courses:
+        label = label_by_name.get((c.name, c.classification or ""))
+        if label:
+            members_by_label[(label, c.classification or "")].append(c)
+
+    result: dict[int, tuple[str, str, list[int]]] = {}
+    for (label, _cls), members in members_by_label.items():
+        if len(members) < 2:
+            continue
+        if not any((m.category or "") == REVIEW_SUBMISSION_SENMON_CATEGORY for m in members):
+            continue
+        ids = sorted(m.id for m in members)
+        base = _longest_common_prefix([m.name for m in members]) or label
+        for m in members:
+            result[m.id] = (base, label, ids)
+    _senmon_variant_group_cache = result
+    _senmon_variant_group_cache_at = time.monotonic()
+    return _senmon_variant_group_cache
 
 
 _letter_view_group_cache: dict[str, tuple[str, list[str], dict[str, str]]] | None = None

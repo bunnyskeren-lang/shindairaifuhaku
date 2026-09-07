@@ -11,7 +11,7 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, KYOTSU_SENMON_KISO_FACULTY,
     MAX_REVIEWS_PER_COURSE_SECTION,
-    ON_DEMAND_SAME_CONTENT_NOTE, ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
+    ON_DEMAND_SAME_CONTENT_NOTE,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_VIEW_CATEGORY,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
@@ -76,6 +76,32 @@ def _submission_category_clause(faculty: str):
             Subject.faculty == faculty,
         ))
     return or_(*clauses)
+
+
+def _variant_group_fields(category, subject_id, name, variant_map, senmon_group):
+    """レビュー投稿フォーム候補1件分の統合表示用フィールドを返す。
+    - variantGroup: サフィックス抽出用の共通プレフィックス（ベース名）
+    - variantGroupKey: フロントエンドがグループ化に使う一意キー
+    - variantGroupLabel: そのまま表示する完全なグループラベル（専門科目のみ。空なら
+      フロントがベース名＋サフィックスを組み立てる）
+    - isRemote: 遠隔/対面クラスを別グループにするための補助フラグ
+
+    専門科目（共通専門基礎含む）は管理画面の科目一覧と全く同じ統合
+    （compute_variant_display_groups()）に揃える（2026-09-08、ユーザー指示）。
+    教養科目は従来どおり compute_variant_groups()（variant_map）単位。"""
+    if (category or "") == REVIEW_SUBMISSION_SENMON_CATEGORY:
+        g = senmon_group.get(subject_id)
+        if g:
+            base, label, _ids = g
+            return {"variantGroup": base, "variantGroupKey": f"L:{label}",
+                    "variantGroupLabel": label, "isRemote": False}
+        return {"variantGroup": "", "variantGroupKey": "",
+                "variantGroupLabel": "", "isRemote": False}
+    vg = variant_map.get(name, "")
+    remote = is_remote_tagged(name)
+    return {"variantGroup": vg,
+            "variantGroupKey": (vg + (" remote" if remote else "")) if vg else "",
+            "variantGroupLabel": "", "isRemote": remote}
 
 
 async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
@@ -157,10 +183,11 @@ async def search_courses(q: str = "", faculty: str = "", _rl=Depends(_search_rat
             )).all()
         cs_url_map = await _latest_syllabus_urls(session, [cs.id for cs, _ in cs_rows])
         remaining_map = await cache.get_review_remaining_cached()
+        on_demand_ids = await cache.get_on_demand_subject_ids_cached()
         insts_by_course: dict = {}
         for cs, inst in cs_rows:
             remaining = remaining_map.get((cs.subject_id, inst.name), MAX_REVIEWS_PER_COURSE_SECTION)
-            closed = cs.subject_id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS
+            closed = cs.subject_id in on_demand_ids
             insts_by_course.setdefault(cs.subject_id, []).append({
                 "name": inst.name,
                 "url": cs_url_map.get(cs.id, ""),
@@ -199,16 +226,17 @@ async def api_preload(faculty: str = ""):
         # 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）は
         # レビュー投稿フォームの科目検索でも1件にまとめて選べるようにする（LINE bot科目一覧と同じ統合規則）
         variant_map = await cache.get_variant_map_cached()
+        senmon_group = await cache.get_senmon_variant_group_cached()
         # variantGroupは遠隔/対面で同じベース名文字列になる（ラベル自体は共通の接頭辞を保つ
         # 必要があるため）。フロントエンド側の統合表示（_groupCourseItems）が誤って
         # 遠隔クラスと対面クラスを1グループに混在させないよう、isRemoteを別途渡す
-        # （core.subject_variants.is_remote_tagged()参照）。
+        # （core.subject_variants.is_remote_tagged()参照）。専門科目は管理画面と同じ統合に
+        # 揃えるためvariantGroupKey/variantGroupLabelを別途渡す（_variant_group_fields参照）。
         course_list = [
             {"id": c.id, "name": c.name, "reading": c.reading or "",
              "category": c.category or "",
              "faculty": c.faculty or "", "department": c.department or "",
-             "variantGroup": variant_map.get(c.name, ""),
-             "isRemote": is_remote_tagged(c.name),
+             **_variant_group_fields(c.category, c.id, c.name, variant_map, senmon_group),
              "instructors": [{"name": i.name} for i in insts_by_course.get(c.id, [])]}
             for c in courses
         ]
@@ -217,7 +245,7 @@ async def api_preload(faculty: str = ""):
                 {"id": ic.id, "name": ic.name,
                  "category": ic.category or "",
                  "faculty": ic.faculty or "", "department": ic.department or "",
-                 "variantGroup": variant_map.get(ic.name, ""), "isRemote": is_remote_tagged(ic.name)}
+                 **_variant_group_fields(ic.category, ic.id, ic.name, variant_map, senmon_group)}
                 for ic in courses_by_id.values()
             ]}
             for name, courses_by_id in sorted(inst_courses.items())
@@ -228,11 +256,12 @@ async def api_preload(faculty: str = ""):
     # 「full」/「remaining」（募集締切・残り枠）はレビュー投稿状況で頻繁に変わりうるため、
     # 構造データ本体（数千件規模でTTL 3600秒キャッシュ）とは切り離し、毎リクエスト時に付与する
     remaining_map = await cache.get_review_remaining_cached()
-    if remaining_map or ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
+    on_demand_ids = await cache.get_on_demand_subject_ids_cached()
+    if remaining_map or on_demand_ids:
         def _full(sid, name):
-            return sid in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS or remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION) <= 0
+            return sid in on_demand_ids or remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION) <= 0
         def _remaining(sid, name):
-            return 0 if sid in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS else remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION)
+            return 0 if sid in on_demand_ids else remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION)
         data = {
             "courses": [
                 {**c, "instructors": [
@@ -298,16 +327,18 @@ async def search_instructors(q: str = "", faculty: str = "", _rl=Depends(_search
                 .order_by(Instructor.name, Subject.name)
             )).all()
             remaining_map = await cache.get_review_remaining_cached()
+            on_demand_ids = await cache.get_on_demand_subject_ids_cached()
             variant_map = await cache.get_variant_map_cached()
+            senmon_group = await cache.get_senmon_variant_group_cached()
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
             for inst_name, c_id, c_name, c_cat, c_fac, c_dept in all_rows:
                 if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
-                    closed = c_id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS
+                    closed = c_id in on_demand_ids
                     remaining = 0 if closed else remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
                     courses_by_inst[inst_name].append({
                         "id": c_id, "name": c_name, "full": closed or remaining <= 0, "remaining": remaining,
                         "category": c_cat or "", "faculty": c_fac or "", "department": c_dept or "",
-                        "variantGroup": variant_map.get(c_name, ""), "isRemote": is_remote_tagged(c_name),
+                        **_variant_group_fields(c_cat, c_id, c_name, variant_map, senmon_group),
                     })
             # 教養科目を担当していない教員（専門科目のみ担当）はレビュー投稿フォームの
             # 検索結果から除外する
@@ -391,6 +422,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             # グループ内の全科目のレビュー・評価をまとめて表示する（レビュー投稿フォームの
             # 科目検索での統合表示と対にするため）
             group_label, group_subject_ids, group_names = await _group_subject_ids(subject)
+            on_demand_ids = await cache.get_on_demand_subject_ids_cached()
             # 修正理由: ORDER BY未指定だとPostgreSQLは行順を保証せず、これに依存する
             # 閲覧数記録先(main_cs_id)・表示するシラバスURL・教員名の表示順がリクエスト
             # ごとに変わりうる非決定的な挙動になっていた。id順で固定する。
@@ -492,7 +524,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                         _syl_by_sid.setdefault(cs.subject_id, {}).setdefault(instr.name, _u)
                 for _sid in group_subject_ids:
                     _v_instrs = _instr_by_sid.get(_sid, [])
-                    if _sid in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
+                    if _sid in on_demand_ids:
                         _is_open = False
                     elif _v_instrs:
                         _is_open = any(
@@ -585,7 +617,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "category": subject.category or "",
             "term_type": subject.term_type or "",
             "credits": float(subject.credits) if subject.credits else 0,
-            "note": ON_DEMAND_SAME_CONTENT_NOTE if (not locked and subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS) else "",
+            "note": ON_DEMAND_SAME_CONTENT_NOTE if (not locked and subject.id in on_demand_ids) else "",
             "syllabus_url": syllabus_url or "",
             "instructor_syllabus_urls": instructor_syllabus_urls,
             # チケット解除前でも担当教員を選んでシラバスだけ見られるようにするため、

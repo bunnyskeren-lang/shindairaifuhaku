@@ -1,6 +1,6 @@
 import os
 import re as _re
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote as _urllib_quote
 
 from dotenv import load_dotenv
@@ -61,11 +61,19 @@ MAX_REVIEWS_PER_COURSE_SECTION = 1
 # 残り枠バッジ・1件上限の管理対象外（同一学籍番号でのオムニバス重複のみ防ぐ）。
 OMNIBUS_INSTRUCTOR_LABEL = "オムニバス"
 
-# オンデマンド配信のため担当教員によらず授業内容が同一な科目（subjects.id）。
+# オンデマンド配信のため担当教員によらず授業内容が同一な科目（科目名, 学部）。
 # 1件のレビューがあれば他の教員のクラスにも実質流用できるため、全course_sectionで
 # レビュー募集を締め切り、科目詳細ページには他教員クラスも同一内容である旨を表示する。
-# 情報基礎(id=704)・教養とは何か(id=702) いずれも教養教育院 - 2026-08-31追加
-ON_DEMAND_SAME_CONTENT_SUBJECT_IDS = {704, 702}
+# 情報基礎・教養とは何か（いずれも教養教育院）- 2026-08-31追加。
+# 2026-09-08: 以前は subjects.id をハードコード（{704, 702}）していたが、
+# 共通専門基礎科目のシラバス再インポートで id が振り直され、id=702/704 が
+# それぞれ「基礎無機化学1」「基礎地学1」を指すようになり、レビュー0件のこれらの科目が
+# レビュー投稿フォームで「募集終了」と誤表示されていた。id ではなく（科目名, 学部）で
+# 指定し、実 id への解決は core.cache.get_on_demand_subject_ids_cached() が毎回行う。
+ON_DEMAND_SAME_CONTENT_SUBJECTS = frozenset({
+    ("情報基礎", "教養教育院"),
+    ("教養とは何か", "教養教育院"),
+})
 ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信であり、他教員のクラスも内容は同一です"
 
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数。

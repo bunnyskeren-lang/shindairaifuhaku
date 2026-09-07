@@ -9,7 +9,6 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
     OMNIBUS_INSTRUCTOR_LABEL,
-    ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
     REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
     REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
@@ -140,7 +139,7 @@ async def submit(
 
         # 学部をまたぐ同名科目は担当教員で subject を確定させたあとに判定する。
         # 教養科目は全員、専門科目は投稿者本人の学部（会員登録情報）のぶんのみ受け付ける。
-        if subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
+        if subject.id in await cache.get_on_demand_subject_ids_cached():
             return _form_error("この科目はオンデマンド配信のため内容が教員によらず同一です。レビュー募集は終了しました")
         if not subject_submittable_for_profile(
             subject.category, subject.faculty, subject.department,
