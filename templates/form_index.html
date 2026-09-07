@@ -654,7 +654,10 @@
       try {
         if (typeof liff !== 'undefined' && liff.logout) liff.logout();
       } catch (e) {}
-      location.reload();
+      // このページ(/)はLIFFエンドポイントURL未登録。location.reload()で'/'に戻ると
+      // initProfilePrefill()内のlogin()がredirectUri='/'で400 Bad Requestになるため、
+      // 直接エンドポイントURL(/liff/review)へ遷移してそちらでログインを完結させる。
+      location.replace('/liff/review' + location.search);
       return true;
     }
 
@@ -791,17 +794,13 @@
         return;
       }
 
-      const isInClient = (() => { try { return liff.isInClient(); } catch (e) { return false; } })();
-      if (isInClient && !liff.isLoggedIn()) {
-        liff.login({ redirectUri: location.href });
-        return;
-      }
-
       if (!liff.isLoggedIn()) {
         // 修正理由: このページ(/)はLIFFのエンドポイントURLとして登録されていない
         // （登録先は/liff/review）。ここでliff.login()を呼ぶとredirectUriの検証に
-        // 失敗し400 Bad Requestになるため、エンドポイントURL側でログインを完結させる
-        // （2026-08-30、外部ブラウザ経由のアクセスで発覚）
+        // 失敗し400 Bad Requestになるため、in-client/外部ブラウザを問わず必ず
+        // エンドポイントURL(/liff/review)へ遷移し、そちらでログインを完結させる
+        // （2026-08-30 外部ブラウザ経由で発覚。2026-09-08 liff.logout()後の
+        //  in-clientでも同じ400が出るため isInClient の特例分岐を廃止）
         location.replace('/liff/review' + location.search);
         return;
       }
