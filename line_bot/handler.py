@@ -160,6 +160,41 @@ def _breadcrumb(category: str = "", faculty: str = "", department: str = "", cla
 
 _reading_key = subject_sort_reading_key
 
+# よみがな順チャンク分割（_ALPHA_CHUNK_SIZE件ごと）は位置だけで機械的に区切るため、
+# バリアント統合グループ（例: LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONSのA/B統合）の
+# メンバーがたまたまチャンク境界をまたぐと、同じrowsに全員揃わず統合表示が壊れる
+# （2026-09-07発覚。教養(自然)の「惑星学A」がよみがな順で境界直前、「惑星学B」が直後の
+# チャンク先頭1件のみになり、末尾アルファベット統合が効かなくなっていた）。汎用的な
+# チャンク境界調整ではなく、実害が確認されたこのペアのみを同一チャンクに固定する対症療法。
+_ALPHA_SPLIT_KEEP_TOGETHER: tuple[frozenset[str], ...] = (
+    frozenset({"惑星学A", "惑星学B"}),
+)
+
+
+def _build_alpha_chunks(rows: list) -> list[list]:
+    """rowsをよみがな順に_ALPHA_CHUNK_SIZE件ごとのチャンクに分割する。
+    _ALPHA_SPLIT_KEEP_TOGETHERに登録された科目名の組は、既に開いているチャンクに片方が
+    入っていればサイズ上限を超えてでも同じチャンクに入れる（該当ペアは2件のみのため
+    超過は最大1件、Flexメッセージサイズへの影響は無視できる）。"""
+    by_reading = sorted(rows, key=_reading_key)
+    keep_together_of: dict[str, frozenset[str]] = {
+        name: group for group in _ALPHA_SPLIT_KEEP_TOGETHER for name in group
+    }
+    chunks: list[list] = []
+    current: list = []
+    for c in by_reading:
+        group = keep_together_of.get(c.name)
+        if group and current and any(m.name in group for m in current):
+            current.append(c)
+            continue
+        if len(current) >= _ALPHA_CHUNK_SIZE:
+            chunks.append(current)
+            current = []
+        current.append(c)
+    if current:
+        chunks.append(current)
+    return chunks
+
 
 def _build_alpha_split_menu(rows: list, category: str, classification: str,
                              faculty: str, department: str) -> list | None:
@@ -169,8 +204,7 @@ def _build_alpha_split_menu(rows: list, category: str, classification: str,
     if not classification and not faculty:
         return None
     row_prefix = _make_nav_data(category, faculty, department, classification)
-    by_reading = sorted(rows, key=_reading_key)
-    chunks = [by_reading[i:i + _ALPHA_CHUNK_SIZE] for i in range(0, len(by_reading), _ALPHA_CHUNK_SIZE)]
+    chunks = _build_alpha_chunks(rows)
     items = []
     for i, chunk in enumerate(chunks):
         first_ch = _reading_key(chunk[0])[:1] or "?"
@@ -728,8 +762,8 @@ async def handle_course_list(category: str = "", classification: str = "", facul
             _idx = int(reading_row)
         except ValueError:
             _idx = -1
-        by_reading = sorted(rows, key=_reading_key)
-        rows = by_reading[_idx * _ALPHA_CHUNK_SIZE:(_idx + 1) * _ALPHA_CHUNK_SIZE] if _idx >= 0 else []
+        chunks = _build_alpha_chunks(rows)
+        rows = chunks[_idx] if 0 <= _idx < len(chunks) else []
         if rows:
             first_ch = _reading_key(rows[0])[:1] or "?"
             last_ch = _reading_key(rows[-1])[:1] or "?"
