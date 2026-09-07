@@ -137,8 +137,8 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
 
 # LIFF IDトークン期限切れ→再ログインのテレメトリ（profile_api.py の /api/liff-auth-event が
-# action="liff_reauth:<form>:<stage>" で notify=False 記録）。既定のエラー一覧では雑音になるので
-# 除外し、?view=liff_reauth のときだけ抽出表示する
+# action="liff_reauth:<form>:<stage>" で記録）。既定のエラー一覧にもそのまま出す。
+# ?view=liff_reauth のときだけ、この種別に絞って抽出表示する。
 _LIFF_REAUTH_ACTION_PREFIX = "liff_reauth:"
 
 
@@ -151,18 +151,16 @@ async def admin_errors(
 ):
     per_page = 50
     is_reauth_view = view == "liff_reauth"
-    if is_reauth_view:
-        action_filter = ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%")
-    else:
-        action_filter = (ErrorLog.action.is_(None)) | (~ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%"))
+    reauth_like = ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%")
     async with AsyncSessionLocal() as session:
-        total = (await session.execute(
-            select(func.count(ErrorLog.id)).where(action_filter)
-        )).scalar_one()
+        count_stmt = select(func.count(ErrorLog.id))
+        if is_reauth_view:
+            count_stmt = count_stmt.where(reauth_like)
+        total = (await session.execute(count_stmt)).scalar_one()
         reauth_total = (await session.execute(
-            select(func.count(ErrorLog.id)).where(ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%"))
+            select(func.count(ErrorLog.id)).where(reauth_like)
         )).scalar_one()
-        errors = (await session.execute(
+        rows_stmt = (
             select(
                 ErrorLog.id,
                 ErrorLog.created_at,
@@ -175,9 +173,12 @@ async def admin_errors(
                 ErrorLog.traceback,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == ErrorLog.user_id)
-            .where(action_filter)
             .order_by(ErrorLog.created_at.desc())
-            .offset((page - 1) * per_page).limit(per_page)
+        )
+        if is_reauth_view:
+            rows_stmt = rows_stmt.where(reauth_like)
+        errors = (await session.execute(
+            rows_stmt.offset((page - 1) * per_page).limit(per_page)
         )).all()
     total_pages = max(1, (total + per_page - 1) // per_page)
     return templates.TemplateResponse("admin/errors.html", {

@@ -328,13 +328,17 @@ function decodeJwt(token) {
   } catch (e) { return null; }
 }
 function idTokenExpired(token) {
-  // dev環境限定: URLに forceExpired=1 を付けると1回だけ期限切れ扱いにして
-  // 「強制再ログイン→新しいトークンで復帰」の一連をテストできる（sessionStorageでワンショット化）
+  // dev環境限定: forceExpired=1 付きで開くと最初の1回だけ期限切れ扱いにして
+  // 「強制再ログイン→新トークンで復帰」を実機テストできる（sessionStorageでワンショット化）。
+  // liff.state 経由でクエリがURLエンコードされるケースに備え decodeURIComponent も見る。
   try {
-    if (/(?:shindairaifuhaku-1\.onrender\.com|localhost|127\.0\.0\.1)/.test(location.hostname)
-        && location.href.indexOf('forceExpired=1') !== -1
+    let href = location.href;
+    try { href = decodeURIComponent(href); } catch (e) {}
+    if (/localhost|127\.0\.0\.1|shindairaifuhaku-1/.test(location.hostname)
+        && href.indexOf('forceExpired=1') !== -1
         && sessionStorage.getItem('forceExpiredUsed') !== '1') {
       sessionStorage.setItem('forceExpiredUsed', '1');
+      alert('[dev] forceExpired: IDトークンを期限切れ扱いにして強制再ログインします。復帰後 /admin/errors に liff_reauth 行が出れば成功です');
       return true;
     }
   } catch (e) {}

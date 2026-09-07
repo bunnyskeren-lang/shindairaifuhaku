@@ -43,9 +43,10 @@ async def liff_auth_event(request: Request, _rl=Depends(_liff_auth_event_rate_li
     クライアントから受け取り記録するテレメトリ受け口。
 
     - 認証は掛けない（そもそもLINEトークン検証に失敗しているユーザーからの報告のため）。
-    - error_logs に notify=False で残すだけで、Push通知は飛ばさない（大量発生時の通知殺到防止）。
+    - error_logs に記録し、Push通知も飛ばす（save_error_log 側に5分クールダウンがあるため
+      短時間に大量発生しても通知は間引かれる）。
     - guard_tripped=True の行が「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
-    - decトークンの sub を user_id に入れるので、どのLINEユーザーが影響を受けたか追える。
+    - 復号したトークンの sub を user_id に入れるので、どのLINEユーザーが影響を受けたか追える。
     """
     try:
         body = await request.json()
@@ -73,7 +74,6 @@ async def liff_auth_event(request: Request, _rl=Depends(_liff_auth_event_rate_li
         RuntimeError(_json.dumps(ctx, ensure_ascii=False)[:480]),
         user_id=(sub if sub.startswith("U") else None),
         action=f"liff_reauth:{form}:{stage}",
-        notify=False,
     )
     return {"ok": True}
 
