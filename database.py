@@ -329,6 +329,22 @@ async def init_db():
                 "UPDATE subjects SET faculty = :fac, department = :dept "
                 "WHERE faculty = :composite AND department = ''"
             ), {"fac": pure_faculty, "dept": dept, "composite": composite})
+        # subjects.department バックフィル（2026-09-08）: classification が
+        # "{学部名}{学科名}専門科目" の形なのに department 列が空のまま取り残された行を補完する。
+        # 国際人間科学部・工学部で、2026-09の語尾バリアント統合作業が classification だけを
+        # 付け替えて department を更新しなかったため、レビュー投稿フォームの学科絞り込み
+        # (core.config.subject_submittable_for_profile。科目側 department が空だと学科不問で
+        # 投稿可と判定する) が素通りし、他学科の専門科目が投稿候補に出ていた。
+        # classification 完全一致でのみ更新するので、classification に学部名プレフィックスが無い
+        # 農学部（登録はコース単位）や領域単位の海洋政策科学部には影響しない。冪等。
+        from core.config import FACULTY_DEPARTMENTS as _FACULTY_DEPARTMENTS
+        for _fac, _depts in _FACULTY_DEPARTMENTS.items():
+            for _dept in _depts:
+                await conn.execute(text(
+                    "UPDATE subjects SET department = :dept "
+                    "WHERE faculty = :fac AND COALESCE(department, '') = '' "
+                    "AND classification = :cls"
+                ), {"dept": _dept, "fac": _fac, "cls": f"{_fac}{_dept}専門科目"})
         # 新しい3列UNIQUE制約を追加
         await conn.execute(text("""
             DO $$ BEGIN
