@@ -37,7 +37,7 @@ shindairaifuhaku/
 ├── routers/                 ← URLプレフィックス単位のFastAPI APIRouter（詳細は API.md）
 │   ├── webhook.py              ← POST /callback（LINE Webhook）
 │   ├── health.py                ← GET /health
-│   ├── pages.py                  ← HTMLページ全般（/＝旧フォームURLの締め切り案内, /post-review＝レビュー投稿フォーム本体, /register, /liff/review, /coop, /privacy, /sw.js, /liff/course）
+│   ├── pages.py                  ← HTMLページ全般（/, /register, /liff/review, /coop, /privacy, /sw.js, /liff/course）
 │   ├── richmenu.py                ← GET /r/{name}（クリック計測付きリダイレクト）
 │   ├── liff_api.py                 ← 科目検索・詳細（/api/courses, /api/preload, /api/instructors, /api/course/{id}）
 │   ├── profile_api.py               ← 会員登録・プロフィール（/api/profile/*, /api/register）

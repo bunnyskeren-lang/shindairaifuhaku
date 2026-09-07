@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
-from core.config import REVIEW_FORM_FULL_URL
+from core.config import REVIEW_FORM_URL
 from core.rate_limit import rate_limiter
 from database import AsyncSessionLocal
 from models import RichMenuTap
@@ -9,7 +9,7 @@ from models import RichMenuTap
 router = APIRouter()
 
 RICHMENU_URLS: dict[str, str] = {
-    "review":    REVIEW_FORM_FULL_URL,
+    "review":    REVIEW_FORM_URL,
     "beefplus":  "https://beefplus.center.kobe-u.ac.jp/login",
     "uribop":    "https://www.uriboportal.ofc.kobe-u.ac.jp/",
     "shokudo":   "https://west2-univ.jp/sp/kobe-univ.php",

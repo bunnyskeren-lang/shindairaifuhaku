@@ -44,10 +44,9 @@ FastAPI製。ベースURLは環境ごとに異なる（[`DEPLOYMENT.md`](./DEPLO
 
 | メソッド/パス | 説明 |
 |---|---|
-| `GET /` | 旧レビュー投稿フォームURL。Discord等で先行公開済みのため「こちらからのレビュー投稿は締め切りました」の締め切り案内（`form_closed.html`）のみを表示する |
-| `GET /post-review` | レビュー投稿フォームのトップ（`REVIEW_FORM_PATH`。`?uid=`はプリフィル対象のヒントのみで、実際の個人情報取得はLIFF ID token検証済みの `/api/profile/prefill` 経由） |
+| `GET /` | レビュー投稿フォームのトップ（`?uid=`はプリフィル対象のヒントのみで、実際の個人情報取得はLIFF ID token検証済みの `/api/profile/prefill` 経由） |
 | `GET /register` | 会員登録フォーム |
-| `GET /liff/review` | レビュー投稿LIFFの中継ページ。ログイン完結後 `REVIEW_FORM_PATH`（`/post-review`）へリダイレクトする |
+| `GET /liff/review` | レビュー投稿LIFFへの直接リダイレクト用ページ |
 | `GET /coop` | 生協アプリのストアページへのhttps中継 |
 | `GET /privacy` | プライバシーポリシー |
 | `GET /sw.js` | Service Worker（Web Push通知の受信・クリック処理） |

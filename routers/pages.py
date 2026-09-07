@@ -8,8 +8,7 @@ from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV,
     LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
-    REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_FULL_URL, REVIEW_FORM_PATH,
-    REVIEW_LIFF_ID,
+    REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
 )
 from core.templates import templates
 
@@ -17,22 +16,7 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    # 旧レビュー投稿フォームURL。Discord等で先行公開済みのため、フォーム実体は
-    # REVIEW_FORM_PATH（/post-review）へ移設し、この旧URLは締め切り案内のみ表示する
-    # （2026-09-07、ユーザー指示）。LINE bot内の導線はすべて新パス経由に切り替え済み。
-    response = templates.TemplateResponse(
-        "form_closed.html",
-        {"request": request},
-    )
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
-
-
-@router.get(REVIEW_FORM_PATH, response_class=HTMLResponse)
-async def review_form(request: Request, uid: str = Query(default="")):
+async def index(request: Request, uid: str = Query(default="")):
     # 修正理由: 以前はここでクライアント指定の uid をそのままDB照会し、氏名・
     # 学籍番号をテンプレートに埋め込んでいたため、任意のuidを指定するだけで
     # 他人の個人情報が閲覧できるIDOR/PII漏洩になっていた。プリフィルは
@@ -83,7 +67,7 @@ async def liff_review(request: Request):
             "request": request,
             "liff_id": REVIEW_LIFF_ID,
             "base_url": APP_URL,
-            "redirect_path": REVIEW_FORM_PATH,
+            "redirect_path": "/",
         },
     )
 
@@ -130,7 +114,7 @@ async def liff_course(request: Request):
             "request": request,
             "liff_id": LIFF_ID,
             "register_liff_id": REGISTER_LIFF_ID,
-            "review_form_url": REVIEW_FORM_FULL_URL,
+            "review_form_url": REVIEW_FORM_URL,
             "review_liff_id": REVIEW_LIFF_ID,
             "base_url": APP_URL,
             "IS_DEV": IS_DEV,

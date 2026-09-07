@@ -9,7 +9,6 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
-    REVIEW_FORM_PATH,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
 )
@@ -217,6 +216,5 @@ async def submit(
             "course_name": course_name,
             "course_id": course_id,
             "review_count": review_count,
-            "review_form_path": REVIEW_FORM_PATH,
         }
     )
