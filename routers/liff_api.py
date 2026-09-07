@@ -234,6 +234,31 @@ async def api_preload(faculty: str = ""):
         # レビュー投稿フォームの科目検索でも1件にまとめて選べるようにする（LINE bot科目一覧と同じ統合規則）
         variant_map = await cache.get_variant_map_cached()
         senmon_group = await cache.get_senmon_variant_group_cached()
+        # 科目×担当教員ごとの最新シラバスURL（レビュー投稿フォームの「この科目×教員の
+        # シラバスはこちら」ボタンの表示可否・遷移先に使う）。course_sections/syllabi 由来で
+        # キャッシュ済みのコース一覧からは引けないため、キャッシュミス時に1回だけDBへ問い合わせる。
+        # syllabi を内部結合しているので対象はシラバスを持つセクションのみ（＝件数は小さく、
+        # 巨大な IN 句も不要）。同じ (科目, 教員) が複数年度・複数セクションに跨る場合は最新年度を採る。
+        syllabus_by_pair: dict[tuple[int, str], str] = {}
+        async with AsyncSessionLocal() as session:
+            _syl_rows = (await session.execute(
+                select(CourseSection.subject_id, Instructor.name, Syllabus.timetable_code,
+                       Syllabus.year, Subject.faculty, Subject.department)
+                .join(Instructor, Instructor.id == CourseSection.instructor_id)
+                .join(Syllabus, Syllabus.course_section_id == CourseSection.id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
+                .where(Syllabus.timetable_code.isnot(None))
+            )).all()
+        _pair_year: dict[tuple[int, str], int] = {}
+        for _sid, _iname, _code, _year, _fac, _dept in _syl_rows:
+            _key = (_sid, _iname)
+            if _key in _pair_year and _year <= _pair_year[_key]:
+                continue
+            _url = make_syllabus_url(_code, f"{_fac or ''}{_dept or ''}")
+            if not _url:
+                continue
+            _pair_year[_key] = _year
+            syllabus_by_pair[_key] = _url
         # variantGroupは遠隔/対面で同じベース名文字列になる（ラベル自体は共通の接頭辞を保つ
         # 必要があるため）。フロントエンド側の統合表示（_groupCourseItems）が誤って
         # 遠隔クラスと対面クラスを1グループに混在させないよう、isRemoteを別途渡す
@@ -244,7 +269,10 @@ async def api_preload(faculty: str = ""):
              "category": c.category or "",
              "faculty": c.faculty or "", "department": c.department or "",
              **_variant_group_fields(c.category, c.id, c.name, variant_map, senmon_group),
-             "instructors": [{"name": i.name} for i in insts_by_course.get(c.id, [])]}
+             "instructors": [
+                 {"name": i.name, "syllabus_url": syllabus_by_pair.get((c.id, i.name), "")}
+                 for i in insts_by_course.get(c.id, [])
+             ]}
             for c in courses
         ]
         instructor_list = [
@@ -252,6 +280,7 @@ async def api_preload(faculty: str = ""):
                 {"id": ic.id, "name": ic.name,
                  "category": ic.category or "",
                  "faculty": ic.faculty or "", "department": ic.department or "",
+                 "syllabus_url": syllabus_by_pair.get((ic.id, name), ""),
                  **_variant_group_fields(ic.category, ic.id, ic.name, variant_map, senmon_group)}
                 for ic in courses_by_id.values()
             ]}

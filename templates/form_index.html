@@ -91,6 +91,12 @@
       <!-- 2. 科目名 + 担当教員 -->
       <div id="courseCard" class="bg-white rounded-2xl shadow-sm p-5">
 
+        <!-- うりぼーポータルへの導線（外部ブラウザで開く。LINE内蔵ブラウザだとログインが通らないため） -->
+        <button type="button" id="uriboPortalBtn"
+          class="flex items-center justify-center gap-1.5 w-full mb-3 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold active:scale-95 transition">
+          <span>🐗</span> うりぼーポータルはこちら <span class="text-indigo-400 text-xs">↗</span>
+        </button>
+
         <!-- トグル -->
         <div class="flex rounded-xl overflow-hidden border border-gray-200 mb-4">
           <button type="button" id="modeCourseBtn"
@@ -101,7 +107,7 @@
             style="background:#fff;color:#6b7280">👨‍🏫 先生名で探す</button>
         </div>
 
-        <p class="text-xs text-amber-600 font-medium mb-3">💡 教養科目のレビューが1件承認されるとチケットが＋{{ unlock_credits_kyoyo }}枚、専門科目のレビューが1件承認されるとチケットが＋{{ unlock_credits_senmon }}枚もらえます</p>
+        <p class="text-xs text-amber-600 font-medium mb-3">💡 レビュー承認1件でチケット付与：<b>教養＋{{ unlock_credits_kyoyo }}枚</b> ／ <b>専門＋{{ unlock_credits_senmon }}枚</b></p>
         <p class="text-xs text-gray-400 mb-3">選択肢に見当たらない科目・先生がいた場合は<a href="/contact" target="_blank" class="underline hover:text-indigo-500">お問い合わせフォーム</a>よりご連絡ください</p>
 
         <input type="hidden" name="course_name" id="courseNameHidden">
@@ -157,6 +163,7 @@
         <div id="selectedInstructorDisplay" class="hidden mt-2 px-1 text-sm font-semibold text-indigo-600">
           👨‍🏫 <span id="selectedInstructorName"></span>
         </div>
+
         <p id="courseError" class="hidden mt-1 text-red-500 text-xs">科目を選択または入力してください</p>
 
         <!-- 担当教員選択（科目名モード用） -->
@@ -168,6 +175,12 @@
           <p id="instructorLimitNotice" class="hidden mt-1.5 text-[11px] text-gray-400">レビューの募集は1科目の先生1人あたり1件までです。投稿済みの組み合わせも選べません。</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
         </div>
+
+        <!-- 選択中の科目×担当教員のシラバス（DBに登録がある時だけ表示・外部ブラウザで開く） -->
+        <button type="button" id="syllabusLinkBtn"
+          class="hidden mt-3 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold active:scale-95 transition">
+          <span>📄</span> この科目×教員のシラバスはこちら <span class="text-indigo-400 text-xs">↗</span>
+        </button>
       </div>
 
       <!-- 2b. 受講年度 -->
@@ -1305,6 +1318,7 @@
       document.getElementById('courseNameLabelInstr').classList.add('hidden');
       document.getElementById('selectedInstructorDisplay').classList.add('hidden');
       document.getElementById('instructorSelectSection').classList.add('hidden');
+      showSyllabusLink('');
       searchInput.classList.remove('hidden');
       searchInput.value = '';
     });
@@ -1321,6 +1335,7 @@
       document.getElementById('selectedCourse').classList.add('hidden');
       document.getElementById('instructorSelectSection').classList.add('hidden');
       document.getElementById('courseNameLabelInstr').classList.add('hidden');
+      showSyllabusLink('');
       document.getElementById('instructorSearchInput').value = '';
       document.getElementById('instructorCourseList').classList.add('hidden');
     });
@@ -1499,6 +1514,30 @@
     let currentCourseId = null;
     const chipsEl = document.getElementById('instructorChips');
 
+    // ── 外部ブラウザ導線（うりぼーポータル / 科目×教員のシラバス） ──
+    // LINE内蔵ブラウザではうりぼーポータル等のログインが通らないため、必ず外部ブラウザで開く。
+    const URIBO_PORTAL_URL = 'https://www.uriboportal.ofc.kobe-u.ac.jp/';
+    function openExternalUrl(url) {
+      if (!url) return;
+      try {
+        if (typeof liff !== 'undefined' && liff.openWindow) {
+          liff.openWindow({ url, external: true });
+          return;
+        }
+      } catch (e) {}
+      window.open(url, '_blank', 'noopener');
+    }
+    document.getElementById('uriboPortalBtn').addEventListener('click', () => openExternalUrl(URIBO_PORTAL_URL));
+
+    const syllabusLinkBtn = document.getElementById('syllabusLinkBtn');
+    let _currentSyllabusUrl = '';
+    syllabusLinkBtn.addEventListener('click', () => openExternalUrl(_currentSyllabusUrl));
+    // 科目×担当教員が確定するたびに呼ぶ。URLが無ければ（未登録・オムニバス等）ボタンを隠す。
+    function showSyllabusLink(url) {
+      _currentSyllabusUrl = url || '';
+      syllabusLinkBtn.classList.toggle('hidden', !_currentSyllabusUrl);
+    }
+
     function selectCourse(name, instructors, courseId, isGroup, variantSuffixes) {
       currentInstructors = instructors || [];
       // 統合科目（isGroup）は教員を選ぶまでどの変種か確定しないため、courseNameHiddenは
@@ -1524,6 +1563,7 @@
       document.getElementById('instructorError').classList.add('hidden');
       document.getElementById('instructorUnregistered').classList.add('hidden');
       document.getElementById('instructorLimitNotice').classList.add('hidden');
+      showSyllabusLink('');  // 新しい科目を選んだ直後は教員未確定＝シラバス導線は隠す
 
       // 担当教員チップは常に表示する（末尾のオムニバス擬似候補は全科目で選べるため、
       // 登録教員が0人の科目でも「募集していません」ではなくオムニバスで投稿できる）
@@ -1547,7 +1587,7 @@
       const omnibusChip = `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(OMNIBUS_INSTRUCTOR_LABEL)}" data-course-id="${_omniCid}" data-course-name="${escapeHtml(_omniCname)}" style="display:inline-flex;align-items:center">${escapeHtml(OMNIBUS_INSTRUCTOR_LABEL)}</button>`;
       chipsEl.innerHTML = withReviewed.map(inst => {
         const label = inst.name;
-        const cidAttr = ` data-course-id="${inst._cid ?? ''}" data-course-name="${escapeHtml(inst._cname)}"`;
+        const cidAttr = ` data-course-id="${inst._cid ?? ''}" data-course-name="${escapeHtml(inst._cname)}" data-syllabus-url="${escapeHtml(inst.syllabus_url || inst.url || '')}"`;
         if (inst.full) {
           return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.45;text-decoration:line-through;cursor:not-allowed;display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
         }
@@ -1575,6 +1615,7 @@
           }
           document.getElementById('instructorHint').classList.add('hidden');
           document.getElementById('instructorError').classList.add('hidden');
+          showSyllabusLink(btn.dataset.syllabusUrl || '');
           saveData();
         };
       });
@@ -1586,6 +1627,7 @@
       document.getElementById('selectedCourse').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
       document.getElementById('selectedInstructorDisplay').classList.add('hidden');
+      showSyllabusLink('');
       chipsEl.classList.add('hidden');
       chipsEl.innerHTML = '';
       document.getElementById('instructorHint').classList.add('hidden');
@@ -1627,6 +1669,7 @@
       document.getElementById('instructorCourseUnregistered').classList.add('hidden');
       document.getElementById('instructorCourseLimitNotice').classList.add('hidden');
       document.getElementById('selectedInstructorHidden').value = '';
+      showSyllabusLink('');
     }
 
     function _showInstrDropdown(items, q) {
@@ -1719,6 +1762,7 @@
         const suffixes = members.map(m => m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name);
         result.push({
           id: rep.id, name: rep.name, full: rep.full, remaining: rep.remaining,
+          syllabus_url: rep.syllabus_url || '',
           displayName: exactLabel || `${c.variantGroup}(${suffixes.join('/')})`,
         });
       }
@@ -1758,7 +1802,7 @@
             data-course-name="${escapeHtml(c.name)}" data-display-name="${escapeHtml(label)}">${escapeHtml(label)}（投稿済み）</button>`;
         }
         return `<button type="button" class="chip-btn" style="display:inline-flex;align-items:center"
-          data-course-name="${escapeHtml(c.name)}" data-display-name="${escapeHtml(label)}" data-course-id="${c.id}">${escapeHtml(label)}${remainingBadgeHtml(c.remaining)}</button>`;
+          data-course-name="${escapeHtml(c.name)}" data-display-name="${escapeHtml(label)}" data-course-id="${c.id}" data-syllabus-url="${escapeHtml(c.syllabus_url || '')}">${escapeHtml(label)}${remainingBadgeHtml(c.remaining)}</button>`;
       }).join('');
       document.getElementById('instructorCourseLimitNotice').classList.remove('hidden');
       document.getElementById('instructorCourseList').classList.remove('hidden');
@@ -1766,7 +1810,7 @@
         el.addEventListener('click', () => {
           courseItems.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
           el.classList.add('active');
-          currentInstructors = [{ name: inst.name }];
+          currentInstructors = [{ name: inst.name, syllabus_url: el.dataset.syllabusUrl || '' }];
           currentCourseId = el.dataset.courseId ? parseInt(el.dataset.courseId, 10) : null;
           document.getElementById('courseNameHidden').value = el.dataset.courseName;
           document.getElementById('selectedInstructorHidden').value = inst.name;
@@ -1778,6 +1822,7 @@
           document.getElementById('instructorModeSection').classList.add('hidden');
           document.getElementById('instructorSelectSection').classList.add('hidden');
           document.getElementById('courseError').classList.add('hidden');
+          showSyllabusLink(el.dataset.syllabusUrl || '');
           saveData();
         });
       });
@@ -2033,6 +2078,8 @@
               b.classList.toggle('active', b.dataset.value === d.selectedInstructor);
             });
             document.getElementById('instructorHint').classList.add('hidden');
+            const _activeInstr = document.querySelector('#instructorChips .chip-btn.active');
+            if (_activeInstr) showSyllabusLink(_activeInstr.dataset.syllabusUrl || '');
           }
         }
         if (d.rating) {
