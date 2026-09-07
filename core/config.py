@@ -144,6 +144,29 @@ REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE = "この専門科目は、ご登録�
 # （ユーザー指示 2026-09-07）。
 KYOTSU_SENMON_KISO_FACULTY = "教養教育院"
 
+# 農学部は会員登録時に「コース」単位（FACULTY_DEPARTMENTS["農学部"]）で登録させるが、
+# 専門科目の分類（subjects.classification / subjects.department）は「学科」単位で管理する。
+# レビュー投稿フォームの候補絞り込みは、この対応表でコース→学科に変換したうえで学科単位で行う
+# （ユーザー指示 2026-09-08）。
+NOGAKU_COURSE_TO_DEPARTMENT = {
+    "生産環境工学コース": "食料環境システム学科",
+    "食料環境経済学コース": "食料環境システム学科",
+    "応用動物学コース": "資源生命科学科",
+    "応用植物学コース": "資源生命科学科",
+    "応用生命化学コース": "生命機能科学科",
+    "応用機能生物学コース": "生命機能科学科",
+}
+# subjects.department に入りうる農学部の学科名（database.py init_db() のバックフィル対象）。
+# classification が "{学科名}専門科目" の科目のみ埋め、"農学部専門科目" /
+# "農学部専門科目（学科不明）" は学科不明として空のまま残す（全コースから投稿可を維持）。
+NOGAKU_DEPARTMENTS = ("食料環境システム学科", "資源生命科学科", "生命機能科学科")
+
+
+def nogaku_profile_department_to_gakka(profile_department) -> str:
+    """農学部プロフィールのコース名を学科名へ変換する。未定・対応表に無い値はそのまま返す。"""
+    pd = (profile_department or "").strip()
+    return NOGAKU_COURSE_TO_DEPARTMENT.get(pd, pd)
+
 
 def subject_submittable_for_profile(
     category,
@@ -158,7 +181,8 @@ def subject_submittable_for_profile(
     - 共通専門基礎科目（category == "専門" かつ faculty == KYOTSU_SENMON_KISO_FACULTY）: 全員可
     - その他の専門科目（category == REVIEW_SUBMISSION_SENMON_CATEGORY）: 投稿者本人の学部と一致必須。
       学科は「一致」「科目側が学科不明（空/NULL）」「投稿者が学科未登録（空/NULL）」の
-      いずれかで可（ユーザー指示 2026-09-07）
+      いずれかで可（ユーザー指示 2026-09-07）。農学部のみ、登録はコース単位・科目分類は
+      学科単位なので、投稿者のコース名を学科名へ変換してから突合する（ユーザー指示 2026-09-08）
     - それ以外のcategory: 不可
     """
     if category == REVIEW_SUBMISSION_CATEGORY:
@@ -173,6 +197,8 @@ def subject_submittable_for_profile(
         return False
     sd = (subject_department or "").strip()
     pd = (profile_department or "").strip()
+    if pf == "農学部":
+        pd = nogaku_profile_department_to_gakka(pd)
     return not sd or not pd or sd == pd
 
 # レビューを閲覧可能な科目のcategory（Subject.category）。2026-09-06より専門科目は

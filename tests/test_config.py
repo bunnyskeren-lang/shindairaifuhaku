@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.config import is_profile_complete, make_syllabus_url, normalize_instructor_name, normalize_subject_name, stars, syllabus_department_key
+from core.config import is_profile_complete, make_syllabus_url, normalize_instructor_name, normalize_subject_name, stars, subject_submittable_for_profile, syllabus_department_key
 
 BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026"
 
@@ -154,3 +154,33 @@ def test_is_profile_complete_all_fields_present():
     p2 = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2, department="教養教育院",
                          coop_jobsite_known="はい")
     assert is_profile_complete(p2)
+
+
+def test_subject_submittable_kyoyo_is_open_to_everyone():
+    assert subject_submittable_for_profile("教養", "農学部", "", "工学部", "建築学科")
+
+
+def test_subject_submittable_senmon_requires_same_faculty():
+    assert not subject_submittable_for_profile("専門", "工学部", "建築学科", "農学部", "生産環境工学コース")
+    assert subject_submittable_for_profile("専門", "工学部", "建築学科", "工学部", "建築学科")
+
+
+def test_subject_submittable_senmon_unknown_department_is_open():
+    # 科目側 department 空 or 投稿者の学科未登録 なら学科不問で可
+    assert subject_submittable_for_profile("専門", "工学部", "", "工学部", "建築学科")
+    assert subject_submittable_for_profile("専門", "工学部", "建築学科", "工学部", "")
+
+
+def test_subject_submittable_nogaku_course_maps_to_gakka():
+    # 農学部は会員登録がコース単位・科目分類が学科単位。コース→学科変換して突合する。
+    # 応用構造力学（食料環境システム学科）を生命機能科学科系コースの学生は投稿不可
+    assert not subject_submittable_for_profile(
+        "専門", "農学部", "食料環境システム学科", "農学部", "応用生命化学コース")
+    # 同学科（食料環境システム学科）に属す2コースは可
+    assert subject_submittable_for_profile(
+        "専門", "農学部", "食料環境システム学科", "農学部", "生産環境工学コース")
+    assert subject_submittable_for_profile(
+        "専門", "農学部", "食料環境システム学科", "農学部", "食料環境経済学コース")
+    # 学科不明科目（農学部専門科目）とコース未定の学生は従来どおり全可
+    assert subject_submittable_for_profile("専門", "農学部", "", "農学部", "応用生命化学コース")
+    assert subject_submittable_for_profile("専門", "農学部", "食料環境システム学科", "農学部", "")

@@ -66,6 +66,10 @@
            ブロックし/registerへ誘導。initProfilePrefill参照)。 -->
 
       <input type="hidden" name="id_token" id="idTokenHidden" value="">
+      <!-- 二重送信対策の冪等キー。送信直前に発行する。送信直後にアプリがバックグラウンドへ
+           回りOS/webviewが同じPOSTを再送しても、サーバーは同じ nonce のレビューを二重作成せず
+           1回目の成功ページへ流す（routers/review_submit_api.py） -->
+      <input type="hidden" name="submit_nonce" id="submitNonceHidden" value="">
 
       <div id="studentIdCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label for="student_id" class="block text-sm font-semibold text-gray-700 mb-1">
@@ -642,6 +646,8 @@
     const SUBMISSION_SENMON_CATEGORY = "{{ submission_senmon_category }}";
     // 共通専門基礎科目（微分積分・力学基礎等、category="専門"・faculty=この値）は学部を問わず投稿可
     const KYOTSU_SENMON_KISO_FACULTY = "{{ kyotsu_senmon_kiso_faculty }}";
+    // 農学部は会員登録がコース単位・科目分類が学科単位。コース→学科に変換してから突合する。
+    const NOGAKU_COURSE_TO_DEPARTMENT = {{ nogaku_course_to_department | tojson }};
     // チーム開講（複数教員が輪番）科目向けの擬似担当教員候補。科目を選ぶと担当教員チップの
     // 末尾に常に出す。実在の教員ではなく、送信時サーバー側で科目の代表course_sectionへ束ねる。
     const OMNIBUS_INSTRUCTOR_LABEL = "{{ omnibus_instructor_label }}";
@@ -676,7 +682,8 @@
     const _prefillDone = new Promise(r => { _prefillResolve = r; });
 
     // この科目にレビュー投稿できるか（教養は全員／専門は本人の学部＝科目学部一致、
-    // 学科は一致・科目側が学科不明・本人が学科未登録のいずれかで可）。
+    // 学科は一致・科目側が学科不明・本人が学科未登録のいずれかで可。農学部のみ
+    // 本人のコース名を学科名に変換してから突合する）。
     function _isSubmittable(c) {
       const cat = (c && c.category) || '';
       if (cat === SUBMISSION_KYOYO_CATEGORY) return true;
@@ -686,7 +693,8 @@
       const pf = ((_profile && _profile.faculty) || '').trim();
       if (!sf || !pf || sf !== pf) return false;
       const sd = ((c && c.department) || '').trim();
-      const pd = ((_profile && _profile.department) || '').trim();
+      let pd = ((_profile && _profile.department) || '').trim();
+      if (pf === '農学部') pd = NOGAKU_COURSE_TO_DEPARTMENT[pd] || pd;
       return !sd || !pd || sd === pd;
     }
 
@@ -2299,6 +2307,14 @@
       // form_success.html 側でクリアされる）とは別キーに保持する。学籍番号と違い
       // 読み取り専用にはせず、次回そのまま書き換えられるようにしておく。
       try { localStorage.setItem('kobe_nickname', document.getElementById('nickname').value.trim()); } catch (_) {}
+      // 冪等キーを送信ごとに1個発行。この直後のネイティブ送信でPOST bodyに載り、
+      // OS/webviewが同じPOSTを再送した場合も同じ値が繰り返し届くのでサーバー側で
+      // 二重作成を防げる（新規の送信操作では毎回新しい値になる）。
+      try {
+        document.getElementById('submitNonceHidden').value =
+          (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+      } catch (_) {}
       e.target.submit();
     });
 

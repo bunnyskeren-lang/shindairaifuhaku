@@ -335,8 +335,8 @@ async def init_db():
         # 付け替えて department を更新しなかったため、レビュー投稿フォームの学科絞り込み
         # (core.config.subject_submittable_for_profile。科目側 department が空だと学科不問で
         # 投稿可と判定する) が素通りし、他学科の専門科目が投稿候補に出ていた。
-        # classification 完全一致でのみ更新するので、classification に学部名プレフィックスが無い
-        # 農学部（登録はコース単位）や領域単位の海洋政策科学部には影響しない。冪等。
+        # classification 完全一致でのみ更新する。農学部は classification に学部名プレフィックスが
+        # 無いため直後の専用ループで別途学科単位で補完する。領域単位の海洋政策科学部は対象外。冪等。
         from core.config import FACULTY_DEPARTMENTS as _FACULTY_DEPARTMENTS
         for _fac, _depts in _FACULTY_DEPARTMENTS.items():
             for _dept in _depts:
@@ -345,6 +345,19 @@ async def init_db():
                     "WHERE faculty = :fac AND COALESCE(department, '') = '' "
                     "AND classification = :cls"
                 ), {"dept": _dept, "fac": _fac, "cls": f"{_fac}{_dept}専門科目"})
+        # 農学部の subjects.department バックフィル（2026-09-08）: 農学部の専門科目は
+        # classification が "{学科名}専門科目"（学部名プレフィックス無し）で、会員登録は
+        # コース単位のため上の FACULTY_DEPARTMENTS ループでは補完されない。学科単位で
+        # department を埋め、subject_submittable_for_profile がコース→学科変換して突合できる
+        # ようにする。"農学部専門科目" / "農学部専門科目（学科不明）" は学科不明なので空のまま
+        # （全コースから投稿可を維持）。冪等。
+        from core.config import NOGAKU_DEPARTMENTS as _NOGAKU_DEPARTMENTS
+        for _dept in _NOGAKU_DEPARTMENTS:
+            await conn.execute(text(
+                "UPDATE subjects SET department = :dept "
+                "WHERE faculty = '農学部' AND COALESCE(department, '') = '' "
+                "AND classification = :cls"
+            ), {"dept": _dept, "cls": f"{_dept}専門科目"})
         # subjects.category バックフィル（2026-09-08）: classification は専門科目なのに
         # category 列が NULL のまま取り残された行を "専門" で補完する。国際人間科学部の
         # 2026-09 の学科別分類・語尾バリアント変換作業で直接 INSERT された Subject 行が
@@ -705,3 +718,17 @@ async def init_db():
         ))
         if _hoken_backfill.rowcount:
             print(f"[init_db] hoken_gakka department backfill: {_hoken_backfill.rowcount} row(s) set to NULL", flush=True)
+
+        # ── 2026-09-08: レビュー二重送信（OS/webviewによる保留POSTの再送）対策の冪等キー ──
+        # 送信直後にLINEアプリがバックグラウンドへ回るとモバイルOS/webviewが保留中の送信POSTを
+        # 後から再送し、1回目は保存済みのため2回目が重複防止で弾かれて「既に投稿済み」エラーが
+        # 出ていた（本人は送信1回・データ消失なし）。クライアントが送信ごとに発行する
+        # submit_nonce で同一送信を識別し、再送は1回目のレビューの成功ページへ流す
+        # （routers/review_submit_api.py）。部分UNIQUEインデックスでNULLは重複可・非NULLは一意。
+        await conn.execute(text(
+            "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS submit_nonce TEXT"
+        ))
+        await conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_reviews_submit_nonce "
+            "ON reviews (submit_nonce) WHERE submit_nonce IS NOT NULL"
+        ))
