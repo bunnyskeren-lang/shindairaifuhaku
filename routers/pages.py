@@ -8,7 +8,8 @@ from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOTSU_SENMON_KISO_FACULTY,
     LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
-    REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_FORM_URL, REVIEW_LIFF_ID,
+    REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
+    REVIEW_FORM_URL, REVIEW_LIFF_ID,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY,
 )
 from core.templates import templates
@@ -124,6 +125,9 @@ async def liff_course(request: Request):
             "IS_DEV": IS_DEV,
             # レビュー閲覧・チケット解除UIは教養科目でのみ表示されるため、教養の付与枚数を渡す
             "unlock_reward": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
+            # 解除前ロックカードでは「教養は+N枚・専門は+M枚」と両方の付与枚数を明示する
+            "approval_credits_kyoyo": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
+            "approval_credits_senmon": REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
         })
     except Exception as exc:
         await save_error_log(exc, action="liff_course")
