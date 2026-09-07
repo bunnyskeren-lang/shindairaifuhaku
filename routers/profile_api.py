@@ -23,7 +23,7 @@ from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Review, ReviewStatus, UserProfile
+from models import CourseSection, Instructor, LiffAuthEvent, Review, ReviewStatus, UserProfile
 
 router = APIRouter()
 
@@ -40,13 +40,15 @@ _liff_auth_event_rate_limit = rate_limiter(max_requests=30, window_seconds=60)
 @router.post("/api/liff-auth-event")
 async def liff_auth_event(request: Request, _rl=Depends(_liff_auth_event_rate_limit)):
     """LIFF IDトークンの期限切れ検知・auth_failed → 強制再ログインが発動した状況を
-    クライアントから受け取り記録するテレメトリ受け口。
+    クライアントから受け取り記録するテレメトリ受け口（_partials/liff_auth.html が送信）。
 
     - 認証は掛けない（そもそもLINEトークン検証に失敗しているユーザーからの報告のため）。
-    - error_logs に記録し、Push通知も飛ばす（save_error_log 側に5分クールダウンがあるため
-      短時間に大量発生しても通知は間引かれる）。
+    - サーバーエラーではないので専用テーブル liff_auth_events に記録する（error_logs には
+      入れない・Push通知も出さない。以前は save_error_log() 経由で相乗りしており、
+      Push誤発火・エラー種別集計の汚染・/admin/errors の特別扱いを招いていた）。
     - guard_tripped=True の行が「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
-    - 復号したトークンの sub を user_id に入れるので、どのLINEユーザーが影響を受けたか追える。
+    - sub は「期限切れ＝署名未検証のIDトークン」から取り出しただけの参考値でなりすまし可能。
+      相関のためだけに user_id へ入れる（LINE user id 形式のときのみ）。
     """
     try:
         body = await request.json()
@@ -68,13 +70,20 @@ async def liff_auth_event(request: Request, _rl=Depends(_liff_auth_event_rate_li
     ctx["ua"] = str(body.get("ua") or "")[:160]
 
     sub = str(body.get("sub") or "")[:64]
-    form = ctx["form"] or "?"
-    stage = ctx["stage"] or "?"
-    await save_error_log(
-        RuntimeError(_json.dumps(ctx, ensure_ascii=False)[:480]),
-        user_id=(sub if sub.startswith("U") else None),
-        action=f"liff_reauth:{form}:{stage}",
-    )
+    try:
+        async with AsyncSessionLocal() as session:
+            session.add(LiffAuthEvent(
+                user_id=(sub if LINE_USER_ID_RE.match(sub) else None),
+                form=ctx["form"][:20],
+                stage=ctx["stage"][:20],
+                reason=ctx["reason"][:40],
+                guard_tripped=bool(ctx["guard_tripped"]),
+                payload=_json.dumps(ctx, ensure_ascii=False)[:2000],
+            ))
+            await session.commit()
+    except Exception as exc:
+        await save_error_log(exc, action="liff_auth_event_save")
+        return {"ok": False}
     return {"ok": True}
 
 

@@ -57,7 +57,7 @@ class Base(DeclarativeBase):
 
 async def init_db():
     from models import (  # noqa: F401
-        MessageLog, UserProfile, UserActivity, ErrorLog,
+        MessageLog, UserProfile, UserActivity, ErrorLog, LiffAuthEvent,
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
         CourseSectionView, PaymentRequest,
@@ -691,12 +691,17 @@ async def init_db():
         # 4専攻しか持たず、フォームもサーバー(profile_api.py)もこの4値以外を弾くので、
         # 該当会員の department を NULL に戻して is_profile_complete() を False にし、
         # 次回操作時の再登録で専攻まで必ず選び直させる。
-        # 4専攻の正規値と教養（"教養教育院"）は対象外。冪等。
-        await conn.execute(text(
+        # 実データ調査で該当は下記2名のみと判明しているため、広い LIKE スキャンではなく
+        # 学籍番号を名指しで対象にする（両名が再登録して department が4専攻のいずれかに
+        # なれば NOT IN ガードで即 no-op になる。毎起動走るが2行のインデックス参照のみ）。
+        _hoken_backfill = await conn.execute(text(
             "UPDATE user_profiles SET department = NULL "
-            "WHERE department LIKE '%保健学科%' "
+            "WHERE student_id IN ('2683842MH', '2683825MH') "
+            "AND department IS NOT NULL "
             "AND department NOT IN ("
             "  '保健学科看護学専攻', '保健学科検査技術科学専攻', "
             "  '保健学科理学療法学専攻', '保健学科作業療法学専攻'"
             ")"
         ))
+        if _hoken_backfill.rowcount:
+            print(f"[init_db] hoken_gakka department backfill: {_hoken_backfill.rowcount} row(s) set to NULL", flush=True)

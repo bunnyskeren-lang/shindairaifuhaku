@@ -1,0 +1,70 @@
+{% extends "admin/base.html" %}
+{% block title %}再ログインテレメトリ{% endblock %}
+{% block heading %}🔄 LIFF再ログインテレメトリ{% endblock %}
+
+{% block extra_style %}
+details > summary { cursor:pointer; font-weight:bold; color:#374151; }
+pre { background:#f3f4f6; padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin:6px 0 0; }
+.rb { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:bold; white-space:nowrap; }
+{% endblock %}
+
+{% from "admin/base.html" import pager %}
+{% block content %}
+<div class="card">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
+    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;background:#f3f4f6;color:#374151">← エラーログ</a>
+    <span style="font-size:12px;padding:5px 12px;border-radius:999px;background:#111827;color:#fff">再ログインテレメトリ</span>
+  </div>
+  <div style="font-size:12px;color:#374151;margin:0 0 16px;line-height:1.9">
+    LIFF IDトークン期限切れ→強制再ログインの発生記録（<b>サーバーエラーではないので専用テーブル liff_auth_events に記録・Push通知なし</b>）。
+    <b>400 Bad Request 自体はLINE側の画面なのでここには残らない</b>が、下記の組み合わせで見分けられる：
+    <br><span class="rb" style="background:#e0e7ff;color:#3730a3">🔄 再ログイン実行</span> 期限切れを検知して自動再ログインを開始した（<b>この直後に同じユーザーで「✅ 復帰確認」が出れば正常</b>）
+    <br><span class="rb" style="background:#dcfce7;color:#166534">✅ 復帰確認</span> 再ログイン後にトークン検証が通り、フォームを正常表示できた
+    <br><span class="rb" style="background:#fee2e2;color:#991b1b">🚨 未復帰</span> 再ログインしても復帰できず詰んでいる（400・トークン再発行失敗・ユーザー離脱など）。<b>「🔄」だけ出て「✅」が続かないユーザーも同様に要注意</b>
+    <br><span style="color:#991b1b;font-weight:bold">未復帰の累計: {{ stuck_total }} 件</span>
+    <br><span style="color:#9ca3af">※ユーザー欄は未検証トークンの sub 由来の参考表示（なりすまし可能）。</span>
+  </div>
+  <table>
+    <tr>
+      <th>日時</th>
+      <th>ユーザー</th>
+      <th>フォーム</th>
+      <th>状態 / 詳細</th>
+    </tr>
+    {% for r in rows %}
+    <tr style="vertical-align:top">
+      <td style="white-space:nowrap;font-size:11px">{{ r.created_at | jst }}</td>
+      <td style="font-size:12px">
+        {{ r.name or "―" }}
+        {% if r.student_id %}<br><span style="color:#9ca3af;font-size:11px">{{ r.student_id }}</span>{% endif %}
+      </td>
+      <td style="font-size:12px">{{ r.form or "―" }}</td>
+      <td style="font-size:12px">
+        {% if r.stage == 'recovered' %}
+        <span class="rb" style="background:#dcfce7;color:#166534">✅ 復帰確認</span>
+        {% elif r.guard_tripped %}
+        <span class="rb" style="background:#fee2e2;color:#991b1b">🚨 未復帰</span>
+        {% else %}
+        <span class="rb" style="background:#e0e7ff;color:#3730a3">🔄 再ログイン実行</span>
+        {% endif %}
+        {% set m = r.payload | fromjson %}
+        {% if m %}
+        <span style="color:#6b7280">
+          {{ r.stage }}{% if r.reason %} / {{ r.reason }}{% endif %}
+          {% if m.in_client %} · アプリ内{% else %} · 外部{% endif %}
+          {% if m.expired_ago_sec is not none %} · {% if m.expired_ago_sec >= 0 %}期限切れ{{ m.expired_ago_sec }}秒経過{% else %}未期限切れ(テスト){% endif %}{% endif %}
+          {% if m.os or m.line_ver %} · {{ m.os }} LINE{{ m.line_ver }}{% endif %}
+        </span>
+        <details style="margin-top:4px"><summary>JSON全体</summary><pre>{{ r.payload }}</pre></details>
+        {% else %}
+        <span style="color:#6b7280">{{ r.stage }}{% if r.reason %} / {{ r.reason }}{% endif %}</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="empty">記録なし</td></tr>
+    {% endfor %}
+  </table>
+  {{ pager(page, total_pages, total, url_prefix) }}
+</div>
+{% endblock %}

@@ -9,7 +9,9 @@ from core.config import credit_tickets_granted_clause, review_approval_unlock_cr
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, ErrorLog, MessageLog, Review, Subject, SubjectUnlock, UserProfile
+from models import (
+    CourseSection, ErrorLog, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserProfile,
+)
 
 router = APIRouter()
 
@@ -137,10 +139,9 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
 
 # 本来のサーバーエラーではないが、発生状況を追うため error_logs へ相乗りさせているテレメトリ種別。
-# いずれも既定のエラー一覧にはそのまま出しつつ、?view=<key> でその種別だけに絞れる。
-#  - liff_reauth:      LIFF IDトークン期限切れ→再ログイン（profile_api.py の /api/liff-auth-event）
+# 既定のエラー一覧にはそのまま出しつつ、?view=submit_duplicate でこの種別だけに絞れる。
 #  - submit_duplicate: レビュー二重送信による「既に投稿済み」拒否（review_submit_api.py の _form_error）
-_LIFF_REAUTH_ACTION_PREFIX = "liff_reauth:"
+# （liff_reauth は 2026-09-08 に専用テーブル liff_auth_events へ分離。/admin/liff-reauth を参照）
 _SUBMIT_DUPLICATE_ACTION_PREFIX = "submit_duplicate:"
 
 
@@ -152,20 +153,13 @@ async def admin_errors(
     view: str = Query(default=""),
 ):
     per_page = 50
-    is_reauth_view = view == "liff_reauth"
     is_dup_view = view == "submit_duplicate"
-    reauth_like = ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%")
     dup_like = ErrorLog.action.like(_SUBMIT_DUPLICATE_ACTION_PREFIX + "%")
     async with AsyncSessionLocal() as session:
         count_stmt = select(func.count(ErrorLog.id))
-        if is_reauth_view:
-            count_stmt = count_stmt.where(reauth_like)
-        elif is_dup_view:
+        if is_dup_view:
             count_stmt = count_stmt.where(dup_like)
         total = (await session.execute(count_stmt)).scalar_one()
-        reauth_total = (await session.execute(
-            select(func.count(ErrorLog.id)).where(reauth_like)
-        )).scalar_one()
         dup_total = (await session.execute(
             select(func.count(ErrorLog.id)).where(dup_like)
         )).scalar_one()
@@ -184,9 +178,7 @@ async def admin_errors(
             .outerjoin(UserProfile, UserProfile.line_user_id == ErrorLog.user_id)
             .order_by(ErrorLog.created_at.desc())
         )
-        if is_reauth_view:
-            rows_stmt = rows_stmt.where(reauth_like)
-        elif is_dup_view:
+        if is_dup_view:
             rows_stmt = rows_stmt.where(dup_like)
         errors = (await session.execute(
             rows_stmt.offset((page - 1) * per_page).limit(per_page)
@@ -198,11 +190,51 @@ async def admin_errors(
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "url_prefix": f"/admin/errors?view={view}&page=" if view else "/admin/errors?page=",
-        "is_reauth_view": is_reauth_view,
-        "reauth_total": reauth_total,
+        "url_prefix": "/admin/errors?view=submit_duplicate&page=" if is_dup_view else "/admin/errors?page=",
         "is_dup_view": is_dup_view,
         "dup_total": dup_total,
+    })
+
+
+@router.get("/admin/liff-reauth", response_class=HTMLResponse)
+async def admin_liff_reauth(
+    request: Request,
+    _: str = Depends(check_admin),
+    page: int = Query(default=1, ge=1),
+):
+    """LIFF IDトークン期限切れ→強制再ログインのテレメトリ（liff_auth_events）。
+    サーバーエラーではないため /admin/errors とは別ページにしている。"""
+    per_page = 50
+    async with AsyncSessionLocal() as session:
+        total = (await session.execute(select(func.count(LiffAuthEvent.id)))).scalar_one()
+        stuck_total = (await session.execute(
+            select(func.count(LiffAuthEvent.id)).where(LiffAuthEvent.guard_tripped.is_(True))
+        )).scalar_one()
+        rows = (await session.execute(
+            select(
+                LiffAuthEvent.created_at,
+                LiffAuthEvent.user_id,
+                UserProfile.name,
+                UserProfile.student_id,
+                LiffAuthEvent.form,
+                LiffAuthEvent.stage,
+                LiffAuthEvent.reason,
+                LiffAuthEvent.guard_tripped,
+                LiffAuthEvent.payload,
+            )
+            .outerjoin(UserProfile, UserProfile.line_user_id == LiffAuthEvent.user_id)
+            .order_by(LiffAuthEvent.created_at.desc())
+            .offset((page - 1) * per_page).limit(per_page)
+        )).all()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return templates.TemplateResponse("admin/liff_reauth.html", {
+        "request": request,
+        "rows": rows,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "stuck_total": stuck_total,
+        "url_prefix": "/admin/liff-reauth?page=",
     })
 
 

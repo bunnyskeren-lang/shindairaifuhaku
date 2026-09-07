@@ -113,6 +113,7 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 - `user_profiles`
 - `user_activity`
 - `error_logs`
+- `liff_auth_events`
 - `push_subscriptions`
 - `richmenu_taps`
 
@@ -301,10 +302,12 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、教員/学部/分類の並び替え）
 │       ├── reviews.py                     ← /admin/reviews*
 │       ├── payments.py                     ← /admin/payments*（支払い申請の承認/支払い済み化/却下）
-│       ├── users_errors.py                 ← /admin/users, /admin/errors
+│       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/liff-reauth（LIFF再ログインテレメトリ）
 │       └── stats.py                         ← /admin/usage-stats
 ├── templates/
-│   ├── admin/              ← courses / reviews / logs / users / errors /
+│   ├── _partials/
+│   │   └── liff_auth.html  ← LIFF IDトークン期限切れ→再ログイン共通JS（window.LiffAuth）。4フォームがincludeする
+│   ├── admin/              ← courses / reviews / logs / users / errors / liff_reauth /
 │   │                          activity / usage_stats / richmenu / login / base 等
 │   ├── liff/
 │   │   └── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
@@ -351,7 +354,8 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み。`unlock_credits`はレビュー閲覧権チケットの残数。`banned_at`は虚偽投稿等を理由にLINE bot利用を永久停止した日時（NULL＝有効）、`ban_reason`は管理者向け内部メモでユーザーには非公開。停止・解除は`/admin/users`から操作し`core/moderation.py`が判定を仲介する） |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
-| `error_logs` | サーバーエラーログ。`action`が`liff_reauth:<form>:<stage>`の行はエラーではなくLIFF IDトークン期限切れ→強制再ログインのテレメトリ（`POST /api/liff-auth-event`が記録、Push通知あり。`error_message`にJSON、`guard_tripped=true`＝再ログインしても復帰不能＝詰み）。`/admin/errors`は既定で全部表示し、`?view=liff_reauth`でこの種別だけに絞れる |
+| `error_logs` | サーバーエラーログ。`action`が`submit_duplicate:<form>`の行はエラーではなくレビュー二重送信の「既に投稿済み」拒否のテレメトリ（`/admin/errors?view=submit_duplicate`で絞れる）。LIFF再ログインのテレメトリは2026-09-08に`liff_auth_events`へ分離済み |
+| `liff_auth_events` | LIFF IDトークン期限切れ→強制再ログインのテレメトリ（`POST /api/liff-auth-event`が記録、`_partials/liff_auth.html`が送信）。**サーバーエラーではないので`error_logs`とは別テーブル・Push通知なし**。`payload`にクライアント送信の全JSON、`guard_tripped=true`＝再ログインしても復帰不能＝詰み。`stage='recovered'`＝再ログイン後に復帰成功。`user_id`は署名未検証トークンのsub由来で信頼できない（なりすまし可）。管理画面は`/admin/liff-reauth`。message_logs/error_logsと同じく30日で自動削除 |
 | `push_subscriptions` | Web Push VAPID 購読情報 |
 | `richmenu_taps` | リッチメニュークリックログ |
 

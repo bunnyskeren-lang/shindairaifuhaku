@@ -75,6 +75,29 @@ class ErrorLog(TimestampMixin, Base):
     traceback: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class LiffAuthEvent(TimestampMixin, Base):
+    """LIFF IDトークン期限切れ→強制再ログインの発生状況テレメトリ。
+    サーバーエラーではないため error_logs には入れず専用テーブルに分離する
+    （2026-09-08、以前は save_error_log() 経由で error_logs へ相乗りしており、
+    Push通知の誤発火・エラー種別集計の汚染・エラー一覧の特別扱いを招いていた）。
+    Push通知は飛ばさない。message_logs / error_logs と同様30日で自動削除する
+    （core.activity_log.cleanup_old_logs）。
+
+    user_id は「期限切れ＝署名未検証のIDトークン」から取り出した sub をそのまま
+    入れているだけで、暗号的に検証された値ではない（なりすまし可能）。相関のための
+    参考値であり、管理画面での UserProfile 突き合わせも参考表示に留めること。"""
+    __tablename__ = "liff_auth_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 未検証トークン由来の sub。信頼できる識別子ではない（上記docstring参照）
+    user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    form: Mapped[str] = mapped_column(String(20), nullable=False, default="")       # course / review / register / contact
+    stage: Mapped[str] = mapped_column(String(20), nullable=False, default="")      # page_load / submit / recovered
+    reason: Mapped[str] = mapped_column(String(40), nullable=False, default="")     # expired / auth_failed / recovered
+    guard_tripped: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # True=再ログインしても復帰不能＝詰み
+    payload: Mapped[str] = mapped_column(Text, nullable=False, default="")          # クライアント送信の全コンテキスト(JSON)
+
+
 class AdminSession(Base):
     """管理画面の一括ログアウト用。単一行(id=1)のrevoked_beforeより前に発行された管理者トークンを
     一律で無効化する（core/security.pyのcheck_admin参照）。ADMIN_PASSWORDは全管理者が共有する

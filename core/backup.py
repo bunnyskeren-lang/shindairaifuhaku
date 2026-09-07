@@ -36,7 +36,7 @@ def _sql_literal(value) -> str:
 async def dump_all_tables_to_sql() -> bytes:
     """全テーブルをFK依存順にSELECTし、INSERT文形式のSQLをgzip圧縮して返す。"""
     from models import (  # noqa: F401
-        MessageLog, UserProfile, UserActivity, ErrorLog,
+        MessageLog, UserProfile, UserActivity, ErrorLog, LiffAuthEvent,
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
         CourseSectionView,

@@ -7,7 +7,7 @@ from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database import AsyncSessionLocal
-from models import ErrorLog, MessageLog, UserActivity
+from models import ErrorLog, LiffAuthEvent, MessageLog, UserActivity
 
 _LOG_RETENTION_DAYS = 30
 
@@ -81,14 +81,14 @@ async def save_log_bg(user_id: str, direction: str, message: str) -> None:
 
 
 async def cleanup_old_logs():
-    """message_logs / error_logsの古い行を削除する（Supabase Freeプランの
-    ストレージ上限対策。両テーブルともreviews等と異なり永続保存が前提の
-    データではない）。"""
+    """message_logs / error_logs / liff_auth_eventsの古い行を削除する（Supabase Freeプランの
+    ストレージ上限対策。いずれもreviews等と異なり永続保存が前提のデータではない）。"""
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(days=_LOG_RETENTION_DAYS)
         async with AsyncSessionLocal() as session:
             await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
             await session.execute(delete(ErrorLog).where(ErrorLog.created_at < cutoff))
+            await session.execute(delete(LiffAuthEvent).where(LiffAuthEvent.created_at < cutoff))
             await session.commit()
     except Exception as exc:
         await save_error_log(exc, action="cleanup")

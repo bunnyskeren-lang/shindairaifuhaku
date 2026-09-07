@@ -5,25 +5,17 @@
 {% block extra_style %}
 details > summary { cursor:pointer; font-weight:bold; color:#991b1b; }
 pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin:6px 0 0; }
-.rb { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:bold; white-space:nowrap; }
 {% endblock %}
 
 {% from "admin/base.html" import pager %}
 {% block content %}
 <div class="card">
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
-    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not is_reauth_view and not is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">すべて</a>
-    <a href="/admin/errors?view=liff_reauth" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if is_reauth_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">再ログインテレメトリのみ（{{ reauth_total }}）</a>
+    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">すべて</a>
     <a href="/admin/errors?view=submit_duplicate" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">重複投稿のみ（{{ dup_total }}）</a>
+    <a href="/admin/liff-reauth" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;background:#f3f4f6;color:#374151">再ログインテレメトリ →</a>
   </div>
-  {% if is_reauth_view %}
-  <div style="font-size:12px;color:#374151;margin:0 0 16px;line-height:1.9">
-    LIFF IDトークン期限切れ→強制再ログインの発生記録。<b>400 Bad Request 自体はLINE側の画面なのでここには残らない</b>が、下記の組み合わせで見分けられる：
-    <br><span class="rb" style="background:#e0e7ff;color:#3730a3">🔄 再ログイン実行</span> 期限切れを検知して自動再ログインを開始した（<b>この直後に同じユーザーで「✅ 復帰確認」が出れば正常</b>）
-    <br><span class="rb" style="background:#dcfce7;color:#166534">✅ 復帰確認</span> 再ログイン後にトークン検証が通り、フォームを正常表示できた
-    <br><span class="rb" style="background:#fee2e2;color:#991b1b">🚨 未復帰</span> 再ログインしても復帰できず詰んでいる（400・トークン再発行失敗・ユーザー離脱など）。<b>「🔄」だけ出て「✅」が続かないユーザーも同様に要注意</b>
-  </div>
-  {% elif is_dup_view %}
+  {% if is_dup_view %}
   <div style="font-size:12px;color:#374151;margin:0 0 16px;line-height:1.8">
     同じ学籍番号で同じ科目×担当教員に<b>2回目以降の投稿が行われた</b>記録（1回目は正常に保存済み・データ消失なし）。
     送信直後にLINEアプリがバックグラウンドへ回り、モバイルOS/webviewが保留中の送信POSTを後から再送するのが主因で、
@@ -37,8 +29,8 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
       <th>日時</th>
       <th>ユーザー</th>
       <th>操作</th>
-      {% if not is_reauth_view %}<th>エラー種別</th>{% endif %}
-      <th>{% if is_reauth_view %}状態 / 詳細{% else %}メッセージ{% endif %}</th>
+      <th>エラー種別</th>
+      <th>メッセージ</th>
     </tr>
     {% for e in errors %}
     <tr style="vertical-align:top">
@@ -48,36 +40,12 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
         {% if e.student_id %}<br><span style="color:#9ca3af;font-size:11px">{{ e.student_id }}</span>{% endif %}
       </td>
       <td style="font-size:12px;max-width:140px;word-break:break-word">{{ e.action or "―" }}</td>
-      {% if not is_reauth_view %}
       <td><span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold">{{ e.error_type }}</span></td>
-      {% endif %}
       <td style="font-size:12px">
-        {% if is_reauth_view %}
-          {% set m = e.error_message | fromjson %}
-          {% if m %}
-            {% if m.stage == 'recovered' %}
-            <span class="rb" style="background:#dcfce7;color:#166534">✅ 復帰確認</span>
-            {% elif m.guard_tripped %}
-            <span class="rb" style="background:#fee2e2;color:#991b1b">🚨 未復帰</span>
-            {% else %}
-            <span class="rb" style="background:#e0e7ff;color:#3730a3">🔄 再ログイン実行</span>
-            {% endif %}
-            <span style="color:#6b7280">
-              {{ m.stage }}{% if m.reason %} / {{ m.reason }}{% endif %}
-              {% if m.in_client %} · アプリ内{% else %} · 外部{% endif %}
-              {% if m.expired_ago_sec is not none %} · {% if m.expired_ago_sec >= 0 %}期限切れ{{ m.expired_ago_sec }}秒経過{% else %}未期限切れ(テスト){% endif %}{% endif %}
-              {% if m.os or m.line_ver %} · {{ m.os }} LINE{{ m.line_ver }}{% endif %}
-            </span>
-            <details style="margin-top:4px"><summary>JSON全体</summary><pre>{{ e.error_message }}</pre></details>
-          {% else %}
-            <details><summary>{{ e.error_message[:80] }}</summary><pre>{{ e.traceback }}</pre></details>
-          {% endif %}
-        {% else %}
         <details>
           <summary>{{ e.error_message[:80] }}{% if e.error_message | length > 80 %}…{% endif %}</summary>
           <pre>{{ e.traceback }}</pre>
         </details>
-        {% endif %}
       </td>
     </tr>
     {% else %}
