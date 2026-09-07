@@ -48,8 +48,8 @@ class UserProfile(TimestampMixin, Base):
     # 1枚ずつ消費する
     unlock_credits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     # レビュー報酬（PayPay）の支払い上限額（円）。管理画面のユーザー設定で管理者が
-    # 100円単位で手入力する。現状は記録・表示専用で、支払い申請フォーム
-    # （routers/payment_api.py）の挙動には影響しない。既定0円。
+    # 100円単位で手入力する。2026-09-07以降、支払い申請フォーム（routers/payment_api.py）の
+    # 申請額はこの値そのものになり、承認済みレビューの件数とは一切連動しない。既定0円＝申請不可。
     payment_limit: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     # 虚偽投稿等を理由にLINE bot利用を永久停止した日時。NULL＝有効、値あり＝停止中。
     # 解除時はNULLに戻す（core/moderation.py・routers/admin/users_errors.py参照）

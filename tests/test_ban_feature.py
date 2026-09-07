@@ -40,7 +40,9 @@ def _admin_client(http_client_factory, monkeypatch):
     return client
 
 
-async def _seed_profile(test_sessionmaker, uid: str, *, banned: bool, complete: bool = True) -> None:
+async def _seed_profile(
+    test_sessionmaker, uid: str, *, banned: bool, complete: bool = True, payment_limit: int = 0
+) -> None:
     async with test_sessionmaker() as session:
         session.add(UserProfile(
             line_user_id=uid,
@@ -48,6 +50,7 @@ async def _seed_profile(test_sessionmaker, uid: str, *, banned: bool, complete: 
             student_id="2345678S",
             faculty="経営学部" if complete else None,
             department="経営学科" if complete else None,
+            payment_limit=payment_limit,
             banned_at=datetime.now(timezone.utc) if banned else None,
             ban_reason="虚偽投稿" if banned else None,
         ))
@@ -246,25 +249,35 @@ async def test_banned_student_gets_ineligible_for_payment(http_client_factory, m
 
 @pytest.mark.asyncio
 async def test_non_banned_student_can_submit_payment_request(http_client_factory, monkeypatch, test_sessionmaker):
-    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False)
-    course_id = await _seed_course(test_sessionmaker)
-    async with test_sessionmaker() as session:
-        cs_id = (await session.execute(
-            select(CourseSection.id).where(CourseSection.subject_id == course_id)
-        )).scalars().first()
-        # amount=200円(_UNIT_YEN)には2件(_YEN_PER_REVIEW=100円/件)の承認済みレビューが必要
-        for _ in range(2):
-            session.add(Review(
-                course_section_id=cs_id, student_id="2345678S",
-                status=ReviewStatus.APPROVED, rating=4, ease_rating="A",
-            ))
-        await session.commit()
+    # 2026-09-07以降、申請額は管理画面で設定したpayment_limit（円）そのもので、
+    # 承認済みレビューの件数とは一切連動しない
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False, payment_limit=200)
 
     client = http_client_factory(payment_api, monkeypatch)
     resp = await client.post("/payment/apply/submit", data={
-        "name": "花子", "student_id": "2345678S", "paypay_id": "hanako123", "amount": "200",
+        "name": "花子", "student_id": "2345678S", "paypay_id": "hanako123",
     })
     assert resp.status_code == 200
+
+    async with test_sessionmaker() as session:
+        pr = (await session.execute(select(PaymentRequest))).scalars().first()
+        assert pr is not None and pr.amount == 200
+
+
+@pytest.mark.asyncio
+async def test_student_without_payment_limit_cannot_submit(http_client_factory, monkeypatch, test_sessionmaker):
+    """payment_limitが0（既定）のユーザーは申請フォームから申請できない。"""
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False, payment_limit=0)
+
+    client = http_client_factory(payment_api, monkeypatch)
+    resp = await client.post("/payment/apply/submit", data={
+        "name": "花子", "student_id": "2345678S", "paypay_id": "hanako123",
+    })
+    assert resp.status_code == 400
+
+    async with test_sessionmaker() as session:
+        count = (await session.execute(select(func.count()).select_from(PaymentRequest))).scalar_one()
+        assert count == 0
 
 
 @pytest.mark.asyncio
