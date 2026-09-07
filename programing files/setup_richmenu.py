@@ -147,7 +147,7 @@ AREAS = [
     {
         "label": "図書館",
         "x": SIDE_MID, "y": SY2, "w": W - SIDE_MID, "h": SY3 - SY2,
-        "action": URIAction(label="図書館", uri="https://lib.kobe-u.ac.jp/services/barcode/"),
+        "action": URIAction(label="図書館", uri="https://lib.kobe-u.ac.jp/services/barcode/?openExternalBrowser=1"),
     },
     {
         "label": "使い方",
