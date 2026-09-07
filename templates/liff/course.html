@@ -682,47 +682,52 @@ async function main() {
     list.forEach(r => reviewsSection.appendChild(buildReviewCard(r)));
   }
 
+  // 担当教員が複数いる科目（バリアント統合科目等）は教員で絞り込めるようにする。
+  // チケット解除前でもシラバスだけは教員別に見られるようにするため、レビュー由来ではなく
+  // course_sections由来のinstructor_namesを使い、ロック中かどうかに関係なくチップを出す
+  // （1人しかいない場合はチップを出しても意味がないため表示しない）
+  const instructorNames = [...new Set((data.instructor_names || []).filter(Boolean))];
+  let controlsHtml = "";
+  if (instructorNames.length > 1) {
+    controlsHtml += `<div class="filter-chips" id="instructor-chips">
+      <button type="button" class="chip active" data-instr="">すべて</button>
+      ${instructorNames.map(name => `<button type="button" class="chip" data-instr="${esc(name)}">${esc(name)}</button>`).join("")}
+    </div>`;
+    if (data.locked) {
+      controlsHtml += `<div style="font-size:11px;color:#94a3b8">🔒 レビューは解除後に表示されます。教員を選ぶとシラバスが切り替わります</div>`;
+    }
+  }
+  if (!data.locked && data.reviews && data.reviews.length > 1) {
+    controlsHtml += `<div class="sort-row">
+      <select id="sort-select" class="sort-select">
+        <option value="ease" selected>楽単順</option>
+        <option value="new">新しい順</option>
+      </select>
+    </div>`;
+  }
+  controlsEl.innerHTML = controlsHtml;
+
+  const chipsEl = document.getElementById("instructor-chips");
+  if (chipsEl) {
+    chipsEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".chip");
+      if (!btn) return;
+      chipsEl.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      btn.classList.add("active");
+      instructorFilter = btn.dataset.instr;
+      if (!data.locked) renderReviewCards();
+      updateSyllabusButton();
+    });
+  }
+  const sortEl = document.getElementById("sort-select");
+  if (sortEl) {
+    sortEl.addEventListener("change", () => {
+      sortMode = sortEl.value;
+      renderReviewCards();
+    });
+  }
+
   if (!data.locked && data.reviews && data.reviews.length) {
-    // 担当教員が複数いる科目（バリアント統合科目等）は教員で絞り込めるようにする。
-    // 1人しかいない場合はチップを出しても意味がないため表示しない
-    const instructors = [...new Set(data.reviews.map(r => r.instructor).filter(Boolean))];
-    let controlsHtml = "";
-    if (instructors.length > 1) {
-      controlsHtml += `<div class="filter-chips" id="instructor-chips">
-        <button type="button" class="chip active" data-instr="">すべて</button>
-        ${instructors.map(name => `<button type="button" class="chip" data-instr="${esc(name)}">${esc(name)}</button>`).join("")}
-      </div>`;
-    }
-    if (data.reviews.length > 1) {
-      controlsHtml += `<div class="sort-row">
-        <select id="sort-select" class="sort-select">
-          <option value="ease" selected>楽単順</option>
-          <option value="new">新しい順</option>
-        </select>
-      </div>`;
-    }
-    controlsEl.innerHTML = controlsHtml;
-
-    const chipsEl = document.getElementById("instructor-chips");
-    if (chipsEl) {
-      chipsEl.addEventListener("click", (e) => {
-        const btn = e.target.closest(".chip");
-        if (!btn) return;
-        chipsEl.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
-        btn.classList.add("active");
-        instructorFilter = btn.dataset.instr;
-        renderReviewCards();
-        updateSyllabusButton();
-      });
-    }
-    const sortEl = document.getElementById("sort-select");
-    if (sortEl) {
-      sortEl.addEventListener("change", () => {
-        sortMode = sortEl.value;
-        renderReviewCards();
-      });
-    }
-
     renderReviewCards();
   }
 

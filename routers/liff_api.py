@@ -492,6 +492,9 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "note": ON_DEMAND_SAME_CONTENT_NOTE if (not locked and subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS) else "",
             "syllabus_url": syllabus_url or "",
             "instructor_syllabus_urls": instructor_syllabus_urls,
+            # チケット解除前でも担当教員を選んでシラバスだけ見られるようにするため、
+            # レビュー由来ではなくcourse_sections由来の教員名一覧をlocked状態に関わらず返す
+            "instructor_names": instr_names,
             "review_count": review_count,
             "locked": locked,
             "view_restricted": view_restricted,
