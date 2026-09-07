@@ -345,6 +345,20 @@ async def init_db():
                     "WHERE faculty = :fac AND COALESCE(department, '') = '' "
                     "AND classification = :cls"
                 ), {"dept": _dept, "fac": _fac, "cls": f"{_fac}{_dept}専門科目"})
+        # subjects.category バックフィル（2026-09-08）: classification は専門科目なのに
+        # category 列が NULL のまま取り残された行を "専門" で補完する。国際人間科学部の
+        # 2026-09 の学科別分類・語尾バリアント変換作業で直接 INSERT された Subject 行が
+        # category 未設定のままだった（import_syllabus.py 経由なら常に "専門" が入る）。
+        # レビュー投稿フォームの候補は core.config の REVIEW_SUBMISSION_SENMON_CATEGORY
+        # (="専門") で category 絞り込みするため、NULL の 214 件（教育原理（世界と日本の
+        # 学校教育）等）がフォームに一切出てこない実害があった。classification が専門科目系
+        # （"…専門科目" もしくは経営学部の群科目）に限定するので教養科目は対象外。冪等。
+        await conn.execute(text(
+            "UPDATE subjects SET category = '専門' "
+            "WHERE category IS NULL "
+            "AND (classification LIKE '%専門科目%' "
+            "     OR classification IN ('第1群科目', '第2群科目', '第3群科目', 'グローバル科目群'))"
+        ))
         # 新しい3列UNIQUE制約を追加
         await conn.execute(text("""
             DO $$ BEGIN
