@@ -10,3 +10,16 @@ venv/
 backups/
 secure_certification/
 programing files/import_debug.log
+
+# design スキル / canvas エディタのスクラッチ出力（レビュー用モックアップ。デプロイ対象外）
+*.dc.html
+canvas.json
+.design-tmp/
+/course-list-*.html
+/course-variant-*.html
+
+# 運用作業で出た一時ファイル（科目統合の中間ダンプ等。リポジトリには載せない）
+/docstemporary*
+/data/test.txt
+programing files/_backup_merge_*.json
+programing files/_import_*_to_dev.py
