@@ -1273,21 +1273,22 @@
     // 検索候補として1件にまとめ、担当教員は全変種分をマージした一覧として提示する。
     // どの変種になるかは教員選択時に自動で解決する（変種そのものはユーザーに意識させない）。
     function _groupCourseItems(items) {
-      // variantGroupは遠隔/対面で同じベース名文字列になる（表示名・サフィックス抽出の
-      // プレフィックスとして共通のベース名を保つ必要があるため）。実際のグループ化キーは
-      // isRemoteも合わせて使い、遠隔クラスと対面クラスを別グループとして扱う。
-      const groupKey = c => c.variantGroup + (c.isRemote ? ' remote' : '');
+      // グループ化キーはサーバーが決める（variantGroupKey）。専門科目は管理画面と同じ
+      // compute_variant_display_groups() 単位のラベルをキーにするため、"線形代数(1/2)" と
+      // "線形代数(1/2)(再履修)" のようにベース名が同じでも別グループに分かれる。教養科目は
+      // 従来どおりベース名＋遠隔/対面フラグ（サーバー未提供時のフォールバックも同式）。
+      const groupKey = c => c.variantGroupKey || (c.variantGroup ? c.variantGroup + (c.isRemote ? ' remote' : '') : '');
       const byGroup = new Map();
       for (const c of items) {
-        if (!c.variantGroup) continue;
-        const key = groupKey(c);
-        if (!byGroup.has(key)) byGroup.set(key, []);
-        byGroup.get(key).push(c);
+        const k = groupKey(c);
+        if (!k) continue;
+        if (!byGroup.has(k)) byGroup.set(k, []);
+        byGroup.get(k).push(c);
       }
       const emitted = new Set();
       const result = [];
       for (const c of items) {
-        const key = c.variantGroup ? groupKey(c) : null;
+        const key = groupKey(c) || null;
         const members = key ? byGroup.get(key) : null;
         if (!members || members.length < 2) { result.push(c); continue; }
         if (emitted.has(key)) continue;
@@ -1305,12 +1306,16 @@
         }
         if (mergedInstructors.length === 0) { result.push(c); continue; } // 教員未登録で解決不能な場合は統合しない
         emitted.add(key);
+        // 専門科目は管理画面と同じ完全なグループラベル（variantGroupLabel）をそのまま表示名に
+        // 使う。教養科目はサーバーがラベルを持たないため、従来どおりベース名＋接尾辞を組み立てる。
+        const exactLabel = members[0].variantGroupLabel || c.variantGroupLabel || '';
         result.push({
           id: null,
-          name: c.variantGroup,
+          name: exactLabel || c.variantGroup,
           isGroup: true,
+          exactLabel: !!exactLabel,
           category: c.category || '',
-          variantSuffixes: members.map(m => m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name),
+          variantSuffixes: exactLabel ? [] : members.map(m => m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name),
           instructors: mergedInstructors,
         });
       }
@@ -1338,7 +1343,7 @@
           style="border-bottom:1px solid #f3f4f6;transition:background .1s;background:${bg}"
           onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
           <div style="font-size:14px;font-weight:600;color:#1e293b${closed ? ';text-decoration:line-through;opacity:.55' : ''}">${escapeHtml(c.name)}${
-            c.isGroup ? ` <span style="color:#94a3b8;font-weight:400">(${escapeHtml(c.variantSuffixes.join('/'))})</span>` : ''
+            c.isGroup && c.variantSuffixes && c.variantSuffixes.length ? ` <span style="color:#94a3b8;font-weight:400">(${escapeHtml(c.variantSuffixes.join('/'))})</span>` : ''
           }${closed ? remainingBadgeHtml(0) : ''}</div>
           ${c.instructors.length
             ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">担当教員 ${c.instructors.length}名</div>`
@@ -1583,28 +1588,32 @@
     // 「未投稿かつ空きのある変種」→「空きのある変種」→「先頭の変種」の優先順で
     // 実際に送信されるsubjectを1つ選ぶだけでよい）。
     function _groupInstructorCourseItems(courses, instName) {
-      const groupKey = c => c.variantGroup + (c.isRemote ? ' remote' : '');
+      // グループ化キーは _groupCourseItems と同じ（サーバー提供の variantGroupKey 優先、
+      // 教養科目はベース名＋遠隔/対面フラグにフォールバック）。
+      const groupKey = c => c.variantGroupKey || (c.variantGroup ? c.variantGroup + (c.isRemote ? ' remote' : '') : '');
       const byGroup = new Map();
       for (const c of courses) {
-        if (!c.variantGroup) continue;
-        const key = groupKey(c);
-        if (!byGroup.has(key)) byGroup.set(key, []);
-        byGroup.get(key).push(c);
+        const k = groupKey(c);
+        if (!k) continue;
+        if (!byGroup.has(k)) byGroup.set(k, []);
+        byGroup.get(k).push(c);
       }
       const emitted = new Set();
       const result = [];
       for (const c of courses) {
-        const key = c.variantGroup ? groupKey(c) : null;
+        const key = groupKey(c) || null;
         const members = key ? byGroup.get(key) : null;
         if (!members || members.length < 2) { result.push(c); continue; }
         if (emitted.has(key)) continue;
         emitted.add(key);
         const scored = members.map(m => ({ m, reviewed: !m.full && _reviewedSet.has(m.id + '::' + instName) }));
         const rep = (scored.find(s => !s.m.full && !s.reviewed) || scored.find(s => !s.m.full) || scored[0]).m;
+        // 専門科目は管理画面と同じ完全なグループラベルをそのまま表示。教養科目はベース名＋接尾辞。
+        const exactLabel = members[0].variantGroupLabel || c.variantGroupLabel || '';
         const suffixes = members.map(m => m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name);
         result.push({
           id: rep.id, name: rep.name, full: rep.full, remaining: rep.remaining,
-          displayName: `${c.variantGroup}(${suffixes.join('/')})`,
+          displayName: exactLabel || `${c.variantGroup}(${suffixes.join('/')})`,
         });
       }
       return result;
