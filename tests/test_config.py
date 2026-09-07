@@ -184,3 +184,14 @@ def test_subject_submittable_nogaku_course_maps_to_gakka():
     # 学科不明科目（農学部専門科目）とコース未定の学生は従来どおり全可
     assert subject_submittable_for_profile("専門", "農学部", "", "農学部", "応用生命化学コース")
     assert subject_submittable_for_profile("専門", "農学部", "食料環境システム学科", "農学部", "")
+
+
+def test_subject_submittable_kaiyo_seisaku_ignores_department():
+    # 海洋政策科学部は登録領域を問わず学部の専門科目すべて投稿可（学部一致のみ判定）
+    assert subject_submittable_for_profile(
+        "専門", "海洋政策科学部", "航海学領域", "海洋政策科学部", "海洋基礎科学領域")
+    assert subject_submittable_for_profile(
+        "専門", "海洋政策科学部", "機関学領域", "海洋政策科学部", "")
+    # 他学部の専門科目は従来どおり不可
+    assert not subject_submittable_for_profile(
+        "専門", "工学部", "建築学科", "海洋政策科学部", "航海学領域")

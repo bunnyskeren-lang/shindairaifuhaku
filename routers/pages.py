@@ -6,7 +6,8 @@ from fastapi.responses import HTMLResponse, Response
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOTSU_SENMON_KISO_FACULTY,
+    APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KAIYO_SEISAKU_FACULTY,
+    KYOTSU_SENMON_KISO_FACULTY,
     LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, NOGAKU_COURSE_TO_DEPARTMENT,
     OMNIBUS_INSTRUCTOR_LABEL,
     REGISTER_LIFF_ID,
@@ -37,6 +38,7 @@ async def index(request: Request, uid: str = Query(default="")):
             "submission_kyoyo_category": REVIEW_SUBMISSION_CATEGORY,
             "submission_senmon_category": REVIEW_SUBMISSION_SENMON_CATEGORY,
             "kyotsu_senmon_kiso_faculty": KYOTSU_SENMON_KISO_FACULTY,
+            "kaiyo_seisaku_faculty": KAIYO_SEISAKU_FACULTY,
             "nogaku_course_to_department": NOGAKU_COURSE_TO_DEPARTMENT,
             "unlock_credits_kyoyo": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
             "unlock_credits_senmon": REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,

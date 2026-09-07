@@ -646,6 +646,8 @@
     const SUBMISSION_SENMON_CATEGORY = "{{ submission_senmon_category }}";
     // 共通専門基礎科目（微分積分・力学基礎等、category="専門"・faculty=この値）は学部を問わず投稿可
     const KYOTSU_SENMON_KISO_FACULTY = "{{ kyotsu_senmon_kiso_faculty }}";
+    // 海洋政策科学部は登録領域を問わず学部の専門科目すべてを投稿可（学部一致のみ判定）。
+    const KAIYO_SEISAKU_FACULTY = "{{ kaiyo_seisaku_faculty }}";
     // 農学部は会員登録がコース単位・科目分類が学科単位。コース→学科に変換してから突合する。
     const NOGAKU_COURSE_TO_DEPARTMENT = {{ nogaku_course_to_department | tojson }};
     // チーム開講（複数教員が輪番）科目向けの擬似担当教員候補。科目を選ぶと担当教員チップの
@@ -683,7 +685,7 @@
 
     // この科目にレビュー投稿できるか（教養は全員／専門は本人の学部＝科目学部一致、
     // 学科は一致・科目側が学科不明・本人が学科未登録のいずれかで可。農学部のみ
-    // 本人のコース名を学科名に変換してから突合する）。
+    // 本人のコース名を学科名に変換してから突合する。海洋政策科学部は学部一致のみで可）。
     function _isSubmittable(c) {
       const cat = (c && c.category) || '';
       if (cat === SUBMISSION_KYOYO_CATEGORY) return true;
@@ -692,6 +694,7 @@
       if (sf === KYOTSU_SENMON_KISO_FACULTY) return true;
       const pf = ((_profile && _profile.faculty) || '').trim();
       if (!sf || !pf || sf !== pf) return false;
+      if (pf === KAIYO_SEISAKU_FACULTY) return true;
       const sd = ((c && c.department) || '').trim();
       let pd = ((_profile && _profile.department) || '').trim();
       if (pf === '農学部') pd = NOGAKU_COURSE_TO_DEPARTMENT[pd] || pd;

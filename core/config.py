@@ -144,6 +144,12 @@ REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE = "この専門科目は、ご登録�
 # （ユーザー指示 2026-09-07）。
 KYOTSU_SENMON_KISO_FACULTY = "教養教育院"
 
+# 海洋政策科学部は会員登録時に「領域」（FACULTY_DEPARTMENTS["海洋政策科学部"]）を選ばせるが、
+# 領域はゆるやかで学生は他領域の専門科目も広く履修する。そのため、この学部の学生に限り、
+# 登録した領域に関係なく学部の専門科目すべてをレビュー投稿できるようにする
+# （＝専門科目の学部一致チェックのみ行い、学科／領域の突合はスキップする。ユーザー指示 2026-09-08）。
+KAIYO_SEISAKU_FACULTY = "海洋政策科学部"
+
 # 農学部は会員登録時に「コース」単位（FACULTY_DEPARTMENTS["農学部"]）で登録させるが、
 # 専門科目の分類（subjects.classification / subjects.department）は「学科」単位で管理する。
 # レビュー投稿フォームの候補絞り込みは、この対応表でコース→学科に変換したうえで学科単位で行う
@@ -182,7 +188,9 @@ def subject_submittable_for_profile(
     - その他の専門科目（category == REVIEW_SUBMISSION_SENMON_CATEGORY）: 投稿者本人の学部と一致必須。
       学科は「一致」「科目側が学科不明（空/NULL）」「投稿者が学科未登録（空/NULL）」の
       いずれかで可（ユーザー指示 2026-09-07）。農学部のみ、登録はコース単位・科目分類は
-      学科単位なので、投稿者のコース名を学科名へ変換してから突合する（ユーザー指示 2026-09-08）
+      学科単位なので、投稿者のコース名を学科名へ変換してから突合する（ユーザー指示 2026-09-08）。
+      海洋政策科学部のみ、登録領域を問わず学部の専門科目すべてを投稿可とする（学部一致のみ判定し
+      学科／領域の突合はスキップ。ユーザー指示 2026-09-08）
     - それ以外のcategory: 不可
     """
     if category == REVIEW_SUBMISSION_CATEGORY:
@@ -195,6 +203,8 @@ def subject_submittable_for_profile(
     pf = (profile_faculty or "").strip()
     if not sf or not pf or sf != pf:
         return False
+    if pf == KAIYO_SEISAKU_FACULTY:
+        return True
     sd = (subject_department or "").strip()
     pd = (profile_department or "").strip()
     if pf == "農学部":
