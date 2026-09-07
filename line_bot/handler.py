@@ -29,6 +29,7 @@ from core.config import (
     RICHMENU_ID_MAIN,
     RICHMENU_ID_PREREGISTER,
     REVIEW_VIEW_CATEGORY,
+    REVIEW_VIEW_RESTRICTED_FORM_LABEL,
     REVIEW_VIEW_RESTRICTED_MESSAGE,
     is_profile_complete,
     make_cls_sort,
@@ -1036,7 +1037,9 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     exact = cbn.get(t)
     if exact:
         if exact.category != REVIEW_VIEW_CATEGORY:
-            return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
+            return [TextMessage(text=f"{REVIEW_VIEW_RESTRICTED_MESSAGE}\n\n"
+                                      f"{REVIEW_VIEW_RESTRICTED_FORM_LABEL}\n"
+                                      f"{make_review_liff_url(exact.name, user_id)}")]
         if exact.name not in _reviewed_names:
             return [make_no_review_flex(exact, user_id)]
         return [await get_course_flex(exact, user_id)]
@@ -1046,7 +1049,9 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     if len(_unique_exact) == 1:
         rep = _unique_exact[0]["rep"]
         if rep.category != REVIEW_VIEW_CATEGORY:
-            return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
+            return [TextMessage(text=f"{REVIEW_VIEW_RESTRICTED_MESSAGE}\n\n"
+                                      f"{REVIEW_VIEW_RESTRICTED_FORM_LABEL}\n"
+                                      f"{make_review_liff_url(rep.name, user_id)}")]
         if rep.name not in _reviewed_names:
             return [make_no_review_flex(rep, user_id)]
         return [await get_course_flex(rep, user_id)]

@@ -85,6 +85,7 @@ REVIEW_SUBMISSION_RESTRICTED_MESSAGE = "現在、レビュー投稿は教養科�
 # レビュー投稿自体は解禁予定だが、閲覧解禁は別途指示があるまで行わない）。
 REVIEW_VIEW_CATEGORY = "教養"
 REVIEW_VIEW_RESTRICTED_MESSAGE = "専門科目のレビュー閲覧機能は、現在準備中です🙇‍♀️\n\nレビュー投稿は募集中です！✨"
+REVIEW_VIEW_RESTRICTED_FORM_LABEL = "📝 レビュー投稿フォームはこちら"
 
 
 def student_email(student_id: str) -> str:

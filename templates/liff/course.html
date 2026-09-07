@@ -400,11 +400,19 @@ async function main() {
   }
 
   // 専門科目はレビュー閲覧機能自体を準備中のため、詳細ページの通常表示は行わず
-  // 案内メッセージのみを表示する（2026-09-07、ユーザー指示）
+  // 案内メッセージ+レビュー投稿フォームへの導線のみを表示する（2026-09-07、ユーザー指示）
   if (data.view_restricted) {
     document.getElementById("loading").style.display = "none";
-    document.getElementById("restricted").textContent =
-      "専門科目のレビュー閲覧機能は、現在準備中です🙇‍♀️\n\nレビュー投稿は募集中です！✨";
+    const reviewParams = userId
+      ? `uid=${userId}&course=${encodeURIComponent(data.name)}`
+      : `course=${encodeURIComponent(data.name)}`;
+    const reviewUrl = REVIEW_LIFF_ID
+      ? `https://liff.line.me/${REVIEW_LIFF_ID}?${reviewParams}`
+      : `${REVIEW_FORM_URL}?${reviewParams}`;
+    document.getElementById("restricted").innerHTML =
+      `<div>専門科目のレビュー閲覧機能は、\n現在準備中です🙇‍♀️</div>`
+      + `<div style="margin-top:18px">レビュー投稿は募集中です！✨</div>`
+      + `<a href="${reviewUrl}" class="btn btn-primary" style="max-width:280px;margin:28px auto 0">📝 レビュー投稿フォームはこちら</a>`;
     document.getElementById("restricted").style.display = "block";
     return;
   }
