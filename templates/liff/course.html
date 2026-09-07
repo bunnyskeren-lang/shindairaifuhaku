@@ -316,6 +316,28 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   return html;
 }
 
+// liff.getIDToken() が返すIDトークンは liff.init() でも更新されず、LIFFセッション（数週間有効）
+// が生きている限り期限切れのまま返り続ける。exp をデコードして先回りで検知し、
+// サーバー検証を {"error_description":"IdToken expired."} で落とす前に再ログインへ回す。
+// sessionStorage のフラグで再ログインの無限ループを防ぐ。
+function idTokenExpired(token) {
+  try {
+    let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const p = JSON.parse(atob(b64));
+    return typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000;
+  } catch (e) { return false; }
+}
+function forceReauthLogin() {
+  try {
+    if (sessionStorage.getItem('liffReauthTried') === '1') return false;
+    sessionStorage.setItem('liffReauthTried', '1');
+  } catch (e) {}
+  try { if (liff.logout) liff.logout(); } catch (e) {}
+  try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
+  return true;
+}
+
 async function main() {
   let liffInitOk = true;
   try {
@@ -360,6 +382,15 @@ async function main() {
       const profile = await liff.getProfile();
       userId = profile.userId;
       idToken = await liff.getIDToken();
+      if (idToken && idTokenExpired(idToken)) {
+        // 期限切れなら logout→再ログインで新しいIDトークンを取り直す（リダイレクトで復帰）。
+        // 復帰不能（ループ防止フラグ済み）のときはトークン無しとして進める（閲覧権なし扱い）
+        if (forceReauthLogin()) return;
+        idToken = "";
+        userId = null;
+      } else if (idToken) {
+        try { sessionStorage.removeItem('liffReauthTried'); } catch (e) {}
+      }
     }
   } catch(e) {
     profileFetchFailed = true;

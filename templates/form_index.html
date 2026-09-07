@@ -644,11 +644,29 @@
     // 再取得するだけで再度auth_failedになってしまう(2026-09-07)。liff.logout()でLIFF側の
     // セッションを破棄してからリロードすることで、initProfilePrefill()内のisLoggedIn()判定が
     // falseになりliff.login()による再ログイン（＝新しいID token発行）を強制する。
+    // sessionStorageのフラグで再ログインの無限ループを防ぐ（復帰不能時は手動導線にフォールバック）。
     function forceReauthAndReload() {
+      try {
+        if (sessionStorage.getItem('liffReauthTried') === '1') return false;
+        sessionStorage.setItem('liffReauthTried', '1');
+      } catch (e) {}
       try {
         if (typeof liff !== 'undefined' && liff.logout) liff.logout();
       } catch (e) {}
       location.reload();
+      return true;
+    }
+
+    // liff.getIDToken()が返すIDトークンはliff.init()でも更新されず、LIFFセッション（数週間有効）
+    // が生きている限り期限切れのまま返り続ける。exp をデコードして先回りで検知し、
+    // 失敗コール（＝error_logs記録）を発生させずに再ログインへ回す。
+    function idTokenExpired(token) {
+      try {
+        let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        const p = JSON.parse(atob(b64));
+        return typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000;
+      } catch (e) { return false; }
     }
 
     // 修正理由: 同じ学籍番号で同じ科目×担当教員に重複投稿できてしまっていたため、
@@ -732,6 +750,12 @@
           <p class="text-sm text-gray-500">ログイン情報の取得に失敗しました。もう一度お試しください。</p>`);
         return;
       }
+      if (idTokenExpired(idToken)) {
+        if (forceReauthAndReload()) return;
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン情報の有効期限が切れています。リッチメニューからこのページを開き直してください。</p>`);
+        return;
+      }
 
       let d;
       try {
@@ -757,10 +781,12 @@
       if (d.auth_failed) {
         // 修正理由: LINE側のID token検証が一時的に失敗しただけなのに、
         // 会員登録済みの本人を「未登録」と誤判定していたバグの修正
-        // (2026-08-31)。この場合は再試行を促す。
+        // (2026-08-31)。期限切れトークンが原因のことが多いので、まず
+        // logout→再ログインで自動復帰を試み、ループ防止で復帰不能なときだけ手動導線を出す。
+        if (forceReauthAndReload()) return;
         showOverlay(`<div class="text-4xl">⚠️</div>
           <p class="text-sm text-gray-500">ログイン確認に失敗しました。もう一度お試しください。</p>
-          <button onclick="forceReauthAndReload()" class="block w-full text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
+          <button onclick="location.reload()" class="block w-full text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
         return;
       }
 
@@ -787,6 +813,7 @@
       _profile = { faculty: d.faculty || '', department: d.department || '' };
       await loadPreload();
       document.getElementById('idTokenHidden').value = idToken;
+      try { sessionStorage.removeItem('liffReauthTried'); } catch (e) {}
       hideOverlay();
     }
     // プリフィルが（成功・失敗いずれでも）決着したら、?course=自動選択とフォールバック検索を解禁する。
@@ -2209,6 +2236,14 @@
         await ensureLiffInit();
         const idToken = liff.isLoggedIn() ? await liff.getIDToken() : null;
         if (!idToken) throw new Error('not logged in');
+        if (idTokenExpired(idToken)) {
+          // 期限切れ: 下書きを保存してから logout→再ログインで新しいトークンを取り直す
+          // （復帰不能なときだけ従来のalert誘導へフォールバック）
+          clearTimeout(saveTimer);
+          persistDraft();
+          if (forceReauthAndReload()) return;
+          throw new Error('id token expired');
+        }
         document.getElementById('idTokenHidden').value = idToken;
       } catch (err) {
         btn.textContent = '送信する';

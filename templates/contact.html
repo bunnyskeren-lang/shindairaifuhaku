@@ -180,6 +180,33 @@
     // 要求すると詰まったまま問い合わせもできない詰み状態になる)。LINEログインのみを必須とする。
     const LIFF_ID = "{{ liff_id }}";
 
+    // 修正理由: liff.getIDToken() はLIFFがログイン時にキャッシュしたIDトークンをそのまま返し、
+    // liff.init() でもアクセストークンしか更新しない。LIFFセッションは数週間有効なため、
+    // isLoggedIn()はtrueのまま期限切れIDトークンを返す状態が発生し、/api/profile/prefill の
+    // 検証が {"error_description":"IdToken expired."} で400になる(2026-09-08、本番error_logsで多発)。
+    // 期限切れ検知時・サーバーからauth_failed時は liff.logout()→liff.login() で新しいIDトークンを
+    // 強制再発行する。sessionStorageのフラグで再ログインの無限ループを防ぐ。
+    function idTokenExpired(token) {
+      try {
+        let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        const p = JSON.parse(atob(b64));
+        return typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000;
+      } catch (e) { return false; }
+    }
+    function forceReauth() {
+      try {
+        if (sessionStorage.getItem('liffReauthTried') === '1') return false;
+        sessionStorage.setItem('liffReauthTried', '1');
+      } catch (e) {}
+      try { if (liff.logout) liff.logout(); } catch (e) {}
+      try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
+      return true;
+    }
+    function clearReauthFlag() {
+      try { sessionStorage.removeItem('liffReauthTried'); } catch (e) {}
+    }
+
     function showOverlay(html) {
       document.getElementById('authOverlayBox').innerHTML = html;
       document.getElementById('authOverlay').style.display = 'flex';
@@ -232,6 +259,12 @@
           <p class="text-sm text-gray-500">ログイン情報の取得に失敗しました。もう一度お試しください。</p>`);
         return;
       }
+      if (idTokenExpired(idToken)) {
+        if (forceReauth()) return;
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン情報の有効期限が切れています。LINEアプリからこのページを開き直してください。</p>`);
+        return;
+      }
 
       let data;
       try {
@@ -246,6 +279,14 @@
           <p class="text-sm text-gray-500">通信に失敗しました。もう一度お試しください。</p>`);
         return;
       }
+
+      if (data.auth_failed) {
+        if (forceReauth()) return;
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン確認に失敗しました。LINEアプリからこのページを開き直してください。</p>`);
+        return;
+      }
+      clearReauthFlag();
 
       document.getElementById('idTokenHidden').value = idToken;
       if (data.found) {
