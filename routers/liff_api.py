@@ -634,8 +634,11 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "locked": locked,
             "view_restricted": view_restricted,
             "unlock_credits": unlock_credits,
-            "avg_rating": avg_rating if not locked else None,
-            "top_ease": top_ease if not locked else None,
+            # 平均・最頻の楽単度はロック中でも返す（解除前カードの「ぼかしティザー」で
+            # 実際の平均星をぼかして見せ、解除の動機づけにするため。2026-09-08、ユーザー指示）。
+            # 個々のレビュー本文・件数分布は従来どおりロック中は返さない
+            "avg_rating": avg_rating,
+            "top_ease": top_ease,
             "rating_distribution": rating_counts if not locked else {},
             "ease_distribution": ease_counts if not locked else {},
             "reviews": [

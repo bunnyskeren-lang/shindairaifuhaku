@@ -37,8 +37,6 @@
     text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px;
   }
 
-  .rating-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .rating-label { font-size: 13px; color: #64748b; width: 90px; }
   .stars { font-size: 16px; color: #f59e0b; }
   .no-review { font-size: 13px; color: #94a3b8; }
 
@@ -96,8 +94,6 @@
     padding: 5px 8px; background: #fff;
   }
 
-  .card.mine { border: 2px solid var(--accent); }
-
   .actions { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .btn {
     display: block; text-align: center; border-radius: 8px;
@@ -134,6 +130,77 @@
   .legend > summary::after { content: "▾"; color: #94a3b8; font-size: 12px; }
   .legend[open] > summary::after { content: "▴"; }
   .legend .legend-body { margin-top: 10px; }
+
+  /* ── 解除前カード（案A・整理型） ── */
+  .a-lock-top { display: flex; gap: 11px; align-items: flex-start; }
+  .a-lock-top .lk {
+    font-size: 17px; width: 34px; height: 34px; flex-shrink: 0; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent); border-radius: 9px;
+  }
+  .a-lock-h { font-size: 14.5px; font-weight: 700; color: #1f2937; }
+  .a-lock-sub { font-size: 12px; color: #64748b; margin-top: 2px; line-height: 1.5; }
+  .a-tix {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    background: #f7f8fc; border-radius: 10px; padding: 12px; margin: 14px 0;
+  }
+  .a-tix .cell { text-align: center; }
+  .a-tix .n { font-size: 22px; font-weight: 800; color: #1f2937; line-height: 1; }
+  .a-tix .u { font-size: 10.5px; color: #64748b; margin-top: 4px; }
+  .a-tix .arrow { font-size: 15px; color: #b3bccb; }
+  .a-reward { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 12px; font-size: 11px; }
+  .a-reward .rl { color: #94a3b8; font-weight: 600; }
+  .a-reward .chip2 { background: #f5f3ff; color: #6d28d9; border-radius: 999px; padding: 3px 10px; font-weight: 600; }
+  .a-reward .chip2 b { font-weight: 800; }
+  .a-lock-zero { font-size: 12px; color: #7c3aed; line-height: 1.6; margin-top: 12px; }
+
+  /* ── ぼかしティザー（解除前の総合評価） ── */
+  .rt-row { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 3px 0; }
+  .rt-row .rt-k { width: 56px; color: #64748b; }
+  .rt-blur { filter: blur(5px); opacity: .75; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .rt-cap { font-size: 12px; color: var(--accent); font-weight: 700; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+
+  /* ── 総合評価タイル（解除後・案A） ── */
+  .sum-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .sum-tile { background: #f8fafc; border-radius: 10px; padding: 12px 10px; text-align: center; }
+  .sum-tile .k { font-size: 10.5px; font-weight: 700; color: #64748b; }
+  .sum-tile .v { font-size: 17px; margin: 6px 0 3px; letter-spacing: 1px; }
+  .sum-tile .cap { font-size: 11px; color: #64748b; }
+  .sum-sep { height: 1px; background: #f1f5f9; margin: 12px 0; }
+
+  /* ── 注意・禁止事項（折りたたみ） ── */
+  .notice {
+    margin: 2px 16px 10px; background: #fff; border-radius: 12px; padding: 11px 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .notice > summary {
+    list-style: none; cursor: pointer; font-size: 11.5px; font-weight: 700;
+    color: #9a3412; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .notice > summary::-webkit-details-marker { display: none; }
+  .notice > summary::after { content: "▾"; color: #94a3b8; flex-shrink: 0; }
+  .notice[open] > summary::after { content: "▴"; }
+  .notice p { font-size: 10.5px; color: #6b7280; line-height: 1.65; margin: 9px 0 0; }
+
+  /* ── レビューカード（案A：1カード／ヘアライン区切り） ── */
+  .card.mine { border: none; border-left: 3px solid var(--accent); }
+  .rev { padding: 0; overflow: hidden; }
+  .rev-sec { padding: 12px 15px; }
+  .rev-sec + .rev-sec { border-top: 1px solid #f1f5f9; }
+  .rev-ins { font-size: 14.5px; font-weight: 700; color: #1f2937; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .rev-badge { font-size: 11px; font-weight: 700; color: var(--accent); background: #eef2ff; border-radius: 6px; padding: 2px 7px; }
+  .rev-mine-tag { font-size: 10px; font-weight: 700; color: #fff; background: var(--accent); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .rev-meta { font-size: 11.5px; color: #64748b; margin-top: 4px; }
+  .rev-rate { display: flex; gap: 20px; font-size: 14px; }
+  .rev-rate .lab { font-size: 11px; color: #94a3b8; margin-right: 6px; }
+  .rev-grade .gh { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .04em; margin-bottom: 9px; }
+  .rev-grade .grow { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; font-size: 12.5px; color: #374151; line-height: 1.55; }
+  .rev-grade .grow:last-child { margin-bottom: 0; }
+  .rev-grade .gk {
+    font-size: 10.5px; font-weight: 700; color: #fff; background: var(--accent-light);
+    padding: 3px 8px; border-radius: 5px; white-space: nowrap; flex-shrink: 0; margin-top: 1px;
+  }
+  .rev-comment-h { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: .04em; margin-bottom: 7px; }
 </style>
 </head>
 <body>
@@ -162,10 +229,11 @@
       <div id="review-count" style="font-size:11px;color:#94a3b8"></div>
     </div>
     <div id="ratings"></div>
-    <div id="rating-dist"></div>
-    <details class="legend">
-      <summary>★の意味を見る</summary>
+    <details class="legend" id="sum-more" hidden>
+      <summary>評価の内訳・★の意味</summary>
       <div class="legend-body">
+        <div id="rating-dist"></div>
+        <div class="sum-sep"></div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);font-size:11px;text-align:center">
           <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px"></div>
           <div style="color:#f59e0b;font-weight:700;font-size:10px;padding-bottom:6px">楽単度</div>
@@ -202,12 +270,11 @@
     </details>
   </div>
 
-  <p style="font-size:11px;font-weight:700;color:#475569;text-align:center;line-height:1.5;margin:2px 16px 8px">
-    ※レビューは投稿者個人の感想です。内容の正確性は保証されないため、必ずご自身の判断でご活用ください（これによって生じた損害について、運営は一切の責任を負いません）
-  </p>
-  <p style="font-size:10.5px;color:#9a3412;background:#fff7ed;border-radius:8px;text-align:center;line-height:1.6;margin:0 16px 10px;padding:8px 10px">
-    🚫 レビューのスクリーンショット・転載・再配布は<a href="/terms" target="_blank" style="color:#9a3412;text-decoration:underline">利用規約</a>で禁止しています。発覚した場合はアカウントを永久停止するほか、著作権法上の罰則（懲役・罰金）や損害賠償請求の対象となることがあります。
-  </p>
+  <details class="notice" id="notice">
+    <summary>⚠️ 注意・禁止事項（個人の感想・無断共有禁止）</summary>
+    <p>レビューは投稿者個人の感想です。内容の正確性は保証されません。必ずご自身の判断でご活用ください（これによって生じた損害について、運営は一切の責任を負いません）。</p>
+    <p>スクショ・転載・再配布・他人への共有は、いかなる理由でも禁止です。違反はアカウント永久停止・法的措置の対象となります。<a href="/terms" target="_blank" style="color:#9a3412;text-decoration:underline">利用規約</a>をご確認ください。</p>
+  </details>
 
   <div id="review-controls" class="review-controls"></div>
 
@@ -279,37 +346,36 @@ const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★�
 const EASE_ORDER = { SS: 0, S: 1, A: 2, B: 3, C: 4 };
 
 function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
-  let html = `<div class="card" style="border:2px solid var(--accent)">`;
-  html += `<div class="section-title">🔒 レビューを見るには解除が必要です</div>`;
-  html += `<div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:14px">`
-        + `この科目には${data.review_count}件のレビューがあります。</div>`;
+  const n = data.review_count;
+  let html = `<div class="card" style="border:1.5px solid var(--accent)">`;
+  html += `<div class="a-lock-top"><span class="lk">🔒</span><div>`
+        + `<div class="a-lock-h">レビュー${n}件がロック中</div>`
+        + `<div class="a-lock-sub">解除すると全${n}件をまとめて読めます</div>`
+        + `</div></div>`;
   if (userId) {
     const credits = data.unlock_credits || 0;
-    html += `<div style="border:1px solid #e9ecf0;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:7px">`
-          + `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#64748b">所持チケット</span><span style="font-weight:700;color:#1f2937">${credits}枚</span></div>`
-          + `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#64748b">この科目の解除に必要</span><span style="font-weight:700;color:#1f2937">1枚</span></div>`
-          + `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#64748b">教養科目のレビューが1件承認されると</span><span style="font-weight:700;color:#1f2937">+${UNLOCK_REWARD_KYOYO}枚</span></div>`
-          + `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#64748b">専門科目のレビューが1件承認されると</span><span style="font-weight:700;color:#1f2937">+${UNLOCK_REWARD_SENMON}枚</span></div>`
+    html += `<div class="a-tix">`
+          + `<div class="cell"><div class="n">${credits}</div><div class="u">所持チケット</div></div>`
+          + `<div class="arrow">→</div>`
+          + `<div class="cell"><div class="n">1</div><div class="u">この科目に必要</div></div>`
           + `</div>`;
     if (credits > 0) {
-      html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケットを1枚使って解除する</button>`;
+      html += `<button id="btn-unlock" class="btn btn-primary">🔓 チケット1枚で解除する</button>`;
     } else {
-      // チケット0枚のときは「次のゴール」として視覚的に動機づける。
-      // 承認は都度+${UNLOCK_REWARD}枚で累積式ではなく実データの途中経過が無いため、
-      // 進捗バーではなく行動喚起の文言のみで表示する
-      html += `<div style="background:#f5f3ff;border-radius:10px;padding:12px 14px;margin-bottom:14px">`
-            + `<div style="font-size:12px;font-weight:700;color:#6d28d9;margin-bottom:6px">🎫 今はチケットが0枚です</div>`
-            + `<div style="font-size:11.5px;color:#7c3aed;line-height:1.6">下の「レビューを投稿」からレビューを書いて承認されると、教養科目のレビューは+${UNLOCK_REWARD_KYOYO}枚・専門科目のレビューは+${UNLOCK_REWARD_SENMON}枚もらえます</div>`
-            + `</div>`;
+      html += `<div class="a-lock-zero">チケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されるとチケットがもらえます。</div>`;
     }
+    // 報酬(+2/+1)は現状の表と0枚ボックスで二重掲載していたのを、下部のチップ1箇所に集約
+    html += `<div class="a-reward"><span class="rl">レビュー承認でチケット追加</span>`
+          + `<span class="chip2">教養 <b>+${UNLOCK_REWARD_KYOYO}</b></span>`
+          + `<span class="chip2">専門 <b>+${UNLOCK_REWARD_SENMON}</b></span></div>`;
   } else if (isInClient || profileFetchFailed) {
     // LINEアプリ内で開いているのにログイン情報が取得できなかった異常系。
     // 「LINEアプリから開いてください」は誤案内になるため、開き直しを促す
-    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6;margin-bottom:10px">`
+    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6;margin:14px 0 10px">`
           + `ログイン状態を確認できませんでした。お手数ですが、リッチメニューや科目一覧からこのページをもう一度開き直してください。</div>`
           + `<button id="btn-retry-login" class="btn btn-secondary">🔄 もう一度ログインする</button>`;
   } else {
-    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6">`
+    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6;margin-top:14px">`
           + `解除するにはLINEアプリ内からこのページを開いてください。</div>`;
   }
   html += `</div>`;
@@ -620,32 +686,37 @@ async function main() {
     }
   }
 
-  // ── レビュー件数（総合評価の信頼度が一目でわかるよう★の横に件数を出す） ──
+  // ── レビュー件数（総合評価の信頼度が一目でわかるよう★の横に件数を出す。解除前でも表示） ──
   const reviewCountEl = document.getElementById("review-count");
-  if (!data.locked && data.review_count > 0) {
+  if (data.review_count > 0) {
     reviewCountEl.textContent = `${data.review_count}件のレビュー`;
   }
 
   const ratingsEl = document.getElementById("ratings");
   if (data.locked) {
-    ratingsEl.innerHTML = `<div class="no-review">🔒 上の「解除する」ボタンで解除すると表示されます</div>`;
-  } else if (data.avg_rating != null) {
-    const rLabel = RATING_LABELS[Math.round(data.avg_rating)] || '';
-    let ratingsHtml = '';
+    // 解除前は実際の平均星を「ぼかし」で見せるティザー（解除の動機づけ。星の値は実データ）
+    let tz = "";
     if (data.top_ease) {
-      const eLabel = EASE_LABELS[data.top_ease] || '';
-      ratingsHtml += `<div class="rating-row">
-           <span class="rating-label">楽単度</span>
-           <span class="stars" style="color:#f59e0b">${EASE_STARS[data.top_ease] || ""}</span>
-           <span style="font-size:12px;color:#64748b;margin-left:6px">${eLabel}</span>
-         </div>`;
+      tz += `<div class="rt-row"><span class="rt-k">楽単度</span>`
+          + `<span class="stars rt-blur" style="color:#f59e0b">${EASE_STARS[data.top_ease] || ""}</span></div>`;
     }
-    ratingsHtml += `<div class="rating-row">
-         <span class="rating-label">充実度</span>
-         <span class="stars" style="color:#a78bfa">${stars(data.avg_rating)}</span>
-         <span style="font-size:12px;color:#64748b;margin-left:6px">${rLabel}</span>
-       </div>`;
-    ratingsEl.innerHTML = ratingsHtml;
+    tz += `<div class="rt-row"><span class="rt-k">充実度</span>`
+        + `<span class="stars rt-blur" style="color:#a78bfa">${stars(data.avg_rating)}</span></div>`;
+    tz += `<div class="rt-cap">🔓 解除すると評価・内訳が見られます</div>`;
+    ratingsEl.innerHTML = tz;
+  } else if (data.avg_rating != null) {
+    // 楽単度／充実度を2タイルで対比表示（案A）
+    const rLabel = RATING_LABELS[Math.round(data.avg_rating)] || '';
+    const eLabel = data.top_ease ? (EASE_LABELS[data.top_ease] || '') : '';
+    const easeTile = data.top_ease
+      ? `<div class="sum-tile"><div class="k">楽単度</div>`
+        + `<div class="v" style="color:#f59e0b">${EASE_STARS[data.top_ease] || ""}</div>`
+        + `<div class="cap">${eLabel}</div></div>`
+      : `<div class="sum-tile"><div class="k">楽単度</div><div class="v" style="color:#cbd5e1">―</div><div class="cap">評価なし</div></div>`;
+    ratingsEl.innerHTML = `<div class="sum-tiles">${easeTile}`
+      + `<div class="sum-tile"><div class="k">充実度</div>`
+      + `<div class="v" style="color:#a78bfa">${stars(data.avg_rating)}</div>`
+      + `<div class="cap">${rLabel}</div></div></div>`;
   } else {
     ratingsEl.innerHTML = `<div class="no-review">⭐ まだレビューはありません。あなたが最初のレビュワーになりませんか？🌟</div>`;
   }
@@ -679,10 +750,11 @@ async function main() {
         <span class="dist-count">${cnt}</span>
       </div>`;
     }
-    distEl.innerHTML = `<details class="legend" style="margin-top:6px;padding-top:10px">
-      <summary>評価の内訳を見る（${data.review_count}件）</summary>
-      <div class="legend-body">${bars}</div>
-    </details>`;
+    // 「評価の内訳」と「★の意味」は #summary-card 内の1つの折りたたみ(#sum-more)に統合した。
+    // ここでは内訳バーだけを流し込み、折りたたみを表示状態にする（既定は閉じたまま）。
+    distEl.innerHTML = bars;
+    const sumMore = document.getElementById("sum-more");
+    if (sumMore) sumMore.hidden = false;
   }
 
   // ── レビューカード（1件ずつ） ──
@@ -693,7 +765,7 @@ async function main() {
 
   function buildReviewCard(r) {
     const card = document.createElement("div");
-    card.className = "card" + (r.is_mine ? " mine" : "");
+    card.className = "card rev" + (r.is_mine ? " mine" : "");
     // ニックネームは一目でニックネームだと分かるよう明示する（匿名は表記だけで自明なのでそのまま）
     const byLabel = r.nickname ? `ニックネーム: ${esc(r.nickname)}` : "匿名";
     const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
@@ -703,55 +775,41 @@ async function main() {
     const _rvVariant = (data.variants || []).find(v => String(v.id) === String(r.variant_id));
     const variantBadgeText = _rvVariant ? _rvVariant.name
       : (r.variant_letter ? `${r.variant_letter}クラス` : "");
-    const letterBadge = variantBadgeText
-      ? `<span style="font-size:11px;font-weight:700;color:var(--accent);background:#eef2ff;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle">${esc(variantBadgeText)}</span>`
-      : "";
+    const variantBadge = variantBadgeText
+      ? `<span class="rev-badge">${esc(variantBadgeText)}</span>` : "";
+    const mineTag = r.is_mine ? `<span class="rev-mine-tag">✅ あなたの投稿</span>` : "";
     const yearLabel = r.academic_year ? `${r.academic_year}年度` : "";
-    let html = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;min-width:0">
-        <span style="font-size:22px;flex-shrink:0">👨‍🏫</span>
-        <div style="min-width:0">
-          <div style="font-size:15px;font-weight:700;color:#1f2937">${instrLabel}${letterBadge}</div>
-          <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap">
-            ${yearLabel ? `<span style="font-size:11px;font-weight:600;color:var(--accent);background:#eef2ff;padding:3px 9px;border-radius:999px">${yearLabel}</span>` : ""}
-            <span style="font-size:11px;color:#64748b;background:#f1f5f9;padding:3px 9px;border-radius:999px">${byLabel}</span>
-          </div>
-        </div>
-      </div>
-      ${r.is_mine ? `<span style="font-size:10.5px;font-weight:700;color:#fff;background:var(--accent);border-radius:999px;padding:4px 10px;flex-shrink:0;white-space:nowrap">✅ あなたの投稿</span>` : ""}
+    const metaParts = [yearLabel, byLabel].filter(Boolean).join(" ・ ");
+
+    // 教員行のピル群 → 中黒区切りの1行メタに集約（案A）
+    let html = `<div class="rev-sec">
+      <div class="rev-ins">${instrLabel}${variantBadge}${mineTag}</div>
+      <div class="rev-meta">${metaParts}</div>
     </div>`;
 
-    html += `<div style="display:flex;background:#f8fafc;border-radius:10px;overflow:hidden;margin-bottom:14px">
-      <div style="flex:1;text-align:center;padding:12px 0;border-right:1px solid #e9edf1">
-        <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;margin-bottom:5px">楽単度</div>
-        <div style="font-size:20px;color:#f59e0b;letter-spacing:1px">${r.ease_rating ? (EASE_STARS[r.ease_rating] || "") : "―"}</div>
-      </div>
-      <div style="flex:1;text-align:center;padding:12px 0">
-        <div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;margin-bottom:5px">充実度</div>
-        <div style="font-size:20px;color:#a78bfa;letter-spacing:1px">${stars(r.rating)}</div>
-      </div>
+    // 星評価は全幅パネルをやめてインライン1行（案A）
+    html += `<div class="rev-sec rev-rate">
+      <span><span class="lab">楽単</span><span class="stars" style="color:#f59e0b">${r.ease_rating ? (EASE_STARS[r.ease_rating] || "―") : "―"}</span></span>
+      <span><span class="lab">充実</span><span class="stars" style="color:#a78bfa">${stars(r.rating) || "―"}</span></span>
     </div>`;
 
+    // 成績評価方法は既存の「📋 見出し + ラベル + 本文」表示を維持（外側のグレー箱だけ廃止しカードに統合）
     const gmParts = r.grading_method || [];
     if (gmParts.length) {
-      let gmHtml = '<div style="background:#fafbfc;border:1px solid #f1f5f9;border-radius:10px;padding:12px;margin-bottom:14px">';
-      gmHtml += '<div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.04em;margin-bottom:10px">📋 成績評価方法</div>';
-      gmHtml += '<div style="display:flex;flex-direction:column;gap:10px">';
+      let gmHtml = '<div class="rev-sec rev-grade"><div class="gh">📋 成績評価方法</div>';
       for (const part of gmParts) {
         const { main, extra } = splitGradingText(part.text);
         const extraHtml = extra
-          ? `<div class="no-copy" style="font-size:12.5px;color:#374151;line-height:1.55;margin-top:3px">補足: ${esc(extra)}</div>`
+          ? `<div class="no-copy" style="font-size:12px;color:#374151;line-height:1.55;margin-top:3px">補足: ${esc(extra)}</div>`
           : "";
         if (!part.label) {
-          gmHtml += `<div style="font-size:12.5px;color:#374151;line-height:1.55">${esc(main)}${extraHtml}</div>`;
+          gmHtml += `<div class="grow"><div>${esc(main)}${extraHtml}</div></div>`;
         } else {
-          gmHtml += `<div style="display:flex;align-items:flex-start;gap:8px">
-            <span style="font-size:10.5px;font-weight:700;color:#fff;background:var(--accent-light);padding:3px 8px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:1px">${esc(part.label)}</span>
-            <div style="font-size:12.5px;color:#374151;line-height:1.55">${esc(main)}${extraHtml}</div>
-          </div>`;
+          gmHtml += `<div class="grow"><span class="gk">${esc(part.label)}</span>`
+            + `<div>${esc(main)}${extraHtml}</div></div>`;
         }
       }
-      gmHtml += '</div></div>';
+      gmHtml += '</div>';
       html += gmHtml;
     }
     card.innerHTML = html;
@@ -759,9 +817,9 @@ async function main() {
       // 長文コメントは4行でクランプし「続きを読む」で展開する
       // （レビューが多い科目でスクロールが長くなりすぎるのを防ぐ）
       const wrap = document.createElement("div");
-      wrap.style.cssText = "border-top:1px solid #f1f5f9;padding-top:14px";
+      wrap.className = "rev-sec";
       const label = document.createElement("div");
-      label.style.cssText = "font-size:11px;font-weight:700;color:#64748b;letter-spacing:.04em;margin-bottom:7px";
+      label.className = "rev-comment-h";
       label.textContent = "💬 コメント";
       wrap.appendChild(label);
       const box = document.createElement("div");
