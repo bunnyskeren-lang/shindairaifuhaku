@@ -725,6 +725,9 @@ async def init_db():
         # 出ていた（本人は送信1回・データ消失なし）。クライアントが送信ごとに発行する
         # submit_nonce で同一送信を識別し、再送は1回目のレビューの成功ページへ流す
         # （routers/review_submit_api.py）。部分UNIQUEインデックスでNULLは重複可・非NULLは一意。
+        # インデックス本体は models.py の Review.__table_args__ で宣言済み（create_all が作る）。
+        # 以下は submit_nonce 列を持たない既存DB向けの列追加＋同名インデックスの後追い作成で、
+        # どちらも IF NOT EXISTS なので新規DBでは実質no-op。
         await conn.execute(text(
             "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS submit_nonce TEXT"
         ))

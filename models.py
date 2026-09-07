@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey, Index
+from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
 from core.config import normalize_instructor_name, normalize_subject_name
@@ -264,6 +264,19 @@ class PaymentRequest(TimestampMixin, Base):
 
 class Review(TimestampMixin, Base):
     __tablename__ = "reviews"
+    # submit_nonce（二重送信対策の冪等キー）は NULL 複数可・非NULLは一意の部分UNIQUE。
+    # 従来は database.py init_db() の生SQL（CREATE UNIQUE INDEX ... WHERE ...）だけで
+    # 管理しており、Base.metadata に載っていなかったため create_all だけで作られるテスト用
+    # SQLite には制約が張られず、並行INSERTを弾く経路（review_submit_api.py の
+    # except IntegrityError）がテストで一度も通らなかった。ここに宣言して create_all でも
+    # 作られるようにする（既存の本番/dev DB向けに init_db() 側の同名 IF NOT EXISTS も残す）。
+    __table_args__ = (
+        Index(
+            "uq_reviews_submit_nonce", "submit_nonce", unique=True,
+            postgresql_where=text("submit_nonce IS NOT NULL"),
+            sqlite_where=text("submit_nonce IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="RESTRICT"), nullable=False, index=True)
@@ -300,7 +313,8 @@ class Review(TimestampMixin, Base):
     # webviewが保留中の送信POSTを後から再送し、1回目は保存済みのため2回目が重複防止で弾かれて
     # ユーザーに「既に投稿済み」エラーが出ていた（本人は送信1回）。クライアントが送信ごとに
     # crypto.randomUUID() を発行し、同じ値のレビューが既にあればサーバーは新規作成せず
-    # 1回目の成功ページへリダイレクトする。UNIQUE制約は database.py init_db() 側で管理。
+    # 1回目の成功ページへリダイレクトする。部分UNIQUEは上の __table_args__ で宣言
+    # （既存DB向けに database.py init_db() 側にも同名の CREATE INDEX IF NOT EXISTS を残す）。
     submit_nonce: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 

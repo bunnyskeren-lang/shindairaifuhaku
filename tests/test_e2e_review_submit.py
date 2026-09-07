@@ -6,9 +6,10 @@
 """
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 import routers.review_submit_api as review_submit_api
-from models import CourseSection, Instructor, Review, Subject, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
 
 UID = "U65326572657669657765723100000000"
 
@@ -470,3 +471,30 @@ async def test_submit_done_page_renders(http_client_factory, monkeypatch, test_s
     assert resp.status_code == 200
     assert "経営管理" in resp.text
     assert "初レビュー投稿" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_submit_nonce_partial_unique_index_is_enforced_at_db_level(test_sessionmaker):
+    """submit_nonce の部分UNIQUEインデックス（models.py Review.__table_args__ で宣言）が
+    create_all で作られ、DBレベルで効いていることの確認。NULL は複数可・非NULLは一意。
+    これが張られていないと review_submit_api.py の except IntegrityError 経路
+    （ほぼ同時に届いた再送POSTの並行INSERT）が本番でしか通らない死角になる。"""
+    await _seed_course(test_sessionmaker)
+
+    def _mk(nonce):
+        return Review(course_section_id=1, rating=5, ease_rating="A",
+                      status=ReviewStatus.PENDING, submit_nonce=nonce)
+
+    # NULL は何件でも入る
+    async with test_sessionmaker() as session:
+        session.add_all([_mk(None), _mk(None)])
+        await session.commit()
+
+    # 非NULLの同一値は2件目でDBが弾く
+    async with test_sessionmaker() as session:
+        session.add(_mk("dup-nonce"))
+        await session.commit()
+    with pytest.raises(IntegrityError):
+        async with test_sessionmaker() as session:
+            session.add(_mk("dup-nonce"))
+            await session.commit()
