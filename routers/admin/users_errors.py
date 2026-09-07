@@ -136,10 +136,12 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
     })
 
 
-# LIFF IDトークン期限切れ→再ログインのテレメトリ（profile_api.py の /api/liff-auth-event が
-# action="liff_reauth:<form>:<stage>" で記録）。既定のエラー一覧にもそのまま出す。
-# ?view=liff_reauth のときだけ、この種別に絞って抽出表示する。
+# 本来のサーバーエラーではないが、発生状況を追うため error_logs へ相乗りさせているテレメトリ種別。
+# いずれも既定のエラー一覧にはそのまま出しつつ、?view=<key> でその種別だけに絞れる。
+#  - liff_reauth:      LIFF IDトークン期限切れ→再ログイン（profile_api.py の /api/liff-auth-event）
+#  - submit_duplicate: レビュー二重送信による「既に投稿済み」拒否（review_submit_api.py の _form_error）
 _LIFF_REAUTH_ACTION_PREFIX = "liff_reauth:"
+_SUBMIT_DUPLICATE_ACTION_PREFIX = "submit_duplicate:"
 
 
 @router.get("/admin/errors", response_class=HTMLResponse)
@@ -151,14 +153,21 @@ async def admin_errors(
 ):
     per_page = 50
     is_reauth_view = view == "liff_reauth"
+    is_dup_view = view == "submit_duplicate"
     reauth_like = ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%")
+    dup_like = ErrorLog.action.like(_SUBMIT_DUPLICATE_ACTION_PREFIX + "%")
     async with AsyncSessionLocal() as session:
         count_stmt = select(func.count(ErrorLog.id))
         if is_reauth_view:
             count_stmt = count_stmt.where(reauth_like)
+        elif is_dup_view:
+            count_stmt = count_stmt.where(dup_like)
         total = (await session.execute(count_stmt)).scalar_one()
         reauth_total = (await session.execute(
             select(func.count(ErrorLog.id)).where(reauth_like)
+        )).scalar_one()
+        dup_total = (await session.execute(
+            select(func.count(ErrorLog.id)).where(dup_like)
         )).scalar_one()
         rows_stmt = (
             select(
@@ -177,6 +186,8 @@ async def admin_errors(
         )
         if is_reauth_view:
             rows_stmt = rows_stmt.where(reauth_like)
+        elif is_dup_view:
+            rows_stmt = rows_stmt.where(dup_like)
         errors = (await session.execute(
             rows_stmt.offset((page - 1) * per_page).limit(per_page)
         )).all()
@@ -190,6 +201,8 @@ async def admin_errors(
         "url_prefix": f"/admin/errors?view={view}&page=" if view else "/admin/errors?page=",
         "is_reauth_view": is_reauth_view,
         "reauth_total": reauth_total,
+        "is_dup_view": is_dup_view,
+        "dup_total": dup_total,
     })
 
 

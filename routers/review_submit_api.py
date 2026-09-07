@@ -45,14 +45,20 @@ async def submit(
 ):
     uid: str | None = None
 
-    def _form_error(msg: str):
+    def _form_error(msg: str, *, telemetry: bool = False):
         # 修正理由: バリデーション拒否は例外を投げずTemplateResponseを直接返すため、
         # main.pyのHTTPException/Exceptionハンドラを一切通らずerror_logsに何も残らなかった。
         # 400を返す理由を追跡できるよう明示的に記録する（レスポンスは待たせずfire-and-forget）。
+        # telemetry=True の拒否（二重送信による「既に投稿済み」など、ユーザーの操作ミスでも
+        # サーバー不具合でもない想定内の事象。送信直後にLINEアプリがバックグラウンドへ回り
+        # モバイルOSが保留中の送信を再送するのが主因）は、action接頭辞を submit_duplicate: に
+        # 分け、Push通知も鳴らさない（/admin/errors?view=submit_duplicate で個別に追える）。
+        prefix = "submit_duplicate" if telemetry else "submit_rejected"
         asyncio.create_task(save_error_log(
             RuntimeError(msg),
             user_id=uid,
-            action=f"submit_rejected:{course_name.strip()[:150]}",
+            action=f"{prefix}:{course_name.strip()[:150]}",
+            notify=not telemetry,
         ))
         return templates.TemplateResponse(
             "form_error.html", {"request": request, "message": msg}, status_code=400
@@ -170,7 +176,7 @@ async def submit(
                 )
             )).scalars().first()
             if dup_omnibus is not None:
-                return _form_error("この科目のオムニバスには、既にレビューを投稿済みです")
+                return _form_error("この科目のオムニバスには、既にレビューを投稿済みです", telemetry=True)
             group_cs_ids = []  # 下の上限チェックはスキップ（is_omnibus分岐で通らない）
         else:
             group_cs_ids = [cs_obj.id]
@@ -201,7 +207,7 @@ async def submit(
                 )
             )).scalars().first()
             if dup_review is not None:
-                return _form_error("この科目・担当教員の組み合わせには、既にレビューを投稿済みです")
+                return _form_error("この科目・担当教員の組み合わせには、既にレビューを投稿済みです", telemetry=True)
 
             existing_review_count = (await session.execute(
                 select(func.count(Review.id)).where(

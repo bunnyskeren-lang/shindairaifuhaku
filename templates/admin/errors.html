@@ -12,8 +12,9 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
 {% block content %}
 <div class="card">
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
-    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not is_reauth_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">すべて</a>
+    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not is_reauth_view and not is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">すべて</a>
     <a href="/admin/errors?view=liff_reauth" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if is_reauth_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">再ログインテレメトリのみ（{{ reauth_total }}）</a>
+    <a href="/admin/errors?view=submit_duplicate" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">重複投稿のみ（{{ dup_total }}）</a>
   </div>
   {% if is_reauth_view %}
   <div style="font-size:12px;color:#374151;margin:0 0 16px;line-height:1.9">
@@ -21,6 +22,12 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
     <br><span class="rb" style="background:#e0e7ff;color:#3730a3">🔄 再ログイン実行</span> 期限切れを検知して自動再ログインを開始した（<b>この直後に同じユーザーで「✅ 復帰確認」が出れば正常</b>）
     <br><span class="rb" style="background:#dcfce7;color:#166534">✅ 復帰確認</span> 再ログイン後にトークン検証が通り、フォームを正常表示できた
     <br><span class="rb" style="background:#fee2e2;color:#991b1b">🚨 未復帰</span> 再ログインしても復帰できず詰んでいる（400・トークン再発行失敗・ユーザー離脱など）。<b>「🔄」だけ出て「✅」が続かないユーザーも同様に要注意</b>
+  </div>
+  {% elif is_dup_view %}
+  <div style="font-size:12px;color:#374151;margin:0 0 16px;line-height:1.8">
+    同じ学籍番号で同じ科目×担当教員に<b>2回目以降の投稿が行われた</b>記録（1回目は正常に保存済み・データ消失なし）。
+    送信直後にLINEアプリがバックグラウンドへ回り、モバイルOSが保留中の送信を後から再送するのが主因。
+    <b>サーバー不具合ではないためPush通知は飛ばさない</b>（記録のみ残す）。
   </div>
   {% else %}
   <p style="font-size:13px;color:#6b7280;margin:0 0 16px">トレースバックは行をクリックで展開。</p>
