@@ -291,7 +291,13 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
     if label and len(ids) >= 2:
         _, all_courses = await cache.get_courses_cached()
         names_by_id = {c.id: c.name for c in all_courses}
-        return label, ids, [names_by_id[i] for i in ids]
+        # バッジ表示（「◯◯のレビューをまとめて表示」）には科目名そのものではなく短い
+        # 接尾辞を使う。labelはグループのベース名（接尾辞を含まない）のため、括弧付き
+        # 別名パターン等では科目名から単純にlabelを取り除いても接尾辞にならない
+        # （2026-09-07、バッジに科目名がそのまま重複表示されるバグの修正）。
+        suffix_map = await cache.get_variant_member_suffix_map_cached()
+        display_names = [suffix_map.get(names_by_id[i], names_by_id[i]) for i in ids]
+        return label, ids, display_names
 
     if len(ids) >= 2 and is_hoken_gakka_senko(subject.faculty or "", subject.department or ""):
         _, all_courses = await cache.get_courses_cached()

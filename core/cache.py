@@ -12,6 +12,7 @@ from core.subject_variants import (
     compute_letter_view_groups,
     compute_variant_full_labels,
     compute_variant_groups,
+    compute_variant_member_suffix_map,
     is_hoken_gakka_senko,
 )
 from database import AsyncSessionLocal
@@ -349,6 +350,7 @@ def invalidate_courses_cache():
     global _preload_cache, _preload_cache_at
     global _variant_map_cache, _variant_map_cache_at
     global _variant_full_label_cache, _variant_full_label_cache_at
+    global _variant_member_suffix_cache, _variant_member_suffix_cache_at
     global _letter_view_group_cache, _letter_view_group_cache_at
     global _search_index_cache, _search_index_cache_at
     _course_by_name = {}
@@ -370,6 +372,8 @@ def invalidate_courses_cache():
     _variant_map_cache_at = 0.0
     _variant_full_label_cache = None
     _variant_full_label_cache_at = 0.0
+    _variant_member_suffix_cache = None
+    _variant_member_suffix_cache_at = 0.0
     # 教養科目A/Bのレビュー閲覧統合グループ(compute_letter_view_groups)もcourses依存の
     # 派生データのため一緒に無効化する
     _letter_view_group_cache = None
@@ -483,6 +487,35 @@ async def get_variant_map_cached() -> dict[str, str]:
     )
     _variant_map_cache_at = time.monotonic()
     return _variant_map_cache
+
+
+_variant_member_suffix_cache: dict[str, str] | None = None
+_variant_member_suffix_cache_at: float = 0.0
+
+
+async def get_variant_member_suffix_map_cached() -> dict[str, str]:
+    """科目名 → その科目自身の短い表示用バリアント接尾辞のマップ（compute_variant_member_suffix_map()）。
+
+    routers/liff_api.py `_group_subject_ids()`が科目詳細LIFFの「◯◯のレビューをまとめて表示」
+    バッジ表示用に、グループ内メンバーそれぞれの接尾辞（ラベル全体ではなく短い接尾辞）を
+    得るために使う。get_variant_map_cached()と対象・除外条件は同一。
+    """
+    global _variant_member_suffix_cache, _variant_member_suffix_cache_at
+    if _variant_member_suffix_cache is not None and time.monotonic() - _variant_member_suffix_cache_at < _COURSE_CACHE_TTL:
+        return _variant_member_suffix_cache
+    _, all_courses = await get_courses_cached()
+    _letter_split_excluded_names = frozenset(
+        c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
+    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
+        c.name for c in all_courses if c.variant_merge_excluded)
+    _variant_member_suffix_cache = compute_variant_member_suffix_map(
+        [(c.name, c.faculty or "", c.department or "") for c in all_courses
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
+        letter_split_excluded_names=_letter_split_excluded_names,
+        num_excluded_names=_num_excluded_names,
+    )
+    _variant_member_suffix_cache_at = time.monotonic()
+    return _variant_member_suffix_cache
 
 
 async def get_variant_group_subject_ids(subject: Subject) -> list[int]:

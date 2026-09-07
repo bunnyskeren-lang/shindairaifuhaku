@@ -869,6 +869,43 @@ def compute_variant_groups(
     return result
 
 
+def compute_variant_member_suffix_map(
+    names_with_faculty_dept: list[tuple[str, str, str]],
+    letter_split_excluded_names: frozenset[str] = frozenset(),
+    num_excluded_names: frozenset[str] = NUM_MERGE_EXCLUDED_NAMES,
+) -> dict[str, str]:
+    """(科目名, faculty, department)のリストから、科目名 → その科目自身の短い表示用
+    バリアント接尾辞（例: "力学基礎1"→"1"、"生物学各論A1"→"A1"、括弧付き別名パターン
+    "ライフコースの心理学1（発達心理学1）"→"1"）のマップを返す。判定基準はcompute_variant_groups()
+    と同一（compute_variant_bases()を共有）。グループに属さない科目名はマップに含めない。
+
+    compute_variant_groups()が返すラベルはグループのベース名（接尾辞を含まない）のため、
+    科目詳細LIFF（templates/liff/course.html）の「◯◯のレビューをまとめて表示」バッジで
+    個々の科目名からラベル文字列を単純に取り除いて接尾辞を得ることができない
+    （括弧付き別名パターンでは数字がベース名の途中に挟まるため、そもそも科目名がラベルの
+    前方一致にならない）。そのため科目名ごとの接尾辞を直接返す専用マップとして新設した
+    （2026-09-07、バッジに元の科目名がそのまま重複表示されるバグの修正）。
+    """
+    sem_bases, num_bases, paren_num_bases, _letter_only_bases = compute_variant_bases(
+        names_with_faculty_dept, num_excluded_names=num_excluded_names,
+        letter_split_excluded_names=letter_split_excluded_names)
+    result: dict[str, str] = {}
+
+    for _key, members in sem_bases.items():
+        for n, sk in members:
+            result[n] = sk
+
+    for _key, members in num_bases.items():
+        for n, letter, _sk, disp, tag in members:
+            result[n] = f"{letter}{disp}{tag}"
+
+    for _key, members in paren_num_bases.items():
+        for n, _main_sk, main_raw, _paren_sk, _paren_raw, tag in members:
+            result[n] = f"{main_raw}{tag}"
+
+    return result
+
+
 def compute_letter_view_groups(
     names_with_faculty_dept: list[tuple[str, str, str]],
 ) -> dict[str, tuple[str, list[str], dict[str, str]]]:
