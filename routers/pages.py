@@ -7,7 +7,8 @@ from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOTSU_SENMON_KISO_FACULTY,
-    LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
+    LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, OMNIBUS_INSTRUCTOR_LABEL,
+    REGISTER_LIFF_ID,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_FORM_URL, REVIEW_LIFF_ID,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY,
@@ -37,6 +38,7 @@ async def index(request: Request, uid: str = Query(default="")):
             "kyotsu_senmon_kiso_faculty": KYOTSU_SENMON_KISO_FACULTY,
             "unlock_credits_kyoyo": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
             "unlock_credits_senmon": REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
+            "omnibus_instructor_label": OMNIBUS_INSTRUCTOR_LABEL,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

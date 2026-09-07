@@ -8,6 +8,7 @@ from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
+    OMNIBUS_INSTRUCTOR_LABEL,
     ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
     REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
     REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
@@ -101,8 +102,19 @@ async def submit(
 
         # 担当教員に対応する course_section を探す
         instr_name = selected_instructor.strip()[:100] or None
+        is_omnibus = instr_name == OMNIBUS_INSTRUCTOR_LABEL
         cs_obj = None
-        if instr_name:
+        if is_omnibus:
+            # オムニバス（チーム開講）は特定の担当教員に紐づけず、科目の代表course_section
+            # （id昇順の先頭）へ束ねる。残り枠・1件上限の管理はしない擬似候補。
+            cs_obj = (await session.execute(
+                select(CourseSection)
+                .where(CourseSection.subject_id == subject.id)
+                .order_by(CourseSection.id)
+            )).scalars().first()
+            if cs_obj is None:
+                return _form_error("この科目はレビューを受け付けていません")
+        elif instr_name:
             # 科目名＋担当教員名でjoinし直すことで、学部をまたいで同名科目が存在する場合でも
             # 正しいsubject（先頭取得のものとは限らない）とcourse_sectionを一意に特定する
             row = (await session.execute(
@@ -144,8 +156,26 @@ async def submit(
         # 見ないと、同じ教員のバリアント違い科目それぞれに1件ずつ投稿でき「1科目1件まで」の
         # 上限をすり抜けられてしまう（2026-09-01発覚）。
         group_subject_ids = await cache.get_variant_group_subject_ids(subject)
-        group_cs_ids = [cs_obj.id]
-        if len(group_subject_ids) > 1:
+
+        if is_omnibus:
+            # オムニバスは残り枠・1件上限の管理対象外。同一学籍番号での
+            # オムニバス重複投稿だけを科目（バリアントグループ）単位で防ぐ。
+            dup_omnibus = (await session.execute(
+                select(Review.id)
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .where(
+                    CourseSection.subject_id.in_(group_subject_ids),
+                    Review.selected_instructor == OMNIBUS_INSTRUCTOR_LABEL,
+                    Review.student_id == sid,
+                    Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+                )
+            )).scalars().first()
+            if dup_omnibus is not None:
+                return _form_error("この科目のオムニバスには、既にレビューを投稿済みです")
+            group_cs_ids = []  # 下の上限チェックはスキップ（is_omnibus分岐で通らない）
+        else:
+            group_cs_ids = [cs_obj.id]
+        if not is_omnibus and len(group_subject_ids) > 1:
             if is_hoken_gakka_senko(subject.faculty or "", subject.department or ""):
                 # 保健学科4専攻をまたいだ完全同名科目は、担当教員（専攻）が異なっていても
                 # レビュー1件で全専攻分の募集を締め切る共有プールとして扱う（2026-09-06、ユーザー指示）
@@ -162,24 +192,26 @@ async def submit(
 
         # 修正理由: 同じ学籍番号の人が同じ科目×担当教員の組み合わせへ複数回レビュー投稿できてしまっていたため、
         # 既に投稿済み（待機中+承認済み）があればサーバー側で拒否する（フォーム側のグレーアウトは補助的なもの）
-        dup_review = (await session.execute(
-            select(Review.id).where(
-                Review.course_section_id.in_(group_cs_ids),
-                Review.student_id == sid,
-                Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
-            )
-        )).scalars().first()
-        if dup_review is not None:
-            return _form_error("この科目・担当教員の組み合わせには、既にレビューを投稿済みです")
+        # （オムニバスは上の is_omnibus 分岐で専用の重複チェック済み・上限管理対象外）
+        if not is_omnibus:
+            dup_review = (await session.execute(
+                select(Review.id).where(
+                    Review.course_section_id.in_(group_cs_ids),
+                    Review.student_id == sid,
+                    Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+                )
+            )).scalars().first()
+            if dup_review is not None:
+                return _form_error("この科目・担当教員の組み合わせには、既にレビューを投稿済みです")
 
-        existing_review_count = (await session.execute(
-            select(func.count(Review.id)).where(
-                Review.course_section_id.in_(group_cs_ids),
-                Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
-            )
-        )).scalar_one()
-        if existing_review_count >= MAX_REVIEWS_PER_COURSE_SECTION:
-            return _form_error("この科目・担当教員へのレビュー投稿数が上限に達したため、募集は締め切りました")
+            existing_review_count = (await session.execute(
+                select(func.count(Review.id)).where(
+                    Review.course_section_id.in_(group_cs_ids),
+                    Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
+                )
+            )).scalar_one()
+            if existing_review_count >= MAX_REVIEWS_PER_COURSE_SECTION:
+                return _form_error("この科目・担当教員へのレビュー投稿数が上限に達したため、募集は締め切りました")
 
         review = Review(
             course_section_id=cs_obj.id,

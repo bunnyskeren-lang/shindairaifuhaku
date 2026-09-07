@@ -55,6 +55,12 @@ def normalize_student_id(raw: str) -> str:
 # 1科目×1担当教員（course_section）あたりのレビュー投稿受付上限（待機中+承認済みの合計）
 MAX_REVIEWS_PER_COURSE_SECTION = 1
 
+# チーム開講（複数教員が輪番で担当）科目向けに、レビュー投稿フォームの担当教員候補へ
+# 全科目常に出す擬似候補のラベル。実在のInstructorではなく、submit時は科目の代表
+# course_section（id昇順の先頭）へ束ね、selected_instructor にこの文字列を保存する。
+# 残り枠バッジ・1件上限の管理対象外（同一学籍番号でのオムニバス重複のみ防ぐ）。
+OMNIBUS_INSTRUCTOR_LABEL = "オムニバス"
+
 # オンデマンド配信のため担当教員によらず授業内容が同一な科目（subjects.id）。
 # 1件のレビューがあれば他の教員のクラスにも実質流用できるため、全course_sectionで
 # レビュー募集を締め切り、科目詳細ページには他教員クラスも同一内容である旨を表示する。

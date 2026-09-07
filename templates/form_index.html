@@ -628,6 +628,9 @@
     const SUBMISSION_SENMON_CATEGORY = "{{ submission_senmon_category }}";
     // 共通専門基礎科目（微分積分・力学基礎等、category="専門"・faculty=この値）は学部を問わず投稿可
     const KYOTSU_SENMON_KISO_FACULTY = "{{ kyotsu_senmon_kiso_faculty }}";
+    // チーム開講（複数教員が輪番）科目向けの擬似担当教員候補。科目を選ぶと担当教員チップの
+    // 末尾に常に出す。実在の教員ではなく、送信時サーバー側で科目の代表course_sectionへ束ねる。
+    const OMNIBUS_INSTRUCTOR_LABEL = "{{ omnibus_instructor_label }}";
     let _liffInitPromise = null;
     function ensureLiffInit() {
       if (!_liffInitPromise) {
@@ -1411,57 +1414,59 @@
       document.getElementById('instructorUnregistered').classList.add('hidden');
       document.getElementById('instructorLimitNotice').classList.add('hidden');
 
-      if (currentInstructors.length > 0) {
-        chipsEl.classList.remove('hidden');
-        document.getElementById('instructorHint').classList.remove('hidden');
-        const withReviewed = currentInstructors.map(inst => {
-          const cid = inst.courseId ?? currentCourseId;
-          return {
-            ...inst,
-            _cid: cid,
-            _cname: inst.courseName ?? name,
-            reviewed: !inst.full && cid != null && _reviewedSet.has(cid + '::' + inst.name),
-          };
-        });
-        chipsEl.innerHTML = withReviewed.map(inst => {
-          const label = inst.name;
-          const cidAttr = ` data-course-id="${inst._cid ?? ''}" data-course-name="${escapeHtml(inst._cname)}"`;
-          if (inst.full) {
-            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.45;text-decoration:line-through;cursor:not-allowed;display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
+      // 担当教員チップは常に表示する（末尾のオムニバス擬似候補は全科目で選べるため、
+      // 登録教員が0人の科目でも「募集していません」ではなくオムニバスで投稿できる）
+      chipsEl.classList.remove('hidden');
+      document.getElementById('instructorHint').classList.remove('hidden');
+      const withReviewed = currentInstructors.map(inst => {
+        const cid = inst.courseId ?? currentCourseId;
+        return {
+          ...inst,
+          _cid: cid,
+          _cname: inst.courseName ?? name,
+          reviewed: !inst.full && cid != null && _reviewedSet.has(cid + '::' + inst.name),
+        };
+      });
+      // チーム開講（オムニバス）用の擬似候補。実在の教員ではないので残り枠・投稿済み
+      // グレーアウトの対象にはせず、常に選択可能な状態で末尾に並べる。送信時は
+      // サーバー側で科目の代表course_sectionへ束ねる（グループ科目は先頭の変種へ）。
+      const _firstInst = currentInstructors[0];
+      const _omniCid = (isGroup && _firstInst) ? (_firstInst.courseId ?? '') : (currentCourseId ?? '');
+      const _omniCname = (isGroup && _firstInst) ? (_firstInst.courseName ?? name) : name;
+      const omnibusChip = `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(OMNIBUS_INSTRUCTOR_LABEL)}" data-course-id="${_omniCid}" data-course-name="${escapeHtml(_omniCname)}" style="display:inline-flex;align-items:center">${escapeHtml(OMNIBUS_INSTRUCTOR_LABEL)}</button>`;
+      chipsEl.innerHTML = withReviewed.map(inst => {
+        const label = inst.name;
+        const cidAttr = ` data-course-id="${inst._cid ?? ''}" data-course-name="${escapeHtml(inst._cname)}"`;
+        if (inst.full) {
+          return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.45;text-decoration:line-through;cursor:not-allowed;display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
+        }
+        if (inst.reviewed) {
+          return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.5;cursor:not-allowed">${escapeHtml(label)}（投稿済み）</button>`;
+        }
+        return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
+      }).join('') + omnibusChip;
+      document.getElementById('instructorLimitNotice').classList.remove('hidden');
+      chipsEl.querySelectorAll('.chip-btn:not([disabled])').forEach(btn => {
+        btn.onclick = () => {
+          chipsEl.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('selectedInstructorHidden').value = btn.dataset.value;
+          // 統合科目（グループ）はどの教員を選んだかで実際の科目（変種）が確定するため、
+          // クリックのたびにdata-course-id/dataset-course-nameへ差し替える
+          // （非グループ選択時もchip生成時点で自分自身のcourseId/courseNameが入っているため無害）
+          if (btn.dataset.courseId) {
+            const cName = btn.dataset.courseName;
+            document.getElementById('courseNameHidden').value = cName;
+            // isGroupの間はグループ表記(displayName)のまま維持し、実際に解決された
+            // 変種名(cName)はcourseNameHidden（送信用）にのみ反映する
+            document.getElementById('selectedCourseName').textContent = isGroup ? displayName : cName;
+            currentCourseId = parseInt(btn.dataset.courseId, 10);
           }
-          if (inst.reviewed) {
-            return `<button type="button" class="chip-btn single" disabled data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="opacity:.5;cursor:not-allowed">${escapeHtml(label)}（投稿済み）</button>`;
-          }
-          return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
-        }).join('');
-        document.getElementById('instructorLimitNotice').classList.remove('hidden');
-        chipsEl.querySelectorAll('.chip-btn:not([disabled])').forEach(btn => {
-          btn.onclick = () => {
-            chipsEl.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('selectedInstructorHidden').value = btn.dataset.value;
-            // 統合科目（グループ）はどの教員を選んだかで実際の科目（変種）が確定するため、
-            // クリックのたびにdata-course-id/dataset-course-nameへ差し替える
-            // （非グループ選択時もchip生成時点で自分自身のcourseId/courseNameが入っているため無害）
-            if (btn.dataset.courseId) {
-              const cName = btn.dataset.courseName;
-              document.getElementById('courseNameHidden').value = cName;
-              // isGroupの間はグループ表記(displayName)のまま維持し、実際に解決された
-              // 変種名(cName)はcourseNameHidden（送信用）にのみ反映する
-              document.getElementById('selectedCourseName').textContent = isGroup ? displayName : cName;
-              currentCourseId = parseInt(btn.dataset.courseId, 10);
-            }
-            document.getElementById('instructorHint').classList.add('hidden');
-            document.getElementById('instructorError').classList.add('hidden');
-            saveData();
-          };
-        });
-      } else {
-        chipsEl.classList.add('hidden');
-        chipsEl.innerHTML = '';
-        document.getElementById('instructorHint').classList.add('hidden');
-        document.getElementById('instructorUnregistered').classList.remove('hidden');
-      }
+          document.getElementById('instructorHint').classList.add('hidden');
+          document.getElementById('instructorError').classList.add('hidden');
+          saveData();
+        };
+      });
       saveData();
     }
 
@@ -1788,7 +1793,7 @@
       { label: '学籍番号', done: () => !studentIdInput || (studentIdInput.value.trim() !== '' && STUDENT_ID_RE.test(studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase())),
         focus: () => scrollToItem(studentIdInput) },
       { label: '科目・担当教員', done: () => document.getElementById('courseNameHidden').value.trim() !== ''
-          && (currentInstructors.length === 0 || document.getElementById('selectedInstructorHidden').value.trim() !== ''),
+          && document.getElementById('selectedInstructorHidden').value.trim() !== '',
         focus: () => scrollToItem(document.getElementById('courseCard')) },
       { label: '受講年度', done: () => {
           const v = document.getElementById('academic_year').value;
@@ -2081,7 +2086,7 @@
         document.getElementById('easeError').classList.remove('hidden');
         valid = false;
       }
-      if (document.getElementById('courseNameHidden').value && currentInstructors.length > 0 &&
+      if (document.getElementById('courseNameHidden').value &&
           !document.getElementById('selectedInstructorHidden').value) {
         document.getElementById('instructorSelectSection').classList.remove('hidden');
         document.getElementById('instructorError').classList.remove('hidden');
