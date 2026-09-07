@@ -1320,13 +1320,17 @@
         dropdown.classList.remove('hidden');
         return;
       }
-      // 教養科目→専門科目の順に並べ替える（同カテゴリ内の元の並びは維持）
-      const sorted = items.slice().sort((a, b) => _catRowOrder(a.category) - _catRowOrder(b.category));
+      // 全担当教員が募集締切なら、この科目は募集を完全に終了しているものとして扱う
+      const _closedCourse = c => c.instructors.length > 0 && c.instructors.every(i => i.full);
+      // 表示順は 教養 → 専門 → 募集終了。募集終了は最後にまとめ、その中でも教養→専門を保つ
+      // （同カテゴリ・同状態の中では元の並びを維持）
+      const sorted = items.slice().sort((a, b) =>
+        (_closedCourse(a) ? 1 : 0) - (_closedCourse(b) ? 1 : 0)
+        || _catRowOrder(a.category) - _catRowOrder(b.category));
       dropdown.innerHTML = sorted.slice(0, 30).map((c, idx) => {
         const bg = _catRowBg(c.category);
-        // 全担当教員が募集締切なら、この科目は募集を完全に終了しているものとして
-        // 検索候補の行に斜線＋「募集終了」を表示する
-        const closed = c.instructors.length > 0 && c.instructors.every(i => i.full);
+        // 募集を完全に終了した科目は検索候補の行に斜線＋「募集終了」を表示する
+        const closed = _closedCourse(c);
         return `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
           style="border-bottom:1px solid #f3f4f6;transition:background .1s;background:${bg}"
           onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
@@ -1515,10 +1519,13 @@
         instrSearchDropdown.classList.remove('hidden');
         return;
       }
-      instrSearchDropdown.innerHTML = items.slice(0, 20).map((inst, idx) => {
-        // 担当科目がすべて募集締切なら、この教員は募集を完全に終了しているものとして
-        // 検索候補の行に斜線＋「募集終了」を表示する
-        const closed = inst.courses.length > 0 && inst.courses.every(c => c.full);
+      // 担当科目がすべて募集締切なら、この教員は募集を完全に終了しているものとして扱う
+      const _closedInstr = inst => inst.courses.length > 0 && inst.courses.every(c => c.full);
+      // 募集終了の教員は末尾にまとめる（その中の並びは元のまま維持）
+      const sorted = items.slice().sort((a, b) => (_closedInstr(a) ? 1 : 0) - (_closedInstr(b) ? 1 : 0));
+      instrSearchDropdown.innerHTML = sorted.slice(0, 20).map((inst, idx) => {
+        // 募集を完全に終了した教員は検索候補の行に斜線＋「募集終了」を表示する
+        const closed = _closedInstr(inst);
         return `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
           style="border-bottom:1px solid #f3f4f6;transition:background .1s"
           onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
@@ -1528,7 +1535,7 @@
       }).join('');
       instrSearchDropdown.classList.remove('hidden');
       instrSearchDropdown.querySelectorAll('[data-instr-idx]').forEach(el => {
-        const inst = items[parseInt(el.dataset.instrIdx)];
+        const inst = sorted[parseInt(el.dataset.instrIdx)];
         el.addEventListener('click', () => selectInstructor(inst));
       });
     }
