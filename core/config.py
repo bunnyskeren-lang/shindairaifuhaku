@@ -285,10 +285,10 @@ def make_syllabus_url(timetable_code: str, department: str = "") -> str:
     return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
 
 
-# 会員登録フォームの必須質問「神大生協が運営するアルバイト求人サイトを開いたことがありますか」。
+# 会員登録フォームの必須質問「神大生協が運営するアルバイト求人サイトを閲覧したことがありますか」。
 # 回答は下記2択のいずれか。DBには文字列でそのまま保存する（"いいえ" も回答済みとして
 # is_profile_complete() を通過させるため、真偽値ではなく選択肢文字列で持つ）。
-COOP_JOBSITE_KNOWN_QUESTION = "神大生協が運営するアルバイト求人サイトを開いたことがありますか"
+COOP_JOBSITE_KNOWN_QUESTION = "神大生協が運営するアルバイト求人サイトを閲覧したことがありますか"
 COOP_JOBSITE_KNOWN_CHOICES = ("はい", "いいえ")
 
 
