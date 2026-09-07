@@ -79,6 +79,7 @@ async def submit(
     nickname: str = Form(default=""),
     academic_year: int = Form(default=0),
     submit_nonce: str = Form(default=""),
+    course_display_name: str = Form(default=""),
     _rl: None = Depends(_submit_rate_limit),
 ):
     uid: str | None = None
@@ -119,6 +120,11 @@ async def submit(
     if not STUDENT_ID_RE.match(sid):
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
 
+    # 成功画面に出す科目名。バリアント統合科目はフォーム上「英米法(A/B)」のようなグループ表記で
+    # 見えているが、course_name には実際に紐づく1変種名（英米法A）が入るため、ユーザーが見ていた
+    # 表記があればそちらを優先して表示する（DB検索・重複判定・Push通知には使わない表示専用）。
+    display_name = course_display_name.strip()[:200] or course_name
+
     # 冪等キー先行チェック: 送信直後のアプリbg化でOS/webviewが保留POSTを再送する事象に備え、
     # 同じ submit_nonce のレビューが既にあれば、LINEログイン再検証（再送POSTは期限切れトークンを
     # 抱えていることが多い）や重複エラー画面を経由せず、1回目のレビューの成功ページへ直行する。
@@ -128,7 +134,7 @@ async def submit(
             prior = await _prior_review_by_nonce(session, nonce)
             if prior is not None and prior.student_id == sid:
                 rc = await _review_count(session, sid)
-                return _success_redirect(course_name, rc)
+                return _success_redirect(display_name, rc)
 
     uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
@@ -298,7 +304,7 @@ async def submit(
                 prior = await _prior_review_by_nonce(session, nonce)
                 if prior is not None:
                     rc = await _review_count(session, prior.student_id)
-                    return _success_redirect(course_name, rc)
+                    return _success_redirect(display_name, rc)
             raise
         cache.invalidate_full_pairs_cache()
 
@@ -319,7 +325,7 @@ async def submit(
 
     asyncio.create_task(_notify())
 
-    return _success_redirect(course_name, review_count)
+    return _success_redirect(display_name, review_count)
 
 
 @router.get("/submit/done")

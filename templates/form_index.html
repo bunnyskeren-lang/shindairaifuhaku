@@ -116,6 +116,9 @@
         <p class="text-xs text-gray-400 mb-3">選択肢に見当たらない科目・先生がいた場合は<a href="/contact" target="_blank" class="underline hover:text-indigo-500">お問い合わせフォーム</a>よりご連絡ください</p>
 
         <input type="hidden" name="course_name" id="courseNameHidden">
+        <!-- バリアント統合科目でユーザーが実際に見ていた表記（例「英米法(A/B)」）。
+             course_name には紐づく1変種名（英米法A）が入るので、成功画面はこちらを出す。 -->
+        <input type="hidden" name="course_display_name" id="courseDisplayNameHidden">
         <input type="hidden" name="selected_instructor" id="selectedInstructorHidden">
 
         <!-- 科目名モード -->
@@ -2317,6 +2320,13 @@
         document.getElementById('submitNonceHidden').value =
           (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
           : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+      } catch (_) {}
+      // 成功画面「レビューを受け付けました」に出す科目名は、ユーザーが今まさに見ている
+      // 表示名（バリアント統合科目なら「英米法(A/B)」のようなグループ表記）に揃える。
+      // courseNameHidden は実際に紐づく1変種名なのでDB検索用として別に持つ。
+      try {
+        document.getElementById('courseDisplayNameHidden').value =
+          (document.getElementById('selectedCourseName').textContent || '').trim();
       } catch (_) {}
       e.target.submit();
     });

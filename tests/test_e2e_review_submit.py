@@ -507,6 +507,50 @@ async def test_submit_sets_short_lived_count_cookie_on_redirect(http_client_fact
 
 
 @pytest.mark.asyncio
+async def test_submit_done_uses_form_display_name_not_resolved_variant(http_client_factory, monkeypatch, test_sessionmaker):
+    """バリアント統合科目は course_name に紐づく1変種名（英米法A）が入るが、
+    成功画面にはフォームで見えていたグループ表記（course_display_name＝英米法(A/B)）を出す。"""
+    from urllib.parse import parse_qs, urlparse
+
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker, name="英米法A")
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=dict(
+        VALID_FORM, course_name="英米法A", course_display_name="英米法(A/B)",
+    ))
+    assert resp.status_code == 303
+    q = parse_qs(urlparse(resp.headers["location"]).query)
+    assert q["course_name"] == ["英米法(A/B)"]
+
+    # レビュー自体は解決済みの1変種（英米法A）に紐づく
+    async with test_sessionmaker() as session:
+        review = (await session.execute(select(Review))).scalars().one()
+        cs = await session.get(CourseSection, review.course_section_id)
+        subj = await session.get(Subject, cs.subject_id)
+        assert subj.name == "英米法A"
+
+
+@pytest.mark.asyncio
+async def test_submit_done_falls_back_to_course_name_without_display_name(http_client_factory, monkeypatch, test_sessionmaker):
+    """course_display_name 未指定（非統合科目・古いフォーム）なら従来どおり course_name を出す。"""
+    from urllib.parse import parse_qs, urlparse
+
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 303
+    q = parse_qs(urlparse(resp.headers["location"]).query)
+    assert q["course_name"] == ["経営管理"]
+
+
+@pytest.mark.asyncio
 async def test_submit_nonce_partial_unique_index_is_enforced_at_db_level(test_sessionmaker):
     """submit_nonce の部分UNIQUEインデックス（models.py Review.__table_args__ で宣言）が
     create_all で作られ、DBレベルで効いていることの確認。NULL は複数可・非NULLは一意。
