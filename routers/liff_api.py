@@ -13,7 +13,7 @@ from core.config import (
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_VIEW_CATEGORY,
-    escape_like, make_syllabus_url, syllabus_department_key, syllabus_department_key_from_parts,
+    escape_like, latest_syllabus_url_map, make_syllabus_url, syllabus_department_key,
 )
 from core.grading_method import parse_grading_method
 from core.liff_auth import verify_liff_id_token
@@ -114,17 +114,8 @@ async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
         .join(Subject, Subject.id == CourseSection.subject_id)
         .where(Syllabus.course_section_id.in_(cs_ids), Syllabus.timetable_code.isnot(None))
     )).all()
-    latest_year: dict[int, int] = {}
-    result: dict[int, str] = {}
-    for cs_id, code, year, faculty, department in rows:
-        if cs_id in latest_year and year <= latest_year[cs_id]:
-            continue
-        url = make_syllabus_url(code, syllabus_department_key_from_parts(faculty, department))
-        if not url:
-            continue
-        latest_year[cs_id] = year
-        result[cs_id] = url
-    return result
+    # 行は既に (course_section_id, code, year, faculty, department) の形なので共通ヘルパーへ直接渡す
+    return latest_syllabus_url_map(rows)
 
 
 @router.get("/api/courses")

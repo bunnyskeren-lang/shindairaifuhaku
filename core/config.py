@@ -368,6 +368,32 @@ def make_syllabus_url(timetable_code: str, department: str = "") -> str:
     return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
 
 
+def latest_syllabus_url_map(rows):
+    """`(key, timetable_code, year, faculty, department)` の行イテラブルから
+    `key → 最新年度のシラバスURL` の dict を作る。
+
+    シラバスは科目につき複数年度ぶん存在しうるため最新年度のURLを採用する。ただし
+    make_syllabus_url() が空文字（path未対応・不正コード）を返す年度は採用も「最新年度」の
+    更新もせず、直近の有効なURLを保持する（＝新しい年度で一時的にURLを導出できなくても
+    古い有効URLが消えない）。
+
+    以前は core.cache.get_syllabus_urls_cached / get_syllabus_urls_by_pair_cached と
+    routers.liff_api._latest_syllabus_urls に同一ループが3つコピペされていた（2026-09-08集約）。
+    行のキー列の意味（subject_id / (subject_id, 教員名) / course_section_id）は呼び出し側で
+    決めてから5タプルに整形して渡す。"""
+    latest_year: dict = {}
+    result: dict = {}
+    for key, code, year, faculty, department in rows:
+        if key in latest_year and year <= latest_year[key]:
+            continue
+        url = make_syllabus_url(code, syllabus_department_key_from_parts(faculty, department))
+        if not url:
+            continue
+        latest_year[key] = year
+        result[key] = url
+    return result
+
+
 # 会員登録フォームの必須質問「神大生協が運営するアルバイト求人サイトを閲覧したことがありますか」。
 # 回答は下記2択のいずれか。DBには文字列でそのまま保存する（"いいえ" も回答済みとして
 # is_profile_complete() を通過させるため、真偽値ではなく選択肢文字列で持つ）。

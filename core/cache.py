@@ -9,8 +9,7 @@ from core.config import (
     ON_DEMAND_SAME_CONTENT_SUBJECTS,
     REVIEW_SUBMISSION_SENMON_CATEGORY,
     is_profile_complete,
-    make_syllabus_url,
-    syllabus_department_key_from_parts,
+    latest_syllabus_url_map,
 )
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
@@ -370,18 +369,8 @@ async def get_syllabus_urls_cached() -> dict[int, str]:
             .join(Subject, Subject.id == CourseSection.subject_id)
             .where(Syllabus.timetable_code.isnot(None))
         )).all()
-    # 科目につき複数年度のsyllabiがありうるため、最新年度のURLを採用する
-    _latest_year: dict[int, int] = {}
-    result: dict[int, str] = {}
-    for subject_id, code, year, faculty, department in rows:
-        if subject_id in _latest_year and year <= _latest_year[subject_id]:
-            continue
-        url = make_syllabus_url(code, syllabus_department_key_from_parts(faculty, department))
-        if not url:
-            continue
-        _latest_year[subject_id] = year
-        result[subject_id] = url
-    _syllabus_url_cache = result
+    # 科目につき複数年度のsyllabiがありうるため、最新年度のURLを採用する（共通ヘルパー）
+    _syllabus_url_cache = latest_syllabus_url_map(rows)
     _syllabus_url_cache_at = time.monotonic()
     return _syllabus_url_cache
 
@@ -403,18 +392,11 @@ async def get_syllabus_urls_by_pair_cached() -> dict[tuple[int, str], str]:
             .join(Subject, Subject.id == CourseSection.subject_id)
             .where(Syllabus.timetable_code.isnot(None))
         )).all()
-    _latest_year: dict[tuple[int, str], int] = {}
-    result: dict[tuple[int, str], str] = {}
-    for subject_id, iname, code, year, faculty, department in rows:
-        key = (subject_id, iname)
-        if key in _latest_year and year <= _latest_year[key]:
-            continue
-        url = make_syllabus_url(code, syllabus_department_key_from_parts(faculty, department))
-        if not url:
-            continue
-        _latest_year[key] = year
-        result[key] = url
-    _syllabus_url_by_pair_cache = result
+    # (subject_id, 教員名) をキーに整形してから共通ヘルパーで最新年度URLを選ぶ
+    _syllabus_url_by_pair_cache = latest_syllabus_url_map(
+        ((sid, iname), code, year, faculty, department)
+        for sid, iname, code, year, faculty, department in rows
+    )
     _syllabus_url_by_pair_cache_at = time.monotonic()
     return _syllabus_url_by_pair_cache
 

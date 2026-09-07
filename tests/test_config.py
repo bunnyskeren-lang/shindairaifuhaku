@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.config import is_profile_complete, make_syllabus_url, normalize_instructor_name, normalize_subject_name, stars, subject_submittable_for_profile, syllabus_department_key
+from core.config import is_profile_complete, latest_syllabus_url_map, make_syllabus_url, normalize_instructor_name, normalize_subject_name, stars, subject_submittable_for_profile, syllabus_department_key
 
 BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026"
 
@@ -195,3 +195,33 @@ def test_subject_submittable_kaiyo_seisaku_ignores_department():
     # 他学部の専門科目は従来どおり不可
     assert not subject_submittable_for_profile(
         "専門", "工学部", "建築学科", "海洋政策科学部", "航海学領域")
+
+
+def test_latest_syllabus_url_map_picks_latest_year():
+    # 同一キーの複数年度から最新年度のURLを採用する
+    rows = [
+        (1, "3U020", 2024, "教養教育院", ""),
+        (1, "3U021", 2026, "教養教育院", ""),
+        (1, "3U019", 2025, "教養教育院", ""),
+    ]
+    assert latest_syllabus_url_map(rows) == {1: f"{BASE}/20/data/2026_3U021.html"}
+
+
+def test_latest_syllabus_url_map_keeps_old_url_when_newer_year_has_no_url():
+    # 新しい年度のコードがpath未対応でURLを導出できない場合、古い有効URLを保持する
+    rows = [
+        (1, "3U020", 2025, "教養教育院", ""),
+        (1, "3Q123", 2026, "教養教育院", ""),  # 未対応letter → make_syllabus_url が "" を返す
+    ]
+    assert latest_syllabus_url_map(rows) == {1: f"{BASE}/20/data/2026_3U020.html"}
+
+
+def test_latest_syllabus_url_map_supports_tuple_keys():
+    rows = [
+        ((1, "田中"), "3U020", 2026, "教養教育院", ""),
+        ((1, "佐藤"), "3U021", 2026, "教養教育院", ""),
+    ]
+    assert latest_syllabus_url_map(rows) == {
+        (1, "田中"): f"{BASE}/20/data/2026_3U020.html",
+        (1, "佐藤"): f"{BASE}/20/data/2026_3U021.html",
+    }
