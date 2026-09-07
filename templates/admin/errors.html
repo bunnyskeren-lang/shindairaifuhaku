@@ -11,8 +11,8 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
 {% block content %}
 <div class="card">
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
-    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">すべて</a>
-    <a href="/admin/errors?view=submit_duplicate" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">重複投稿のみ（{{ dup_total }}）</a>
+    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">エラーのみ</a>
+    <a href="/admin/errors?view=submit_duplicate" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if is_dup_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">レビュー二重送信（{{ dup_total }}）</a>
     <a href="/admin/liff-reauth" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;background:#f3f4f6;color:#374151">再ログインテレメトリ →</a>
   </div>
   {% if is_dup_view %}
@@ -22,7 +22,7 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
     <b>ユーザー本人は送信ボタンを1回しか押していない</b>ことが多い。サーバー不具合ではないが発生状況を追うため Push 通知は従来どおり行う。
   </div>
   {% else %}
-  <p style="font-size:13px;color:#6b7280;margin:0 0 16px">トレースバックは行をクリックで展開。</p>
+  <p style="font-size:13px;color:#6b7280;margin:0 0 16px">本物の障害のみ表示（レビュー二重送信のテレメトリは別タブ）。トレースバックは行をクリックで展開。</p>
   {% endif %}
   <table>
     <tr>

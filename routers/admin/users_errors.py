@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from core import cache
 from core.config import credit_tickets_granted_clause, review_approval_unlock_credits
@@ -139,7 +139,8 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
 
 # 本来のサーバーエラーではないが、発生状況を追うため error_logs へ相乗りさせているテレメトリ種別。
-# 既定のエラー一覧にはそのまま出しつつ、?view=submit_duplicate でこの種別だけに絞れる。
+# 既定のエラー一覧（＝本物の障害）からは除外し、?view=submit_duplicate でこの種別だけを表示する。
+# こうしないと二重送信テレメトリが本物のエラーを一覧・件数の両方で薄めてしまう。
 #  - submit_duplicate: レビュー二重送信による「既に投稿済み」拒否（review_submit_api.py の _form_error）
 # （liff_reauth は 2026-09-08 に専用テーブル liff_auth_events へ分離。/admin/liff-reauth を参照）
 _SUBMIT_DUPLICATE_ACTION_PREFIX = "submit_duplicate:"
@@ -155,11 +156,14 @@ async def admin_errors(
     per_page = 50
     is_dup_view = view == "submit_duplicate"
     dup_like = ErrorLog.action.like(_SUBMIT_DUPLICATE_ACTION_PREFIX + "%")
+    # 既定ビューは submit_duplicate: を除外（＝本物の障害だけ）、?view=submit_duplicate はその逆。
+    # action IS NULL の行（大半の本物のエラー）は NOT LIKE が SQL上 NULL になり除外されて
+    # しまうため、明示的に is_(None) を OR しておく
+    view_filter = dup_like if is_dup_view else or_(ErrorLog.action.is_(None), ~dup_like)
     async with AsyncSessionLocal() as session:
-        count_stmt = select(func.count(ErrorLog.id))
-        if is_dup_view:
-            count_stmt = count_stmt.where(dup_like)
-        total = (await session.execute(count_stmt)).scalar_one()
+        total = (await session.execute(
+            select(func.count(ErrorLog.id)).where(view_filter)
+        )).scalar_one()
         dup_total = (await session.execute(
             select(func.count(ErrorLog.id)).where(dup_like)
         )).scalar_one()
@@ -176,10 +180,9 @@ async def admin_errors(
                 ErrorLog.traceback,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == ErrorLog.user_id)
+            .where(view_filter)
             .order_by(ErrorLog.created_at.desc())
         )
-        if is_dup_view:
-            rows_stmt = rows_stmt.where(dup_like)
         errors = (await session.execute(
             rows_stmt.offset((page - 1) * per_page).limit(per_page)
         )).all()

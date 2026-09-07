@@ -13,12 +13,21 @@ _LOG_RETENTION_DAYS = 30
 
 # DB接続枯渇等の障害時に短時間で大量のエラーが発生すると、エラー1件ごとにPush通知が
 # 飛んで管理者端末に通知が殺到してしまうため、Push通知だけをクールダウンで間引く
-# （DBへのErrorLog保存自体は間引かず、全件記録する）
+# （DBへのErrorLog保存自体は間引かず、全件記録する）。
+# クールダウンは push_cooldown_key 単位で独立させる: 本物のエラー("error")と、error_logs へ
+# 相乗りしている想定内テレメトリ（submit_duplicate 等）が同じ枠を共有すると、良性テレメトリの
+# バーストが本物の障害Push通知を最大5分マスクしてしまうため。
 _ERROR_PUSH_COOLDOWN_SECONDS = 300
-_last_error_push_at: float = 0.0
+_last_push_at: dict[str, float] = {}
 
 
-async def save_error_log(exc: Exception, user_id: str | None = None, action: str | None = None, notify: bool = True):
+async def save_error_log(
+    exc: Exception,
+    user_id: str | None = None,
+    action: str | None = None,
+    notify: bool = True,
+    push_cooldown_key: str = "error",
+):
     try:
         # exc.__traceback__から明示的に組み立てる。asyncio.Task.add_done_callback等、
         # 元のexceptブロックを抜けた後に呼ばれる場合はtraceback.format_exc()だと
@@ -42,11 +51,10 @@ async def save_error_log(exc: Exception, user_id: str | None = None, action: str
     if not notify:
         return
 
-    global _last_error_push_at
     now = time.monotonic()
-    if now - _last_error_push_at < _ERROR_PUSH_COOLDOWN_SECONDS:
+    if now - _last_push_at.get(push_cooldown_key, 0.0) < _ERROR_PUSH_COOLDOWN_SECONDS:
         return
-    _last_error_push_at = now
+    _last_push_at[push_cooldown_key] = now
 
     async def _notify() -> None:
         try:
