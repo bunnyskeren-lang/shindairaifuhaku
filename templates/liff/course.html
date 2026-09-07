@@ -201,7 +201,6 @@
 
   <div class="actions">
     <a id="btn-review" class="btn btn-primary" href="#">✏️ レビューを投稿</a>
-    <a id="btn-syllabus" class="btn btn-secondary" href="#" style="display:none">📄 シラバスを見る</a>
   </div>
 </div>
 
@@ -697,6 +696,8 @@ async function main() {
       controlsHtml += `<div style="font-size:11px;color:#94a3b8">🔒 レビューは解除後に表示されます。教員を選ぶとシラバスが切り替わります</div>`;
     }
   }
+  // 教員チップの直下に配置し、選んだ教員のシラバスであることが見た目で分かるようにする
+  controlsHtml += `<a id="btn-syllabus" class="btn btn-secondary" href="#" style="display:none">📄 シラバスを見る</a>`;
   if (!data.locked && data.reviews && data.reviews.length > 1) {
     controlsHtml += `<div class="sort-row">
       <select id="sort-select" class="sort-select">
