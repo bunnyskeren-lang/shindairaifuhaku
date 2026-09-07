@@ -351,7 +351,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み。`unlock_credits`はレビュー閲覧権チケットの残数。`banned_at`は虚偽投稿等を理由にLINE bot利用を永久停止した日時（NULL＝有効）、`ban_reason`は管理者向け内部メモでユーザーには非公開。停止・解除は`/admin/users`から操作し`core/moderation.py`が判定を仲介する） |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
-| `error_logs` | サーバーエラーログ |
+| `error_logs` | サーバーエラーログ。`action`が`liff_reauth:<form>:<stage>`の行はエラーではなくLIFF IDトークン期限切れ→強制再ログインのテレメトリ（`POST /api/liff-auth-event`が`notify=False`で記録。`error_message`にJSON、`guard_tripped=true`＝再ログインしても復帰不能＝詰み）。`/admin/errors`は既定でこれらを除外し`?view=liff_reauth`で抽出表示 |
 | `push_subscriptions` | Web Push VAPID 購読情報 |
 | `richmenu_taps` | リッチメニュークリックログ |
 
