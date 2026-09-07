@@ -9,7 +9,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
-    BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, MAX_REVIEWS_PER_COURSE_SECTION,
+    BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, KYOTSU_SENMON_KISO_FACULTY,
+    MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE, ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_VIEW_CATEGORY,
     escape_like, make_syllabus_url, syllabus_department_key,
@@ -57,18 +58,24 @@ def _clean_faculty(faculty: str) -> str:
 
 
 def _submission_category_clause(faculty: str):
-    """レビュー投稿フォームの科目候補に含める条件（教養科目は全員、専門科目は指定学部のぶんのみ）。
-    faculty が空なら教養科目のみ（学部未指定・未ログイン相当）。学科の絞り込みは
-    core.config.subject_submittable_for_profile() でクライアント側／/submit側が行う。"""
+    """レビュー投稿フォームの科目候補に含める条件。
+    - 教養科目: 全員
+    - 共通専門基礎科目（faculty="教養教育院" の専門科目）: 全員
+    - その他の専門科目: 指定学部のぶんのみ（faculty が空なら含めない）
+    学科の絞り込みは core.config.subject_submittable_for_profile() でクライアント側／/submit側が行う。"""
+    clauses = [
+        Subject.category == REVIEW_SUBMISSION_CATEGORY,
+        and_(
+            Subject.category == REVIEW_SUBMISSION_SENMON_CATEGORY,
+            Subject.faculty == KYOTSU_SENMON_KISO_FACULTY,
+        ),
+    ]
     if faculty:
-        return or_(
-            Subject.category == REVIEW_SUBMISSION_CATEGORY,
-            and_(
-                Subject.category == REVIEW_SUBMISSION_SENMON_CATEGORY,
-                Subject.faculty == faculty,
-            ),
-        )
-    return Subject.category == REVIEW_SUBMISSION_CATEGORY
+        clauses.append(and_(
+            Subject.category == REVIEW_SUBMISSION_SENMON_CATEGORY,
+            Subject.faculty == faculty,
+        ))
+    return or_(*clauses)
 
 
 async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
@@ -181,6 +188,7 @@ async def api_preload(faculty: str = ""):
         courses = [
             c for c in all_courses_
             if c.category == REVIEW_SUBMISSION_CATEGORY
+            or (c.category == REVIEW_SUBMISSION_SENMON_CATEGORY and (c.faculty or "") == KYOTSU_SENMON_KISO_FACULTY)
             or (faculty and c.category == REVIEW_SUBMISSION_SENMON_CATEGORY and (c.faculty or "") == faculty)
         ]
         insts_by_course = await cache.get_all_instructors_cached()

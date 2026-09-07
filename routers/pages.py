@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, Response
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, FACULTY_DEPARTMENTS, IS_DEV,
+    APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KYOTSU_SENMON_KISO_FACULTY,
     LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_FORM_URL, REVIEW_LIFF_ID,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY,
@@ -33,6 +33,7 @@ async def index(request: Request, uid: str = Query(default="")):
             "max_reviews_per_course_section": MAX_REVIEWS_PER_COURSE_SECTION,
             "submission_kyoyo_category": REVIEW_SUBMISSION_CATEGORY,
             "submission_senmon_category": REVIEW_SUBMISSION_SENMON_CATEGORY,
+            "kyotsu_senmon_kiso_faculty": KYOTSU_SENMON_KISO_FACULTY,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

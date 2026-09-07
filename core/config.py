@@ -97,6 +97,11 @@ REVIEW_SUBMISSION_RESTRICTED_MESSAGE = "現在、レビュー投稿は教養科�
 REVIEW_SUBMISSION_SENMON_CATEGORY = "専門"
 REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE = "この専門科目は、ご登録の学部の学生のみレビューを投稿できます"
 
+# 共通専門基礎科目（微分積分・力学基礎・化学実験等）は category="専門" だが faculty がこの値で、
+# 理系を中心に複数学部の学生が履修する。教養科目と同じく学部を問わずレビュー投稿可とする
+# （ユーザー指示 2026-09-07）。
+KYOTSU_SENMON_KISO_FACULTY = "教養教育院"
+
 
 def subject_submittable_for_profile(
     category,
@@ -108,16 +113,19 @@ def subject_submittable_for_profile(
     """レビュー投稿フォームでこの科目にレビューを投稿できるか判定する。
 
     - 教養科目（category == REVIEW_SUBMISSION_CATEGORY）: 全員可
-    - 専門科目（category == REVIEW_SUBMISSION_SENMON_CATEGORY）: 投稿者本人の学部と一致必須。
+    - 共通専門基礎科目（category == "専門" かつ faculty == KYOTSU_SENMON_KISO_FACULTY）: 全員可
+    - その他の専門科目（category == REVIEW_SUBMISSION_SENMON_CATEGORY）: 投稿者本人の学部と一致必須。
       学科は「一致」「科目側が学科不明（空/NULL）」「投稿者が学科未登録（空/NULL）」の
       いずれかで可（ユーザー指示 2026-09-07）
-    - それ以外のcategory（共通専門基礎科目のfaculty='教養教育院'等を含む）: 不可
+    - それ以外のcategory: 不可
     """
     if category == REVIEW_SUBMISSION_CATEGORY:
         return True
     if category != REVIEW_SUBMISSION_SENMON_CATEGORY:
         return False
     sf = (subject_faculty or "").strip()
+    if sf == KYOTSU_SENMON_KISO_FACULTY:
+        return True
     pf = (profile_faculty or "").strip()
     if not sf or not pf or sf != pf:
         return False

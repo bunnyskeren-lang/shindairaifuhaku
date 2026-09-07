@@ -626,6 +626,8 @@
     // サーバー側(core.config.subject_submittable_for_profile / routers/review_submit_api.py)と同じ規則。
     const SUBMISSION_KYOYO_CATEGORY = "{{ submission_kyoyo_category }}";
     const SUBMISSION_SENMON_CATEGORY = "{{ submission_senmon_category }}";
+    // 共通専門基礎科目（微分積分・力学基礎等、category="専門"・faculty=この値）は学部を問わず投稿可
+    const KYOTSU_SENMON_KISO_FACULTY = "{{ kyotsu_senmon_kiso_faculty }}";
     let _liffInitPromise = null;
     function ensureLiffInit() {
       if (!_liffInitPromise) {
@@ -664,6 +666,7 @@
       if (cat === SUBMISSION_KYOYO_CATEGORY) return true;
       if (cat !== SUBMISSION_SENMON_CATEGORY) return false;
       const sf = ((c && c.faculty) || '').trim();
+      if (sf === KYOTSU_SENMON_KISO_FACULTY) return true;
       const pf = ((_profile && _profile.faculty) || '').trim();
       if (!sf || !pf || sf !== pf) return false;
       const sd = ((c && c.department) || '').trim();
