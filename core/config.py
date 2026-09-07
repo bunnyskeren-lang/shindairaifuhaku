@@ -232,9 +232,23 @@ def make_syllabus_url(timetable_code: str, department: str = "") -> str:
     return f"https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{timetable_code}.html"
 
 
+# 会員登録フォームの必須質問「神大生協が運営するアルバイト求人サイトはご存じですか」。
+# 回答は下記2択のいずれか。DBには文字列でそのまま保存する（"いいえ" も回答済みとして
+# is_profile_complete() を通過させるため、真偽値ではなく選択肢文字列で持つ）。
+COOP_JOBSITE_KNOWN_QUESTION = "神大生協が運営するアルバイト求人サイトはご存じですか"
+COOP_JOBSITE_KNOWN_CHOICES = ("はい", "いいえ")
+
+
 def is_profile_complete(p) -> bool:
-    """UserProfile行が氏名・学籍番号・学部・学科すべて入力済みか判定する。"""
-    return bool(p and p.name and p.student_id and p.faculty and p.department)
+    """UserProfile行が氏名・学籍番号・学部・学科・生協求人サイト認知の質問すべて入力済みか判定する。
+
+    coop_jobsite_known は2026-09-07に必須化した項目。既存の登録済みユーザーはこの列がNULLの
+    ままになり本関数がFalseを返すため、次回操作時に一度だけ会員登録フォームへ誘導される
+    （友だち追加者の把握が目的）。一度回答すれば以降は再登録を求められない。"""
+    return bool(
+        p and p.name and p.student_id and p.faculty and p.department
+        and getattr(p, "coop_jobsite_known", None)
+    )
 
 
 def make_register_url(user_id: str) -> str:

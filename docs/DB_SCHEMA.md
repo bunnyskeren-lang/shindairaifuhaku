@@ -122,10 +122,11 @@ subjects ─┬─< course_sections >─┬─ instructors
 | `student_id` | String(20) | NOT NULL | |
 | `faculty` | Text | NULL可 | |
 | `department` | Text | NULL可 | |
+| `coop_jobsite_known` | Text | NULL可 | 会員登録フォームの必須質問「神大生協が運営するアルバイト求人サイトはご存じですか」への回答（`"はい"`/`"いいえ"`）。2026-09-07追加 |
 | `updated_at` | DateTime(tz) | NULL可 | |
 | `created_at` | DateTime(tz) | NOT NULL | |
 
-友だち追加時の会員登録で氏名・学籍番号・学部・学科すべての入力が必須（`core.config.is_profile_complete()`で判定）。`share_token_version`列は2026-07-30の大規模リニューアル（My時間割機能全廃止）で廃止済み。`grade`列は2026-08-24に廃止済み（学年を使う機能が既に無く実質未使用だったため、登録フォームから削除・既存データも削除）。
+友だち追加時の会員登録で氏名・学籍番号・学部・学科・`coop_jobsite_known`すべての入力が必須（`core.config.is_profile_complete()`で判定）。`coop_jobsite_known`は2026-09-07に必須化した項目で、友だち追加者を把握する目的。必須化前に登録済みのユーザーはこの列がNULLのまま残り`is_profile_complete()`がFalseを返すため、次回操作時に一度だけ会員登録フォームへ誘導される（一度回答すれば以降は再登録不要。ブロック解除で再度FollowEventが来ても回答済みなら求められない）。`share_token_version`列は2026-07-30の大規模リニューアル（My時間割機能全廃止）で廃止済み。`grade`列は2026-08-24に廃止済み（学年を使う機能が既に無く実質未使用だったため、登録フォームから削除・既存データも削除）。
 
 ### `message_logs` — LINEメッセージ送受信ログ
 

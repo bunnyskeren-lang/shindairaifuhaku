@@ -30,6 +30,7 @@ VALID_FORM = {
     "student_id": "2345678S",
     "faculty": "経営学部",
     "department": "経営学科",
+    "coop_jobsite_known": "はい",
 }
 
 
@@ -98,6 +99,44 @@ async def test_register_missing_department_field_shows_friendly_error(http_clien
     assert resp.status_code == 400
     assert "detail" not in resp.text
     assert "学科を選択してください" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_register_missing_coop_jobsite_known_shows_friendly_error(http_client_factory, monkeypatch, test_sessionmaker):
+    """2026-09-07追加の必須項目。未選択（POSTボディに無い／空文字）だと400で誘導文言を返し、
+    生のバリデーションエラーを出さないこと。"""
+    _fake_verify(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
+    client = http_client_factory(profile_api, monkeypatch)
+
+    form = {k: v for k, v in VALID_FORM.items() if k != "coop_jobsite_known"}
+    resp = await client.post("/api/register", data=form)
+    assert resp.status_code == 400
+    assert "detail" not in resp.text
+    assert "神大生協が運営するアルバイト求人サイト" in resp.text
+
+    bad = {**VALID_FORM, "coop_jobsite_known": "たぶん"}
+    resp2 = await client.post("/api/register", data=bad)
+    assert resp2.status_code == 400
+    assert "神大生協が運営するアルバイト求人サイト" in resp2.text
+
+
+@pytest.mark.asyncio
+async def test_register_existing_user_recorded_coop_jobsite_answer(http_client_factory, monkeypatch, test_sessionmaker):
+    """必須化前に登録済みのユーザー（coop_jobsite_known=NULL）が再登録すると、その回答が
+    保存されること（ON CONFLICT DO UPDATE の set_ 対象に含めているため）。"""
+    _fake_verify(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
+    client = http_client_factory(profile_api, monkeypatch)
+
+    first = await client.post("/api/register", data={**VALID_FORM, "coop_jobsite_known": "いいえ"})
+    assert first.status_code == 200
+    second = await client.post("/api/register", data={**VALID_FORM, "coop_jobsite_known": "はい"})
+    assert second.status_code == 200
+
+    async with test_sessionmaker() as session:
+        profile = await session.get(UserProfile, USER_ID)
+        assert profile.coop_jobsite_known == "はい"
 
 
 @pytest.mark.asyncio

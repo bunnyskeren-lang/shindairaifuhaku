@@ -86,6 +86,18 @@
         </select>
       </div>
 
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">
+          🔎 神大生協が運営するアルバイト求人サイトはご存じですか <span class="text-red-500">*</span>
+        </label>
+        <select name="coop_jobsite_known" id="coop_jobsite_known" required
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white">
+          <option value="">選択してください</option>
+          <option value="はい">はい</option>
+          <option value="いいえ">いいえ</option>
+        </select>
+      </div>
+
       <button type="submit"
         class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">
         登録する
@@ -172,6 +184,9 @@
             facultySel.value = d.faculty;
             populateDepartments(d.faculty, d.department || '');
           }
+          if (d.coop_jobsite_known) {
+            document.getElementById('coop_jobsite_known').value = d.coop_jobsite_known;
+          }
         } catch (e) {}
       })();
     }
@@ -191,6 +206,10 @@
       }
       if (!document.getElementById('department').value) {
         alert('学科を選択してください');
+        return;
+      }
+      if (!document.getElementById('coop_jobsite_known').value) {
+        alert('「神大生協が運営するアルバイト求人サイトはご存じですか」にお答えください');
         return;
       }
       const sid = document.getElementById('student_id').value.replace(/[\s　]+/g, '').toUpperCase();

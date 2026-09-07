@@ -35,7 +35,7 @@ async def _seed_course_with_reviews(test_sessionmaker, *, my_student_id: str):
 
         session.add(UserProfile(
             line_user_id=UID, name="太郎", student_id=my_student_id,
-            faculty="経営学部", department="経営学科",
+            faculty="経営学部", department="経営学科", coop_jobsite_known="はい",
         ))
         session.add(SubjectUnlock(line_user_id=UID, subject_id=subj.id))
 

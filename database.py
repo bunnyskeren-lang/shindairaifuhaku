@@ -643,3 +643,12 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS variant_merge_excluded BOOLEAN NOT NULL DEFAULT FALSE"
         ))
+
+        # ── 2026-09-07: 会員登録フォームに必須質問「神大生協が運営するアルバイト求人サイトは
+        #    ご存じですか」（はい/いいえ）を追加 ──
+        # 友だち追加者を把握するため必須項目にする。既存の登録済みユーザーはこの列がNULLのままに
+        # なり、is_profile_complete() が False を返すため次回操作時に一度だけ再登録を求められる。
+        # 一度回答すれば列が埋まり、以降（ブロック解除等で再度FollowEventが来ても）再登録は不要。
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS coop_jobsite_known TEXT"
+        ))

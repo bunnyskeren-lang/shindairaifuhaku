@@ -75,7 +75,7 @@ async def _seed_profile(test_sessionmaker, user_id: str = UID, student_id: str =
     async with test_sessionmaker() as session:
         session.add(UserProfile(
             line_user_id=user_id, name=name, student_id=student_id,
-            faculty="経営学部", department="経営学科",
+            faculty="経営学部", department="経営学科", coop_jobsite_known="はい",
         ))
         await session.commit()
 

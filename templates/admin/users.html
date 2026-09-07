@@ -6,7 +6,7 @@
 {% block content %}
 <div class="card">
   <table>
-    <tr><th>名前</th><th>学籍番号</th><th>学部・学科</th><th>LINE ID</th><th>登録日時</th><th>最終アクセス</th><th>レビュー</th><th>閲覧権チケット</th><th>支払い上限額</th><th>利用状況</th></tr>
+    <tr><th>名前</th><th>学籍番号</th><th>学部・学科</th><th>生協求人<br>サイト認知</th><th>LINE ID</th><th>登録日時</th><th>最終アクセス</th><th>レビュー</th><th>閲覧権チケット</th><th>支払い上限額</th><th>利用状況</th></tr>
     {% for u in users %}
     {% set rv = review_map.get(u.student_id) if u.student_id else None %}
     {% set tk = ticket_map.get(u.user_id) %}
@@ -14,6 +14,7 @@
       <td>{{ u.name or "―" }}</td>
       <td style="font-size:12px">{{ u.student_id or "―" }}</td>
       <td style="font-size:12px">{{ u.faculty or "―" }}{% if u.department %}<br>{{ u.department }}{% endif %}</td>
+      <td style="font-size:12px">{{ u.coop_jobsite_known or "―" }}</td>
       <td style="font-size:11px;color:#9ca3af;word-break:break-all">{{ u.user_id }}</td>
       <td style="font-size:12px">{{ u.registered_at | jst if u.registered_at else "―" }}</td>
       <td>{{ u.last_seen | jst if u.last_seen else "―" }}</td>
@@ -89,7 +90,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="10" class="empty">ユーザーなし</td></tr>
+    <tr><td colspan="11" class="empty">ユーザーなし</td></tr>
     {% endfor %}
   </table>
   {{ pager(page, total_pages, total, url_prefix) }}

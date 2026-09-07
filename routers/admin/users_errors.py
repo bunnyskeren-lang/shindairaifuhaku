@@ -40,6 +40,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 UserProfile.student_id,
                 UserProfile.faculty,
                 UserProfile.department,
+                UserProfile.coop_jobsite_known,
                 UserProfile.unlock_credits,
                 UserProfile.payment_limit,
                 UserProfile.banned_at,

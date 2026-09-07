@@ -50,6 +50,7 @@ async def _seed_profile(
             student_id="2345678S",
             faculty="経営学部" if complete else None,
             department="経営学科" if complete else None,
+            coop_jobsite_known="はい" if complete else None,
             payment_limit=payment_limit,
             banned_at=datetime.now(timezone.utc) if banned else None,
             ban_reason="虚偽投稿" if banned else None,
@@ -293,5 +294,6 @@ async def test_non_banned_user_unaffected(http_client_factory, monkeypatch, test
         "student_id": "2345678S",
         "faculty": "経営学部",
         "department": "経営学科",
+        "coop_jobsite_known": "はい",
     })
     assert resp.status_code == 200

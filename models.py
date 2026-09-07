@@ -56,6 +56,12 @@ class UserProfile(TimestampMixin, Base):
     banned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # BAN時の管理者向け内部メモ。ユーザーには開示しない
     ban_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 会員登録フォームの必須質問「神大生協が運営するアルバイト求人サイトはご存じですか」への回答
+    # （"はい" / "いいえ" のいずれか）。2026-09-07追加。
+    # is_profile_complete() の判定対象に含めているため、この列がNULL/空のユーザーは未完了扱いになる。
+    # 既存の登録済みユーザーはこの列がNULLのままになり、次回操作時に一度だけ再登録を求められる
+    # （友だち追加者を把握する目的。"いいえ" も回答済みとして扱えるよう真偽値でなく文字列で保持する）。
+    coop_jobsite_known: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class ErrorLog(TimestampMixin, Base):

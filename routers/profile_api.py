@@ -10,6 +10,7 @@ from core.activity_log import save_error_log
 from core.push import send_registration_push_notification
 from core.config import (
     BAN_MESSAGE_TEXT,
+    COOP_JOBSITE_KNOWN_CHOICES, COOP_JOBSITE_KNOWN_QUESTION,
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE,
     FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, RICHMENU_ID_MAIN,
@@ -84,6 +85,7 @@ async def profile_prefill(request: Request):
         "student_id": profile.student_id,
         "faculty": profile.faculty,
         "department": profile.department,
+        "coop_jobsite_known": profile.coop_jobsite_known,
         "reviewed_pairs": [[sid, name] for sid, name in reviewed_rows],
         # レビュー投稿フォーム(form_index.html)がこのフラグでオーバーレイブロックする。
         # お問い合わせフォーム(contact.html)は意図的にこのフラグを見ず、BAN中でも
@@ -100,6 +102,7 @@ async def register_profile(
     student_id: str = Form(""),
     faculty: str = Form(""),
     department: str = Form(""),
+    coop_jobsite_known: str = Form(""),
     _rl=Depends(_register_rate_limit),
 ):
     def _form_error(msg: str):
@@ -126,6 +129,9 @@ async def register_profile(
         department = None
     elif department not in FACULTY_DEPARTMENTS.get(faculty, []):
         return _form_error("学科を選択してください")
+    coop_jobsite_known = coop_jobsite_known.strip()
+    if coop_jobsite_known not in COOP_JOBSITE_KNOWN_CHOICES:
+        return _form_error(f"「{COOP_JOBSITE_KNOWN_QUESTION}」にお答えください")
 
     async with AsyncSessionLocal() as session:
         taken = (await session.execute(
@@ -154,6 +160,7 @@ async def register_profile(
             student_id=sid,
             faculty=faculty,
             department=department,
+            coop_jobsite_known=coop_jobsite_known,
             # 会員登録（UserProfile初回作成）した全員へ、レビュー閲覧権チケットをプレゼントする
             unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
         )
@@ -164,6 +171,9 @@ async def register_profile(
                 "student_id": stmt.excluded.student_id,
                 "faculty": stmt.excluded.faculty,
                 "department": stmt.excluded.department,
+                # 既存の登録済みユーザーが必須化後に再登録した場合、この回答を保存する
+                # （この列がNULLだったユーザーを埋めることが再登録の主目的）
+                "coop_jobsite_known": stmt.excluded.coop_jobsite_known,
             },
         )
 

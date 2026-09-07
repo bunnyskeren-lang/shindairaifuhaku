@@ -100,8 +100,21 @@ def test_is_profile_complete_none_profile_is_false():
 
 
 def test_is_profile_complete_partial_fields_missing():
-    p = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2, department=None)
+    p = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2, department=None,
+                        coop_jobsite_known="はい")
     assert not is_profile_complete(p)
+
+
+def test_is_profile_complete_coop_jobsite_known_missing():
+    # 2026-09-07 追加の必須項目。既存の登録済みユーザーはこの列がNULLのため未完了扱いになり、
+    # 次回操作時に一度だけ再登録を求められる
+    p = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2,
+                        department="教養教育院", coop_jobsite_known=None)
+    assert not is_profile_complete(p)
+    p2 = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2,
+                         department="教養教育院", coop_jobsite_known="いいえ")
+    # "いいえ" も回答済みとして完了扱いになること（真偽値でなく文字列で保持している理由）
+    assert is_profile_complete(p2)
 
 
 # ── 境界値 ──────────────────────────────────────────────────────────────────
@@ -134,8 +147,10 @@ def test_stars_clamps_to_1_to_5_range():
 
 
 def test_is_profile_complete_all_fields_present():
-    p = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2, department="")
+    p = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2, department="",
+                        coop_jobsite_known="はい")
     # department が空文字の場合、falsy値なので未完了扱いになる(仕様通りの挙動を確認)
     assert not is_profile_complete(p)
-    p2 = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2, department="教養教育院")
+    p2 = SimpleNamespace(name="神戸太郎", student_id="2345678S", faculty="経営学部", grade=2, department="教養教育院",
+                         coop_jobsite_known="はい")
     assert is_profile_complete(p2)
