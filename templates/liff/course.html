@@ -290,12 +290,14 @@
 </div>
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+{% include "_partials/liff_auth.html" %}
 <script>
 const LIFF_ID = "{{ liff_id }}";
 const REGISTER_LIFF_ID = "{{ register_liff_id }}";
 const REVIEW_FORM_URL = "{{ review_form_url }}";
 const REVIEW_LIFF_ID = "{{ review_liff_id }}";
 const BASE_URL = "{{ base_url }}";
+LiffAuth.configure({ form: 'course', apiBase: BASE_URL });
 const UNLOCK_REWARD = {{ unlock_reward }};
 const UNLOCK_REWARD_KYOYO = {{ approval_credits_kyoyo }};
 const UNLOCK_REWARD_SENMON = {{ approval_credits_senmon }};
@@ -382,61 +384,8 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   return html;
 }
 
-// liff.getIDToken() が返すIDトークンは liff.init() でも更新されず、LIFFセッション（数週間有効）
-// が生きている限り期限切れのまま返り続ける。exp をデコードして先回りで検知し、
-// サーバー検証を {"error_description":"IdToken expired."} で落とす前に再ログインへ回す。
-// sessionStorage のフラグで再ログインの無限ループを防ぐ。
-function decodeJwt(token) {
-  try {
-    let b64 = (token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
-    return JSON.parse(atob(b64));
-  } catch (e) { return null; }
-}
-function idTokenExpired(token) {
-  const p = decodeJwt(token);
-  return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
-}
-function liffSafe(fn) { try { return fn(); } catch (e) { return null; } }
-// IDトークン期限切れ→再ログインの発生状況テレメトリ。guard_tripped=true が
-// 「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
-function sendLiffAuthEvent(reason, stage, guardTripped, idToken) {
-  try {
-    const p = decodeJwt(idToken) || {};
-    const exp = (typeof p.exp === 'number') ? p.exp : null;
-    const payload = {
-      form: 'course', path: location.pathname,
-      reason: reason || '', stage: stage || '', guard_tripped: !!guardTripped,
-      in_client: !!liffSafe(() => liff.isInClient()),
-      logged_in: !!liffSafe(() => liff.isLoggedIn()),
-      token_exp: exp,
-      expired_ago_sec: exp ? Math.round(Date.now() / 1000 - exp) : null,
-      sub: p.sub || '',
-      os: liffSafe(() => liff.getOS()) || '',
-      liff_ver: liffSafe(() => liff.getVersion()) || '',
-      line_ver: liffSafe(() => liff.getLineVersion()) || '',
-      draft_present: false,
-      ua: navigator.userAgent,
-    };
-    const data = JSON.stringify(payload);
-    const url = (typeof BASE_URL === 'string' ? BASE_URL : '') + '/api/liff-auth-event';
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }));
-    } else {
-      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
-    }
-  } catch (e) {}
-}
-function forceReauthLogin(reason, stage, idToken) {
-  let tried = false;
-  try { tried = sessionStorage.getItem('liffReauthTried') === '1'; } catch (e) {}
-  sendLiffAuthEvent(reason, stage, tried, idToken);
-  if (tried) return false;
-  try { sessionStorage.setItem('liffReauthTried', '1'); } catch (e) {}
-  try { if (liff.logout) liff.logout(); } catch (e) {}
-  try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
-  return true;
-}
+// LIFF IDトークン期限切れ→強制再ログインの共通処理は _partials/liff_auth.html の
+// window.LiffAuth に集約（idExpired / forceReauth / clearFlag）。
 
 async function main() {
   let liffInitOk = true;
@@ -482,21 +431,14 @@ async function main() {
       const profile = await liff.getProfile();
       userId = profile.userId;
       idToken = await liff.getIDToken();
-      if (idToken && idTokenExpired(idToken)) {
+      if (idToken && LiffAuth.idExpired(idToken)) {
         // 期限切れなら logout→再ログインで新しいIDトークンを取り直す（リダイレクトで復帰）。
         // 復帰不能（ループ防止フラグ済み）のときはトークン無しとして進める（閲覧権なし扱い）
-        if (forceReauthLogin('expired', 'page_load', idToken)) return;
+        if (LiffAuth.forceReauth('expired', 'page_load', idToken)) return;
         idToken = "";
         userId = null;
       } else if (idToken) {
-        try {
-          if (sessionStorage.getItem('liffReauthTried') === '1') {
-            // 直前に強制再ログインしたユーザーが、今回は有効なトークンを得られた＝復帰成功。
-            // 「✅ 復帰確認」が出ないまま「🔄 再ログイン実行」だけ残るユーザーは詰み(400等)の疑い。
-            sendLiffAuthEvent('recovered', 'recovered', false, idToken);
-          }
-          sessionStorage.removeItem('liffReauthTried');
-        } catch (e) {}
+        LiffAuth.clearFlag(idToken);
       }
     }
   } catch(e) {

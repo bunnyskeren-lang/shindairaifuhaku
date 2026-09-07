@@ -1,0 +1,126 @@
+{# ------------------------------------------------------------------------------
+   LIFF IDトークン期限切れ → 強制再ログインの共通処理（window.LiffAuth）
+
+   従来は course.html / form_index.html / form_register.html / contact.html に
+   ほぼ同一のコピー（decodeJwt / idTokenExpired / liffSafe / sendLiffAuthEvent /
+   forceReauth* / clearReauthFlag）が4つあり、関数名・復帰確認処理・POST先URL・
+   draft_present の取り方が少しずつ食い違っていた。2026-09-08にこの1ファイルへ集約。
+
+   使い方:
+     1. LIFF SDK の <script src=".../sdk.js"> の直後、ページ本体スクリプトより前に
+        {% include "_partials/liff_auth.html" %} でこのpartialを読み込む。
+     2. ページ本体スクリプトの冒頭で LiffAuth.configure({...}) を1回呼ぶ。
+          form      … テレメトリの発生源識別子（'course' / 'review' / 'register' / 'contact'）
+          draftKey  … 下書きlocalStorageキー（無ければ省略。draft_present の判定に使う）
+          apiBase   … /api/liff-auth-event の前置URL（course.html は BASE_URL、他は省略）
+          reauthMode… 're-login'（既定, liff.login で復帰）/ 'replace'（別URLへ遷移して復帰）
+          reauthUrl … reauthMode='replace' 時の遷移先（例 '/liff/review'）
+
+   公開API:
+     LiffAuth.idExpired(idToken)              → 期限切れ(60秒手前)なら true
+     LiffAuth.forceReauth(reason,stage,token) → 再ログインを開始したら true（呼び出し側は即 return）
+                                                ループ防止済みで復帰不能なら false（手動導線を出す）
+     LiffAuth.clearFlag(idToken)              → 復帰成功時に呼ぶ（「復帰確認」テレメトリ＋フラグ解除）
+------------------------------------------------------------------------------ #}
+<script>
+window.LiffAuth = (function () {
+  var cfg = { form: '?', draftKey: null, apiBase: '', reauthMode: 're-login', reauthUrl: '' };
+
+  function configure(o) { if (o) { for (var k in o) { if (o[k] !== undefined) cfg[k] = o[k]; } } }
+
+  // liff.getIDToken() は liff.init() でも更新されず、LIFFセッション（数週間有効）が
+  // 生きている限り期限切れのIDトークンをそのまま返し続ける。exp を自前でデコードして
+  // 先回りで検知し、サーバー検証を "IdToken expired." で落とす前に再ログインへ回す。
+  function decodeJwt(token) {
+    try {
+      var b64 = (token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      return JSON.parse(atob(b64));
+    } catch (e) { return null; }
+  }
+  function idExpired(token) {
+    var p = decodeJwt(token);
+    // exp の60秒手前で「期限切れ」扱いにして、検証往復の途中で切れるのを避ける
+    return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
+  }
+  function safe(fn) { try { return fn(); } catch (e) { return null; } }
+
+  // 期限切れ→再ログインの発生状況テレメトリ。専用テーブル liff_auth_events に記録する
+  // （サーバーエラーではないので error_logs には入れない・Push通知も出さない）。
+  // guard_tripped=true が「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
+  function sendEvent(reason, stage, guardTripped, idToken) {
+    try {
+      var p = decodeJwt(idToken) || {};
+      var exp = (typeof p.exp === 'number') ? p.exp : null;
+      var draftPresent = false;
+      if (cfg.draftKey) { try { draftPresent = !!localStorage.getItem(cfg.draftKey); } catch (e) {} }
+      var payload = {
+        form: cfg.form, path: location.pathname,
+        reason: reason || '', stage: stage || '', guard_tripped: !!guardTripped,
+        in_client: !!safe(function () { return liff.isInClient(); }),
+        logged_in: !!safe(function () { return liff.isLoggedIn(); }),
+        token_exp: exp,
+        expired_ago_sec: exp ? Math.round(Date.now() / 1000 - exp) : null,
+        sub: p.sub || '',
+        os: safe(function () { return liff.getOS(); }) || '',
+        liff_ver: safe(function () { return liff.getVersion(); }) || '',
+        line_ver: safe(function () { return liff.getLineVersion(); }) || '',
+        draft_present: draftPresent,
+        ua: navigator.userAgent,
+      };
+      var data = JSON.stringify(payload);
+      var url = (cfg.apiBase || '') + '/api/liff-auth-event';
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }));
+      } else {
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
+      }
+    } catch (e) {}
+  }
+
+  function _redirect() {
+    try { if (typeof liff !== 'undefined' && liff.logout) liff.logout(); } catch (e) {}
+    if (cfg.reauthMode === 'replace') {
+      // このページのURLがLIFFエンドポイントとして未登録だと liff.login({redirectUri})
+      // が redirectUri 検証に失敗して400になるため、登録済みエンドポイント(cfg.reauthUrl)へ
+      // 遷移し、そちらでログインを完結させる（form_index.html '/' → '/liff/review'）。
+      location.replace((cfg.reauthUrl || location.pathname) + location.search);
+      return true;
+    }
+    try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
+    return true;
+  }
+
+  // 戻り値 true = 再ログインへ遷移した（呼び出し側は即 return する）
+  //        false = ループ防止フラグ済みで復帰不能（呼び出し側は手動導線を出す）
+  function forceReauth(reason, stage, idToken) {
+    var tried = false;
+    try { tried = sessionStorage.getItem('liffReauthTried') === '1'; } catch (e) {}
+    sendEvent(reason, stage, tried, idToken);
+    if (tried) return false;
+    try { sessionStorage.setItem('liffReauthTried', '1'); } catch (e) {}
+    return _redirect();
+  }
+
+  // 直前に強制再ログインしたユーザーが、今回は検証を通って正常表示できた＝復帰成功。
+  // この「復帰確認」が記録されないまま「再ログイン実行」だけ残るユーザーは詰み(400等)の疑い。
+  function clearFlag(idToken) {
+    try {
+      if (sessionStorage.getItem('liffReauthTried') === '1') {
+        sendEvent('recovered', 'recovered', false, idToken);
+      }
+      sessionStorage.removeItem('liffReauthTried');
+    } catch (e) {}
+  }
+
+  return {
+    configure: configure,
+    decodeJwt: decodeJwt,
+    idExpired: idExpired,
+    safe: safe,
+    sendEvent: sendEvent,
+    forceReauth: forceReauth,
+    clearFlag: clearFlag,
+  };
+})();
+</script>

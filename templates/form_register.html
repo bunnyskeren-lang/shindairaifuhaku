@@ -6,6 +6,7 @@
   <title>会員登録 | 神大ライフハック</title>
   <script src="https://cdn.tailwindcss.com"></script>
   {% if liff_id %}<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>{% endif %}
+  {% include "_partials/liff_auth.html" %}
 </head>
 <body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
 
@@ -127,74 +128,12 @@
       return _liffInitPromise;
     }
 
-    // 修正理由: liff.getIDToken() はLIFFがログイン時にキャッシュしたIDトークンをそのまま返し、
-    // liff.init() でもアクセストークンしか更新しない。LIFFセッションは数週間有効なため、
-    // isLoggedIn()はtrueのまま期限切れIDトークンを返す状態が発生し、/api/profile/prefill や
-    // /api/register の検証が {"error_description":"IdToken expired."} で400になる
-    // (2026-09-08、本番error_logsで多発)。期限切れ検知時・サーバーからauth_failed時は
-    // liff.logout()→liff.login() で新しいIDトークンを強制再発行する。
-    // sessionStorageのフラグで再ログインの無限ループを防ぐ。
-    function decodeJwt(token) {
-      try {
-        let b64 = (token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-        while (b64.length % 4) b64 += '=';
-        return JSON.parse(atob(b64));
-      } catch (e) { return null; }
-    }
-    function idTokenExpired(token) {
-      const p = decodeJwt(token);
-      return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
-    }
-    function liffSafe(fn) { try { return fn(); } catch (e) { return null; } }
-    // 修正理由: IDトークン期限切れ→再ログインの発生状況を可視化するテレメトリ。
-    // guard_tripped=true（＝再ログイン後もまだ弾かれている）が「ユーザーが詰んでいる」瞬間。
-    // /api/liff-auth-event へ notify なしで記録し、Push通知は出さない。
-    function sendLiffAuthEvent(reason, stage, guardTripped, idToken) {
-      try {
-        const p = decodeJwt(idToken) || {};
-        const exp = (typeof p.exp === 'number') ? p.exp : null;
-        const payload = {
-          form: 'register', path: location.pathname,
-          reason: reason, stage: stage, guard_tripped: !!guardTripped,
-          in_client: !!liffSafe(() => liff.isInClient()),
-          logged_in: !!liffSafe(() => liff.isLoggedIn()),
-          token_exp: exp,
-          expired_ago_sec: exp ? Math.round(Date.now() / 1000 - exp) : null,
-          sub: p.sub || '',
-          os: liffSafe(() => liff.getOS()) || '',
-          liff_ver: liffSafe(() => liff.getVersion()) || '',
-          line_ver: liffSafe(() => liff.getLineVersion()) || '',
-          draft_present: !!liffSafe(() => localStorage.getItem('registerDraft')),
-          ua: navigator.userAgent,
-        };
-        const data = JSON.stringify(payload);
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon('/api/liff-auth-event', new Blob([data], { type: 'application/json' }));
-        } else {
-          fetch('/api/liff-auth-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
-        }
-      } catch (e) {}
-    }
-    function forceReauth(reason, stage, idToken) {
-      let tried = false;
-      try { tried = sessionStorage.getItem('liffReauthTried') === '1'; } catch (e) {}
-      sendLiffAuthEvent(reason, stage, tried, idToken);
-      if (tried) return false;
-      try { sessionStorage.setItem('liffReauthTried', '1'); } catch (e) {}
-      try { if (liff.logout) liff.logout(); } catch (e) {}
-      try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
-      return true;
-    }
-    function clearReauthFlag(idToken) {
-      try {
-        if (sessionStorage.getItem('liffReauthTried') === '1') {
-          // 直前に強制再ログインしたユーザーが、今回は検証を通って正常表示できた＝復帰成功。
-          // この「✅ 復帰確認」が出ないまま「🔄 再ログイン実行」だけ残るユーザーは詰み(400等)の疑い。
-          sendLiffAuthEvent('recovered', 'recovered', false, idToken);
-        }
-        sessionStorage.removeItem('liffReauthTried');
-      } catch (e) {}
-    }
+    // LIFF IDトークン期限切れ→強制再ログインの共通処理は _partials/liff_auth.html の
+    // window.LiffAuth に集約（idExpired / forceReauth / clearFlag）。
+    LiffAuth.configure({ form: 'register', draftKey: 'registerDraft' });
+    const idTokenExpired = LiffAuth.idExpired;
+    const forceReauth = LiffAuth.forceReauth;
+    const clearReauthFlag = LiffAuth.clearFlag;
 
     // 2年次からコース分岐する学部。1年次等コース未所属の学生向けに「コース未定」を選べるようにする
     // （core/config.py の DEPARTMENT_UNDECIDED_FACULTIES / DEPARTMENT_UNDECIDED_VALUE と同期を保つこと）
