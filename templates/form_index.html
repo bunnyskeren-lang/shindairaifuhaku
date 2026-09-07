@@ -1232,6 +1232,19 @@
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // 科目名候補の行を科目カテゴリで淡く塗り分ける（教養科目＝青系 / 専門科目＝黄系）。
+    // 表示順も教養科目→専門科目の順に並べ替える。
+    function _catRowBg(cat) {
+      if (cat === SUBMISSION_KYOYO_CATEGORY) return '#eff6ff';
+      if (cat === SUBMISSION_SENMON_CATEGORY) return '#fefce8';
+      return '';
+    }
+    function _catRowOrder(cat) {
+      if (cat === SUBMISSION_KYOYO_CATEGORY) return 0;
+      if (cat === SUBMISSION_SENMON_CATEGORY) return 1;
+      return 2;
+    }
+
     // ── プリロードキャッシュ ──
     let _preload = null;
     // 専門科目の候補は会員登録した学部で変わるため、プリフィル（_profile確定）を待ってから取得する。
@@ -1293,6 +1306,7 @@
           id: null,
           name: c.variantGroup,
           isGroup: true,
+          category: c.category || '',
           variantSuffixes: members.map(m => m.name.startsWith(c.variantGroup) ? m.name.slice(c.variantGroup.length) : m.name),
           instructors: mergedInstructors,
         });
@@ -1306,21 +1320,24 @@
         dropdown.classList.remove('hidden');
         return;
       }
-      dropdown.innerHTML = items.slice(0, 30).map((c, idx) =>
-        `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
-          style="border-bottom:1px solid #f3f4f6;transition:background .1s"
-          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      // 教養科目→専門科目の順に並べ替える（同カテゴリ内の元の並びは維持）
+      const sorted = items.slice().sort((a, b) => _catRowOrder(a.category) - _catRowOrder(b.category));
+      dropdown.innerHTML = sorted.slice(0, 30).map((c, idx) => {
+        const bg = _catRowBg(c.category);
+        return `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
+          style="border-bottom:1px solid #f3f4f6;transition:background .1s;background:${bg}"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
           <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}${
             c.isGroup ? ` <span style="color:#94a3b8;font-weight:400">(${escapeHtml(c.variantSuffixes.join('/'))})</span>` : ''
           }</div>
           ${c.instructors.length
             ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">担当教員 ${c.instructors.length}名</div>`
             : ''}
-        </div>`
-      ).join('');
+        </div>`;
+      }).join('');
       dropdown.classList.remove('hidden');
       dropdown.querySelectorAll('[data-idx]').forEach(el => {
-        const c = items[parseInt(el.dataset.idx)];
+        const c = sorted[parseInt(el.dataset.idx)];
         el.addEventListener('click', () => selectCourse(c.name, c.instructors, c.id, !!c.isGroup, c.variantSuffixes));
       });
     }
