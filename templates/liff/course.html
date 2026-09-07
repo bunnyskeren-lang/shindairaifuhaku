@@ -88,11 +88,6 @@
     font-size: 12.5px; font-weight: 700; line-height: 1.5;
   }
   .btn.btn-disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
-  .sort-row { display: flex; justify-content: flex-end; }
-  .sort-select {
-    font-size: 12px; color: #64748b; border: 1px solid #e2e8f0; border-radius: 8px;
-    padding: 5px 8px; background: #fff;
-  }
 
   .actions { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .btn {
@@ -752,9 +747,31 @@ async function main() {
     return card;
   }
 
-  let sortMode = "ease";
   let instructorFilter = "";
   let variantFilter = "";  // "" = すべて / それ以外は String(subject_id)
+
+  // レビュー一覧の並び順は常に固定（ユーザーが切り替えるセレクトは廃止）。
+  // A/B/C… でレビュー募集は分けているが閲覧は統合している科目を想定し、
+  // 開講科目(アルファベット順) → 担当教員(あいうえお順) → 受講年度(新しい順) → 楽単度(SS→C・未評価は最後) の4段。
+  function variantSortKey(r) {
+    const v = (data.variants || []).find(x => String(x.id) === String(r.variant_id));
+    return v ? v.name : (r.variant_letter || "");
+  }
+  function compareReviews(a, b) {
+    const va = variantSortKey(a), vb = variantSortKey(b);
+    if (va !== vb) return va.localeCompare(vb, "ja");
+    const ia = a.instructor || "", ib = b.instructor || "";
+    if (ia !== ib) {
+      if (!ia) return 1;
+      if (!ib) return -1;
+      return ia.localeCompare(ib, "ja");
+    }
+    const ya = a.academic_year || 0, yb = b.academic_year || 0;
+    if (ya !== yb) return yb - ya;
+    const ea = EASE_ORDER[a.ease_rating] ?? 99;
+    const eb = EASE_ORDER[b.ease_rating] ?? 99;
+    return ea - eb;
+  }
 
   function renderReviewCards() {
     reviewsSection.innerHTML = "";
@@ -765,18 +782,7 @@ async function main() {
     if (instructorFilter) {
       list = list.filter(r => r.instructor === instructorFilter);
     }
-    if (sortMode === "ease") {
-      // 「楽単順」= 楽単度が高い(SS→C)順、未評価は最後、同一楽単度内は受講年度が新しい順
-      list.sort((a, b) => {
-        const ea = EASE_ORDER[a.ease_rating] ?? 99;
-        const eb = EASE_ORDER[b.ease_rating] ?? 99;
-        return ea - eb || (b.academic_year || 0) - (a.academic_year || 0);
-      });
-    } else {
-      // 「新しい順」= 受講年度が新しい順、同じ年度内は投稿日時が新しい順
-      list.sort((a, b) => (b.academic_year || 0) - (a.academic_year || 0)
-        || (new Date(b.created_at) - new Date(a.created_at)));
-    }
+    list.sort(compareReviews);
     if (!list.length) {
       reviewsSection.innerHTML = `<div class="card"><div class="no-review">この条件に合うレビューはありません</div></div>`;
       return;
@@ -842,18 +848,10 @@ async function main() {
     controlsHtml += `<div id="syllabus-prompt" class="syllabus-prompt"><span>📄</span><span>科目・教員を選択するとここにシラバスが表示されます</span></div>`;
   }
 
-  if (!data.locked && data.reviews && data.reviews.length > 1) {
-    // 解除後も教員チップがある科目では、並び替えセレクト横の空きスペースに同じ案内を出す
-    const instructorHint = (instructorNames.length > 1 && !isVariantMode)
-      ? `<span style="font-size:11px;color:#94a3b8;flex:1;min-width:0">教員を選ぶとシラバスが切り替わります</span>`
-      : "";
-    controlsHtml += `<div class="sort-row"${instructorHint ? ' style="justify-content:space-between;align-items:center"' : ""}>
-      ${instructorHint}
-      <select id="sort-select" class="sort-select">
-        <option value="ease" selected>楽単順</option>
-        <option value="new">新しい順</option>
-      </select>
-    </div>`;
+  if (!data.locked && data.reviews && data.reviews.length > 1
+      && instructorNames.length > 1 && !isVariantMode) {
+    // 並び替えセレクトは廃止（常に固定順）。教員チップのシラバス切り替え案内だけ残す。
+    controlsHtml += `<div style="font-size:11px;color:#94a3b8">教員を選ぶとシラバスが切り替わります</div>`;
   }
   controlsEl.innerHTML = controlsHtml;
 
@@ -914,13 +912,6 @@ async function main() {
       instructorFilter = btn.dataset.instr;
       if (!data.locked) renderReviewCards();
       updateSyllabusButton();
-    });
-  }
-  const sortEl = document.getElementById("sort-select");
-  if (sortEl) {
-    sortEl.addEventListener("change", () => {
-      sortMode = sortEl.value;
-      renderReviewCards();
     });
   }
 
