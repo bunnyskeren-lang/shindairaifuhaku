@@ -14,5 +14,9 @@
       <p class="text-gray-400 text-sm mb-8">内容を確認のうえ対応いたします。ご協力ありがとうございました。</p>
     </div>
   </div>
+  <script>
+    // 送信が確定したので入力欄の下書き退避（contact.html）を破棄する
+    try { localStorage.removeItem('contactDraft'); } catch (e) {}
+  </script>
 </body>
 </html>

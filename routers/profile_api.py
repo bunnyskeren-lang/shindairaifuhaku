@@ -1,4 +1,5 @@
 import asyncio
+import json as _json
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -30,6 +31,51 @@ router = APIRouter()
 # 無制限だった。id_token検証には120秒のキャッシュ(core/liff_auth.py)があり、有効なトークン1つで
 # 検証をバイパスしてDB書き込みを連打できたため、同水準の制限を設ける
 _register_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
+
+# LIFF IDトークン期限切れ→再ログインの発生状況テレメトリ。1端末が短時間に
+# 何度も再ログインを繰り返す（ループ被害）ケースも取りこぼさない程度に緩め
+_liff_auth_event_rate_limit = rate_limiter(max_requests=30, window_seconds=60)
+
+
+@router.post("/api/liff-auth-event")
+async def liff_auth_event(request: Request, _rl=Depends(_liff_auth_event_rate_limit)):
+    """LIFF IDトークンの期限切れ検知・auth_failed → 強制再ログインが発動した状況を
+    クライアントから受け取り記録するテレメトリ受け口。
+
+    - 認証は掛けない（そもそもLINEトークン検証に失敗しているユーザーからの報告のため）。
+    - error_logs に notify=False で残すだけで、Push通知は飛ばさない（大量発生時の通知殺到防止）。
+    - guard_tripped=True の行が「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
+    - decトークンの sub を user_id に入れるので、どのLINEユーザーが影響を受けたか追える。
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False}
+    if not isinstance(body, dict):
+        return {"ok": False}
+
+    str_keys = ("form", "stage", "reason", "os", "liff_ver", "line_ver", "path")
+    bool_keys = ("guard_tripped", "in_client", "logged_in", "draft_present")
+    num_keys = ("token_exp", "expired_ago_sec")
+    ctx: dict = {k: str(body.get(k) or "")[:40] for k in str_keys}
+    ctx.update({k: bool(body.get(k)) for k in bool_keys})
+    for k in num_keys:
+        try:
+            ctx[k] = int(body.get(k))
+        except (TypeError, ValueError):
+            ctx[k] = None
+    ctx["ua"] = str(body.get("ua") or "")[:160]
+
+    sub = str(body.get("sub") or "")[:64]
+    form = ctx["form"] or "?"
+    stage = ctx["stage"] or "?"
+    await save_error_log(
+        RuntimeError(_json.dumps(ctx, ensure_ascii=False)[:480]),
+        user_id=(sub if sub.startswith("U") else None),
+        action=f"liff_reauth:{form}:{stage}",
+        notify=False,
+    )
+    return {"ok": True}
 
 
 @router.post("/api/profile/status")

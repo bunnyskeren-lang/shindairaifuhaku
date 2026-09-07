@@ -29,6 +29,10 @@
       {% if liff_id %}<button onclick="closeWindow()" class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">閉じる</button>{% endif %}
     </div>
   </div>
+  <script>
+    // 登録が確定したので入力欄の下書き退避（form_register.html）を破棄する
+    try { localStorage.removeItem('registerDraft'); } catch (e) {}
+  </script>
   {% if liff_id %}
   <script>
     function closeWindow() {

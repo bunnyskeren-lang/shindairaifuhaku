@@ -134,19 +134,63 @@
     // (2026-09-08、本番error_logsで多発)。期限切れ検知時・サーバーからauth_failed時は
     // liff.logout()→liff.login() で新しいIDトークンを強制再発行する。
     // sessionStorageのフラグで再ログインの無限ループを防ぐ。
-    function idTokenExpired(token) {
+    function decodeJwt(token) {
       try {
-        let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        let b64 = (token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
         while (b64.length % 4) b64 += '=';
-        const p = JSON.parse(atob(b64));
-        return typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000;
-      } catch (e) { return false; }
+        return JSON.parse(atob(b64));
+      } catch (e) { return null; }
     }
-    function forceReauth() {
+    function idTokenExpired(token) {
+      // dev環境限定: URLに forceExpired=1 を付けると1回だけ期限切れ扱いにして
+      // 「強制再ログイン→新しいトークンで復帰」の一連をテストできる（sessionStorageでワンショット化）
       try {
-        if (sessionStorage.getItem('liffReauthTried') === '1') return false;
-        sessionStorage.setItem('liffReauthTried', '1');
+        if (/(?:shindairaifuhaku-1\.onrender\.com|localhost|127\.0\.0\.1)/.test(location.hostname)
+            && location.href.indexOf('forceExpired=1') !== -1
+            && sessionStorage.getItem('forceExpiredUsed') !== '1') {
+          sessionStorage.setItem('forceExpiredUsed', '1');
+          return true;
+        }
       } catch (e) {}
+      const p = decodeJwt(token);
+      return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
+    }
+    function liffSafe(fn) { try { return fn(); } catch (e) { return null; } }
+    // 修正理由: IDトークン期限切れ→再ログインの発生状況を可視化するテレメトリ。
+    // guard_tripped=true（＝再ログイン後もまだ弾かれている）が「ユーザーが詰んでいる」瞬間。
+    // /api/liff-auth-event へ notify なしで記録し、Push通知は出さない。
+    function sendLiffAuthEvent(reason, stage, guardTripped, idToken) {
+      try {
+        const p = decodeJwt(idToken) || {};
+        const exp = (typeof p.exp === 'number') ? p.exp : null;
+        const payload = {
+          form: 'register', path: location.pathname,
+          reason: reason, stage: stage, guard_tripped: !!guardTripped,
+          in_client: !!liffSafe(() => liff.isInClient()),
+          logged_in: !!liffSafe(() => liff.isLoggedIn()),
+          token_exp: exp,
+          expired_ago_sec: exp ? Math.round(Date.now() / 1000 - exp) : null,
+          sub: p.sub || '',
+          os: liffSafe(() => liff.getOS()) || '',
+          liff_ver: liffSafe(() => liff.getVersion()) || '',
+          line_ver: liffSafe(() => liff.getLineVersion()) || '',
+          draft_present: !!liffSafe(() => localStorage.getItem('registerDraft')),
+          ua: navigator.userAgent,
+        };
+        const data = JSON.stringify(payload);
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/liff-auth-event', new Blob([data], { type: 'application/json' }));
+        } else {
+          fetch('/api/liff-auth-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
+        }
+      } catch (e) {}
+    }
+    function forceReauth(reason, stage, idToken) {
+      let tried = false;
+      try { tried = sessionStorage.getItem('liffReauthTried') === '1'; } catch (e) {}
+      sendLiffAuthEvent(reason, stage, tried, idToken);
+      if (tried) return false;
+      try { sessionStorage.setItem('liffReauthTried', '1'); } catch (e) {}
       try { if (liff.logout) liff.logout(); } catch (e) {}
       try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
       return true;
@@ -189,6 +233,41 @@
     populateDepartments(facultySel.value, '');
     facultySel.addEventListener('change', () => populateDepartments(facultySel.value, ''));
 
+    // 修正理由: 会員登録フォームには下書き保存が無く、IDトークン期限切れによる
+    // 強制再ログイン（liff.login()の全画面リダイレクト）で入力が丸ごと消えていた。
+    // 入力のたびにlocalStorageへ退避し、戻ってきたときに復元する。
+    const REGISTER_DRAFT_KEY = 'registerDraft';
+    const DRAFT_FIELD_IDS = ['name', 'student_id', 'faculty', 'department', 'coop_jobsite_known'];
+    function saveRegisterDraft() {
+      try {
+        const d = {};
+        for (const id of DRAFT_FIELD_IDS) d[id] = document.getElementById(id).value;
+        localStorage.setItem(REGISTER_DRAFT_KEY, JSON.stringify(d));
+      } catch (e) {}
+    }
+    function restoreRegisterDraft() {
+      try {
+        const d = JSON.parse(localStorage.getItem(REGISTER_DRAFT_KEY) || 'null');
+        if (!d) return;
+        if (d.name && !document.getElementById('name').value) document.getElementById('name').value = d.name;
+        if (d.student_id && !document.getElementById('student_id').value) document.getElementById('student_id').value = d.student_id;
+        if (d.faculty && !facultySel.value) {
+          facultySel.value = d.faculty;
+          populateDepartments(d.faculty, d.department || '');
+        }
+        if (d.department && !document.getElementById('department').value) document.getElementById('department').value = d.department;
+        if (d.coop_jobsite_known && !document.getElementById('coop_jobsite_known').value) {
+          document.getElementById('coop_jobsite_known').value = d.coop_jobsite_known;
+        }
+      } catch (e) {}
+    }
+    for (const id of DRAFT_FIELD_IDS) {
+      const el = document.getElementById(id);
+      el.addEventListener('input', saveRegisterDraft);
+      el.addEventListener('change', saveRegisterDraft);
+    }
+    restoreRegisterDraft();
+
     // 修正理由: 以前は ?uid= をサーバー側でDB照会してテンプレートに直接
     // 埋め込んでいたため他人のPIIが閲覧できてしまっていた。ID token検証済みの
     // /api/profile/prefill から取得した本人の既存プロフィールのみを反映する。
@@ -199,25 +278,27 @@
           if (!liff.isLoggedIn()) return;
           const idToken = await liff.getIDToken();
           if (!idToken) return;
-          if (idTokenExpired(idToken)) { forceReauth(); return; }
+          if (idTokenExpired(idToken)) { forceReauth('expired', 'page_load', idToken); return; }
           const res = await fetch('/api/profile/prefill', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_token: idToken }),
           });
           const d = await res.json();
-          if (d.auth_failed) { forceReauth(); return; }
+          if (d.auth_failed) { forceReauth('auth_failed', 'page_load', idToken); return; }
           clearReauthFlag();
           if (!d.found) return;
-          if (d.name) document.getElementById('name').value = d.name;
-          if (d.student_id) document.getElementById('student_id').value = d.student_id;
-          if (d.faculty) {
+          // 未入力の欄だけサーバー値で埋める（入力途中の下書きを上書きしない）
+          const nameEl = document.getElementById('name');
+          if (d.name && !nameEl.value) nameEl.value = d.name;
+          const sidEl = document.getElementById('student_id');
+          if (d.student_id && !sidEl.value) sidEl.value = d.student_id;
+          if (d.faculty && !facultySel.value) {
             facultySel.value = d.faculty;
             populateDepartments(d.faculty, d.department || '');
           }
-          if (d.coop_jobsite_known) {
-            document.getElementById('coop_jobsite_known').value = d.coop_jobsite_known;
-          }
+          const coopEl = document.getElementById('coop_jobsite_known');
+          if (d.coop_jobsite_known && !coopEl.value) coopEl.value = d.coop_jobsite_known;
         } catch (e) {}
       })();
     }
@@ -258,8 +339,9 @@
         if (!idToken) throw new Error('not logged in');
         if (idTokenExpired(idToken)) {
           // 期限切れなら再ログインで新しいIDトークンを取り直す（リダイレクトで復帰）。
-          // 再ログインループ防止フラグ済みで復帰不能なときのみ従来のalert誘導へフォールバック
-          if (forceReauth()) return;
+          // 再ログインループ防止フラグ済みで復帰不能なときのみ従来のalert誘導へフォールバック。
+          // 送信直前なのでフォーム入力は下書き(registerDraft)に保存済み。
+          if (forceReauth('expired', 'submit', idToken)) return;
           throw new Error('id token expired');
         }
         document.getElementById('idTokenHidden').value = idToken;

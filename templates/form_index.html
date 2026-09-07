@@ -645,11 +645,12 @@
     // セッションを破棄してからリロードすることで、initProfilePrefill()内のisLoggedIn()判定が
     // falseになりliff.login()による再ログイン（＝新しいID token発行）を強制する。
     // sessionStorageのフラグで再ログインの無限ループを防ぐ（復帰不能時は手動導線にフォールバック）。
-    function forceReauthAndReload() {
-      try {
-        if (sessionStorage.getItem('liffReauthTried') === '1') return false;
-        sessionStorage.setItem('liffReauthTried', '1');
-      } catch (e) {}
+    function forceReauthAndReload(reason, stage, idToken) {
+      let tried = false;
+      try { tried = sessionStorage.getItem('liffReauthTried') === '1'; } catch (e) {}
+      sendLiffAuthEvent(reason, stage, tried, idToken);
+      if (tried) return false;
+      try { sessionStorage.setItem('liffReauthTried', '1'); } catch (e) {}
       try {
         if (typeof liff !== 'undefined' && liff.logout) liff.logout();
       } catch (e) {}
@@ -660,13 +661,55 @@
     // liff.getIDToken()が返すIDトークンはliff.init()でも更新されず、LIFFセッション（数週間有効）
     // が生きている限り期限切れのまま返り続ける。exp をデコードして先回りで検知し、
     // 失敗コール（＝error_logs記録）を発生させずに再ログインへ回す。
-    function idTokenExpired(token) {
+    function decodeJwt(token) {
       try {
-        let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        let b64 = (token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
         while (b64.length % 4) b64 += '=';
-        const p = JSON.parse(atob(b64));
-        return typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000;
-      } catch (e) { return false; }
+        return JSON.parse(atob(b64));
+      } catch (e) { return null; }
+    }
+    function idTokenExpired(token) {
+      // dev環境限定: URLに forceExpired=1 を付けると1回だけ期限切れ扱いにして
+      // 「強制再ログイン→新しいトークンで復帰」の一連をテストできる（sessionStorageでワンショット化）
+      try {
+        if (/(?:shindairaifuhaku-1\.onrender\.com|localhost|127\.0\.0\.1)/.test(location.hostname)
+            && location.href.indexOf('forceExpired=1') !== -1
+            && sessionStorage.getItem('forceExpiredUsed') !== '1') {
+          sessionStorage.setItem('forceExpiredUsed', '1');
+          return true;
+        }
+      } catch (e) {}
+      const p = decodeJwt(token);
+      return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
+    }
+    function liffSafe(fn) { try { return fn(); } catch (e) { return null; } }
+    // IDトークン期限切れ→再ログインの発生状況テレメトリ。guard_tripped=true が
+    // 「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
+    function sendLiffAuthEvent(reason, stage, guardTripped, idToken) {
+      try {
+        const p = decodeJwt(idToken) || {};
+        const exp = (typeof p.exp === 'number') ? p.exp : null;
+        const payload = {
+          form: 'review', path: location.pathname,
+          reason: reason || '', stage: stage || '', guard_tripped: !!guardTripped,
+          in_client: !!liffSafe(() => liff.isInClient()),
+          logged_in: !!liffSafe(() => liff.isLoggedIn()),
+          token_exp: exp,
+          expired_ago_sec: exp ? Math.round(Date.now() / 1000 - exp) : null,
+          sub: p.sub || '',
+          os: liffSafe(() => liff.getOS()) || '',
+          liff_ver: liffSafe(() => liff.getVersion()) || '',
+          line_ver: liffSafe(() => liff.getLineVersion()) || '',
+          draft_present: !!liffSafe(() => localStorage.getItem('kobe_review_v2')),
+          ua: navigator.userAgent,
+        };
+        const data = JSON.stringify(payload);
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/liff-auth-event', new Blob([data], { type: 'application/json' }));
+        } else {
+          fetch('/api/liff-auth-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
+        }
+      } catch (e) {}
     }
 
     // 修正理由: 同じ学籍番号で同じ科目×担当教員に重複投稿できてしまっていたため、
@@ -751,7 +794,7 @@
         return;
       }
       if (idTokenExpired(idToken)) {
-        if (forceReauthAndReload()) return;
+        if (forceReauthAndReload('expired', 'page_load', idToken)) return;
         showOverlay(`<div class="text-4xl">⚠️</div>
           <p class="text-sm text-gray-500">ログイン情報の有効期限が切れています。リッチメニューからこのページを開き直してください。</p>`);
         return;
@@ -783,7 +826,7 @@
         // 会員登録済みの本人を「未登録」と誤判定していたバグの修正
         // (2026-08-31)。期限切れトークンが原因のことが多いので、まず
         // logout→再ログインで自動復帰を試み、ループ防止で復帰不能なときだけ手動導線を出す。
-        if (forceReauthAndReload()) return;
+        if (forceReauthAndReload('auth_failed', 'page_load', idToken)) return;
         showOverlay(`<div class="text-4xl">⚠️</div>
           <p class="text-sm text-gray-500">ログイン確認に失敗しました。もう一度お試しください。</p>
           <button onclick="location.reload()" class="block w-full text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
@@ -2241,7 +2284,7 @@
           // （復帰不能なときだけ従来のalert誘導へフォールバック）
           clearTimeout(saveTimer);
           persistDraft();
-          if (forceReauthAndReload()) return;
+          if (forceReauthAndReload('expired', 'submit', idToken)) return;
           throw new Error('id token expired');
         }
         document.getElementById('idTokenHidden').value = idToken;

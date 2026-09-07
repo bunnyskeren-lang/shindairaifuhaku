@@ -320,19 +320,63 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
 // が生きている限り期限切れのまま返り続ける。exp をデコードして先回りで検知し、
 // サーバー検証を {"error_description":"IdToken expired."} で落とす前に再ログインへ回す。
 // sessionStorage のフラグで再ログインの無限ループを防ぐ。
-function idTokenExpired(token) {
+function decodeJwt(token) {
   try {
-    let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    let b64 = (token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
     while (b64.length % 4) b64 += '=';
-    const p = JSON.parse(atob(b64));
-    return typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000;
-  } catch (e) { return false; }
+    return JSON.parse(atob(b64));
+  } catch (e) { return null; }
 }
-function forceReauthLogin() {
+function idTokenExpired(token) {
+  // dev環境限定: URLに forceExpired=1 を付けると1回だけ期限切れ扱いにして
+  // 「強制再ログイン→新しいトークンで復帰」の一連をテストできる（sessionStorageでワンショット化）
   try {
-    if (sessionStorage.getItem('liffReauthTried') === '1') return false;
-    sessionStorage.setItem('liffReauthTried', '1');
+    if (/(?:shindairaifuhaku-1\.onrender\.com|localhost|127\.0\.0\.1)/.test(location.hostname)
+        && location.href.indexOf('forceExpired=1') !== -1
+        && sessionStorage.getItem('forceExpiredUsed') !== '1') {
+      sessionStorage.setItem('forceExpiredUsed', '1');
+      return true;
+    }
   } catch (e) {}
+  const p = decodeJwt(token);
+  return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
+}
+function liffSafe(fn) { try { return fn(); } catch (e) { return null; } }
+// IDトークン期限切れ→再ログインの発生状況テレメトリ。guard_tripped=true が
+// 「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
+function sendLiffAuthEvent(reason, stage, guardTripped, idToken) {
+  try {
+    const p = decodeJwt(idToken) || {};
+    const exp = (typeof p.exp === 'number') ? p.exp : null;
+    const payload = {
+      form: 'course', path: location.pathname,
+      reason: reason || '', stage: stage || '', guard_tripped: !!guardTripped,
+      in_client: !!liffSafe(() => liff.isInClient()),
+      logged_in: !!liffSafe(() => liff.isLoggedIn()),
+      token_exp: exp,
+      expired_ago_sec: exp ? Math.round(Date.now() / 1000 - exp) : null,
+      sub: p.sub || '',
+      os: liffSafe(() => liff.getOS()) || '',
+      liff_ver: liffSafe(() => liff.getVersion()) || '',
+      line_ver: liffSafe(() => liff.getLineVersion()) || '',
+      draft_present: false,
+      ua: navigator.userAgent,
+    };
+    const data = JSON.stringify(payload);
+    const url = (typeof BASE_URL === 'string' ? BASE_URL : '') + '/api/liff-auth-event';
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }));
+    } else {
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
+    }
+  } catch (e) {}
+}
+function forceReauthLogin(reason, stage, idToken) {
+  let tried = false;
+  try { tried = sessionStorage.getItem('liffReauthTried') === '1'; } catch (e) {}
+  sendLiffAuthEvent(reason, stage, tried, idToken);
+  if (tried) return false;
+  try { sessionStorage.setItem('liffReauthTried', '1'); } catch (e) {}
   try { if (liff.logout) liff.logout(); } catch (e) {}
   try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
   return true;
@@ -385,7 +429,7 @@ async function main() {
       if (idToken && idTokenExpired(idToken)) {
         // 期限切れなら logout→再ログインで新しいIDトークンを取り直す（リダイレクトで復帰）。
         // 復帰不能（ループ防止フラグ済み）のときはトークン無しとして進める（閲覧権なし扱い）
-        if (forceReauthLogin()) return;
+        if (forceReauthLogin('expired', 'page_load', idToken)) return;
         idToken = "";
         userId = null;
       } else if (idToken) {

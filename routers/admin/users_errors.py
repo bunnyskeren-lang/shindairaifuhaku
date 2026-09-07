@@ -136,11 +136,32 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
     })
 
 
+# LIFF IDトークン期限切れ→再ログインのテレメトリ（profile_api.py の /api/liff-auth-event が
+# action="liff_reauth:<form>:<stage>" で notify=False 記録）。既定のエラー一覧では雑音になるので
+# 除外し、?view=liff_reauth のときだけ抽出表示する
+_LIFF_REAUTH_ACTION_PREFIX = "liff_reauth:"
+
+
 @router.get("/admin/errors", response_class=HTMLResponse)
-async def admin_errors(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
+async def admin_errors(
+    request: Request,
+    _: str = Depends(check_admin),
+    page: int = Query(default=1, ge=1),
+    view: str = Query(default=""),
+):
     per_page = 50
+    is_reauth_view = view == "liff_reauth"
+    if is_reauth_view:
+        action_filter = ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%")
+    else:
+        action_filter = (ErrorLog.action.is_(None)) | (~ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%"))
     async with AsyncSessionLocal() as session:
-        total = (await session.execute(select(func.count(ErrorLog.id)))).scalar_one()
+        total = (await session.execute(
+            select(func.count(ErrorLog.id)).where(action_filter)
+        )).scalar_one()
+        reauth_total = (await session.execute(
+            select(func.count(ErrorLog.id)).where(ErrorLog.action.like(_LIFF_REAUTH_ACTION_PREFIX + "%"))
+        )).scalar_one()
         errors = (await session.execute(
             select(
                 ErrorLog.id,
@@ -154,6 +175,7 @@ async def admin_errors(request: Request, _: str = Depends(check_admin), page: in
                 ErrorLog.traceback,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == ErrorLog.user_id)
+            .where(action_filter)
             .order_by(ErrorLog.created_at.desc())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()
@@ -164,7 +186,9 @@ async def admin_errors(request: Request, _: str = Depends(check_admin), page: in
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "url_prefix": "/admin/errors?page=",
+        "url_prefix": f"/admin/errors?view={view}&page=" if view else "/admin/errors?page=",
+        "is_reauth_view": is_reauth_view,
+        "reauth_total": reauth_total,
     })
 
 

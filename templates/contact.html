@@ -136,6 +136,7 @@
         btn.classList.add('active');
         document.getElementById('category').value = btn.dataset.value;
         document.getElementById('categoryError').classList.add('hidden');
+        if (typeof saveContactDraft === 'function') saveContactDraft();
       });
     });
 
@@ -149,6 +150,7 @@
         el.focus();
         el.setSelectionRange(el.value.length, el.value.length);
         document.getElementById('contentError').classList.add('hidden');
+        if (typeof saveContactDraft === 'function') saveContactDraft();
       });
     });
 
@@ -186,19 +188,62 @@
     // 検証が {"error_description":"IdToken expired."} で400になる(2026-09-08、本番error_logsで多発)。
     // 期限切れ検知時・サーバーからauth_failed時は liff.logout()→liff.login() で新しいIDトークンを
     // 強制再発行する。sessionStorageのフラグで再ログインの無限ループを防ぐ。
-    function idTokenExpired(token) {
+    function decodeJwt(token) {
       try {
-        let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        let b64 = (token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
         while (b64.length % 4) b64 += '=';
-        const p = JSON.parse(atob(b64));
-        return typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000;
-      } catch (e) { return false; }
+        return JSON.parse(atob(b64));
+      } catch (e) { return null; }
     }
-    function forceReauth() {
+    function idTokenExpired(token) {
+      // dev環境限定: URLに forceExpired=1 を付けると1回だけ期限切れ扱いにして
+      // 「強制再ログイン→新しいトークンで復帰」の一連をテストできる（sessionStorageでワンショット化）
       try {
-        if (sessionStorage.getItem('liffReauthTried') === '1') return false;
-        sessionStorage.setItem('liffReauthTried', '1');
+        if (/(?:shindairaifuhaku-1\.onrender\.com|localhost|127\.0\.0\.1)/.test(location.hostname)
+            && location.href.indexOf('forceExpired=1') !== -1
+            && sessionStorage.getItem('forceExpiredUsed') !== '1') {
+          sessionStorage.setItem('forceExpiredUsed', '1');
+          return true;
+        }
       } catch (e) {}
+      const p = decodeJwt(token);
+      return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
+    }
+    function liffSafe(fn) { try { return fn(); } catch (e) { return null; } }
+    // IDトークン期限切れ→再ログインの発生状況テレメトリ。guard_tripped=true が
+    // 「再ログインしてもまだ弾かれている＝ユーザーが詰んでいる」瞬間。
+    function sendLiffAuthEvent(reason, stage, guardTripped, idToken) {
+      try {
+        const p = decodeJwt(idToken) || {};
+        const exp = (typeof p.exp === 'number') ? p.exp : null;
+        const payload = {
+          form: 'contact', path: location.pathname,
+          reason: reason, stage: stage, guard_tripped: !!guardTripped,
+          in_client: !!liffSafe(() => liff.isInClient()),
+          logged_in: !!liffSafe(() => liff.isLoggedIn()),
+          token_exp: exp,
+          expired_ago_sec: exp ? Math.round(Date.now() / 1000 - exp) : null,
+          sub: p.sub || '',
+          os: liffSafe(() => liff.getOS()) || '',
+          liff_ver: liffSafe(() => liff.getVersion()) || '',
+          line_ver: liffSafe(() => liff.getLineVersion()) || '',
+          draft_present: !!liffSafe(() => localStorage.getItem('contactDraft')),
+          ua: navigator.userAgent,
+        };
+        const data = JSON.stringify(payload);
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/liff-auth-event', new Blob([data], { type: 'application/json' }));
+        } else {
+          fetch('/api/liff-auth-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
+        }
+      } catch (e) {}
+    }
+    function forceReauth(reason, stage, idToken) {
+      let tried = false;
+      try { tried = sessionStorage.getItem('liffReauthTried') === '1'; } catch (e) {}
+      sendLiffAuthEvent(reason, stage, tried, idToken);
+      if (tried) return false;
+      try { sessionStorage.setItem('liffReauthTried', '1'); } catch (e) {}
       try { if (liff.logout) liff.logout(); } catch (e) {}
       try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
       return true;
@@ -206,6 +251,38 @@
     function clearReauthFlag() {
       try { sessionStorage.removeItem('liffReauthTried'); } catch (e) {}
     }
+
+    // 修正理由: お問い合わせフォームには下書き保存が無く、IDトークン期限切れによる
+    // 強制再ログインのリダイレクトで入力（特に長文の問い合わせ本文）が消えていた。
+    const CONTACT_DRAFT_KEY = 'contactDraft';
+    function saveContactDraft() {
+      try {
+        localStorage.setItem(CONTACT_DRAFT_KEY, JSON.stringify({
+          category: document.getElementById('category').value,
+          content: document.getElementById('content').value,
+          email: document.getElementById('email').value,
+        }));
+      } catch (e) {}
+    }
+    function restoreContactDraft() {
+      try {
+        const d = JSON.parse(localStorage.getItem(CONTACT_DRAFT_KEY) || 'null');
+        if (!d) return;
+        const contentEl = document.getElementById('content');
+        const emailEl = document.getElementById('email');
+        if (d.content && !contentEl.value) contentEl.value = d.content;
+        if (d.email && !emailEl.value) emailEl.value = d.email;
+        if (d.category && !document.getElementById('category').value) {
+          document.getElementById('category').value = d.category;
+          document.querySelectorAll('[data-group="category"]').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === d.category);
+          });
+        }
+      } catch (e) {}
+    }
+    document.getElementById('content').addEventListener('input', saveContactDraft);
+    document.getElementById('email').addEventListener('input', saveContactDraft);
+    restoreContactDraft();
 
     function showOverlay(html) {
       document.getElementById('authOverlayBox').innerHTML = html;
@@ -260,7 +337,7 @@
         return;
       }
       if (idTokenExpired(idToken)) {
-        if (forceReauth()) return;
+        if (forceReauth('expired', 'page_load', idToken)) return;
         showOverlay(`<div class="text-4xl">⚠️</div>
           <p class="text-sm text-gray-500">ログイン情報の有効期限が切れています。LINEアプリからこのページを開き直してください。</p>`);
         return;
@@ -281,7 +358,7 @@
       }
 
       if (data.auth_failed) {
-        if (forceReauth()) return;
+        if (forceReauth('auth_failed', 'page_load', idToken)) return;
         showOverlay(`<div class="text-4xl">⚠️</div>
           <p class="text-sm text-gray-500">ログイン確認に失敗しました。LINEアプリからこのページを開き直してください。</p>`);
         return;

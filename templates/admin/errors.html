@@ -10,7 +10,15 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
 {% from "admin/base.html" import pager %}
 {% block content %}
 <div class="card">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
+    <a href="/admin/errors" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not is_reauth_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">エラー</a>
+    <a href="/admin/errors?view=liff_reauth" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if is_reauth_view %}background:#111827;color:#fff{% else %}background:#f3f4f6;color:#374151{% endif %}">再ログインテレメトリ（{{ reauth_total }}）</a>
+  </div>
+  {% if is_reauth_view %}
+  <p style="font-size:12px;color:#6b7280;margin:0 0 16px">IDトークン期限切れ→強制再ログインの発生記録。メッセージ欄の JSON に <code>guard_tripped</code>（true＝再ログインしても復帰できず詰んでいる）、<code>stage</code>（page_load / submit）、<code>reason</code>、<code>in_client</code>、<code>expired_ago_sec</code>、端末情報が入る。ユーザー欄はトークンの sub が取れたときだけ表示。</p>
+  {% else %}
   <p style="font-size:13px;color:#6b7280;margin:0 0 16px">トレースバックは行をクリックで展開。</p>
+  {% endif %}
   <table>
     <tr>
       <th>日時</th>
