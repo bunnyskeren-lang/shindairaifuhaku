@@ -25,9 +25,9 @@ def _stub_push_notification(monkeypatch):
     monkeypatch.setattr(review_submit_api, "send_push_notification", _noop)
 
 
-async def _seed_course(test_sessionmaker, name="経営管理", instructor="山田太郎", category="教養"):
+async def _seed_course(test_sessionmaker, name="経営管理", instructor="山田太郎", category="教養", faculty="経営学部"):
     async with test_sessionmaker() as session:
-        subj = Subject(name=name, faculty="経営学部", category=category)
+        subj = Subject(name=name, faculty=faculty, category=category)
         session.add(subj)
         await session.flush()
         instr = Instructor(name=instructor)
@@ -111,11 +111,65 @@ async def test_submit_creates_review_for_registered_user(http_client_factory, mo
 
 
 @pytest.mark.asyncio
-async def test_submit_senmon_course_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
-    """レビュー投稿は教養科目(category=='教養')のみ受け付け、専門科目は拒否する。"""
+async def test_submit_senmon_course_matching_faculty_creates_review(http_client_factory, monkeypatch, test_sessionmaker):
+    """2026-09-07以降、専門科目でも投稿者本人の登録学部と一致すればレビュー投稿できる。"""
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
-    await _seed_course(test_sessionmaker, category="専門")
+    # _seed_profile の faculty は「経営学部」。同じ学部の専門科目。
+    await _seed_course(test_sessionmaker, category="専門", faculty="経営学部")
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 200
+
+    async with test_sessionmaker() as session:
+        reviews = (await session.execute(select(Review))).scalars().all()
+        assert len(reviews) == 1
+        assert reviews[0].status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_submit_senmon_course_faculty_mismatch_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """専門科目は、投稿者本人の登録学部と異なる学部のものは拒否する。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    # _seed_profile の faculty は「経営学部」。別学部（法学部）の専門科目。
+    await _seed_course(test_sessionmaker, category="専門", faculty="法学部")
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 400
+    assert "ご登録の学部" in resp.text
+
+    async with test_sessionmaker() as session:
+        assert (await session.execute(select(Review))).scalars().first() is None
+
+
+@pytest.mark.asyncio
+async def test_submit_kyotsu_senmon_kiso_course_creates_review(http_client_factory, monkeypatch, test_sessionmaker):
+    """共通専門基礎科目（category=='専門' かつ faculty=='教養教育院'）は学部を問わず投稿できる。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    # _seed_profile の faculty は「経営学部」だが、共通専門基礎は学部不問。
+    await _seed_course(test_sessionmaker, category="専門", faculty="教養教育院")
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 200
+
+    async with test_sessionmaker() as session:
+        assert len((await session.execute(select(Review))).scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_submit_non_review_category_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """教養・専門のいずれでもないcategoryの科目は投稿を拒否する。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker, category="その他")
     await _seed_profile(test_sessionmaker)
     client = http_client_factory(review_submit_api, monkeypatch)
 
