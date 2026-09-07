@@ -8,7 +8,9 @@ from core.config import (
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_SUBJECTS,
     REVIEW_SUBMISSION_SENMON_CATEGORY,
+    is_profile_complete,
     make_syllabus_url,
+    syllabus_department_key_from_parts,
 )
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
@@ -23,7 +25,17 @@ from core.subject_variants import (
     is_hoken_gakka_senko,
 )
 from database import AsyncSessionLocal
-from models import CourseSection, DisplayOrder, Instructor, Review, ReviewStatus, Subject, Syllabus
+from models import (
+    CourseSection,
+    DisplayOrder,
+    Instructor,
+    Review,
+    ReviewStatus,
+    Subject,
+    SubjectUnlock,
+    Syllabus,
+    UserProfile,
+)
 
 # 全キャッシュ共通のTTLポリシー(1時間)。用途別に名前を分けているが値は全て同じであるべきなので、
 # ここ1箇所を直せば全キャッシュに反映される(個別に変えたい場合のみ該当行だけ上書きする)
@@ -130,6 +142,12 @@ _course_list_cache: dict[str, tuple] = {}
 
 _syllabus_url_cache: dict[int, str] = {}
 _syllabus_url_cache_at: float = 0.0
+
+# (subject_id, 教員名) → 最新年度のシラバスURL。シラバスは科目名だけでなく担当教員にも
+# 依存するため subject_id 単位の _syllabus_url_cache とは別に持つ（レビュー投稿フォームの
+# 「この科目×教員のシラバスはこちら」導線用）。
+_syllabus_url_by_pair_cache: dict[tuple[int, str], str] = {}
+_syllabus_url_by_pair_cache_at: float = 0.0
 
 _all_instructors_cache: dict[int, list] = {}
 _all_instructors_cache_at: float = 0.0
@@ -358,7 +376,7 @@ async def get_syllabus_urls_cached() -> dict[int, str]:
     for subject_id, code, year, faculty, department in rows:
         if subject_id in _latest_year and year <= _latest_year[subject_id]:
             continue
-        url = make_syllabus_url(code, f"{faculty or ''}{department or ''}")
+        url = make_syllabus_url(code, syllabus_department_key_from_parts(faculty, department))
         if not url:
             continue
         _latest_year[subject_id] = year
@@ -368,11 +386,45 @@ async def get_syllabus_urls_cached() -> dict[int, str]:
     return _syllabus_url_cache
 
 
+async def get_syllabus_urls_by_pair_cached() -> dict[tuple[int, str], str]:
+    """(subject_id, 教員名) → 最新年度のシラバスURL。
+    以前は routers/liff_api.py の /api/preload 内に同種のクエリが直書きされており、
+    faculty別キャッシュのミスごとに syllabi 全件スキャンが走り prewarm対象にもなっていなかった
+    （2026-09-08にここへ集約）。"""
+    global _syllabus_url_by_pair_cache, _syllabus_url_by_pair_cache_at
+    if _syllabus_url_by_pair_cache and time.monotonic() - _syllabus_url_by_pair_cache_at < _COURSE_CACHE_TTL:
+        return _syllabus_url_by_pair_cache
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(CourseSection.subject_id, Instructor.name, Syllabus.timetable_code,
+                   Syllabus.year, Subject.faculty, Subject.department)
+            .join(Instructor, Instructor.id == CourseSection.instructor_id)
+            .join(Syllabus, Syllabus.course_section_id == CourseSection.id)
+            .join(Subject, Subject.id == CourseSection.subject_id)
+            .where(Syllabus.timetable_code.isnot(None))
+        )).all()
+    _latest_year: dict[tuple[int, str], int] = {}
+    result: dict[tuple[int, str], str] = {}
+    for subject_id, iname, code, year, faculty, department in rows:
+        key = (subject_id, iname)
+        if key in _latest_year and year <= _latest_year[key]:
+            continue
+        url = make_syllabus_url(code, syllabus_department_key_from_parts(faculty, department))
+        if not url:
+            continue
+        _latest_year[key] = year
+        result[key] = url
+    _syllabus_url_by_pair_cache = result
+    _syllabus_url_by_pair_cache_at = time.monotonic()
+    return _syllabus_url_by_pair_cache
+
+
 def invalidate_courses_cache():
     global _course_by_name, _course_list_all, _course_cache_at
     global _all_instructors_cache, _all_instructors_cache_at
     global _course_flex_cache, _course_list_cache
     global _syllabus_url_cache, _syllabus_url_cache_at
+    global _syllabus_url_by_pair_cache, _syllabus_url_by_pair_cache_at
     global _preload_cache
     global _variant_map_cache, _variant_map_cache_at
     global _variant_full_label_cache, _variant_full_label_cache_at
@@ -391,6 +443,8 @@ def invalidate_courses_cache():
     # ここで一緒に無効化しないと管理画面での追加・変更が最大TTL(1時間)反映されなかった。
     _syllabus_url_cache = {}
     _syllabus_url_cache_at = 0.0
+    _syllabus_url_by_pair_cache = {}
+    _syllabus_url_by_pair_cache_at = 0.0
     _preload_cache = {}
     # 語尾バリアントグループ(compute_variant_groups)も科目一覧に依存する派生データのため、
     # ここで一緒に無効化する
@@ -851,6 +905,53 @@ async def get_ban_status_cached(line_user_id: str) -> bool:
 def invalidate_ban_cache(line_user_id: str) -> None:
     """管理画面のBAN/解除操作の直後に呼ぶ。呼び忘れると最大_BAN_STATUS_CACHE_TTL秒古い状態が使われる。"""
     _ban_status_cache.pop(line_user_id, None)
+    _linebot_user_state_cache.pop(line_user_id, None)
+
+
+# ── LINE bot 受信イベント処理用 ユーザー状態スナップショット ────────────────
+# レビュー閲覧メニュー等の操作のたびに、line_bot/handler.py の _user_banned /
+# _registration_incomplete / _get_unlocked_subject_ids がそれぞれ別々の
+# AsyncSessionLocal() で UserProfile / subject_unlocks へ往復していた。
+# Render(シンガポール)⇄Supabase(日本)間はDB1往復のコストが高く、科目一覧等の
+# 共有キャッシュがヒットしていても、その手前のこれらの往復ぶんの待ちが体感遅延に
+# 直結していた（2026-09-08、レイテンシ改善）。3つの判定材料を1セッションでまとめて
+# 取得し、短いTTLでプロセス内キャッシュする。1回の操作バーストで往復は最大1本、
+# TTL内の連続タップでは0本になる。
+# - banned はBAN→解除の双方向遷移があるため長いTTLは不可。管理画面のBAN/解除操作は
+#   invalidate_ban_cache() が本キャッシュも落とす
+# - unlocked_subject_ids はレビュー閲覧権の解除操作
+#   （routers/liff_api.py /api/course/{id}/unlock）の直後に
+#   invalidate_linebot_user_state() でキャッシュを落とすため取りこぼさない
+_LINEBOT_USER_STATE_TTL = 60
+_linebot_user_state_cache: dict[str, tuple[bool, bool, frozenset[int], float]] = {}
+
+
+async def get_linebot_user_state_cached(line_user_id: str) -> tuple[bool, bool, frozenset[int]]:
+    """(banned, registration_complete, unlocked_subject_ids) を1回のDBセッションで取得し
+    _LINEBOT_USER_STATE_TTL 秒キャッシュする。line_user_id が空なら即デフォルトを返す。"""
+    if not line_user_id:
+        return False, False, frozenset()
+    cached = _linebot_user_state_cache.get(line_user_id)
+    if cached is not None and time.monotonic() - cached[3] < _LINEBOT_USER_STATE_TTL:
+        return cached[0], cached[1], cached[2]
+    async with AsyncSessionLocal() as s:
+        profile = await s.get(UserProfile, line_user_id)
+        unlocked = frozenset((await s.execute(
+            select(SubjectUnlock.subject_id).where(SubjectUnlock.line_user_id == line_user_id)
+        )).scalars().all())
+    banned = bool(profile and profile.banned_at is not None)
+    complete = is_profile_complete(profile)
+    _linebot_user_state_cache[line_user_id] = (banned, complete, unlocked, time.monotonic())
+    # 登録完了は一方向遷移。sticky キャッシュも温めておくと、本スナップショットのTTLが
+    # 切れた後も _registration_incomplete がDBを見ずに False を返せる
+    if complete:
+        set_registration_complete(line_user_id)
+    return banned, complete, unlocked
+
+
+def invalidate_linebot_user_state(line_user_id: str) -> None:
+    """レビュー閲覧権の解除直後など、次のLINE bot操作へ即時反映したいときに呼ぶ。"""
+    _linebot_user_state_cache.pop(line_user_id, None)
 
 
 async def warm_query_caches() -> None:
@@ -872,6 +973,7 @@ async def warm_query_caches() -> None:
         get_all_instructors_cached(),
         get_all_review_stats_cached(),
         get_syllabus_urls_cached(),
+        get_syllabus_urls_by_pair_cached(),
         get_variant_map_cached(),
         get_senmon_variant_group_cached(),
         get_ease_extremes_cached(),

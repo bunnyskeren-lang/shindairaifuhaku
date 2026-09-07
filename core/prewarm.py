@@ -17,4 +17,11 @@ async def prewarm_caches() -> None:
     except Exception as e:
         print(f"Prewarm flex cache failed: {e}", flush=True)
         await save_error_log(e, action="prewarm_flex_cache")
+    try:
+        # circular import 回避のため遅延 import（line_bot.handler は core を広く import する）
+        from line_bot.handler import prewarm_menu_caches
+        await prewarm_menu_caches()
+    except Exception as e:
+        print(f"Prewarm menu cache failed: {e}", flush=True)
+        await save_error_log(e, action="prewarm_menu_caches")
     print("Cache pre-warm complete", flush=True)

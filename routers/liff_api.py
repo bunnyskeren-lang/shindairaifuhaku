@@ -13,7 +13,7 @@ from core.config import (
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_VIEW_CATEGORY,
-    escape_like, make_syllabus_url, syllabus_department_key,
+    escape_like, make_syllabus_url, syllabus_department_key, syllabus_department_key_from_parts,
 )
 from core.grading_method import parse_grading_method
 from core.liff_auth import verify_liff_id_token
@@ -119,7 +119,7 @@ async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
     for cs_id, code, year, faculty, department in rows:
         if cs_id in latest_year and year <= latest_year[cs_id]:
             continue
-        url = make_syllabus_url(code, f"{faculty or ''}{department or ''}")
+        url = make_syllabus_url(code, syllabus_department_key_from_parts(faculty, department))
         if not url:
             continue
         latest_year[cs_id] = year
@@ -235,30 +235,9 @@ async def api_preload(faculty: str = ""):
         variant_map = await cache.get_variant_map_cached()
         senmon_group = await cache.get_senmon_variant_group_cached()
         # 科目×担当教員ごとの最新シラバスURL（レビュー投稿フォームの「この科目×教員の
-        # シラバスはこちら」ボタンの表示可否・遷移先に使う）。course_sections/syllabi 由来で
-        # キャッシュ済みのコース一覧からは引けないため、キャッシュミス時に1回だけDBへ問い合わせる。
-        # syllabi を内部結合しているので対象はシラバスを持つセクションのみ（＝件数は小さく、
-        # 巨大な IN 句も不要）。同じ (科目, 教員) が複数年度・複数セクションに跨る場合は最新年度を採る。
-        syllabus_by_pair: dict[tuple[int, str], str] = {}
-        async with AsyncSessionLocal() as session:
-            _syl_rows = (await session.execute(
-                select(CourseSection.subject_id, Instructor.name, Syllabus.timetable_code,
-                       Syllabus.year, Subject.faculty, Subject.department)
-                .join(Instructor, Instructor.id == CourseSection.instructor_id)
-                .join(Syllabus, Syllabus.course_section_id == CourseSection.id)
-                .join(Subject, Subject.id == CourseSection.subject_id)
-                .where(Syllabus.timetable_code.isnot(None))
-            )).all()
-        _pair_year: dict[tuple[int, str], int] = {}
-        for _sid, _iname, _code, _year, _fac, _dept in _syl_rows:
-            _key = (_sid, _iname)
-            if _key in _pair_year and _year <= _pair_year[_key]:
-                continue
-            _url = make_syllabus_url(_code, f"{_fac or ''}{_dept or ''}")
-            if not _url:
-                continue
-            _pair_year[_key] = _year
-            syllabus_by_pair[_key] = _url
+        # シラバスはこちら」ボタンの表示可否・遷移先に使う）。学部を問わず全件共通なので
+        # faculty別のこのキャッシュとは別に、全体で1つのTTLキャッシュ＋prewarm対象にしている。
+        syllabus_by_pair = await cache.get_syllabus_urls_by_pair_cached()
         # variantGroupは遠隔/対面で同じベース名文字列になる（ラベル自体は共通の接頭辞を保つ
         # 必要があるため）。フロントエンド側の統合表示（_groupCourseItems）が誤って
         # 遠隔クラスと対面クラスを1グループに混在させないよう、isRemoteを別途渡す
@@ -663,9 +642,10 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "locked": locked,
             "view_restricted": view_restricted,
             "unlock_credits": unlock_credits,
-            # 平均・最頻の楽単度はロック中でも返す（解除前カードの「ぼかしティザー」で
-            # 実際の平均星をぼかして見せ、解除の動機づけにするため。2026-09-08、ユーザー指示）。
-            # 個々のレビュー本文・件数分布は従来どおりロック中は返さない
+            # 平均評価・最頻の楽単度はロック中でも実値をそのまま返す（2026-09-08、ユーザー指示）。
+            # フロントは解除前カードで CSS blur をかけて見せるが、これは解除の動機づけの演出で
+            # あってアクセス制御ではない（数値はJSON応答に含まれ DevTools で読める）。
+            # 集計値のみの開示なので許容範囲。個々のレビュー本文・件数分布はロック中は返さない。
             "avg_rating": avg_rating,
             "top_ease": top_ease,
             "rating_distribution": rating_counts if not locked else {},
@@ -745,4 +725,7 @@ async def unlock_course(course_id: int, request: Request, _rl=Depends(_unlock_ra
                 .on_conflict_do_nothing(index_elements=["line_user_id", "subject_id"])
             )
         await session.commit()
+        # LINE bot 側の科目一覧が「解除済み」バッジを即時反映できるよう、
+        # ユーザー状態スナップショット（banned/登録状態/解除済み科目をまとめてキャッシュ）を落とす
+        cache.invalidate_linebot_user_state(uid)
         return {"ok": True, "already": False, "unlock_credits": new_balance}

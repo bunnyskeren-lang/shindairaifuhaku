@@ -17,9 +17,8 @@ from linebot.v3.messaging import (
     URIAction,
 )
 from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
-from sqlalchemy import select
 
-from core import cache, line_client, moderation
+from core import cache, line_client
 from core.activity_log import save_error_log, save_log_bg
 from core.config import (
     APP_URL,
@@ -31,7 +30,6 @@ from core.config import (
     REVIEW_VIEW_CATEGORY,
     REVIEW_VIEW_RESTRICTED_FORM_LABEL,
     REVIEW_VIEW_RESTRICTED_MESSAGE,
-    is_profile_complete,
     make_cls_sort,
     make_course_liff_url,
     make_register_url,
@@ -52,7 +50,6 @@ from core.subject_variants import (
     variant_letter_in_suffix,
     variant_tag_in_suffix,
 )
-from database import AsyncSessionLocal
 from line_bot.flex_builders import (
     get_course_flex,
     make_category_entry_flex,
@@ -67,34 +64,32 @@ from line_bot.flex_builders import (
     make_review_badge_legend,
     make_search_result_card,
 )
-from models import SubjectUnlock, UserProfile
 
 
+# BAN判定・登録完了判定・解除済み科目取得の3つは、受信イベントごとに個別のDB往復を
+# 積まないよう core.cache のユーザー状態スナップショット（1セッションでまとめて取得し
+# _LINEBOT_USER_STATE_TTL 秒プロセス内キャッシュ）に集約した（2026-09-08、レイテンシ改善）。
+# 下の3ヘルパーは同一スナップショットの別フィールドを読むだけなので、1回の操作バーストで
+# 実際にDBへ行くのは最初の1回だけになる。
 async def _user_banned(user_id: str) -> bool:
-    return await moderation.is_banned(user_id)
+    banned, _complete, _unlocked = await cache.get_linebot_user_state_cached(user_id)
+    return banned
 
 
 async def _get_unlocked_subject_ids(user_id: str) -> set[int]:
     """指定ユーザーがレビュー閲覧権を消費して解除済みのsubject_id集合を返す。
-    ユーザー個別のデータなのでキャッシュせず毎回引く（subject_unlocksはline_user_id
-    始まりの複合主キーのため軽量）。"""
+    解除操作（routers/liff_api.py /api/course/{id}/unlock）の直後は
+    cache.invalidate_linebot_user_state() がスナップショットを落とすため取りこぼさない。"""
     if not user_id:
         return set()
-    async with AsyncSessionLocal() as s:
-        rows = (await s.execute(
-            select(SubjectUnlock.subject_id).where(SubjectUnlock.line_user_id == user_id)
-        )).scalars().all()
-    return set(rows)
+    _banned, _complete, unlocked = await cache.get_linebot_user_state_cached(user_id)
+    return set(unlocked)
 
 
 async def _registration_incomplete(user_id: str) -> bool:
     if cache.get_registration_complete_cached(user_id):
         return False
-    async with AsyncSessionLocal() as session:
-        profile = await session.get(UserProfile, user_id)
-        complete = is_profile_complete(profile)
-    if complete:
-        cache.set_registration_complete(user_id)
+    _banned, complete, _unlocked = await cache.get_linebot_user_state_cached(user_id)
     return not complete
 
 
@@ -1047,6 +1042,18 @@ async def _handle_faculty_menu(t: str, user_id: str = "") -> list:
                                          line_user_id=user_id)
     cache.set_course_list_cache(_menu_key, result)
     return result
+
+
+async def prewarm_menu_caches() -> None:
+    """レビュー閲覧の入口（教養/専門タイル）と系統/学部グリッドのFlexを起動時に生成して
+    cache._course_list_cache に載せておく。これをやらないとメニューのキャッシュが切れる
+    たび（最大1時間ごと）に、その時間帯で最初にレビュー閲覧を開いたユーザーだけが
+    全 compute を負担することになる。core.prewarm.prewarm_caches() から呼ぶ。
+    user_id="" で呼ぶと _get_unlocked_subject_ids("") が即 set() を返すため個別化されず、
+    純粋に共有キャッシュだけが温まる。"""
+    await _handle_category_entry()
+    await _handle_kyoyo_menu("")
+    await _handle_senmon_menu("")
 
 
 _MSG_SEARCH_LIMIT = 10
