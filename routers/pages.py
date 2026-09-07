@@ -9,6 +9,7 @@ from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV,
     LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
     REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
+    REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY,
 )
 from core.templates import templates
 
@@ -30,6 +31,8 @@ async def index(request: Request, uid: str = Query(default="")):
             "register_liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
             "max_reviews_per_course_section": MAX_REVIEWS_PER_COURSE_SECTION,
+            "submission_kyoyo_category": REVIEW_SUBMISSION_CATEGORY,
+            "submission_senmon_category": REVIEW_SUBMISSION_SENMON_CATEGORY,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

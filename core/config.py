@@ -76,9 +76,43 @@ WELCOME_PROMO_SUBJECT_ID = 2
 BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止しております。心当たりがある場合は、お問い合わせフォームよりご連絡ください。"
 
 # レビュー投稿を受け付ける科目のcategory（Subject.category）。2026-08-31より教養科目のみに限定。
-# フォーム(/submit)・LINE bot双方の投稿導線をこの値で揃える。
+# LINE botの投稿導線（Flexの「レビューを投稿する」ボタン）はこの値のみで判定する。
 REVIEW_SUBMISSION_CATEGORY = "教養"
 REVIEW_SUBMISSION_RESTRICTED_MESSAGE = "現在、レビュー投稿は教養科目のみ受け付けています"
+
+# 専門科目のcategory値。2026-09-07より、レビュー投稿フォーム(/)に限り、投稿者本人が
+# 会員登録した学部の専門科目もレビュー投稿できるようにする（LINE botの投稿導線・レビュー
+# 閲覧は従来どおり教養科目のみ）。判定は subject_submittable_for_profile() に集約する。
+REVIEW_SUBMISSION_SENMON_CATEGORY = "専門"
+REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE = "この専門科目は、ご登録の学部の学生のみレビューを投稿できます"
+
+
+def subject_submittable_for_profile(
+    category,
+    subject_faculty,
+    subject_department,
+    profile_faculty,
+    profile_department,
+) -> bool:
+    """レビュー投稿フォームでこの科目にレビューを投稿できるか判定する。
+
+    - 教養科目（category == REVIEW_SUBMISSION_CATEGORY）: 全員可
+    - 専門科目（category == REVIEW_SUBMISSION_SENMON_CATEGORY）: 投稿者本人の学部と一致必須。
+      学科は「一致」「科目側が学科不明（空/NULL）」「投稿者が学科未登録（空/NULL）」の
+      いずれかで可（ユーザー指示 2026-09-07）
+    - それ以外のcategory（共通専門基礎科目のfaculty='教養教育院'等を含む）: 不可
+    """
+    if category == REVIEW_SUBMISSION_CATEGORY:
+        return True
+    if category != REVIEW_SUBMISSION_SENMON_CATEGORY:
+        return False
+    sf = (subject_faculty or "").strip()
+    pf = (profile_faculty or "").strip()
+    if not sf or not pf or sf != pf:
+        return False
+    sd = (subject_department or "").strip()
+    pd = (profile_department or "").strip()
+    return not sd or not pd or sd == pd
 
 # レビューを閲覧可能な科目のcategory（Subject.category）。2026-09-06より専門科目は
 # チケット解除・件数/評価集計表示を含め一切閲覧不可にする（ユーザー指示。将来的に専門科目の

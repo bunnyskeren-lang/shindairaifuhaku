@@ -622,6 +622,10 @@
     const LIFF_ID = "{{ liff_id }}";
     const REGISTER_LIFF_ID = "{{ register_liff_id }}";
     const MAX_REVIEWS_PER_COURSE_SECTION = {{ max_reviews_per_course_section }};
+    // レビュー投稿できる科目のcategory。教養科目は全員、専門科目は会員登録した学部のぶんのみ。
+    // サーバー側(core.config.subject_submittable_for_profile / routers/review_submit_api.py)と同じ規則。
+    const SUBMISSION_KYOYO_CATEGORY = "{{ submission_kyoyo_category }}";
+    const SUBMISSION_SENMON_CATEGORY = "{{ submission_senmon_category }}";
     let _liffInitPromise = null;
     function ensureLiffInit() {
       if (!_liffInitPromise) {
@@ -646,6 +650,26 @@
     // 既に投稿済みの組み合わせをプリフィル時に取得し、科目選択画面でグレーアウト表示する
     // （実際の受付可否は/submit側で再確認するため、これはあくまで補助的なUI表示）
     let _reviewedSet = new Set();
+
+    // 会員登録情報（学部・学科）。プリフィルで解決する。専門科目の候補絞り込みに使う。
+    let _profile = null;
+    // ?course= の自動選択・プリロード取得はプリフィル（学部の確定）を待ってから行う。
+    let _prefillResolve;
+    const _prefillDone = new Promise(r => { _prefillResolve = r; });
+
+    // この科目にレビュー投稿できるか（教養は全員／専門は本人の学部＝科目学部一致、
+    // 学科は一致・科目側が学科不明・本人が学科未登録のいずれかで可）。
+    function _isSubmittable(c) {
+      const cat = (c && c.category) || '';
+      if (cat === SUBMISSION_KYOYO_CATEGORY) return true;
+      if (cat !== SUBMISSION_SENMON_CATEGORY) return false;
+      const sf = ((c && c.faculty) || '').trim();
+      const pf = ((_profile && _profile.faculty) || '').trim();
+      if (!sf || !pf || sf !== pf) return false;
+      const sd = ((c && c.department) || '').trim();
+      const pd = ((_profile && _profile.department) || '').trim();
+      return !sd || !pd || sd === pd;
+    }
 
     // 会員登録ゲートのブラー＋オーバーレイ機構（.blurredクラス・#authOverlay構造・
     // showOverlay/hideOverlayの3点セット）はtemplates/liff/course.html（showAuthOverlay/
@@ -753,10 +777,14 @@
       if (Array.isArray(d.reviewed_pairs)) {
         _reviewedSet = new Set(d.reviewed_pairs.map(([cid, name]) => cid + '::' + name));
       }
+      // 会員登録した学部・学科を控え、その学部の専門科目を含むプリロードを取得する
+      _profile = { faculty: d.faculty || '', department: d.department || '' };
+      await loadPreload();
       document.getElementById('idTokenHidden').value = idToken;
       hideOverlay();
     }
-    initProfilePrefill();
+    // プリフィルが（成功・失敗いずれでも）決着したら、?course=自動選択とフォールバック検索を解禁する
+    initProfilePrefill().finally(() => _prefillResolve());
 
     const RATING_LABELS = ['', 'ほぼ学びなし 😔', 'ちょい学び 🙂', 'まあまあ学びあり 😊', 'かなり学べた 😄', 'めちゃくちゃ学べた 🤩'];
     const EASE_VALS   = ['', 'C', 'B', 'A', 'S', 'SS'];
@@ -1203,11 +1231,22 @@
 
     // ── プリロードキャッシュ ──
     let _preload = null;
+    // 専門科目の候補は会員登録した学部で変わるため、プリフィル（_profile確定）を待ってから取得する。
+    // フォーム本体は会員登録ゲートのオーバーレイで覆われており、その解除前に検索は行われない。
     // 修正理由: res.okを確認せずJSON化していたため、サーバーエラー時に
     // {"detail": "..."}のような形の異なるレスポンスが_preloadに入り、
     // 検索欄に1文字入力した瞬間 `_preload.courses.filter` がTypeErrorで無言クラッシュしていた。
     // res.ok以外なら_preloadをnullのままにし、既存の/api/coursesフォールバックへ委ねる。
-    fetch('/api/preload').then(r => r.ok ? r.json() : Promise.reject(new Error(r.status))).then(d => { _preload = d; }).catch(() => {});
+    function _facultyQS(prefix) {
+      const f = (_profile && _profile.faculty || '').trim();
+      return f ? (prefix + 'faculty=' + encodeURIComponent(f)) : '';
+    }
+    function loadPreload() {
+      return fetch('/api/preload' + _facultyQS('?'))
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
+        .then(d => { _preload = d; })
+        .catch(() => {});
+    }
 
     function _normStr(s) { return s.replace(/[・･（）()]/g, '').toLowerCase(); }
 
@@ -1290,6 +1329,7 @@
         const tokens = q.trim().split(/[\s　]+/).filter(Boolean).map(t => t.toLowerCase());
         const normTokens = tokens.map(_normStr);
         const items = _preload.courses.filter(c => {
+          if (!_isSubmittable(c)) return false;
           const name = c.name.toLowerCase();
           const reading = (c.reading || '').toLowerCase();
           const normName = _normStr(c.name);
@@ -1299,9 +1339,9 @@
         });
         _showCourseDropdown(_groupCourseItems(items), q);
       } else {
-        fetch(`/api/courses?q=${encodeURIComponent(q)}`)
+        fetch(`/api/courses?q=${encodeURIComponent(q)}${_facultyQS('&')}`)
           .then(r => r.json())
-          .then(d => _showCourseDropdown(d.courses || [], q))
+          .then(d => _showCourseDropdown((d.courses || []).filter(_isSubmittable), q))
           .catch(() => {});
       }
     }
@@ -1472,16 +1512,21 @@
       if (_preload) {
         const ql = q.replace(/　/g, ' ').trim().toLowerCase();
         const items = _preload.instructors
-          .filter(i => i.name.toLowerCase().includes(ql))
+          .map(i => ({ ...i, courses: (i.courses || []).filter(_isSubmittable) }))
+          .filter(i => i.courses.length && i.name.toLowerCase().includes(ql))
           .sort((a, b) => {
             const al = a.name.toLowerCase(), bl = b.name.toLowerCase();
             return (al.startsWith(ql) ? 0 : 1) - (bl.startsWith(ql) ? 0 : 1) || al.localeCompare(bl);
           });
         _showInstrDropdown(items, q);
       } else {
-        fetch(`/api/instructors?q=${encodeURIComponent(q)}`)
+        fetch(`/api/instructors?q=${encodeURIComponent(q)}${_facultyQS('&')}`)
           .then(r => r.json())
-          .then(d => _showInstrDropdown(d.instructors || [], q))
+          .then(d => _showInstrDropdown(
+            (d.instructors || [])
+              .map(i => ({ ...i, courses: (i.courses || []).filter(_isSubmittable) }))
+              .filter(i => i.courses.length),
+            q))
           .catch(() => {});
       }
     }
@@ -2156,13 +2201,23 @@
     (async () => {
       const urlCourse = new URLSearchParams(location.search).get('course');
       if (!urlCourse) return;
+      // プリフィル（学部の確定）とプリロード取得を待ってから判定する
+      await _prefillDone;
       const trySelect = (data) => {
         const match = (data.courses || []).find(c => c.name === urlCourse);
-        if (match) selectCourse(match.name, match.instructors, match.id);
+        if (!match) return;
+        if (!_isSubmittable(match)) {
+          // 他学部の専門科目など、この会員登録情報では投稿できない科目が指定された場合
+          searchInput.value = urlCourse;
+          dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-gray-500">「${escapeHtml(urlCourse)}」は、ご登録の学部ではレビュー投稿の対象外です。投稿できる科目を検索してください。</div>`;
+          dropdown.classList.remove('hidden');
+          return;
+        }
+        selectCourse(match.name, match.instructors, match.id);
       };
       if (_preload) { trySelect(_preload); return; }
       try {
-        const res = await fetch(`/api/courses?q=${encodeURIComponent(urlCourse)}`);
+        const res = await fetch(`/api/courses?q=${encodeURIComponent(urlCourse)}${_facultyQS('&')}`);
         trySelect(await res.json());
       } catch (_) {}
     })();

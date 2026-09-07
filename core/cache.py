@@ -347,7 +347,7 @@ def invalidate_courses_cache():
     global _all_instructors_cache, _all_instructors_cache_at
     global _course_flex_cache, _course_list_cache
     global _syllabus_url_cache, _syllabus_url_cache_at
-    global _preload_cache, _preload_cache_at
+    global _preload_cache
     global _variant_map_cache, _variant_map_cache_at
     global _variant_full_label_cache, _variant_full_label_cache_at
     global _variant_member_suffix_cache, _variant_member_suffix_cache_at
@@ -364,8 +364,7 @@ def invalidate_courses_cache():
     # ここで一緒に無効化しないと管理画面での追加・変更が最大TTL(1時間)反映されなかった。
     _syllabus_url_cache = {}
     _syllabus_url_cache_at = 0.0
-    _preload_cache = None
-    _preload_cache_at = 0.0
+    _preload_cache = {}
     # 語尾バリアントグループ(compute_variant_groups)も科目一覧に依存する派生データのため、
     # ここで一緒に無効化する
     _variant_map_cache = None
@@ -444,20 +443,20 @@ def set_registration_complete(user_id: str) -> None:
 # get_courses_cached/get_all_instructors_cachedからの構築自体は軽いが、
 # 全科目・全教員（数千件規模）をループするため、リクエストの都度組み立てず結果をキャッシュする
 _PRELOAD_TTL = 3600
-_preload_cache: dict | None = None
-_preload_cache_at: float = 0.0
+# レビュー投稿フォームの科目候補は「教養科目（全員共通）＋ 指定学部の専門科目」を返すため、
+# 学部ごとに別のレスポンスになる。faculty="" は教養科目のみ（学部未指定・未ログイン相当）。
+_preload_cache: dict[str, tuple[dict, float]] = {}
 
 
-def get_preload_cache() -> dict | None:
-    if _preload_cache is not None and time.monotonic() - _preload_cache_at < _PRELOAD_TTL:
-        return _preload_cache
+def get_preload_cache(faculty: str = "") -> dict | None:
+    entry = _preload_cache.get(faculty or "")
+    if entry is not None and time.monotonic() - entry[1] < _PRELOAD_TTL:
+        return entry[0]
     return None
 
 
-def set_preload_cache(data: dict) -> None:
-    global _preload_cache, _preload_cache_at
-    _preload_cache = data
-    _preload_cache_at = time.monotonic()
+def set_preload_cache(data: dict, faculty: str = "") -> None:
+    _preload_cache[faculty or ""] = (data, time.monotonic())
 
 
 _variant_map_cache: dict[str, str] | None = None

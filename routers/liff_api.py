@@ -3,15 +3,15 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
-    BAN_MESSAGE_TEXT, EASE_ORDER, MAX_REVIEWS_PER_COURSE_SECTION,
+    BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE, ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
-    REVIEW_SUBMISSION_CATEGORY, REVIEW_VIEW_CATEGORY,
+    REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_VIEW_CATEGORY,
     escape_like, make_syllabus_url, syllabus_department_key,
 )
 from core.grading_method import parse_grading_method
@@ -50,6 +50,27 @@ def _normalize_form_q(s: str) -> str:
     return s
 
 
+def _clean_faculty(faculty: str) -> str:
+    """クエリで渡された学部名を既知の11学部に限定する（不明な値はキャッシュ汚染防止のため空扱い）。"""
+    faculty = (faculty or "").strip()
+    return faculty if faculty in FACULTIES else ""
+
+
+def _submission_category_clause(faculty: str):
+    """レビュー投稿フォームの科目候補に含める条件（教養科目は全員、専門科目は指定学部のぶんのみ）。
+    faculty が空なら教養科目のみ（学部未指定・未ログイン相当）。学科の絞り込みは
+    core.config.subject_submittable_for_profile() でクライアント側／/submit側が行う。"""
+    if faculty:
+        return or_(
+            Subject.category == REVIEW_SUBMISSION_CATEGORY,
+            and_(
+                Subject.category == REVIEW_SUBMISSION_SENMON_CATEGORY,
+                Subject.faculty == faculty,
+            ),
+        )
+    return Subject.category == REVIEW_SUBMISSION_CATEGORY
+
+
 async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
     """course_section_idごとに最新年度のsyllabus_urlをtimetable_code/departmentから動的生成する。"""
     if not cs_ids:
@@ -74,7 +95,9 @@ async def _latest_syllabus_urls(session, cs_ids: list) -> dict[int, str]:
 
 
 @router.get("/api/courses")
-async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
+async def search_courses(q: str = "", faculty: str = "", _rl=Depends(_search_rate_limit)):
+    faculty = _clean_faculty(faculty)
+    cat_clause = _submission_category_clause(faculty)
     async with AsyncSessionLocal() as session:
         if q.strip():
             q_stripped = q.strip()
@@ -84,7 +107,7 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                 (Subject.name.ilike(f"{q_full}%", escape="\\"), 0),
                 else_=1,
             )
-            stmt = select(Subject).where(Subject.category == REVIEW_SUBMISSION_CATEGORY)
+            stmt = select(Subject).where(cat_clause)
             for tok in tokens:
                 t = escape_like(tok)
                 stmt = stmt.where(or_(
@@ -103,7 +126,7 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                     (norm_col.ilike(f"{norm_q_full}%", escape="\\"), 0),
                     else_=1,
                 )
-                stmt2 = select(Subject).where(Subject.category == REVIEW_SUBMISSION_CATEGORY)
+                stmt2 = select(Subject).where(cat_clause)
                 for tok in norm_tokens:
                     t = escape_like(tok)
                     stmt2 = stmt2.where(norm_col.ilike(f"%{t}%", escape="\\"))
@@ -112,7 +135,7 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
         else:
             stmt = (
                 select(Subject)
-                .where(Subject.category == REVIEW_SUBMISSION_CATEGORY)
+                .where(cat_clause)
                 .order_by(Subject.name).limit(30)
             )
             courses = (await session.execute(stmt)).scalars().all()
@@ -138,23 +161,33 @@ async def search_courses(q: str = "", _rl=Depends(_search_rate_limit)):
                 "remaining": 0 if closed else remaining,
             })
     return {"courses": [
-        {"id": c.id, "name": c.name, "instructors": insts_by_course.get(c.id, [])}
+        {"id": c.id, "name": c.name,
+         "category": c.category or "",
+         "faculty": c.faculty or "", "department": c.department or "",
+         "instructors": insts_by_course.get(c.id, [])}
         for c in courses
     ]}
 
 
 @router.get("/api/preload")
-async def api_preload():
-    data = cache.get_preload_cache()
+async def api_preload(faculty: str = ""):
+    # レビュー投稿フォームの科目候補は「教養科目（全員共通）＋ 指定学部の専門科目」。
+    # faculty はプロフィール（会員登録情報）の学部で、クライアントがプリフィル解決後に付与する。
+    # 学科の絞り込みはクライアント側（core.config.subject_submittable_for_profile 相当）で行う。
+    faculty = _clean_faculty(faculty)
+    data = cache.get_preload_cache(faculty)
     if data is None:
         _, all_courses_ = await cache.get_courses_cached()
-        # レビュー投稿フォームの科目候補は教養科目のみに限定する
-        courses = [c for c in all_courses_ if c.category == REVIEW_SUBMISSION_CATEGORY]
+        courses = [
+            c for c in all_courses_
+            if c.category == REVIEW_SUBMISSION_CATEGORY
+            or (faculty and c.category == REVIEW_SUBMISSION_SENMON_CATEGORY and (c.faculty or "") == faculty)
+        ]
         insts_by_course = await cache.get_all_instructors_cached()
-        inst_courses: dict[str, dict[int, str]] = {}
+        inst_courses: dict[str, dict[int, object]] = {}
         for c in courses:
             for inst in insts_by_course.get(c.id, []):
-                inst_courses.setdefault(inst.name, {})[c.id] = c.name
+                inst_courses.setdefault(inst.name, {})[c.id] = c
         # 語尾の数字・アルファベットのみが異なる科目（例: 生物学各論A1/A2/C1/C2）は
         # レビュー投稿フォームの科目検索でも1件にまとめて選べるようにする（LINE bot科目一覧と同じ統合規則）
         variant_map = await cache.get_variant_map_cached()
@@ -164,6 +197,8 @@ async def api_preload():
         # （core.subject_variants.is_remote_tagged()参照）。
         course_list = [
             {"id": c.id, "name": c.name, "reading": c.reading or "",
+             "category": c.category or "",
+             "faculty": c.faculty or "", "department": c.department or "",
              "variantGroup": variant_map.get(c.name, ""),
              "isRemote": is_remote_tagged(c.name),
              "instructors": [{"name": i.name} for i in insts_by_course.get(c.id, [])]}
@@ -171,13 +206,16 @@ async def api_preload():
         ]
         instructor_list = [
             {"name": name, "courses": [
-                {"id": cid, "name": cn, "variantGroup": variant_map.get(cn, ""), "isRemote": is_remote_tagged(cn)}
-                for cid, cn in courses_by_id.items()
+                {"id": ic.id, "name": ic.name,
+                 "category": ic.category or "",
+                 "faculty": ic.faculty or "", "department": ic.department or "",
+                 "variantGroup": variant_map.get(ic.name, ""), "isRemote": is_remote_tagged(ic.name)}
+                for ic in courses_by_id.values()
             ]}
             for name, courses_by_id in sorted(inst_courses.items())
         ]
         data = {"courses": course_list, "instructors": instructor_list}
-        cache.set_preload_cache(data)
+        cache.set_preload_cache(data, faculty)
 
     # 「full」/「remaining」（募集締切・残り枠）はレビュー投稿状況で頻繁に変わりうるため、
     # 構造データ本体（数千件規模でTTL 3600秒キャッシュ）とは切り離し、毎リクエスト時に付与する
@@ -213,9 +251,11 @@ async def api_preload():
 
 
 @router.get("/api/instructors")
-async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
+async def search_instructors(q: str = "", faculty: str = "", _rl=Depends(_search_rate_limit)):
     if not q.strip():
         return {"instructors": []}
+    faculty = _clean_faculty(faculty)
+    cat_clause = _submission_category_clause(faculty)
     async with AsyncSessionLocal() as session:
         q_clean = q.replace("　", " ").strip()
         escaped = escape_like(q_clean)
@@ -242,21 +282,23 @@ async def search_instructors(q: str = "", _rl=Depends(_search_rate_limit)):
         result = []
         if insts:
             all_rows = (await session.execute(
-                select(Instructor.name, Subject.id, Subject.name)
+                select(Instructor.name, Subject.id, Subject.name,
+                       Subject.category, Subject.faculty, Subject.department)
                 .join(CourseSection, CourseSection.instructor_id == Instructor.id)
                 .join(Subject, Subject.id == CourseSection.subject_id)
-                .where(Instructor.name.in_(insts), Subject.category == REVIEW_SUBMISSION_CATEGORY)
+                .where(Instructor.name.in_(insts), cat_clause)
                 .order_by(Instructor.name, Subject.name)
             )).all()
             remaining_map = await cache.get_review_remaining_cached()
             variant_map = await cache.get_variant_map_cached()
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
-            for inst_name, c_id, c_name in all_rows:
+            for inst_name, c_id, c_name, c_cat, c_fac, c_dept in all_rows:
                 if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
                     closed = c_id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS
                     remaining = 0 if closed else remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
                     courses_by_inst[inst_name].append({
                         "id": c_id, "name": c_name, "full": closed or remaining <= 0, "remaining": remaining,
+                        "category": c_cat or "", "faculty": c_fac or "", "department": c_dept or "",
                         "variantGroup": variant_map.get(c_name, ""), "isRemote": is_remote_tagged(c_name),
                     })
             # 教養科目を担当していない教員（専門科目のみ担当）はレビュー投稿フォームの

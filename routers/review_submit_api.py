@@ -9,8 +9,10 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_SUBJECT_IDS,
-    REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
+    REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
+    REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
+    subject_submittable_for_profile,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -83,10 +85,6 @@ async def submit(
         )).scalars().first()
         if not subject:
             return _form_error("指定された科目が見つかりません")
-        if subject.category != REVIEW_SUBMISSION_CATEGORY:
-            return _form_error(REVIEW_SUBMISSION_RESTRICTED_MESSAGE)
-        if subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
-            return _form_error("この科目はオンデマンド配信のため内容が教員によらず同一です。レビュー募集は終了しました")
 
         existing = (await session.execute(
             select(UserProfile).where(UserProfile.line_user_id == uid)
@@ -127,6 +125,18 @@ async def submit(
             )).scalars().first()
         if cs_obj is None:
             return _form_error("この科目の担当教員情報が見つかりません")
+
+        # 学部をまたぐ同名科目は担当教員で subject を確定させたあとに判定する。
+        # 教養科目は全員、専門科目は投稿者本人の学部（会員登録情報）のぶんのみ受け付ける。
+        if subject.id in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
+            return _form_error("この科目はオンデマンド配信のため内容が教員によらず同一です。レビュー募集は終了しました")
+        if not subject_submittable_for_profile(
+            subject.category, subject.faculty, subject.department,
+            existing.faculty, existing.department,
+        ):
+            if subject.category == REVIEW_SUBMISSION_SENMON_CATEGORY:
+                return _form_error(REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE)
+            return _form_error(REVIEW_SUBMISSION_RESTRICTED_MESSAGE)
 
         # 末尾バリアントグループ（例: 線形代数1/2/3/4）に属する科目は、同じ教員が複数メンバーを
         # 担当している場合、レビュー閲覧側では既に1つの科目としてまとめて表示している
