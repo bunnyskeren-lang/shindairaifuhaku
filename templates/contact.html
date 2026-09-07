@@ -195,23 +195,43 @@
         return JSON.parse(atob(b64));
       } catch (e) { return null; }
     }
+    function devHost() {
+      try { return /localhost|127\.0\.0\.1|shindairaifuhaku-1/.test(location.hostname); }
+      catch (e) { return false; }
+    }
     function idTokenExpired(token) {
-      // dev環境限定: forceExpired=1 付きで開くと最初の1回だけ期限切れ扱いにして
-      // 「強制再ログイン→新トークンで復帰」を実機テストできる（sessionStorageでワンショット化）。
-      // liff.state 経由でクエリがURLエンコードされるケースに備え decodeURIComponent も見る。
+      // dev環境限定の強制期限切れテスト。画面の[dev]ボタン、または URLに ?forceExpired=1 で作動。
       try {
         let href = location.href;
         try { href = decodeURIComponent(href); } catch (e) {}
-        if (/localhost|127\.0\.0\.1|shindairaifuhaku-1/.test(location.hostname)
-            && href.indexOf('forceExpired=1') !== -1
-            && sessionStorage.getItem('forceExpiredUsed') !== '1') {
+        const want = href.indexOf('forceExpired=1') !== -1 || sessionStorage.getItem('forceExpiredArm') === '1';
+        if (devHost() && want && sessionStorage.getItem('forceExpiredUsed') !== '1') {
           sessionStorage.setItem('forceExpiredUsed', '1');
+          sessionStorage.removeItem('forceExpiredArm');
           alert('[dev] forceExpired: IDトークンを期限切れ扱いにして強制再ログインします。復帰後 /admin/errors に liff_reauth 行が出れば成功です');
           return true;
         }
       } catch (e) {}
       const p = decodeJwt(token);
       return !!(p && typeof p.exp === 'number' && p.exp * 1000 <= Date.now() + 60000);
+    }
+    // dev環境でのみ、画面左下に強制期限切れテストボタンを出す（URL入力ミスに影響されない確実な導線）
+    if (devHost()) {
+      window.addEventListener('DOMContentLoaded', () => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = '[dev] 強制期限切れ再ログインテスト';
+        b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#b91c1c;color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.35)';
+        b.onclick = () => {
+          try {
+            sessionStorage.setItem('forceExpiredArm', '1');
+            sessionStorage.removeItem('forceExpiredUsed');
+            sessionStorage.removeItem('liffReauthTried');
+          } catch (e) {}
+          location.reload();
+        };
+        document.body.appendChild(b);
+      });
     }
     function liffSafe(fn) { try { return fn(); } catch (e) { return null; } }
     // IDトークン期限切れ→再ログインの発生状況テレメトリ。guard_tripped=true が
