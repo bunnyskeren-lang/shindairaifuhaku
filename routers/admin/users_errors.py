@@ -107,11 +107,16 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
         ticket_map: dict[str, dict] = {}
         for u in users:
-            granted = granted_count_map.get(u.student_id, 0) if u.student_id else 0
+            granted_actual = granted_count_map.get(u.student_id, 0) if u.student_id else 0
             balance = u.unlock_credits or 0
+            # 2026-09-08 暫定: unlock_credits を payment_limit/100 だけ一括減算した結果、
+            # 付与(credit_granted_at件数×カテゴリ枚数)との差で「使用」が実態より大きく出るため、
+            # 当面は付与表示を残数に一致させ「使用」を0で表示する。元の集計値は granted_actual。
+            granted = balance
             ticket_map[u.user_id] = {
                 "balance": balance,
                 "granted": granted,
+                "granted_actual": granted_actual,
                 # 付与総数-現在残数=使用数。マイナスにはならない想定だが、表示上の破綻を避けるためガードする
                 "used": max(granted - balance, 0),
                 "subjects": unlocked_subjects_map.get(u.user_id, []),
