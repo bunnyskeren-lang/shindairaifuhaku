@@ -218,6 +218,13 @@ async def api_preload(faculty: str = ""):
             or (c.category == REVIEW_SUBMISSION_SENMON_CATEGORY and (c.faculty or "") == KYOTSU_SENMON_KISO_FACULTY)
             or (faculty and c.category == REVIEW_SUBMISSION_SENMON_CATEGORY and (c.faculty or "") == faculty)
         ]
+        # 前提: 専門科目のバリアント統合グループ（get_senmon_variant_group_cached）は
+        # (科目名, classification) 単位で、classification に学部名が埋まっているため1グループが
+        # 複数の faculty 値をまたぐことはない。この前提が崩れると、faculty で絞ったこの courses に
+        # グループの一部メンバーしか入らず、フロントの統合表示が不完全になる／submit 側は
+        # 完全な group_subject_ids で重複判定するため「フォーム上は別項目なのに投稿済みで弾かれる」
+        # 不整合が起きうる。跨ぐ classification を新設するときはここも見直すこと。
+        # （共通専門基礎 KYOTSU_SENMON_KISO_FACULTY と医学部保健学科4専攻は faculty 一致で常に全員含まれる）
         insts_by_course = await cache.get_all_instructors_cached()
         inst_courses: dict[str, dict[int, object]] = {}
         for c in courses:
@@ -565,8 +572,8 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 )
 
             # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
-            # REVIEW_APPROVAL_UNLOCK_CREDITS枚の閲覧権が付与される。閲覧権はsubject単位・
-            # バリアントグループ内で共有）
+            # core.config.review_approval_unlock_credits(科目category) 枚（教養2枚・専門1枚）の
+            # 閲覧権チケットが付与される。閲覧権はsubject単位・バリアントグループ内で共有）
             # 専門科目は投稿解禁後もチケット解除・件数/評価集計表示を含め一切閲覧不可にする
             # （2026-09-06、ユーザー指示。閲覧解禁は別途指示があるまで行わない）
             view_restricted = subject.category != REVIEW_VIEW_CATEGORY

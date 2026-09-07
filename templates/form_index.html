@@ -789,8 +789,14 @@
       document.getElementById('idTokenHidden').value = idToken;
       hideOverlay();
     }
-    // プリフィルが（成功・失敗いずれでも）決着したら、?course=自動選択とフォールバック検索を解禁する
-    initProfilePrefill().finally(() => _prefillResolve());
+    // プリフィルが（成功・失敗いずれでも）決着したら、?course=自動選択とフォールバック検索を解禁する。
+    // プリフィルが途中で失敗して _profile が確定しなかった場合でも、教養科目ぶん（学部未指定）の
+    // プリロードだけは取得しておく。これをしないと _preload が永久に null のままになり、
+    // 検索欄のキーストロークごとに /api/courses を叩き続けることになる。
+    initProfilePrefill().finally(() => {
+      _prefillResolve();
+      if (!_preload) loadPreload();
+    });
 
     const RATING_LABELS = ['', 'ほぼ学びなし 😔', 'ちょい学び 🙂', 'まあまあ学びあり 😊', 'かなり学べた 😄', 'めちゃくちゃ学べた 🤩'];
     const EASE_VALS   = ['', 'C', 'B', 'A', 'S', 'SS'];

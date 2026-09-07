@@ -84,12 +84,33 @@ REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON = 1
 # カテゴリが取得できない/教養・専門以外のレビュー（通常発生しない）向けフォールバック
 REVIEW_APPROVAL_UNLOCK_CREDITS = 1
 
-# reviews.credit_granted_at の番兵値。「閲覧チケットの付与は行わない（レビュー報酬を
-# 現金買取 payment_limit へ換算済み）」ことを表す。NULL にすると /admin/reviews/approve の
-# 冪等ガード（credit_granted_at IS NULL）をすり抜けて再付与されてしまうため、実時刻ではなく
-# この固定値を入れる。管理画面の「付与」集計・支払い済み化時のチケット消費は、この値の
-# レビューを credit_granted_at > CREDIT_GRANTED_SENTINEL で除外する（2026-09-08）。
+# reviews.credit_granted_at は1列で3状態を表す（2026-09-08〜）:
+#   - NULL                     … まだ付与も番兵マークもしていない。承認時にチケットを付与すべき
+#   - CREDIT_GRANTED_SENTINEL  … 付与はしない（レビュー報酬を現金買取 payment_limit へ換算済み）
+#   - 実時刻                    … その時刻にチケットを実際に付与した
+# NULL のままにすると /admin/reviews/approve の冪等ガード（credit_granted_at IS NULL）を
+# すり抜けて再付与されてしまうため、「付与しない」ケースにも実時刻ではなくこの固定値を入れる。
+# 判定は必ず下の credit_grant_pending() / credit_tickets_were_granted() /
+# credit_tickets_granted_clause() を経由する（生の IS NULL / isnot(None) を新規に書かない。
+# 番兵レビューを誤って「付与済み」に数えるバグの温床になる）。
 CREDIT_GRANTED_SENTINEL = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def credit_grant_pending(credit_granted_at) -> bool:
+    """このレビューは承認時に閲覧チケットを付与すべきか（まだ付与も番兵マークもされていない）。"""
+    return credit_granted_at is None
+
+
+def credit_tickets_were_granted(credit_granted_at) -> bool:
+    """このレビューで閲覧チケットを実際に付与したか（Python オブジェクト版）。
+    NULL（未付与）も番兵値（現金換算済み・付与なし）も False。"""
+    return credit_granted_at is not None and credit_granted_at > CREDIT_GRANTED_SENTINEL
+
+
+def credit_tickets_granted_clause(credit_granted_at_col):
+    """credit_tickets_were_granted() の SQLAlchemy 条件版（models を import せず列を受け取る）。
+    管理画面の「付与」集計・支払い済み化時のチケット消費で使う。"""
+    return credit_granted_at_col > CREDIT_GRANTED_SENTINEL
 
 
 def review_approval_unlock_credits(category) -> int:

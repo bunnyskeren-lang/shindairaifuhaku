@@ -44,8 +44,8 @@ class UserProfile(TimestampMixin, Base):
     department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # レビュー閲覧権チケットの残数。承認された自分のレビュー1件につき
-    # REVIEW_APPROVAL_UNLOCK_CREDITS枚が付与され、任意の科目のレビュー閲覧解除（SubjectUnlock作成）に
-    # 1枚ずつ消費する
+    # core.config.review_approval_unlock_credits(科目category) 枚（教養2枚・専門1枚）が付与され、
+    # 任意の科目のレビュー閲覧解除（SubjectUnlock作成）に1枚ずつ消費する
     unlock_credits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     # レビュー報酬（PayPay）の支払い上限額（円）。管理画面のユーザー設定で管理者が
     # 100円単位で手入力する。2026-09-07以降、支払い申請フォーム（routers/payment_api.py）の

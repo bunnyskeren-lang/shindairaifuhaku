@@ -855,11 +855,13 @@ def invalidate_ban_cache(line_user_id: str) -> None:
 
 async def warm_query_caches() -> None:
     import asyncio
-    # 修正理由: 11個を一度にasyncio.gatherすると起動時にDBセッションが11本同時に開き、
+    # 修正理由: 全部を一度にasyncio.gatherすると起動時にDBセッションが同数同時に開き、
     # Supabase poolerの「セッションモード」（DATABASE_URLのポート5432、1クライアント接続＝
     # 1バックエンド固定）が持つ同時セッション数上限に達しEMAXCONNSESSIONで失敗する
     # （2026-08-31に発生確認済み）。3件ずつのバッチに分けて直列に実行することで
-    # 同時に開くセッション数を抑える
+    # 同時に開くセッション数を抑える。
+    # get_senmon_variant_group_cached は get_courses_cached の結果に相乗りする派生キャッシュ
+    # （compute_variant_display_groups の全科目実行が重い）ため、courses より後ろに置く。
     _tasks = [
         get_cls_order_map(),
         get_cls_parent_map(),
@@ -871,6 +873,7 @@ async def warm_query_caches() -> None:
         get_all_review_stats_cached(),
         get_syllabus_urls_cached(),
         get_variant_map_cached(),
+        get_senmon_variant_group_cached(),
         get_ease_extremes_cached(),
     ]
     _BATCH = 3

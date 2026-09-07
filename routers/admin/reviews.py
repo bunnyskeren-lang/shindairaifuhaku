@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, func, select
 
 from core import cache
-from core.config import review_approval_unlock_credits, normalize_instructor_name
+from core.config import credit_grant_pending, review_approval_unlock_credits, normalize_instructor_name
 from core.grading_method import build_grading_method_from_edit_text
 from core.security import check_admin
 from core.subject_variants import is_hoken_gakka_senko
@@ -174,7 +174,8 @@ async def admin_review_approve(
             review.status = ReviewStatus.APPROVED
             # レビュー閲覧権チケットの付与。credit_granted_atで一度きりに限定し、
             # 却下→復元→再承認のようなステータス往復があっても二重付与しない
-            if review.credit_granted_at is None and review.student_id:
+            # （番兵値が入っているレビュー＝現金換算済みも credit_grant_pending() が False を返す）
+            if credit_grant_pending(review.credit_granted_at) and review.student_id:
                 profile = (await session.execute(
                     select(UserProfile).where(UserProfile.student_id == review.student_id)
                 )).scalar_one_or_none()

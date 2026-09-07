@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
 from core import cache
-from core.config import CREDIT_GRANTED_SENTINEL, review_approval_unlock_credits
+from core.config import credit_tickets_granted_clause, review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -76,11 +76,11 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 entry["total"] += cnt
                 entry["breakdown"].append((course_name, instructor, status, cnt))
 
-        # レビュー閲覧権チケットの付与数（credit_granted_atが立っている承認済みレビュー件数×付与枚数）・
-        # 使用数（付与総数 - 現在残数）・解除済み科目一覧を、このページに表示する分だけ集計する
-        # 付与枚数は科目カテゴリで異なる（教養2枚・専門1枚）ため、カテゴリ別に集計して合算する
-        # credit_granted_at が番兵値（CREDIT_GRANTED_SENTINEL）のレビューは「報酬を現金buyoutへ
-        # 換算済み・チケット付与なし」の意味なので付与数から除外する
+        # レビュー閲覧権チケットの「付与数」（実際に付与したレビューぶんの合計枚数）・
+        # 使用数（付与総数 - 現在残数）・解除済み科目一覧を、このページに表示する分だけ集計する。
+        # 付与枚数は科目カテゴリで異なる（教養2枚・専門1枚）ため、カテゴリ別件数に枚数を掛けて合算する。
+        # NULL（未付与）も番兵値（現金換算済み・付与なし）も除外する
+        # → credit_tickets_granted_clause() に集約。
         granted_count_map: dict[str, int] = {}
         if student_ids:
             granted_rows = (await session.execute(
@@ -89,7 +89,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(
                     Review.student_id.in_(student_ids),
-                    Review.credit_granted_at > CREDIT_GRANTED_SENTINEL,
+                    credit_tickets_granted_clause(Review.credit_granted_at),
                 )
                 .group_by(Review.student_id, Subject.category)
             )).all()
