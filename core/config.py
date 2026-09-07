@@ -62,15 +62,26 @@ MAX_REVIEWS_PER_COURSE_SECTION = 1
 ON_DEMAND_SAME_CONTENT_SUBJECT_IDS = {704, 702}
 ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信であり、他教員のクラスも内容は同一です"
 
-# レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数
+# レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数。
+# 2026-09-07より、レビュー投稿先の科目カテゴリで枚数を分ける（教養2枚・専門1枚）。
+# 実際の付与・消費判定は review_approval_unlock_credits() に集約する。
+REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO = 2
+REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON = 1
+# カテゴリが取得できない/教養・専門以外のレビュー（通常発生しない）向けフォールバック
 REVIEW_APPROVAL_UNLOCK_CREDITS = 1
+
+
+def review_approval_unlock_credits(category) -> int:
+    """このカテゴリの科目へのレビューが1件承認されたとき付与するチケット枚数。"""
+    c = (category or "").strip()
+    if c == "教養":
+        return REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO
+    if c == "専門":
+        return REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON
+    return REVIEW_APPROVAL_UNLOCK_CREDITS
 
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
-
-# 会員登録完了画面で、もらったチケットの使い方を体験してもらうために案内する科目（subjects.id）。
-# 「データサイエンス基礎学」（教養教育院）
-WELCOME_PROMO_SUBJECT_ID = 2
 
 # 虚偽投稿等でLINE bot利用を永久停止（UserProfile.banned_at）されたユーザーへの定型応答
 BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止しております。心当たりがある場合は、お問い合わせフォームよりご連絡ください。"

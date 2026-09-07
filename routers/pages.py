@@ -8,7 +8,7 @@ from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV,
     LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, REGISTER_LIFF_ID,
-    REVIEW_APPROVAL_UNLOCK_CREDITS, REVIEW_FORM_URL, REVIEW_LIFF_ID,
+    REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_FORM_URL, REVIEW_LIFF_ID,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY,
 )
 from core.templates import templates
@@ -121,7 +121,8 @@ async def liff_course(request: Request):
             "review_liff_id": REVIEW_LIFF_ID,
             "base_url": APP_URL,
             "IS_DEV": IS_DEV,
-            "unlock_reward": REVIEW_APPROVAL_UNLOCK_CREDITS,
+            # レビュー閲覧・チケット解除UIは教養科目でのみ表示されるため、教養の付与枚数を渡す
+            "unlock_reward": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
         })
     except Exception as exc:
         await save_error_log(exc, action="liff_course")

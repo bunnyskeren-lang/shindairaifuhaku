@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
 from core import cache
-from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
+from core.config import review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -78,14 +78,20 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
         # レビュー閲覧権チケットの付与数（credit_granted_atが立っている承認済みレビュー件数×付与枚数）・
         # 使用数（付与総数 - 現在残数）・解除済み科目一覧を、このページに表示する分だけ集計する
+        # 付与枚数は科目カテゴリで異なる（教養2枚・専門1枚）ため、カテゴリ別に集計して合算する
         granted_count_map: dict[str, int] = {}
         if student_ids:
             granted_rows = (await session.execute(
-                select(Review.student_id, func.count(Review.id))
+                select(Review.student_id, Subject.category, func.count(Review.id))
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(Review.student_id.in_(student_ids), Review.credit_granted_at.isnot(None))
-                .group_by(Review.student_id)
+                .group_by(Review.student_id, Subject.category)
             )).all()
-            granted_count_map = {sid: cnt for sid, cnt in granted_rows}
+            for sid, category, cnt in granted_rows:
+                granted_count_map[sid] = (
+                    granted_count_map.get(sid, 0) + cnt * review_approval_unlock_credits(category)
+                )
 
         line_user_ids = [u.user_id for u in users]
         unlocked_subjects_map: dict[str, list] = {}
@@ -101,7 +107,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
         ticket_map: dict[str, dict] = {}
         for u in users:
-            granted = granted_count_map.get(u.student_id, 0) * REVIEW_APPROVAL_UNLOCK_CREDITS if u.student_id else 0
+            granted = granted_count_map.get(u.student_id, 0) if u.student_id else 0
             balance = u.unlock_credits or 0
             ticket_map[u.user_id] = {
                 "balance": balance,

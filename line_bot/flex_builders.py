@@ -13,7 +13,8 @@ from linebot.v3.messaging import (
 from core import cache
 from core.config import (
     CONTACT_URL, EASE_COLOR, EASE_LABEL, EASE_STARS, PRIVACY_URL, TERMS_URL,
-    REGISTRATION_WELCOME_UNLOCK_CREDITS, REVIEW_APPROVAL_UNLOCK_CREDITS,
+    REGISTRATION_WELCOME_UNLOCK_CREDITS,
+    REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
 )
@@ -276,7 +277,8 @@ def make_help_flex() -> FlexMessage:
                          bg="#fffbeb", icon_color="#d97706"),
                     card("🎁", "もらい方",
                          f"会員登録で{REGISTRATION_WELCOME_UNLOCK_CREDITS}枚、"
-                         f"自分のレビューが承認されるたびに{REVIEW_APPROVAL_UNLOCK_CREDITS}枚もらえます",
+                         f"自分のレビューが承認されるたびに教養は{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚・"
+                         f"専門は{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚もらえます",
                          bg="#fffbeb", icon_color="#d97706"),
                     section_label("💬  チャット"),
                     card("🔍", "科目名を送る",

@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, func, select
 
 from core import cache
-from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS, normalize_instructor_name
+from core.config import review_approval_unlock_credits, normalize_instructor_name
 from core.grading_method import build_grading_method_from_edit_text
 from core.security import check_admin
 from core.subject_variants import is_hoken_gakka_senko
@@ -179,7 +179,13 @@ async def admin_review_approve(
                     select(UserProfile).where(UserProfile.student_id == review.student_id)
                 )).scalar_one_or_none()
                 if profile:
-                    profile.unlock_credits += REVIEW_APPROVAL_UNLOCK_CREDITS
+                    # 付与枚数はレビュー投稿先の科目カテゴリで分岐（教養2枚・専門1枚）
+                    category = (await session.execute(
+                        select(Subject.category)
+                        .join(CourseSection, CourseSection.subject_id == Subject.id)
+                        .where(CourseSection.id == review.course_section_id)
+                    )).scalar_one_or_none()
+                    profile.unlock_credits += review_approval_unlock_credits(category)
                 review.credit_granted_at = datetime.now(timezone.utc)
             await session.commit()
     cache.invalidate_review_cache()

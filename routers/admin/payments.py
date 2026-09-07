@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
-from core.config import REVIEW_APPROVAL_UNLOCK_CREDITS
+from core.config import review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import PaymentRequest, PaymentRequestStatus, Review, UserProfile
+from models import CourseSection, PaymentRequest, PaymentRequestStatus, Review, Subject, UserProfile
 
 router = APIRouter()
 
@@ -59,15 +59,22 @@ async def admin_payment_pay(request_id: int, _: str = Depends(check_admin)):
             payment_request.paid_at = datetime.now(timezone.utc)
 
             # PayPayで現金化した分だけ、レビュー承認時に付与済みの閲覧チケットを使用済みにする
-            # （現金と閲覧権チケットの二重取得を防ぐため）
-            review_count = (await session.execute(
-                select(func.count(Review.id)).where(
+            # （現金と閲覧権チケットの二重取得を防ぐため）。付与枚数は科目カテゴリで異なる
+            # （教養2枚・専門1枚）ため、件数×定数ではなくレビューごとに合算する
+            paid_review_categories = (await session.execute(
+                select(Subject.category)
+                .select_from(Review)
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
+                .where(
                     Review.payment_request_id == payment_request.id,
                     Review.credit_granted_at.isnot(None),
                 )
-            )).scalar_one()
-            if review_count:
-                credits_to_use = review_count * REVIEW_APPROVAL_UNLOCK_CREDITS
+            )).scalars().all()
+            if paid_review_categories:
+                credits_to_use = sum(
+                    review_approval_unlock_credits(c) for c in paid_review_categories
+                )
                 await session.execute(
                     UserProfile.__table__.update()
                     .where(UserProfile.student_id == payment_request.student_id)
