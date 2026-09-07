@@ -59,10 +59,15 @@ async def send_push_notification(course_name: str, rating: int, ease_rating: str
     )
 
 
-async def send_registration_push_notification(name: str, faculty: str, department: str | None):
+async def send_registration_push_notification(
+    name: str, faculty: str, department: str | None, is_new: bool = True
+):
     dept = f" {department}" if department else ""
+    # 生協求人サイトの質問(必須化)を埋めるため既存ユーザーが再登録するケースも
+    # 通知するので、新規と再登録をタイトルで区別する
+    title = "👤 新規会員登録" if is_new else "🔄 会員情報の再登録"
     await _send_to_subscribers(
-        title="👤 新規会員登録",
+        title=title,
         body=f"{name}（{faculty}{dept}）",
         url="/admin/users",
     )

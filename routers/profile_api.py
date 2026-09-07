@@ -240,16 +240,19 @@ async def register_profile(
     except Exception as exc:
         await save_error_log(exc, user_id=uid, action="register_richmenu_link")
 
-    if is_new_registration:
-        # 会員登録はここで既にcommit済みのため、レビュー投稿と同様に
-        # レスポンスを待たせずバックグラウンドで通知する
-        async def _notify() -> None:
-            try:
-                await send_registration_push_notification(name[:100], faculty, department)
-            except Exception as exc:
-                await save_error_log(exc, user_id=uid, action="register_push_notification")
+    # 会員登録はここで既にcommit済みのため、レビュー投稿と同様に
+    # レスポンスを待たせずバックグラウンドで通知する。
+    # 生協求人サイトの質問(必須化)を埋めるための既存ユーザーの再登録も
+    # 管理者が把握できるよう、新規・再登録どちらの場合も通知する。
+    async def _notify() -> None:
+        try:
+            await send_registration_push_notification(
+                name[:100], faculty, department, is_new=is_new_registration
+            )
+        except Exception as exc:
+            await save_error_log(exc, user_id=uid, action="register_push_notification")
 
-        asyncio.create_task(_notify())
+    asyncio.create_task(_notify())
 
     return templates.TemplateResponse(
         "form_register_success.html", {
