@@ -683,3 +683,20 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS coop_jobsite_known TEXT"
         ))
+
+        # ── 2026-09-08: 医学部保健学科の会員は専攻まで登録させる ──
+        # 会員登録フォームの学科選択肢に「保健学科」単体があった時期に登録した会員は
+        # user_profiles.department に専攻を含まない値（"保健学科" 等）が残っている。
+        # 現在の FACULTY_DEPARTMENTS["医学部"] は看護学/検査技術科学/理学療法学/作業療法学の
+        # 4専攻しか持たず、フォームもサーバー(profile_api.py)もこの4値以外を弾くので、
+        # 該当会員の department を NULL に戻して is_profile_complete() を False にし、
+        # 次回操作時の再登録で専攻まで必ず選び直させる。
+        # 4専攻の正規値と教養（"教養教育院"）は対象外。冪等。
+        await conn.execute(text(
+            "UPDATE user_profiles SET department = NULL "
+            "WHERE department LIKE '%保健学科%' "
+            "AND department NOT IN ("
+            "  '保健学科看護学専攻', '保健学科検査技術科学専攻', "
+            "  '保健学科理学療法学専攻', '保健学科作業療法学専攻'"
+            ")"
+        ))
