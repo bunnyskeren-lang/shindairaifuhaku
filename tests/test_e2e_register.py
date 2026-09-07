@@ -6,8 +6,12 @@
 import pytest
 
 import routers.profile_api as profile_api
-from core.config import REGISTRATION_WELCOME_UNLOCK_CREDITS, WELCOME_PROMO_SUBJECT_ID
-from models import Subject, UserProfile
+from core.config import (
+    REGISTRATION_WELCOME_UNLOCK_CREDITS,
+    REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
+    REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
+)
+from models import UserProfile
 
 USER_ID = "U11111111111111111111111111111111"
 
@@ -140,15 +144,18 @@ async def test_register_existing_user_recorded_coop_jobsite_answer(http_client_f
 
 
 @pytest.mark.asyncio
-async def test_register_new_user_sees_promo_course_link(http_client_factory, monkeypatch, test_sessionmaker):
+async def test_register_new_user_sees_review_view_guidance(http_client_factory, monkeypatch, test_sessionmaker):
+    """会員登録完了画面は、レビュー投稿フォームへ誘導せず「レビューを閲覧」の案内と
+    チケット付与枚数の注記（教養/専門）を表示する（2026-09-07変更）。"""
     _fake_verify(monkeypatch)
     _stub_link_rich_menu(monkeypatch)
-    async with test_sessionmaker() as session:
-        session.add(Subject(id=WELCOME_PROMO_SUBJECT_ID, name="データサイエンス基礎学", faculty="教養教育院"))
-        await session.commit()
     client = http_client_factory(profile_api, monkeypatch)
 
     resp = await client.post("/api/register", data=VALID_FORM)
     assert resp.status_code == 200
-    assert "データサイエンス基礎学" in resp.text
-    assert f"course_id={WELCOME_PROMO_SUBJECT_ID}" in resp.text
+    assert "「レビューを閲覧」から" in resp.text
+    assert f"教養：{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚" in resp.text
+    assert f"専門：{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚" in resp.text
+    # レビュー投稿フォームへの自動遷移・戻り導線は廃止済み
+    assert "course_id=" not in resp.text
+    assert "goToReviewForm" not in resp.text

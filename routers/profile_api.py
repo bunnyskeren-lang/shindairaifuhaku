@@ -14,15 +14,15 @@ from core.config import (
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE,
     FACULTIES, FACULTY_DEPARTMENTS,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, RICHMENU_ID_MAIN,
+    REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     STUDENT_ID_RE, LINE_USER_ID_RE,
-    WELCOME_PROMO_SUBJECT_ID,
-    is_profile_complete, make_course_liff_url, make_review_liff_url, normalize_student_id,
+    is_profile_complete, normalize_student_id,
 )
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, UserProfile
 
 router = APIRouter()
 
@@ -179,12 +179,6 @@ async def register_profile(
 
         try:
             await session.execute(stmt)
-            promo_subject_name = None
-            if is_new_registration:
-                # 会員登録直後、もらったチケットの使い方を体験してもらうための案内科目
-                promo_subject_name = (await session.execute(
-                    select(Subject.name).where(Subject.id == WELCOME_PROMO_SUBJECT_ID)
-                )).scalar_one_or_none()
             await session.commit()
         except Exception as exc:
             await session.rollback()
@@ -216,12 +210,8 @@ async def register_profile(
             "request": request,
             "liff_id": REGISTER_LIFF_ID,
             "welcome_credits": REGISTRATION_WELCOME_UNLOCK_CREDITS if is_new_registration else 0,
-            "promo_course_name": promo_subject_name,
-            "promo_course_url": make_course_liff_url(WELCOME_PROMO_SUBJECT_ID) if promo_subject_name else "",
-            # 会員登録は「レビュー投稿フォームを開こうとして未登録だったので誘導された」流れの
-            # 最終ステップとして辿り着くのがほとんどのため、登録完了後はLINEのトーク画面を挟まず
-            # 直接レビュー投稿フォームへ戻す
-            "review_liff_url": make_review_liff_url(user_id=uid),
+            "approval_credits_kyoyo": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
+            "approval_credits_senmon": REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
         }
     )
 
