@@ -38,6 +38,10 @@
     // 送信が実際に成功した（このページが表示された）時点で初めて下書きを消す。
     // トークン期限切れ等でform_error.htmlに来た場合は消さずに残す
     try { localStorage.removeItem('kobe_review_v2'); } catch (_) {}
+    // 「戻る」でフォームへ返ったとき、ブラウザが素のコメント欄だけ自前で復元して
+    // 投稿済みの本文が残るのを防ぐためのフラグ（フォーム側で検知してコメントのみクリア。
+    // ニックネームは kobe_nickname から常に復元されるので触らない）
+    try { sessionStorage.setItem('kobe_review_submitted', '1'); } catch (_) {}
   </script>
 </body>
 </html>

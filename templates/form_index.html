@@ -2321,6 +2321,29 @@
     buildStars();
     buildEaseStars();
     loadData();
+
+    // 投稿成功の直後に「戻る」でこのフォームへ返ってきた場合、下書き(kobe_review_v2)は
+    // form_success.html 側で消してあるが、ブラウザが bfcache / 履歴復元で素のコメント欄
+    // だけ自前で戻してしまい「投稿済みの本文が残る」状態になる。コメントは毎回まっさらに
+    // したいので明示クリアする（ニックネームは kobe_nickname から常に復元するため対象外）。
+    function clearCommentAfterSubmit(consume) {
+      let submitted = false;
+      try { submitted = sessionStorage.getItem('kobe_review_submitted') === '1'; } catch (_) {}
+      if (!submitted) return;
+      const el = document.getElementById('comment');
+      if (el && el.value) {
+        el.value = '';
+        updateCommentFeedback(0);
+        updateProgressUI();
+      }
+      // フラグの消費は pageshow 側だけで行う。インライン実行時点ではブラウザの
+      // 履歴復元がまだ走っておらず値が空に見えることがあり、そこで消すと取りこぼす。
+      if (consume) { try { sessionStorage.removeItem('kobe_review_submitted'); } catch (_) {} }
+    }
+    clearCommentAfterSubmit(false);
+    // pageshow は通常ロード・bfcache 復元のどちらでも復元完了後に必ず発火する
+    window.addEventListener('pageshow', () => clearCommentAfterSubmit(true));
+
     // 前回投稿したニックネームを自動入力（下書きに残っていればそちらを優先。
     // 学籍番号と違い readOnly にはしないので、その場で自由に書き換えられる）
     (function() {
