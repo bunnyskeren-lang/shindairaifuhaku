@@ -12,6 +12,7 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     MAX_REVIEWS_PER_COURSE_SECTION,
     OMNIBUS_INSTRUCTOR_LABEL,
+    REVIEW_BUYBACK_UNIT_YEN,
     REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
     REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
@@ -37,6 +38,20 @@ def _success_redirect(course_name: str, course_id: int, review_count: int):
     # フォーム POST 自体の再送（二重送信の主因）が減る。
     qs = urlencode({"course_name": course_name.strip(), "course_id": course_id, "n": review_count})
     return RedirectResponse(url=f"/submit/done?{qs}", status_code=303)
+
+
+async def _cumulative_post_count(session, sid: str) -> int:
+    """成功画面に出す「累計投稿数」。実レビュー件数（却下ぶんも含む生カウント）ではなく、
+    「残りの閲覧チケット枚数（unlock_credits）＋ 支払い申請上限額（payment_limit）÷ 買取単価」で概算する。
+    現金買取に回したぶん（チケットではなく payment_limit へ換算済み）も投稿数として数えるため。
+    買取単価は今後変わりうるが、この換算では常に現在値 REVIEW_BUYBACK_UNIT_YEN（100）を固定で使う。"""
+    row = (await session.execute(
+        select(UserProfile.unlock_credits, UserProfile.payment_limit)
+        .where(UserProfile.student_id == sid)
+    )).first()
+    if row is None:
+        return 0
+    return (row.unlock_credits or 0) + (row.payment_limit or 0) // REVIEW_BUYBACK_UNIT_YEN
 
 
 async def _prior_review_by_nonce(session, nonce: str):
@@ -108,9 +123,7 @@ async def submit(
         async with AsyncSessionLocal() as session:
             prior = await _prior_review_by_nonce(session, nonce)
             if prior is not None and prior.student_id == sid:
-                rc = (await session.execute(
-                    select(func.count(Review.id)).where(Review.student_id == sid)
-                )).scalar_one()
+                rc = await _cumulative_post_count(session, sid)
                 return _success_redirect(course_name, prior.subject_id, rc)
 
     uid = await verify_liff_id_token(id_token, request)
@@ -280,16 +293,12 @@ async def submit(
             if nonce:
                 prior = await _prior_review_by_nonce(session, nonce)
                 if prior is not None:
-                    rc = (await session.execute(
-                        select(func.count(Review.id)).where(Review.student_id == prior.student_id)
-                    )).scalar_one()
+                    rc = await _cumulative_post_count(session, prior.student_id)
                     return _success_redirect(course_name, prior.subject_id, rc)
             raise
         cache.invalidate_full_pairs_cache()
 
-        review_count = (await session.execute(
-            select(func.count(Review.id)).where(Review.student_id == sid)
-        )).scalar_one()
+        review_count = await _cumulative_post_count(session, sid)
         course_id = subject.id
 
     # レビューは既にcommit済みのため、push通知はレスポンスを待たせず

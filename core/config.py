@@ -125,6 +125,12 @@ def review_approval_unlock_credits(category) -> int:
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
 
+# レビュー現金買取の単価（円 / 1件）。2026-09-01より1件100円。
+# レビュー投稿の成功画面に出す「累計投稿数」を
+# 「残りチケット枚数 + 支払い申請上限額 ÷ この単価」で概算するのに使う。
+# 買取単価は今後変更しうるが、この換算では常にこの現在値（100）を固定で用いる（ユーザー指示）。
+REVIEW_BUYBACK_UNIT_YEN = 100
+
 # 虚偽投稿等でLINE bot利用を永久停止（UserProfile.banned_at）されたユーザーへの定型応答
 BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止しております。心当たりがある場合は、お問い合わせフォームよりご連絡ください。"
 
