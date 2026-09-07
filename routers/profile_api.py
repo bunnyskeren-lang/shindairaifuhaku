@@ -241,6 +241,9 @@ async def register_profile(
             return _form_error("登録に失敗しました。もう一度お試しください")
 
     cache.set_registration_complete(uid)
+    # LINE bot 受信処理のユーザー状態スナップショット（60秒TTL）も、直前に「未登録」で
+    # キャッシュされていると登録直後の操作へ反映が遅れるため落としておく
+    cache.invalidate_linebot_user_state(uid)
 
     try:
         # LINE側のデフォルトリッチメニューは登録前メニュー(setup_richmenu.py参照)なので、

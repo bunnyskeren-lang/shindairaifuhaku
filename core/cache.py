@@ -490,8 +490,14 @@ def set_course_list_cache(key: str, value) -> None:
 
 
 # ── registration completeness cache（LINE bot応答パスの毎メッセージDB往復を回避） ──
-# 一度登録完了したユーザーが未完了に戻ることは無い（管理画面にリセット機能も無い）ため、
 # True確定分はTTL内であればDBを一切見ずに返す。False/未登録は毎回DBを見て最新状態を反映する。
+#
+# 「一度完了したら未完了に戻らない」は厳密には成り立たない（生協求人質問の必須化・
+# 医学部保健学科の専攻再入力など、必須項目追加で complete→incomplete が起きる）。
+# ただしそれらの complete→incomplete 化はすべて database.py init_db() の起動時バックフィルで、
+# init_db() はプロセス起動直後＝このプロセス内キャッシュがまだ空のときに走るため実害が無い。
+# 将来もし「稼働中のプロセスで」プロフィールを不完全化する経路を足す場合は、その箇所で
+# 必ず invalidate_registration_complete() を呼ぶこと。
 _REGISTRATION_COMPLETE_TTL = 3600
 _registration_complete_at: dict[str, float] = {}
 
@@ -503,6 +509,12 @@ def get_registration_complete_cached(user_id: str) -> bool:
 
 def set_registration_complete(user_id: str) -> None:
     _registration_complete_at[user_id] = time.monotonic()
+
+
+def invalidate_registration_complete(user_id: str) -> None:
+    """稼働中プロセスでプロフィールを不完全化した直後に呼ぶ（現状は呼び出し元なし。
+    上のコメント参照）。"""
+    _registration_complete_at.pop(user_id, None)
 
 
 # ── /api/preload レスポンスキャッシュ ──
