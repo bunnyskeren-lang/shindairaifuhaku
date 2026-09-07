@@ -1,3 +1,5 @@
+import json as _json
+
 from fastapi.templating import Jinja2Templates
 
 from core.config import IS_DEV, JST, VAPID_PUBLIC_KEY
@@ -17,8 +19,17 @@ def _to_jst(dt) -> str:
     return dt.astimezone(JST).strftime("%m/%d %H:%M")
 
 
+def _from_json(s):
+    """文字列をJSONとしてパースし、失敗したらNoneを返す（管理画面のテレメトリ表示用）。"""
+    try:
+        return _json.loads(s)
+    except (TypeError, ValueError):
+        return None
+
+
 templates = Jinja2Templates(directory="templates")
 templates.env.filters["jst"] = _to_jst
+templates.env.filters["fromjson"] = _from_json
 templates.env.filters["grading_parts"] = parse_grading_method
 templates.env.filters["grading_edit_text"] = format_grading_method_for_edit
 templates.env.filters["grading_summary"] = format_grading_method_summary

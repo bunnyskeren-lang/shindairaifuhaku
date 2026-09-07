@@ -272,8 +272,15 @@
       try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
       return true;
     }
-    function clearReauthFlag() {
-      try { sessionStorage.removeItem('liffReauthTried'); } catch (e) {}
+    function clearReauthFlag(idToken) {
+      try {
+        if (sessionStorage.getItem('liffReauthTried') === '1') {
+          // 直前に強制再ログインしたユーザーが、今回は検証を通って正常表示できた＝復帰成功。
+          // この「✅ 復帰確認」が出ないまま「🔄 再ログイン実行」だけ残るユーザーは詰み(400等)の疑い。
+          sendLiffAuthEvent('recovered', 'recovered', false, idToken);
+        }
+        sessionStorage.removeItem('liffReauthTried');
+      } catch (e) {}
     }
 
     // 修正理由: お問い合わせフォームには下書き保存が無く、IDトークン期限切れによる
@@ -387,7 +394,7 @@
           <p class="text-sm text-gray-500">ログイン確認に失敗しました。LINEアプリからこのページを開き直してください。</p>`);
         return;
       }
-      clearReauthFlag();
+      clearReauthFlag(idToken);
 
       document.getElementById('idTokenHidden').value = idToken;
       if (data.found) {

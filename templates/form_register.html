@@ -220,8 +220,15 @@
       try { liff.login({ redirectUri: location.href }); } catch (e) { return false; }
       return true;
     }
-    function clearReauthFlag() {
-      try { sessionStorage.removeItem('liffReauthTried'); } catch (e) {}
+    function clearReauthFlag(idToken) {
+      try {
+        if (sessionStorage.getItem('liffReauthTried') === '1') {
+          // 直前に強制再ログインしたユーザーが、今回は検証を通って正常表示できた＝復帰成功。
+          // この「✅ 復帰確認」が出ないまま「🔄 再ログイン実行」だけ残るユーザーは詰み(400等)の疑い。
+          sendLiffAuthEvent('recovered', 'recovered', false, idToken);
+        }
+        sessionStorage.removeItem('liffReauthTried');
+      } catch (e) {}
     }
 
     // 2年次からコース分岐する学部。1年次等コース未所属の学生向けに「コース未定」を選べるようにする
@@ -311,7 +318,7 @@
           });
           const d = await res.json();
           if (d.auth_failed) { forceReauth('auth_failed', 'page_load', idToken); return; }
-          clearReauthFlag();
+          clearReauthFlag(idToken);
           if (!d.found) return;
           // 未入力の欄だけサーバー値で埋める（入力途中の下書きを上書きしない）
           const nameEl = document.getElementById('name');

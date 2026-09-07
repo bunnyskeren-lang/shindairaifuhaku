@@ -457,7 +457,14 @@ async function main() {
         idToken = "";
         userId = null;
       } else if (idToken) {
-        try { sessionStorage.removeItem('liffReauthTried'); } catch (e) {}
+        try {
+          if (sessionStorage.getItem('liffReauthTried') === '1') {
+            // 直前に強制再ログインしたユーザーが、今回は有効なトークンを得られた＝復帰成功。
+            // 「✅ 復帰確認」が出ないまま「🔄 再ログイン実行」だけ残るユーザーは詰み(400等)の疑い。
+            sendLiffAuthEvent('recovered', 'recovered', false, idToken);
+          }
+          sessionStorage.removeItem('liffReauthTried');
+        } catch (e) {}
       }
     }
   } catch(e) {
