@@ -1,7 +1,10 @@
 import asyncio
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from core import cache, moderation
 from core.activity_log import save_error_log
@@ -28,6 +31,24 @@ router = APIRouter()
 _submit_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
 
+def _success_redirect(course_name: str, course_id: int, review_count: int):
+    # PRG（Post/Redirect/Get）: 送信成功時はテンプレートを直接返さず 303 で GET ページへ。
+    # ブラウザ履歴・タブ復元・bfcache 復元で再実行されるのが無害な GET になり、
+    # フォーム POST 自体の再送（二重送信の主因）が減る。
+    qs = urlencode({"course_name": course_name.strip(), "course_id": course_id, "n": review_count})
+    return RedirectResponse(url=f"/submit/done?{qs}", status_code=303)
+
+
+async def _prior_review_by_nonce(session, nonce: str):
+    """同じ submit_nonce のレビューが既にあれば (student_id, subject_id) を返す。
+    二重送信（送信直後のアプリbg化でOS/webviewが保留POSTを再送する事象）の検知に使う。"""
+    return (await session.execute(
+        select(Review.student_id, CourseSection.subject_id)
+        .join(CourseSection, CourseSection.id == Review.course_section_id)
+        .where(Review.submit_nonce == nonce)
+    )).first()
+
+
 @router.post("/submit")
 async def submit(
     request: Request,
@@ -41,6 +62,7 @@ async def submit(
     selected_instructor: str = Form(default=""),
     nickname: str = Form(default=""),
     academic_year: int = Form(default=0),
+    submit_nonce: str = Form(default=""),
     _rl: None = Depends(_submit_rate_limit),
 ):
     uid: str | None = None
@@ -77,6 +99,19 @@ async def submit(
     sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):
         return _form_error("学籍番号の形式が正しくありません（例：2345678S、医学部は2345678MM）")
+
+    # 冪等キー先行チェック: 送信直後のアプリbg化でOS/webviewが保留POSTを再送する事象に備え、
+    # 同じ submit_nonce のレビューが既にあれば、LINEログイン再検証（再送POSTは期限切れトークンを
+    # 抱えていることが多い）や重複エラー画面を経由せず、1回目のレビューの成功ページへ直行する。
+    nonce = submit_nonce.strip()[:64] or None
+    if nonce:
+        async with AsyncSessionLocal() as session:
+            prior = await _prior_review_by_nonce(session, nonce)
+            if prior is not None and prior.student_id == sid:
+                rc = (await session.execute(
+                    select(func.count(Review.id)).where(Review.student_id == sid)
+                )).scalar_one()
+                return _success_redirect(course_name, prior.subject_id, rc)
 
     uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
@@ -233,9 +268,23 @@ async def submit(
             academic_year=academic_year,
             student_id=sid or None,
             status=ReviewStatus.PENDING,
+            submit_nonce=nonce,
         )
         session.add(review)
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            # 同じ submit_nonce の並行INSERT（ほぼ同時に届いた再送POST）。1回目が勝っているので、
+            # こちらは重複として扱い既存レビューの成功ページへ流す（エラー画面は出さない）。
+            await session.rollback()
+            if nonce:
+                prior = await _prior_review_by_nonce(session, nonce)
+                if prior is not None:
+                    rc = (await session.execute(
+                        select(func.count(Review.id)).where(Review.student_id == prior.student_id)
+                    )).scalar_one()
+                    return _success_redirect(course_name, prior.subject_id, rc)
+            raise
         cache.invalidate_full_pairs_cache()
 
         review_count = (await session.execute(
@@ -258,11 +307,23 @@ async def submit(
 
     asyncio.create_task(_notify())
 
+    return _success_redirect(course_name, course_id, review_count)
+
+
+@router.get("/submit/done")
+async def submit_done(
+    request: Request,
+    course_name: str = "",
+    course_id: int = 0,
+    n: int = 0,
+):
+    # PRG のリダイレクト先。POST /submit が 303 で飛ばしてくる（直接の再送POSTが
+    # 無害なGETに置き換わる）。表示専用でクエリ値以外は参照しない。
     return templates.TemplateResponse(
         "form_success.html", {
             "request": request,
             "course_name": course_name,
             "course_id": course_id,
-            "review_count": review_count,
+            "review_count": n,
         }
     )

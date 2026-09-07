@@ -296,6 +296,12 @@ class Review(TimestampMixin, Base):
     copied_from_review_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("reviews.id", ondelete="SET NULL"), nullable=True
     )
+    # 二重送信対策の冪等キー。送信直後にLINEアプリがバックグラウンドへ回るとモバイルOS/
+    # webviewが保留中の送信POSTを後から再送し、1回目は保存済みのため2回目が重複防止で弾かれて
+    # ユーザーに「既に投稿済み」エラーが出ていた（本人は送信1回）。クライアントが送信ごとに
+    # crypto.randomUUID() を発行し、同じ値のレビューが既にあればサーバーは新規作成せず
+    # 1回目の成功ページへリダイレクトする。UNIQUE制約は database.py init_db() 側で管理。
+    submit_nonce: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class CourseSectionView(Base):

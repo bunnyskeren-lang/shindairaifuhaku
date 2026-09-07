@@ -99,8 +99,10 @@ async def test_submit_creates_review_for_registered_user(http_client_factory, mo
     await _seed_profile(test_sessionmaker)
     client = http_client_factory(review_submit_api, monkeypatch)
 
+    # 成功時は PRG（Post/Redirect/Get）で 303 → GET /submit/done
     resp = await client.post("/submit", data=VALID_FORM)
-    assert resp.status_code == 200
+    assert resp.status_code == 303
+    assert resp.headers["location"].startswith("/submit/done?")
 
     async with test_sessionmaker() as session:
         reviews = (await session.execute(select(Review))).scalars().all()
@@ -121,7 +123,7 @@ async def test_submit_senmon_course_matching_faculty_creates_review(http_client_
     client = http_client_factory(review_submit_api, monkeypatch)
 
     resp = await client.post("/submit", data=VALID_FORM)
-    assert resp.status_code == 200
+    assert resp.status_code == 303
 
     async with test_sessionmaker() as session:
         reviews = (await session.execute(select(Review))).scalars().all()
@@ -158,7 +160,7 @@ async def test_submit_kyotsu_senmon_kiso_course_creates_review(http_client_facto
     client = http_client_factory(review_submit_api, monkeypatch)
 
     resp = await client.post("/submit", data=VALID_FORM)
-    assert resp.status_code == 200
+    assert resp.status_code == 303
 
     async with test_sessionmaker() as session:
         assert len((await session.execute(select(Review))).scalars().all()) == 1
@@ -286,7 +288,7 @@ async def test_submit_rating_boundary_values_accepted(http_client_factory, monke
 
         form = dict(VALID_FORM, course_name=f"科目{rating}", rating=rating, student_id=sid)
         resp = await client.post("/submit", data=form)
-        assert resp.status_code == 200, f"rating={rating} should be accepted"
+        assert resp.status_code == 303, f"rating={rating} should be accepted"
 
 
 @pytest.mark.asyncio
@@ -314,7 +316,7 @@ async def test_submit_variant_group_shares_recruitment_slot(http_client_factory,
     client = http_client_factory(review_submit_api, monkeypatch)
 
     resp1 = await client.post("/submit", data=dict(VALID_FORM, course_name="線形代数1", student_id="1111111S"))
-    assert resp1.status_code == 200
+    assert resp1.status_code == 303
 
     _fake_verify(monkeypatch, user_id="U2".ljust(33, "0"))
     await _seed_profile(test_sessionmaker, user_id="U2".ljust(33, "0"), student_id="2222222S", name="別学生")
@@ -338,7 +340,7 @@ async def test_submit_variant_group_blocks_same_student_dup(http_client_factory,
     client = http_client_factory(review_submit_api, monkeypatch)
 
     resp1 = await client.post("/submit", data=dict(VALID_FORM, course_name="線形代数1"))
-    assert resp1.status_code == 200
+    assert resp1.status_code == 303
 
     resp2 = await client.post("/submit", data=dict(VALID_FORM, course_name="線形代数2"))
     assert resp2.status_code == 400
@@ -364,7 +366,7 @@ async def test_submit_hoken_gakka_cross_department_shares_recruitment_slot(http_
     resp1 = await client.post("/submit", data=dict(
         VALID_FORM, course_name="生理学", student_id="1111111S", selected_instructor="看護太郎",
     ))
-    assert resp1.status_code == 200
+    assert resp1.status_code == 303
 
     _fake_verify(monkeypatch, user_id="U2".ljust(33, "0"))
     await _seed_profile(test_sessionmaker, user_id="U2".ljust(33, "0"), student_id="2222222S", name="別学生")
@@ -390,7 +392,7 @@ async def test_submit_hoken_gakka_cross_department_blocks_same_student_dup(http_
     client = http_client_factory(review_submit_api, monkeypatch)
 
     resp1 = await client.post("/submit", data=dict(VALID_FORM, course_name="生理学", selected_instructor="看護太郎"))
-    assert resp1.status_code == 200
+    assert resp1.status_code == 303
 
     resp2 = await client.post("/submit", data=dict(VALID_FORM, course_name="生理学", selected_instructor="理学花子"))
     assert resp2.status_code == 400
@@ -411,3 +413,60 @@ async def test_submit_academic_year_out_of_range_returns_400(http_client_factory
     form = dict(VALID_FORM, academic_year="1999")
     resp = await client.post("/submit", data=form)
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_submit_same_nonce_is_idempotent(http_client_factory, monkeypatch, test_sessionmaker):
+    """送信直後のアプリbg化でOS/webviewが同じPOSTを再送する事象を模す。
+    同じ submit_nonce の2回目は新規レビューを作らず、1回目の成功ページ(303→/submit/done)へ流す。
+    「既に投稿済み」の400エラーをユーザーに見せない。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    form = dict(VALID_FORM, submit_nonce="fixed-nonce-abc123")
+    resp1 = await client.post("/submit", data=form)
+    assert resp1.status_code == 303
+    resp2 = await client.post("/submit", data=form)
+    assert resp2.status_code == 303
+    assert resp2.headers["location"].startswith("/submit/done?")
+
+    async with test_sessionmaker() as session:
+        reviews = (await session.execute(select(Review))).scalars().all()
+        assert len(reviews) == 1
+        assert reviews[0].submit_nonce == "fixed-nonce-abc123"
+
+
+@pytest.mark.asyncio
+async def test_submit_expired_token_on_replay_still_shows_success(http_client_factory, monkeypatch, test_sessionmaker):
+    """再送POSTがLINEトークン期限切れ（verify失敗）でも、既に1回目が保存済みなら
+    冪等キー先行チェックで成功ページへ流す（ログイン再検証を待たない）。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    form = dict(VALID_FORM, submit_nonce="replay-nonce-xyz")
+    resp1 = await client.post("/submit", data=form)
+    assert resp1.status_code == 303
+
+    # 再送時はトークンが検証できない状態を模す
+    _fake_verify(monkeypatch, user_id="")
+    resp2 = await client.post("/submit", data=dict(form, id_token="stale-token"))
+    assert resp2.status_code == 303
+
+    async with test_sessionmaker() as session:
+        reviews = (await session.execute(select(Review))).scalars().all()
+        assert len(reviews) == 1
+
+
+@pytest.mark.asyncio
+async def test_submit_done_page_renders(http_client_factory, monkeypatch, test_sessionmaker):
+    client = http_client_factory(review_submit_api, monkeypatch)
+    resp = await client.get("/submit/done", params={"course_name": "経営管理", "course_id": 1, "n": 1})
+    assert resp.status_code == 200
+    assert "経営管理" in resp.text
+    assert "初レビュー投稿" in resp.text
