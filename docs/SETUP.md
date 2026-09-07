@@ -33,7 +33,8 @@ pip install -r requirements-dev.txt
 
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
-| `REVIEW_FORM_URL` | `https://shindairaifuhaku.onrender.com` | レビュー投稿フォームの公開URL（本番/devで固定値が異なる。[`DEPLOYMENT.md`](./DEPLOYMENT.md)参照、絶対に入れ替えないこと） |
+| `REVIEW_FORM_URL` | `https://shindairaifuhaku.onrender.com` | アプリの公開ベースURL（本番/devで固定値が異なる。[`DEPLOYMENT.md`](./DEPLOYMENT.md)参照、絶対に入れ替えないこと） |
+| `REVIEW_FORM_PATH` | `post-review` | レビュー投稿フォーム本体のパス（先頭スラッシュ不要）。ルート `/` は締め切り案内に固定したためフォーム実体はこのパス。未設定なら既定値。`routers/pages.py` の投稿フォームルートも同じ値を使う |
 | `LIFF_ID` | `2010406205-emxo5rhE`（本番値） | 科目詳細LIFFページのLIFF ID |
 | `REGISTER_LIFF_ID` | `""` | 会員登録LIFFページのLIFF ID |
 | `REVIEW_LIFF_ID` | `""` | レビュー投稿LIFFページのLIFF ID |
@@ -71,7 +72,7 @@ DBスキーマの詳細は [`DB_SCHEMA.md`](./DB_SCHEMA.md) を参照。
 3. Webhook URLを `https://<デプロイ先>/callback` に設定し、Webhookを有効化
 4. LIFFアプリを2つ作成（会員登録用・レビュー投稿用）し、各LIFF URLをそれぞれ以下に向ける
    - 会員登録: `/register`
-   - レビュー投稿: `/`（フォームトップ）
+   - レビュー投稿: `/liff/review`（LINEログイン完結後、フォーム本体の `REVIEW_FORM_PATH`＝`/post-review` へ転送する中継ページ。旧・フォームトップ `/` は締め切り案内に固定したため直接向けないこと）
    - （科目詳細は `/liff/course`。上記2つとは別に、科目一覧・レビュー閲覧用のLIFF IDも本番/devそれぞれ固定値がある。[`DEPLOYMENT.md`](./DEPLOYMENT.md)参照）
 5. 発行されたLIFF IDを `.env` の `LIFF_ID` / `REGISTER_LIFF_ID` / `REVIEW_LIFF_ID` に設定
 

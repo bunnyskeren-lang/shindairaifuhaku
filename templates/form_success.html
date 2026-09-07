@@ -28,7 +28,7 @@
       </div>
       {% endif %}
 
-      <a href="/"
+      <a href="{{ review_form_path | default('/post-review', true) }}"
         class="block w-full bg-indigo-600 text-white font-bold py-3 rounded-2xl hover:bg-indigo-700 transition text-sm">
         別の授業もレビューする →
       </a>

@@ -13,6 +13,12 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or ""
 if not ADMIN_PASSWORD:
     raise RuntimeError("環境変数 ADMIN_PASSWORD が未設定です")
 REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", "https://shindairaifuhaku.onrender.com")
+# レビュー投稿フォーム本体のパス。旧URL（ルート "/"）はDiscord等で先行公開済みで
+# 「こちらからのレビュー投稿は締め切りました」表示に切り替えたため、フォーム実体を
+# このパスへ移設した（2026-09-07）。LINE bot内のレビュー投稿導線はすべてこのパス経由。
+# routers/pages.py の投稿フォームルートのパスもこの値を参照する（両方が自動で揃う）。
+REVIEW_FORM_PATH = "/" + os.environ.get("REVIEW_FORM_PATH", "post-review").strip("/")
+REVIEW_FORM_FULL_URL = REVIEW_FORM_URL.rstrip("/") + REVIEW_FORM_PATH
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
@@ -246,7 +252,7 @@ def make_register_url(user_id: str) -> str:
 
 
 def make_review_liff_url(course_name: str = "", user_id: str = "") -> str:
-    """レビュー投稿フォーム（/、REVIEW_LIFF_IDのエンドポイントURL）へのURL。
+    """レビュー投稿フォーム（REVIEW_FORM_PATH、REVIEW_LIFF_IDのエンドポイントURL）へのURL。
     生のHTTPS URLで開かせるとLINEの通常のアプリ内ブラウザ扱いになりliff.isInClient()が
     falseになって自動ログインできない（[[feedback_liff_links_must_use_liffline_me]]と同じ理由）。
     必ず https://liff.line.me/{REVIEW_LIFF_ID}?course=...&uid=... 形式で開かせる。
@@ -257,7 +263,7 @@ def make_review_liff_url(course_name: str = "", user_id: str = "") -> str:
     if user_id:
         parts.append(f"uid={user_id}")
     params = "&".join(parts)
-    base = f"https://liff.line.me/{REVIEW_LIFF_ID}" if REVIEW_LIFF_ID else REVIEW_FORM_URL
+    base = f"https://liff.line.me/{REVIEW_LIFF_ID}" if REVIEW_LIFF_ID else REVIEW_FORM_FULL_URL
     return f"{base}?{params}" if params else base
 
 

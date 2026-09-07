@@ -146,6 +146,12 @@ python -X utf8 sync_db_to_prod.py
 - `programing files/.env.dev` の `REVIEW_FORM_URL` は必ず dev URLのままにすること
 - **絶対に入れ替えないこと**
 
+### レビュー投稿フォーム本体のパス（`REVIEW_FORM_PATH`）
+
+- ルート `/` はDiscord等で先行公開済みのため「こちらからのレビュー投稿は締め切りました」表示（`templates/form_closed.html`）に固定した（2026-09-07）。フォーム実体は `REVIEW_FORM_PATH`（既定 `/post-review`）へ移設済み
+- LINE bot内のレビュー投稿導線はすべて `make_review_liff_url()` 経由で、LIFF（`REVIEW_LIFF_ID`）→ `/liff/review` 中継 → `REVIEW_FORM_PATH` へ転送される。`REVIEW_LIFF_ID` のLIFFエンドポイントURLは **LINE Developers Console で `/liff/review` に設定しておくこと**（`/` のままだと締め切り画面に着地してbotのレビュー投稿導線が全滅する）
+- `REVIEW_FORM_PATH` は `core/config.py` のモジュール定数で、`routers/pages.py` の投稿フォームルートのパスも同じ値を参照するため両者は自動で揃う。パスを変えたい場合のみ環境変数 `REVIEW_FORM_PATH`（先頭スラッシュ不要）で上書きできる（dev/本番とも同じ値でよい）
+
 ## .env ファイル構成
 
 | ファイル | 環境 |
