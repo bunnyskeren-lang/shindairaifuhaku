@@ -1324,12 +1324,15 @@
       const sorted = items.slice().sort((a, b) => _catRowOrder(a.category) - _catRowOrder(b.category));
       dropdown.innerHTML = sorted.slice(0, 30).map((c, idx) => {
         const bg = _catRowBg(c.category);
+        // 全担当教員が募集締切なら、この科目は募集を完全に終了しているものとして
+        // 検索候補の行に斜線＋「募集終了」を表示する
+        const closed = c.instructors.length > 0 && c.instructors.every(i => i.full);
         return `<div class="px-4 py-3 cursor-pointer" data-idx="${idx}"
           style="border-bottom:1px solid #f3f4f6;transition:background .1s;background:${bg}"
           onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
-          <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(c.name)}${
+          <div style="font-size:14px;font-weight:600;color:#1e293b${closed ? ';text-decoration:line-through;opacity:.55' : ''}">${escapeHtml(c.name)}${
             c.isGroup ? ` <span style="color:#94a3b8;font-weight:400">(${escapeHtml(c.variantSuffixes.join('/'))})</span>` : ''
-          }</div>
+          }${closed ? remainingBadgeHtml(0) : ''}</div>
           ${c.instructors.length
             ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">担当教員 ${c.instructors.length}名</div>`
             : ''}
@@ -1512,14 +1515,17 @@
         instrSearchDropdown.classList.remove('hidden');
         return;
       }
-      instrSearchDropdown.innerHTML = items.slice(0, 20).map((inst, idx) =>
-        `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
+      instrSearchDropdown.innerHTML = items.slice(0, 20).map((inst, idx) => {
+        // 担当科目がすべて募集締切なら、この教員は募集を完全に終了しているものとして
+        // 検索候補の行に斜線＋「募集終了」を表示する
+        const closed = inst.courses.length > 0 && inst.courses.every(c => c.full);
+        return `<div class="px-4 py-3 cursor-pointer" data-instr-idx="${idx}"
           style="border-bottom:1px solid #f3f4f6;transition:background .1s"
           onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-          <div style="font-size:14px;font-weight:600;color:#1e293b">${escapeHtml(inst.name)}</div>
+          <div style="font-size:14px;font-weight:600;color:#1e293b${closed ? ';text-decoration:line-through;opacity:.55' : ''}">${escapeHtml(inst.name)}${closed ? remainingBadgeHtml(0) : ''}</div>
           <div style="font-size:12px;color:#94a3b8;margin-top:2px">${inst.courses.length}科目担当</div>
-        </div>`
-      ).join('');
+        </div>`;
+      }).join('');
       instrSearchDropdown.classList.remove('hidden');
       instrSearchDropdown.querySelectorAll('[data-instr-idx]').forEach(el => {
         const inst = items[parseInt(el.dataset.instrIdx)];
