@@ -694,12 +694,20 @@ async function main() {
     </div>`;
     if (data.locked) {
       controlsHtml += `<div style="font-size:11px;color:#94a3b8">🔒 レビューは解除後に表示されます。教員を選ぶとシラバスが切り替わります</div>`;
+    } else if (!(data.reviews && data.reviews.length > 1)) {
+      // 並び替えセレクトが出ない場合（レビュー0〜1件）はこちらで単独表示する
+      controlsHtml += `<div style="font-size:11px;color:#94a3b8">教員を選ぶとシラバスが切り替わります</div>`;
     }
   }
   // 教員チップの直下に配置し、選んだ教員のシラバスであることが見た目で分かるようにする
   controlsHtml += `<a id="btn-syllabus" class="btn btn-secondary" href="#" style="display:none">📄 シラバスを見る</a>`;
   if (!data.locked && data.reviews && data.reviews.length > 1) {
-    controlsHtml += `<div class="sort-row">
+    // 解除後も教員チップがある科目では、並び替えセレクト横の空きスペースに同じ案内を出す
+    const instructorHint = instructorNames.length > 1
+      ? `<span style="font-size:11px;color:#94a3b8;flex:1;min-width:0">教員を選ぶとシラバスが切り替わります</span>`
+      : "";
+    controlsHtml += `<div class="sort-row"${instructorHint ? ' style="justify-content:space-between;align-items:center"' : ""}>
+      ${instructorHint}
       <select id="sort-select" class="sort-select">
         <option value="ease" selected>楽単順</option>
         <option value="new">新しい順</option>
