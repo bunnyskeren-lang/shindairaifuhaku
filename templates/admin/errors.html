@@ -26,8 +26,8 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
   {% elif is_dup_view %}
   <div style="font-size:12px;color:#374151;margin:0 0 16px;line-height:1.8">
     同じ学籍番号で同じ科目×担当教員に<b>2回目以降の投稿が行われた</b>記録（1回目は正常に保存済み・データ消失なし）。
-    送信直後にLINEアプリがバックグラウンドへ回り、モバイルOSが保留中の送信を後から再送するのが主因。
-    <b>サーバー不具合ではないためPush通知は飛ばさない</b>（記録のみ残す）。
+    送信直後にLINEアプリがバックグラウンドへ回り、モバイルOS/webviewが保留中の送信POSTを後から再送するのが主因で、
+    <b>ユーザー本人は送信ボタンを1回しか押していない</b>ことが多い。サーバー不具合ではないが発生状況を追うため Push 通知は従来どおり行う。
   </div>
   {% else %}
   <p style="font-size:13px;color:#6b7280;margin:0 0 16px">トレースバックは行をクリックで展開。</p>

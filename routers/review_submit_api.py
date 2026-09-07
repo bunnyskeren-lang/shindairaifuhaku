@@ -51,14 +51,15 @@ async def submit(
         # 400を返す理由を追跡できるよう明示的に記録する（レスポンスは待たせずfire-and-forget）。
         # telemetry=True の拒否（二重送信による「既に投稿済み」など、ユーザーの操作ミスでも
         # サーバー不具合でもない想定内の事象。送信直後にLINEアプリがバックグラウンドへ回り
-        # モバイルOSが保留中の送信を再送するのが主因）は、action接頭辞を submit_duplicate: に
-        # 分け、Push通知も鳴らさない（/admin/errors?view=submit_duplicate で個別に追える）。
+        # モバイルOS/webviewが保留中の送信POSTを後から再送するのが主因）は、action接頭辞を
+        # submit_duplicate: に分けて /admin/errors?view=submit_duplicate で個別に追えるようにする。
+        # Push通知は従来どおり行う（発生状況を取りこぼさないためユーザー指示、save_error_logの
+        # 5分クールダウンで殺到は間引かれる）。
         prefix = "submit_duplicate" if telemetry else "submit_rejected"
         asyncio.create_task(save_error_log(
             RuntimeError(msg),
             user_id=uid,
             action=f"{prefix}:{course_name.strip()[:150]}",
-            notify=not telemetry,
         ))
         return templates.TemplateResponse(
             "form_error.html", {"request": request, "message": msg}, status_code=400
