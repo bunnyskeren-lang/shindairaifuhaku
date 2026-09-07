@@ -401,6 +401,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 .order_by(CourseSection.id)
             )).all()
             cs_ids = [cs.id for cs, _ in cs_instr_rows]
+            cs_subject_by_id = {cs.id: cs.subject_id for cs, _ in cs_instr_rows}
 
             # 教養科目のA/B文字バリアント統合（LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS）では、
             # レビューカードごとに担当教員がA/Bどちらのクラスのものかを明記する（2026-09-05、
@@ -469,6 +470,44 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 url = cs_syllabus_urls.get(cs.id)
                 if url and instr.name not in instructor_syllabus_urls:
                     instructor_syllabus_urls[instr.name] = url
+
+            # 開講科目（バリアント）別メタ情報。
+            # 「1ページに統合表示するが、レビュー募集は開講科目ごとに別管理」という教養科目で、
+            # 詳細ページ（templates/liff/course.html）に「すべて / 科目名A / 科目名B …」の
+            # 絞り込みチップ行を出すために使う。グループに属さない単独科目では空リストを返し、
+            # フロント側はチップ行自体を描画しない。
+            variants_payload: list[dict] = []
+            if group_label and len(group_subject_ids) >= 2:
+                _, _all_courses_v = await cache.get_courses_cached()
+                _name_by_id = {c.id: c.name for c in _all_courses_v}
+                _remaining_map_v = await cache.get_review_remaining_cached()
+                _instr_by_sid: dict[int, list[str]] = {}
+                _syl_by_sid: dict[int, dict[str, str]] = {}
+                for cs, instr in cs_instr_rows:
+                    lst = _instr_by_sid.setdefault(cs.subject_id, [])
+                    if instr.name not in lst:
+                        lst.append(instr.name)
+                    _u = cs_syllabus_urls.get(cs.id)
+                    if _u:
+                        _syl_by_sid.setdefault(cs.subject_id, {}).setdefault(instr.name, _u)
+                for _sid in group_subject_ids:
+                    _v_instrs = _instr_by_sid.get(_sid, [])
+                    if _sid in ON_DEMAND_SAME_CONTENT_SUBJECT_IDS:
+                        _is_open = False
+                    elif _v_instrs:
+                        _is_open = any(
+                            _remaining_map_v.get((_sid, nm), MAX_REVIEWS_PER_COURSE_SECTION) > 0
+                            for nm in _v_instrs
+                        )
+                    else:
+                        _is_open = True
+                    variants_payload.append({
+                        "id": _sid,
+                        "name": _name_by_id.get(_sid, ""),
+                        "instructors": _v_instrs,
+                        "open": _is_open,
+                        "syllabus_urls": _syl_by_sid.get(_sid, {}),
+                    })
 
             # ビューカウント記録
             # 修正理由: バリアントグループでcs_idsはグループ全体にまたがるため、閲覧数は
@@ -540,6 +579,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             "name": subject.name,
             "group_label": group_label,
             "group_variant_names": group_names if group_label else [],
+            "variants": variants_payload,
             "instructor": instructor_str,
             "classification": subject.classification or "",
             "category": subject.category or "",
@@ -570,6 +610,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     "comment": r.content or "",
                     "instructor": r.selected_instructor or "",
                     "variant_letter": cs_id_to_letter.get(r.course_section_id, ""),
+                    "variant_id": cs_subject_by_id.get(r.course_section_id, subject.id),
                     "nickname": r.nickname or "",
                     "academic_year": r.academic_year or 0,
                     "created_at": r.created_at.isoformat(),

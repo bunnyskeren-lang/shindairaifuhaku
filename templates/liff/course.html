@@ -65,13 +65,31 @@
   .dist-bar-fill { height: 6px; border-radius: 999px; }
   .dist-count { width: 22px; text-align: right; color: #94a3b8; flex-shrink: 0; }
 
-  .review-controls { padding: 0 12px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+  .review-controls { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+  .chips-block { display: flex; flex-direction: column; gap: 5px; }
+  .chips-label { font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #94a3b8; }
   .filter-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
   .chip {
     flex-shrink: 0; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
-    border: 1px solid #e2e8f0; background: #fff; color: #64748b;
+    border: 1px solid #e2e8f0; background: #fff; color: #64748b; white-space: nowrap;
   }
   .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip .lamp { font-size: 9px; vertical-align: 1px; margin-left: 5px; }
+  .chip .lamp.open { color: #16a34a; }
+  .chip .lamp.closed { color: #dc2626; }
+  .chip.active .lamp.open, .chip.active .lamp.closed { color: #fff; }
+
+  .recruit-note { font-size: 11.5px; line-height: 1.6; border-radius: 8px; padding: 8px 11px; }
+  .recruit-note.all { background: #f1f5f9; color: #64748b; }
+  .recruit-note.open { background: #ecfdf5; color: #047857; }
+  .recruit-note.closed { background: #fef2f2; color: #b91c1c; }
+  .syllabus-prompt {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    background: #eef2ff; border: 1.5px dashed var(--accent); color: #4338ca;
+    border-radius: 8px; padding: 13px 11px; text-align: center;
+    font-size: 12.5px; font-weight: 700; line-height: 1.5;
+  }
+  .btn.btn-disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
   .sort-row { display: flex; justify-content: flex-end; }
   .sort-select {
     font-size: 12px; color: #64748b; border: 1px solid #e2e8f0; border-radius: 8px;
@@ -570,8 +588,14 @@ async function main() {
     // ニックネームは一目でニックネームだと分かるよう明示する（匿名は表記だけで自明なのでそのまま）
     const byLabel = r.nickname ? `ニックネーム: ${esc(r.nickname)}` : "匿名";
     const instrLabel = r.instructor ? esc(r.instructor) : "担当教員不明";
-    const letterBadge = r.variant_letter
-      ? `<span style="font-size:11px;font-weight:700;color:var(--accent);background:#eef2ff;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle">${esc(r.variant_letter)}クラス</span>`
+    // バリアント統合表示のときは、そのレビューがどの開講科目のものかを科目名フルネームで示す
+    // （data.variants は routers/liff_api.py がグループ2件以上のときだけ返す）。
+    // 語尾A/B文字バリアント（letter-view）しか情報が無い場合は従来どおり「◯クラス」表記。
+    const _rvVariant = (data.variants || []).find(v => String(v.id) === String(r.variant_id));
+    const variantBadgeText = _rvVariant ? _rvVariant.name
+      : (r.variant_letter ? `${r.variant_letter}クラス` : "");
+    const letterBadge = variantBadgeText
+      ? `<span style="font-size:11px;font-weight:700;color:var(--accent);background:#eef2ff;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle">${esc(variantBadgeText)}</span>`
       : "";
     const yearLabel = r.academic_year ? `${r.academic_year}年度` : "";
     let html = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px">
@@ -655,10 +679,14 @@ async function main() {
 
   let sortMode = "ease";
   let instructorFilter = "";
+  let variantFilter = "";  // "" = すべて / それ以外は String(subject_id)
 
   function renderReviewCards() {
     reviewsSection.innerHTML = "";
     let list = (data.reviews || []).slice();
+    if (variantFilter) {
+      list = list.filter(r => String(r.variant_id) === variantFilter);
+    }
     if (instructorFilter) {
       list = list.filter(r => r.instructor === instructorFilter);
     }
@@ -686,24 +714,62 @@ async function main() {
   // course_sections由来のinstructor_namesを使い、ロック中かどうかに関係なくチップを出す
   // （1人しかいない場合はチップを出しても意味がないため表示しない）
   const instructorNames = [...new Set((data.instructor_names || []).filter(Boolean))];
+
+  // 開講科目（バリアント）チップ行。「1ページに統合表示するが、レビュー募集は開講科目
+  // ごとに別管理」という教養科目でのみ出す（data.variants は routers/liff_api.py が
+  // グループ2件以上のときだけ返す）。担当教員チップのすぐ上に配置する。
+  const variants = data.variants || [];
+  const isVariantMode = variants.length > 1;
+  const selectedVariant = () => variants.find(v => String(v.id) === variantFilter) || null;
+
   let controlsHtml = "";
+
+  if (isVariantMode) {
+    // ランプ（🟢募集中 / 🔴締切）はレビュー投稿を受け付ける教養科目でのみ意味を持つ
+    const showLamp = data.category === "教養";
+    controlsHtml += `<div class="chips-block">
+      <span class="chips-label">開講科目で絞り込み</span>
+      <div class="filter-chips" id="variant-chips">
+        <button type="button" class="chip active" data-vid="">すべて</button>
+        ${variants.map(v => `<button type="button" class="chip" data-vid="${v.id}">${esc(v.name)}${showLamp ? `<span class="lamp ${v.open ? "open" : "closed"}">●</span>` : ""}</button>`).join("")}
+      </div>
+    </div>`;
+  }
+
   if (instructorNames.length > 1) {
-    controlsHtml += `<div class="filter-chips" id="instructor-chips">
+    const instrChips = `<div class="filter-chips" id="instructor-chips">
       <button type="button" class="chip active" data-instr="">すべて</button>
       ${instructorNames.map(name => `<button type="button" class="chip" data-instr="${esc(name)}">${esc(name)}</button>`).join("")}
     </div>`;
-    if (data.locked) {
-      controlsHtml += `<div style="font-size:11px;color:#94a3b8">🔒 レビューは解除後に表示されます。教員を選ぶとシラバスが切り替わります</div>`;
-    } else if (!(data.reviews && data.reviews.length > 1)) {
-      // 並び替えセレクトが出ない場合（レビュー0〜1件）はこちらで単独表示する
-      controlsHtml += `<div style="font-size:11px;color:#94a3b8">教員を選ぶとシラバスが切り替わります</div>`;
+    controlsHtml += isVariantMode
+      ? `<div class="chips-block"><span class="chips-label">担当教員で絞り込み</span>${instrChips}</div>`
+      : instrChips;
+    if (!isVariantMode) {
+      if (data.locked) {
+        controlsHtml += `<div style="font-size:11px;color:#94a3b8">🔒 レビューは解除後に表示されます。教員を選ぶとシラバスが切り替わります</div>`;
+      } else if (!(data.reviews && data.reviews.length > 1)) {
+        // 並び替えセレクトが出ない場合（レビュー0〜1件）はこちらで単独表示する
+        controlsHtml += `<div style="font-size:11px;color:#94a3b8">教員を選ぶとシラバスが切り替わります</div>`;
+      }
     }
   }
-  // 教員チップの直下に配置し、選んだ教員のシラバスであることが見た目で分かるようにする
+
+  // 募集状況の注記（教養のバリアント統合科目のみ）
+  if (isVariantMode && data.category === "教養") {
+    controlsHtml += `<div id="recruit-note" class="recruit-note all"></div>`;
+  }
+
+  // 教員チップの直下に配置し、選んだ教員のシラバスであることが見た目で分かるようにする。
+  // バリアント統合科目では「開講科目 + 担当教員の両方を選んだとき」だけボタンを出し、
+  // それ以外は同じ場所に案内（#syllabus-prompt）を出す。
   controlsHtml += `<a id="btn-syllabus" class="btn btn-secondary" href="#" style="display:none">📄 シラバスを見る</a>`;
+  if (isVariantMode) {
+    controlsHtml += `<div id="syllabus-prompt" class="syllabus-prompt"><span>📄</span><span>科目・教員を選択するとここにシラバスが表示されます</span></div>`;
+  }
+
   if (!data.locked && data.reviews && data.reviews.length > 1) {
     // 解除後も教員チップがある科目では、並び替えセレクト横の空きスペースに同じ案内を出す
-    const instructorHint = instructorNames.length > 1
+    const instructorHint = (instructorNames.length > 1 && !isVariantMode)
       ? `<span style="font-size:11px;color:#94a3b8;flex:1;min-width:0">教員を選ぶとシラバスが切り替わります</span>`
       : "";
     controlsHtml += `<div class="sort-row"${instructorHint ? ' style="justify-content:space-between;align-items:center"' : ""}>
@@ -715,6 +781,53 @@ async function main() {
     </div>`;
   }
   controlsEl.innerHTML = controlsHtml;
+
+  // 選択中の開講科目に合わせて担当教員チップの表示/非表示を切り替える（選択リセット込み）
+  function syncInstructorChips() {
+    const el = document.getElementById("instructor-chips");
+    if (!el) return;
+    const v = selectedVariant();
+    const allowed = v ? new Set(v.instructors) : null;
+    el.querySelectorAll(".chip").forEach(c => {
+      const nm = c.dataset.instr;
+      const hide = !!(allowed && nm && !allowed.has(nm));
+      c.style.display = hide ? "none" : "";
+      c.classList.toggle("active", nm === "");
+    });
+  }
+
+  function updateRecruitNote() {
+    const el = document.getElementById("recruit-note");
+    if (!el) return;
+    const v = selectedVariant();
+    if (!v) {
+      el.className = "recruit-note all";
+      el.textContent = "開講科目を選ぶと、その回のレビュー募集状況が表示されます";
+    } else if (v.open) {
+      el.className = "recruit-note open";
+      el.textContent = `🟢 ${v.name} は現在レビュー募集中です`;
+    } else {
+      el.className = "recruit-note closed";
+      el.textContent = `✋ ${v.name} は募集を締め切りました`;
+    }
+  }
+
+  const vchipsEl = document.getElementById("variant-chips");
+  if (vchipsEl) {
+    vchipsEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".chip");
+      if (!btn) return;
+      vchipsEl.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      btn.classList.add("active");
+      variantFilter = btn.dataset.vid || "";
+      instructorFilter = "";
+      syncInstructorChips();
+      updateRecruitNote();
+      updateSubmitButton();
+      updateSyllabusButton();
+      if (!data.locked) renderReviewCards();
+    });
+  }
 
   const chipsEl = document.getElementById("instructor-chips");
   if (chipsEl) {
@@ -768,9 +881,62 @@ async function main() {
     }
   }
 
+  // バリアント統合科目で開講科目チップを選んでいるときは、その科目の募集状況に合わせて
+  // 投稿ボタンの遷移先（course=）・文言・可否を切り替える。「すべて」選択時は既存挙動のまま。
+  function updateSubmitButton() {
+    if (data.category !== "教養" || !isVariantMode) return;
+    const v = selectedVariant();
+    const courseName = v ? v.name : data.name;
+    const rp = userId
+      ? `uid=${userId}&course=${encodeURIComponent(courseName)}`
+      : `course=${encodeURIComponent(courseName)}`;
+    const url = REVIEW_LIFF_ID
+      ? `https://liff.line.me/${REVIEW_LIFF_ID}?${rp}`
+      : `${REVIEW_FORM_URL}?${rp}`;
+    if (!v) {
+      // 「すべて」: 既存処理が設定した文言（通常 or 「最初のレビューを書く」）はそのまま活かす
+      btnReview.classList.remove("btn-disabled");
+      btnReview.style.pointerEvents = "";
+      btnReview.href = url;
+      return;
+    }
+    if (!v.open) {
+      btnReview.classList.add("btn-disabled");
+      btnReview.style.pointerEvents = "none";
+      btnReview.removeAttribute("href");
+      btnReview.style.boxShadow = "";
+      btnReview.textContent = "✋ 募集を締め切りました";
+    } else {
+      btnReview.classList.remove("btn-disabled");
+      btnReview.style.pointerEvents = "";
+      btnReview.href = url;
+      btnReview.style.boxShadow = "";
+      btnReview.textContent = `✏️ ${v.name} のレビューを投稿`;
+    }
+  }
+
   function updateSyllabusButton() {
     const sylBtn = document.getElementById("btn-syllabus");
-    // 教員で絞り込み中はその教員のシラバスURLに切り替える。無ければボタン自体を隠す
+    const promptEl = document.getElementById("syllabus-prompt");
+    if (isVariantMode) {
+      // 開講科目 + 担当教員の両方が確定したときだけシラバスボタンを出す。
+      // 担当教員が1人しかいない開講科目は曖昧さが無いので自動的に確定扱いにする。
+      const v = selectedVariant();
+      let effInstr = instructorFilter;
+      if (v && !effInstr && (v.instructors || []).length === 1) effInstr = v.instructors[0];
+      const url = (v && effInstr) ? ((v.syllabus_urls || {})[effInstr] || "") : "";
+      if (v && effInstr && url) {
+        sylBtn.href = url;
+        sylBtn.textContent = `📄 シラバスを見る（${v.name}／${effInstr}）`;
+        sylBtn.style.display = "block";
+        if (promptEl) promptEl.style.display = "none";
+      } else {
+        sylBtn.style.display = "none";
+        if (promptEl) promptEl.style.display = "flex";
+      }
+      return;
+    }
+    // 非バリアント科目: 教員で絞り込み中はその教員のシラバスURLに切り替える。無ければ隠す
     const url = instructorFilter
       ? (data.instructor_syllabus_urls || {})[instructorFilter] || ""
       : data.syllabus_url;
@@ -780,6 +946,11 @@ async function main() {
     } else {
       sylBtn.style.display = "none";
     }
+  }
+  if (isVariantMode) {
+    syncInstructorChips();
+    updateRecruitNote();
+    updateSubmitButton();
   }
   updateSyllabusButton();
 
