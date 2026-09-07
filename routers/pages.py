@@ -35,6 +35,8 @@ async def index(request: Request, uid: str = Query(default="")):
             "submission_kyoyo_category": REVIEW_SUBMISSION_CATEGORY,
             "submission_senmon_category": REVIEW_SUBMISSION_SENMON_CATEGORY,
             "kyotsu_senmon_kiso_faculty": KYOTSU_SENMON_KISO_FACULTY,
+            "unlock_credits_kyoyo": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
+            "unlock_credits_senmon": REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
