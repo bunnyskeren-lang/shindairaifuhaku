@@ -193,9 +193,13 @@
     // 修正理由: お問い合わせフォームには下書き保存が無く、IDトークン期限切れによる
     // 強制再ログインのリダイレクトで入力（特に長文の問い合わせ本文）が消えていた。
     const CONTACT_DRAFT_KEY = 'contactDraft';
+    // 数時間より古い下書きは書きかけを忘れた放置分のことが多いので破棄する（再ログインの
+    // リダイレクトで消える対策が目的なので、直近ぶんだけ復元できれば十分）。
+    const CONTACT_DRAFT_TTL_MS = 6 * 60 * 60 * 1000;
     function saveContactDraft() {
       try {
         localStorage.setItem(CONTACT_DRAFT_KEY, JSON.stringify({
+          _ts: Date.now(),
           category: document.getElementById('category').value,
           content: document.getElementById('content').value,
           email: document.getElementById('email').value,
@@ -206,6 +210,10 @@
       try {
         const d = JSON.parse(localStorage.getItem(CONTACT_DRAFT_KEY) || 'null');
         if (!d) return;
+        if (!d._ts || Date.now() - d._ts > CONTACT_DRAFT_TTL_MS) {
+          localStorage.removeItem(CONTACT_DRAFT_KEY);
+          return;
+        }
         const contentEl = document.getElementById('content');
         const emailEl = document.getElementById('email');
         if (d.content && !contentEl.value) contentEl.value = d.content;

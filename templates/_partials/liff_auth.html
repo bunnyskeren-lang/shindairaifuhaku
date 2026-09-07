@@ -13,8 +13,23 @@
           form      … テレメトリの発生源識別子（'course' / 'review' / 'register' / 'contact'）
           draftKey  … 下書きlocalStorageキー（無ければ省略。draft_present の判定に使う）
           apiBase   … /api/liff-auth-event の前置URL（course.html は BASE_URL、他は省略）
-          reauthMode… 're-login'（既定, liff.login で復帰）/ 'replace'（別URLへ遷移して復帰）
+          reauthMode… 're-login'（既定）/ 'replace'
           reauthUrl … reauthMode='replace' 時の遷移先（例 '/liff/review'）
+
+     reauthMode の選び方:
+       - 're-login'（既定）: liff.login({ redirectUri: location.href }) で復帰する。
+         redirectUri は LINE Developers Console で **そのLIFFアプリのエンドポイントURLと
+         同一オリジン・同一パス配下** でなければ 400 Bad Request になる。
+         このページのパス自体がエンドポイントURLに登録されている場合はこれでよい
+         （/register は REGISTER_LIFF_ID の、/contact は問い合わせ用LIFF IDの、
+          /liff/course は LIFF_ID のエンドポイントURLそのものなので該当）。
+       - 'replace': このページのパスがどのLIFFアプリのエンドポイントURLにも登録されて
+         いない場合に使う。liff.login は 400 になるので使えず、代わりに登録済みの
+         エンドポイントURL(reauthUrl)へ location.replace() して、そちら側の
+         're-login' でログインを完結させる。
+         現状の該当は form_index.html（'/'。REVIEW_LIFF_ID のエンドポイントは
+         '/liff/review' で '/' は未登録）だけ。新しくLIFFエンドポイント未登録の
+         ページを足すときは必ず 'replace' + reauthUrl を指定すること。
 
    公開API:
      LiffAuth.idExpired(idToken)              → 期限切れ(60秒手前)なら true

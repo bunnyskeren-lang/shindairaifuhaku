@@ -173,10 +173,14 @@
     // 強制再ログイン（liff.login()の全画面リダイレクト）で入力が丸ごと消えていた。
     // 入力のたびにlocalStorageへ退避し、戻ってきたときに復元する。
     const REGISTER_DRAFT_KEY = 'registerDraft';
+    // 下書きは「再ログインの全画面リダイレクトで入力が消える」対策。数時間より古い下書きは
+    // 別端末に置き去りになった古い入力のことが多く、サーバー既存プロフィール(/api/profile/prefill)
+    // より優先すると古い値で上書きしてしまうため、TTLを過ぎたら破棄してサーバー値を正とする。
+    const REGISTER_DRAFT_TTL_MS = 6 * 60 * 60 * 1000;
     const DRAFT_FIELD_IDS = ['name', 'student_id', 'faculty', 'department', 'coop_jobsite_known'];
     function saveRegisterDraft() {
       try {
-        const d = {};
+        const d = { _ts: Date.now() };
         for (const id of DRAFT_FIELD_IDS) d[id] = document.getElementById(id).value;
         localStorage.setItem(REGISTER_DRAFT_KEY, JSON.stringify(d));
       } catch (e) {}
@@ -185,6 +189,10 @@
       try {
         const d = JSON.parse(localStorage.getItem(REGISTER_DRAFT_KEY) || 'null');
         if (!d) return;
+        if (!d._ts || Date.now() - d._ts > REGISTER_DRAFT_TTL_MS) {
+          localStorage.removeItem(REGISTER_DRAFT_KEY);
+          return;
+        }
         if (d.name && !document.getElementById('name').value) document.getElementById('name').value = d.name;
         if (d.student_id && !document.getElementById('student_id').value) document.getElementById('student_id').value = d.student_id;
         if (d.faculty && !facultySel.value) {
