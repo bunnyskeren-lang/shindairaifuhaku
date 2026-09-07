@@ -14,6 +14,8 @@
       <p class="text-gray-500 text-sm mb-1">「{{ course_name }}」のレビューをありがとうございます。</p>
       <p class="text-gray-400 text-sm mb-4">確認後に公開されます。後輩のためにありがとう✨</p>
 
+      {# review_count は _success_redirect が張った短命Cookie由来。0＝Cookieが無い/壊れている
+         ので、件数に触れる文言は一切出さない（推測値を見せない） #}
       {% if review_count == 1 %}
       <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 mb-6 text-sm font-bold text-indigo-600">
         🔰 初レビュー投稿、おめでとうございます！
@@ -22,7 +24,7 @@
       <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-6 text-sm font-bold text-amber-600">
         🏅 累計{{ review_count }}件目の投稿達成！すごい貢献度です
       </div>
-      {% else %}
+      {% elif review_count > 1 %}
       <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 mb-6 text-sm font-bold text-indigo-600">
         📝 これで累計{{ review_count }}件目のレビューです
       </div>

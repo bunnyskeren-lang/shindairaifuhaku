@@ -31,12 +31,20 @@ router = APIRouter()
 _submit_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
 
-def _success_redirect(course_name: str, course_id: int, review_count: int):
+def _success_redirect(course_name: str, review_count: int):
     # PRG（Post/Redirect/Get）: 送信成功時はテンプレートを直接返さず 303 で GET ページへ。
     # ブラウザ履歴・タブ復元・bfcache 復元で再実行されるのが無害な GET になり、
     # フォーム POST 自体の再送（二重送信の主因）が減る。
-    qs = urlencode({"course_name": course_name.strip(), "course_id": course_id, "n": review_count})
-    return RedirectResponse(url=f"/submit/done?{qs}", status_code=303)
+    # 累計投稿数はURLクエリに載せるとユーザーが書き換えて「初投稿おめでとう」等を任意に
+    # 出せてしまう（実害はないが表示の信頼性の問題）。短命Cookieで渡し、/submit/done は
+    # クエリを一切見ない。Cookieが無い/壊れている場合は祝いメッセージ自体を出さない。
+    qs = urlencode({"course_name": course_name.strip()})
+    resp = RedirectResponse(url=f"/submit/done?{qs}", status_code=303)
+    resp.set_cookie(
+        "kobe_review_n", str(review_count),
+        max_age=120, httponly=True, samesite="lax", path="/submit/done",
+    )
+    return resp
 
 
 async def _review_count(session, sid: str) -> int:
@@ -120,7 +128,7 @@ async def submit(
             prior = await _prior_review_by_nonce(session, nonce)
             if prior is not None and prior.student_id == sid:
                 rc = await _review_count(session, sid)
-                return _success_redirect(course_name, prior.subject_id, rc)
+                return _success_redirect(course_name, rc)
 
     uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
@@ -290,12 +298,11 @@ async def submit(
                 prior = await _prior_review_by_nonce(session, nonce)
                 if prior is not None:
                     rc = await _review_count(session, prior.student_id)
-                    return _success_redirect(course_name, prior.subject_id, rc)
+                    return _success_redirect(course_name, rc)
             raise
         cache.invalidate_full_pairs_cache()
 
         review_count = await _review_count(session, sid)
-        course_id = subject.id
 
     # レビューは既にcommit済みのため、push通知はレスポンスを待たせず
     # バックグラウンドで送る（購読者数が増えても投稿完了レスポンスの速度に影響しないように）。
@@ -312,23 +319,25 @@ async def submit(
 
     asyncio.create_task(_notify())
 
-    return _success_redirect(course_name, course_id, review_count)
+    return _success_redirect(course_name, review_count)
 
 
 @router.get("/submit/done")
-async def submit_done(
-    request: Request,
-    course_name: str = "",
-    course_id: int = 0,
-    n: int = 0,
-):
+async def submit_done(request: Request, course_name: str = ""):
     # PRG のリダイレクト先。POST /submit が 303 で飛ばしてくる（直接の再送POSTが
-    # 無害なGETに置き換わる）。表示専用でクエリ値以外は参照しない。
-    return templates.TemplateResponse(
+    # 無害なGETに置き換わる）。累計投稿数は _success_redirect が張った短命Cookieから
+    # 読む（URLクエリには載せない）。Cookieが無い/数値でないときは review_count=0 とし、
+    # テンプレート側は 0 のとき祝いメッセージを出さない。
+    try:
+        review_count = int(request.cookies.get("kobe_review_n", "0"))
+    except (TypeError, ValueError):
+        review_count = 0
+    resp = templates.TemplateResponse(
         "form_success.html", {
             "request": request,
             "course_name": course_name,
-            "course_id": course_id,
-            "review_count": n,
+            "review_count": max(0, review_count),
         }
     )
+    resp.delete_cookie("kobe_review_n", path="/submit/done")
+    return resp

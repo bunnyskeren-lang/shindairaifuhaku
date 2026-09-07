@@ -465,12 +465,45 @@ async def test_submit_expired_token_on_replay_still_shows_success(http_client_fa
 
 
 @pytest.mark.asyncio
-async def test_submit_done_page_renders(http_client_factory, monkeypatch, test_sessionmaker):
+async def test_submit_done_page_uses_cookie_not_query_for_count(http_client_factory, monkeypatch, test_sessionmaker):
     client = http_client_factory(review_submit_api, monkeypatch)
-    resp = await client.get("/submit/done", params={"course_name": "経営管理", "course_id": 1, "n": 1})
+    # 累計投稿数は _success_redirect が張る短命Cookieから読む
+    client.cookies.set("kobe_review_n", "1")
+    resp = await client.get("/submit/done", params={"course_name": "経営管理"})
     assert resp.status_code == 200
     assert "経営管理" in resp.text
     assert "初レビュー投稿" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_submit_done_page_hides_milestone_when_cookie_absent_or_tampered(http_client_factory, monkeypatch, test_sessionmaker):
+    client = http_client_factory(review_submit_api, monkeypatch)
+    # Cookie無し → 件数に触れる文言を一切出さない（?n=1 を付けても無視される）
+    resp = await client.get("/submit/done", params={"course_name": "経営管理", "n": 1})
+    assert resp.status_code == 200
+    assert "初レビュー投稿" not in resp.text
+    assert "累計" not in resp.text
+    # 壊れたCookieでも同様
+    client.cookies.set("kobe_review_n", "not-a-number")
+    resp2 = await client.get("/submit/done", params={"course_name": "経営管理"})
+    assert resp2.status_code == 200
+    assert "初レビュー投稿" not in resp2.text
+
+
+@pytest.mark.asyncio
+async def test_submit_sets_short_lived_count_cookie_on_redirect(http_client_factory, monkeypatch, test_sessionmaker):
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    resp = await client.post("/submit", data=VALID_FORM)
+    assert resp.status_code == 303
+    set_cookie = resp.headers.get("set-cookie", "")
+    assert "kobe_review_n=1" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "Max-Age=120" in set_cookie
 
 
 @pytest.mark.asyncio
