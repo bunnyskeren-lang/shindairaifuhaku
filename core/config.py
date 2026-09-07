@@ -84,6 +84,13 @@ REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON = 1
 # カテゴリが取得できない/教養・専門以外のレビュー（通常発生しない）向けフォールバック
 REVIEW_APPROVAL_UNLOCK_CREDITS = 1
 
+# reviews.credit_granted_at の番兵値。「閲覧チケットの付与は行わない（レビュー報酬を
+# 現金買取 payment_limit へ換算済み）」ことを表す。NULL にすると /admin/reviews/approve の
+# 冪等ガード（credit_granted_at IS NULL）をすり抜けて再付与されてしまうため、実時刻ではなく
+# この固定値を入れる。管理画面の「付与」集計・支払い済み化時のチケット消費は、この値の
+# レビューを credit_granted_at > CREDIT_GRANTED_SENTINEL で除外する（2026-09-08）。
+CREDIT_GRANTED_SENTINEL = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
 
 def review_approval_unlock_credits(category) -> int:
     """このカテゴリの科目へのレビューが1件承認されたとき付与するチケット枚数。"""

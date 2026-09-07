@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
-from core.config import review_approval_unlock_credits
+from core.config import CREDIT_GRANTED_SENTINEL, review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -61,6 +61,8 @@ async def admin_payment_pay(request_id: int, _: str = Depends(check_admin)):
             # PayPayで現金化した分だけ、レビュー承認時に付与済みの閲覧チケットを使用済みにする
             # （現金と閲覧権チケットの二重取得を防ぐため）。付与枚数は科目カテゴリで異なる
             # （教養2枚・専門1枚）ため、件数×定数ではなくレビューごとに合算する
+            # credit_granted_at が番兵値のレビューは元々チケットを付与していない（現金へ換算済み）ので
+            # 消費対象から除外する（credit_granted_at > CREDIT_GRANTED_SENTINEL）
             paid_review_categories = (await session.execute(
                 select(Subject.category)
                 .select_from(Review)
@@ -68,7 +70,7 @@ async def admin_payment_pay(request_id: int, _: str = Depends(check_admin)):
                 .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(
                     Review.payment_request_id == payment_request.id,
-                    Review.credit_granted_at.isnot(None),
+                    Review.credit_granted_at > CREDIT_GRANTED_SENTINEL,
                 )
             )).scalars().all()
             if paid_review_categories:
