@@ -630,6 +630,18 @@
       return _liffInitPromise;
     }
 
+    // 修正理由: liff.getIDToken()はLIFF SDKがブラウザ側に保持しているキャッシュ済み
+    // トークンをそのまま返すため、単純なlocation.reload()では期限切れの同じトークンを
+    // 再取得するだけで再度auth_failedになってしまう(2026-09-07)。liff.logout()でLIFF側の
+    // セッションを破棄してからリロードすることで、initProfilePrefill()内のisLoggedIn()判定が
+    // falseになりliff.login()による再ログイン（＝新しいID token発行）を強制する。
+    function forceReauthAndReload() {
+      try {
+        if (typeof liff !== 'undefined' && liff.logout) liff.logout();
+      } catch (e) {}
+      location.reload();
+    }
+
     // 修正理由: 同じ学籍番号で同じ科目×担当教員に重複投稿できてしまっていたため、
     // 既に投稿済みの組み合わせをプリフィル時に取得し、科目選択画面でグレーアウト表示する
     // （実際の受付可否は/submit側で再確認するため、これはあくまで補助的なUI表示）
@@ -718,7 +730,7 @@
         // (2026-08-31)。この場合は再試行を促す。
         showOverlay(`<div class="text-4xl">⚠️</div>
           <p class="text-sm text-gray-500">ログイン確認に失敗しました。もう一度お試しください。</p>
-          <button onclick="location.reload()" class="block w-full text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
+          <button onclick="forceReauthAndReload()" class="block w-full text-center bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
         return;
       }
 
