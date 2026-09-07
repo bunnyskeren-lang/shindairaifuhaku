@@ -481,6 +481,11 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS unlock_credits INTEGER NOT NULL DEFAULT 0"
         ))
+        # レビュー報酬の支払い上限額（円、100円単位）。管理画面ユーザー設定で管理者が手入力する
+        # 記録・表示専用の値。既定0円。
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS payment_limit INTEGER NOT NULL DEFAULT 0"
+        ))
         await conn.execute(text(
             "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS credit_granted_at TIMESTAMPTZ"
         ))

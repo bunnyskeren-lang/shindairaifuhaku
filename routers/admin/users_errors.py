@@ -41,6 +41,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 UserProfile.faculty,
                 UserProfile.department,
                 UserProfile.unlock_credits,
+                UserProfile.payment_limit,
                 UserProfile.banned_at,
                 UserProfile.ban_reason,
             )
@@ -174,6 +175,28 @@ async def admin_user_ban(
             profile.ban_reason = reason.strip()[:500] or None
             await session.commit()
     cache.invalidate_ban_cache(line_user_id)
+    return RedirectResponse(_safe_admin_redirect(next), status_code=303)
+
+
+@router.post("/admin/users/payment-limit/{line_user_id}")
+async def admin_user_payment_limit(
+    line_user_id: str,
+    amount: str = Form(default="0"),
+    next: str = Form(default="/admin/users"),
+    _: str = Depends(check_admin),
+):
+    # レビュー報酬の支払い上限額（円）。100円単位・0以上のみ受け付ける。
+    # 不正値は無視して現状維持する（現状は記録・表示専用の値）。
+    try:
+        value = int(amount)
+    except (TypeError, ValueError):
+        value = None
+    if value is not None and value >= 0 and value % 100 == 0:
+        async with AsyncSessionLocal() as session:
+            profile = await session.get(UserProfile, line_user_id)
+            if profile:
+                profile.payment_limit = value
+                await session.commit()
     return RedirectResponse(_safe_admin_redirect(next), status_code=303)
 
 
