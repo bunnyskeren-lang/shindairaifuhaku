@@ -677,29 +677,41 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
     （旧make_category_browse_flexの案B'）が、ユーザー判断で入口画面（この画面）と
     系統/学部選択（make_classification_grid_flex）の2画面構成に戻した）。"""
 
-    def _tile(icon: str, label: str, data: str, count: int, sub: str,
-               bg: str, border: str, text_color: str, badge_bg: str,
+    def _tile(icon: str, label: str, data: str,
+               bg: str, border: str, text_color: str, badge_bg: str, *,
+               count: int | None = None, sub: str | None = None,
+               pill: tuple[str, str, str] | None = None,
                notes: list[tuple[str, str]] | None = None) -> FlexBox:
-        note_texts = [
-            FlexText(text=t, size="xxs", color=c, align="center", wrap=True, weight="bold")
-            for t, c in (notes or [])
+        contents: list = [
+            FlexText(text=icon, size="xxl", align="center"),
+            FlexText(text=label, size="sm", weight="bold", color=text_color, align="center"),
         ]
+        if count is not None:
+            contents.append(FlexBox(
+                layout="vertical", background_color=badge_bg, corner_radius="999px",
+                padding_all="xs",
+                contents=[FlexText(text=f"全{count:,}件", size="xxs", weight="bold",
+                                     color=text_color, align="center")],
+            ))
+        if pill is not None:
+            p_text, p_bg, p_color = pill
+            contents.append(FlexBox(
+                layout="vertical", background_color=p_bg, corner_radius="999px",
+                padding_top="xs", padding_bottom="xs", padding_start="md", padding_end="md",
+                margin="xs",
+                contents=[FlexText(text=p_text, size="xs", weight="bold",
+                                     color=p_color, align="center")],
+            ))
+        if sub is not None:
+            contents.append(FlexText(text=sub, size="xxs", color="#64748b", align="center"))
+        for t, c in (notes or []):
+            contents.append(FlexText(text=t, size="xs", color=c, align="center",
+                                       wrap=True, weight="bold"))
         return FlexBox(
             layout="vertical",
             action=PostbackAction(label=label[:20], data=data),
             justify_content="center", align_items="center", spacing="xs",
-            contents=[
-                FlexText(text=icon, size="xxl", align="center"),
-                FlexText(text=label, size="sm", weight="bold", color=text_color, align="center"),
-                FlexBox(
-                    layout="vertical", background_color=badge_bg, corner_radius="999px",
-                    padding_all="xs",
-                    contents=[FlexText(text=f"全{count:,}件", size="xxs", weight="bold",
-                                         color=text_color, align="center")],
-                ),
-                FlexText(text=sub, size="xxs", color="#64748b", align="center"),
-                *note_texts,
-            ],
+            contents=contents,
             background_color=bg,
             border_width="1.5px",
             border_color=border,
@@ -737,12 +749,13 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
                     FlexBox(
                         layout="horizontal", spacing="sm",
                         contents=[
-                            _tile("📚", "教養科目", "教養", edu_count, "系統から探す",
-                                   "#eef2ff", "#c7d2fe", "#4338ca", "#e0e7ff"),
-                            _tile("🎓", "専門科目", "専門", senmon_count, "学部から探す",
+                            _tile("📚", "教養科目", "教養",
+                                   "#eef2ff", "#c7d2fe", "#4338ca", "#e0e7ff",
+                                   count=edu_count, sub="系統から探す"),
+                            _tile("🎓", "専門科目", "専門",
                                    "#e0f2fe", "#bae6fd", "#0369a1", "#bae6fd",
-                                   notes=[("閲覧は準備中", "#94a3b8"),
-                                          ("投稿は募集中", "#0369a1")]),
+                                   pill=("閲覧は準備中", "#fcd34d", "#8a4b00"),
+                                   notes=[("✅ 投稿は募集中", "#047857")]),
                         ],
                     ),
                 ],

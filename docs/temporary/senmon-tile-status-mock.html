@@ -1,0 +1,374 @@
+<title>専門タイル 準備中モック</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#eef0f4;
+    --panel:#ffffff;
+    --panel-edge:#dfe2ea;
+    --ink:#1f2430;
+    --muted:#6b7280;
+    --faint:#9aa1ad;
+    --accent:#4338ca;
+    --accent-soft:#eef0ff;
+    --amber-fill:#fcd34d;
+    --amber-ink:#8a4b00;
+    --go-ink:#047857;
+    --chat-bg:#7d9bb9;
+    --rule:#e6e8ef;
+    --shadow:0 6px 24px rgba(24,28,45,.10),0 1px 3px rgba(24,28,45,.08);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#14161b;
+      --panel:#1e2128;
+      --panel-edge:#2e323c;
+      --ink:#e7e9ee;
+      --muted:#9aa1ad;
+      --faint:#767d89;
+      --accent:#a5b4fc;
+      --accent-soft:#20233a;
+      --amber-fill:#fcd34d;
+      --amber-ink:#7c4600;
+      --go-ink:#34d399;
+      --chat-bg:#3f5266;
+      --rule:#2b2f39;
+      --shadow:0 8px 30px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#14161b;
+    --panel:#1e2128;
+    --panel-edge:#2e323c;
+    --ink:#e7e9ee;
+    --muted:#9aa1ad;
+    --faint:#767d89;
+    --accent:#a5b4fc;
+    --accent-soft:#20233a;
+    --amber-fill:#fcd34d;
+    --amber-ink:#7c4600;
+    --go-ink:#34d399;
+    --chat-bg:#3f5266;
+    --rule:#2b2f39;
+    --shadow:0 8px 30px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN",sans-serif;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:56px 24px 96px}
+
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 14px;
+  }
+  h1{
+    font-family:"Zen Kaku Gothic New",sans-serif;font-weight:900;
+    font-size:clamp(28px,4.4vw,40px);line-height:1.2;margin:0 0 12px;
+    text-wrap:balance;letter-spacing:.01em;
+  }
+  .lede{font-size:15px;color:var(--muted);margin:0;max-width:60ch}
+  .lede code{
+    font-family:"IBM Plex Mono",monospace;font-size:13px;
+    background:var(--accent-soft);color:var(--accent);
+    padding:1px 6px;border-radius:5px;
+  }
+
+  .panels{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:22px;
+    margin-top:44px;
+  }
+  @media (max-width:860px){.panels{grid-template-columns:1fr;max-width:420px}}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--panel-edge);
+    border-radius:18px;overflow:hidden;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;
+  }
+  .panel-head{
+    display:flex;align-items:center;gap:9px;
+    padding:16px 18px 14px;border-bottom:1px solid var(--rule);
+  }
+  .tag{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;
+    letter-spacing:.08em;text-transform:uppercase;
+    padding:3px 9px;border-radius:999px;white-space:nowrap;
+  }
+  .tag.now{background:var(--rule);color:var(--muted)}
+  .tag.a{background:var(--accent);color:#fff}
+  .tag.b{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+  .panel-head .name{font-size:13px;font-weight:700;color:var(--ink)}
+
+  .stage{background:var(--chat-bg);padding:26px 20px 30px;display:flex;justify-content:center}
+
+  .notes{padding:16px 18px 20px;margin:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  .notes li{position:relative;padding-left:20px;font-size:12.5px;color:var(--muted)}
+  .notes li::before{
+    content:"";position:absolute;left:2px;top:9px;width:7px;height:7px;border-radius:2px;
+    background:var(--accent);
+  }
+  .notes li.cut::before{background:#c0392b;transform:rotate(45deg);border-radius:0}
+  .notes li.keep::before{background:var(--faint)}
+  .notes b{color:var(--ink);font-weight:700}
+
+  /* ---- LINE Flex bubble ---- */
+  .bubble{
+    width:296px;background:#fff;border-radius:18px;
+    box-shadow:0 1px 2px rgba(0,0,0,.28);overflow:hidden;
+    font-family:"Noto Sans JP",sans-serif;color:#1f2430;
+  }
+  .b-head{background:#6366f1;padding:18px 18px 16px;display:flex;flex-direction:column;gap:11px}
+  .b-title{color:#fff;font-weight:700;font-size:17px;line-height:1.2}
+  .b-search{
+    background:#fff;border-radius:10px;padding:10px 8px;
+    font-size:12.5px;font-weight:700;color:#312e81;text-align:center;line-height:1.45;
+  }
+  .b-body{padding:15px 14px 16px;display:flex;flex-direction:column;gap:10px}
+  .b-caption{font-size:11px;color:#64748b;text-align:center}
+  .tiles{display:flex;gap:9px}
+  .tile{
+    flex:1;border-radius:16px;border:1.5px solid;padding:16px 10px 15px;
+    display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;
+  }
+  .tile.edu{background:#eef2ff;border-color:#c7d2fe}
+  .tile.sen{background:#e0f2fe;border-color:#bae6fd}
+  .t-emoji{font-size:30px;line-height:1}
+  .t-label{font-size:13.5px;font-weight:700}
+  .tile.edu .t-label{color:#4338ca}
+  .tile.sen .t-label{color:#0369a1}
+  .t-count{
+    background:#e0e7ff;color:#4338ca;font-size:10.5px;font-weight:700;
+    border-radius:999px;padding:3px 10px;
+  }
+  .tile.sen .t-count{background:#bae6fd;color:#0369a1}
+  .t-sub{font-size:10.5px;color:#64748b;line-height:1.4}
+
+  /* status treatments */
+  .st-now-wait{font-size:10.5px;color:#94a3b8}
+  .st-now-open{font-size:10.5px;color:#0369a1;font-weight:700}
+
+  .st-pill{
+    background:#fcd34d;color:#8a4b00;font-weight:700;font-size:12px;
+    border-radius:999px;padding:5px 12px;letter-spacing:.02em;
+    box-shadow:0 1px 0 rgba(0,0,0,.06);
+  }
+  .st-open{font-size:11px;color:#047857;font-weight:700}
+
+  .ledger{width:100%;display:flex;flex-direction:column;gap:4px;margin-top:1px}
+  .ledger-row{
+    display:flex;align-items:center;justify-content:space-between;gap:6px;
+    background:#ffffff;border:1px solid #d5e6f2;border-radius:9px;padding:5px 9px;
+  }
+  .ledger-row .k{font-size:10.5px;color:#475569;font-weight:500}
+  .ledger-row .v-wait{font-size:10.5px;color:#8a4b00;font-weight:700}
+  .ledger-row .v-open{font-size:10.5px;color:#047857;font-weight:700}
+  .ledger-row.wait{background:#fff7e6;border-color:#fcd88a}
+
+  .spec{
+    margin-top:52px;background:var(--panel);border:1px solid var(--panel-edge);
+    border-radius:16px;padding:26px 26px 22px;box-shadow:var(--shadow);
+  }
+  .spec h2{
+    font-family:"Zen Kaku Gothic New",sans-serif;font-weight:700;
+    font-size:18px;margin:0 0 4px;
+  }
+  .spec .file{
+    font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);
+    margin:0 0 18px;
+  }
+  .difflist{display:flex;flex-direction:column;gap:12px}
+  .diff{display:flex;gap:12px;font-size:13px;align-items:baseline}
+  .diff .mark{
+    font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:12px;
+    flex-shrink:0;width:64px;text-align:center;padding:2px 0;border-radius:6px;
+  }
+  .diff .mark.rm{background:rgba(192,57,43,.14);color:#c0392b}
+  .diff .mark.add{background:rgba(4,120,135,.14);color:var(--go-ink)}
+  .diff .mark.same{background:var(--rule);color:var(--faint)}
+  .diff p{margin:0;color:var(--muted)}
+  .diff p b{color:var(--ink)}
+  .diff code{
+    font-family:"IBM Plex Mono",monospace;font-size:12px;
+    background:var(--ground);padding:1px 5px;border-radius:4px;color:var(--ink);
+  }
+
+  .foot{margin-top:34px;font-size:12px;color:var(--faint);font-family:"IBM Plex Mono",monospace}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">LINE Flex モック</p>
+  <h1>レビュー閲覧カード・専門タイル</h1>
+  <p class="lede">
+    「レビュー閲覧」リッチメニューで返る入口カード（<code>make_category_entry_flex</code>）の
+    <b>専門科目タイル</b>だけを差し替える案。<b>閲覧は準備中</b>をタイル内でいちばん目立たせ、
+    件数バッジは外す。教養タイルは現行のまま。
+  </p>
+
+  <div class="panels">
+
+    <!-- 現行 -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="tag now">現行</span>
+        <span class="name">いま dev に出ているもの</span>
+      </div>
+      <div class="stage">
+        <div class="bubble">
+          <div class="b-head">
+            <div class="b-title">📚 科目一覧</div>
+            <div class="b-search">🔍 科目名をチャットに直接送っても検索できます</div>
+          </div>
+          <div class="b-body">
+            <div class="b-caption">カテゴリを選んでください</div>
+            <div class="tiles">
+              <div class="tile edu">
+                <div class="t-emoji">📚</div>
+                <div class="t-label">教養科目</div>
+                <div class="t-count">全2,345件</div>
+                <div class="t-sub">系統から探す</div>
+              </div>
+              <div class="tile sen">
+                <div class="t-emoji">🎓</div>
+                <div class="t-label">専門科目</div>
+                <div class="t-count">全1,180件</div>
+                <div class="t-sub">学部から探す</div>
+                <div class="st-now-wait">閲覧は準備中</div>
+                <div class="st-now-open">投稿は募集中</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li class="keep">「閲覧は準備中」が最小文字・淡色で、件数や「学部から探す」に埋もれる</li>
+        <li class="keep">件数バッジが目立ち、閲覧できる件数だと誤解されうる</li>
+      </ul>
+    </div>
+
+    <!-- 案A -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="tag a">案A・推奨</span>
+        <span class="name">警告ピルで前面に</span>
+      </div>
+      <div class="stage">
+        <div class="bubble">
+          <div class="b-head">
+            <div class="b-title">📚 科目一覧</div>
+            <div class="b-search">🔍 科目名をチャットに直接送っても検索できます</div>
+          </div>
+          <div class="b-body">
+            <div class="b-caption">カテゴリを選んでください</div>
+            <div class="tiles">
+              <div class="tile edu">
+                <div class="t-emoji">📚</div>
+                <div class="t-label">教養科目</div>
+                <div class="t-count">全2,345件</div>
+                <div class="t-sub">系統から探す</div>
+              </div>
+              <div class="tile sen">
+                <div class="t-emoji">🎓</div>
+                <div class="t-label">専門科目</div>
+                <div class="st-pill">閲覧は準備中</div>
+                <div class="st-open">✅ 投稿は募集中</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li><b>「閲覧は準備中」</b>を琥珀色の塗りピルに。タイル内で最も強い要素</li>
+        <li class="cut">件数バッジ <code>全N件</code> を削除</li>
+        <li class="cut">「学部から探す」を削除（閲覧導線がない今は不要）</li>
+        <li>「投稿は募集中」は緑チェックで下に添える</li>
+      </ul>
+    </div>
+
+    <!-- 案B -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="tag b">案B</span>
+        <span class="name">2行の状態レジャー</span>
+      </div>
+      <div class="stage">
+        <div class="bubble">
+          <div class="b-head">
+            <div class="b-title">📚 科目一覧</div>
+            <div class="b-search">🔍 科目名をチャットに直接送っても検索できます</div>
+          </div>
+          <div class="b-body">
+            <div class="b-caption">カテゴリを選んでください</div>
+            <div class="tiles">
+              <div class="tile edu">
+                <div class="t-emoji">📚</div>
+                <div class="t-label">教養科目</div>
+                <div class="t-count">全2,345件</div>
+                <div class="t-sub">系統から探す</div>
+              </div>
+              <div class="tile sen">
+                <div class="t-emoji">🎓</div>
+                <div class="t-label">専門科目</div>
+                <div class="ledger">
+                  <div class="ledger-row wait">
+                    <span class="k">⏳ 閲覧</span><span class="v-wait">準備中</span>
+                  </div>
+                  <div class="ledger-row">
+                    <span class="k">✏️ 投稿</span><span class="v-open">募集中</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="notes">
+        <li>閲覧＝準備中／投稿＝募集中を対にして明示</li>
+        <li>「準備中」行だけ淡い琥珀の背景で強調</li>
+        <li class="cut">件数バッジ・「学部から探す」を削除</li>
+        <li class="keep">案Aより情報量は多いが、視線の一点集中は弱い</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="spec">
+    <h2>変更点（案A）</h2>
+    <p class="file">line_bot/flex_builders.py · make_category_entry_flex の専門タイル（_tile 呼び出し）</p>
+    <div class="difflist">
+      <div class="diff">
+        <span class="mark rm">削除</span>
+        <p>件数バッジ <code>全{count:,}件</code> の <code>FlexBox</code>。専門タイルでは <code>count</code> を渡さず描画しない</p>
+      </div>
+      <div class="diff">
+        <span class="mark rm">削除</span>
+        <p>サブテキスト <code>"学部から探す"</code>（<code>sub</code>）</p>
+      </div>
+      <div class="diff">
+        <span class="mark add">追加</span>
+        <p><b>閲覧は準備中</b> ＝ 塗りピル。<code>background_color="#fcd34d"</code> / 文字 <code>#8a4b00</code> bold、<code>corner_radius="999px"</code>、<code>padding</code> 縦 <code>xs</code>・横 <code>md</code></p>
+      </div>
+      <div class="diff">
+        <span class="mark add">追加</span>
+        <p><b>✅ 投稿は募集中</b> ＝ <code>FlexText</code> <code>size="xs"</code> / <code>color="#047857"</code> / bold</p>
+      </div>
+      <div class="diff">
+        <span class="mark same">据置</span>
+        <p>教養タイルは現行どおり（絵文字・ラベル・<code>全N件</code>・「系統から探す」）</p>
+      </div>
+      <div class="diff">
+        <span class="mark same">据置</span>
+        <p>専門タイルの <code>PostbackAction(data="専門")</code> ＝ タップ時は従来どおり学部選択へ遷移</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">shindairaifuhaku · docs/temporary/senmon-tile-status-mock.html</p>
+</div>
