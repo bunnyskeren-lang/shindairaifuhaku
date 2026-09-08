@@ -8,7 +8,8 @@ from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KAIYO_SEISAKU_FACULTY,
     KYOTSU_SENMON_KISO_FACULTY,
-    LIFF_ID, MAX_REVIEWS_PER_COURSE_SECTION, NOGAKU_COURSE_TO_DEPARTMENT,
+    LIFF_ID, LINE_FRIEND_URL, MAX_REVIEWS_PER_COURSE_SECTION,
+    NOGAKU_COURSE_TO_DEPARTMENT,
     OMNIBUS_INSTRUCTOR_LABEL,
     REGISTER_LIFF_ID,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
@@ -88,6 +89,25 @@ async def liff_review(request: Request):
 @router.get("/coop", response_class=HTMLResponse)
 async def coop_redirect(request: Request):
     return templates.TemplateResponse("coop_redirect.html", {"request": request})
+
+
+@router.get("/join", response_class=HTMLResponse)
+async def join_line(request: Request):
+    # LINE/Discord等にそのままlin.eeを貼るとデフォルト画像になるため、OGP画像付きの
+    # このページを共有してもらう。クローラーはOGPだけ読み、人間のブラウザはJS/メタリフレッシュで
+    # LINE友だち追加へ転送される（サーバー側リダイレクトにするとクローラーもlin.ee側のOGPを
+    # 拾ってしまうので、あえて200 HTMLを返す）。
+    response = templates.TemplateResponse(
+        "join.html",
+        {
+            "request": request,
+            "friend_url": LINE_FRIEND_URL,
+            "app_url": APP_URL,
+        },
+    )
+    # OGP画像を差し替えたときにLINE/Discordのキャッシュ更新を妨げないよう短めに
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
 
 
 @router.get("/privacy", response_class=HTMLResponse)

@@ -269,6 +269,12 @@ PRIVACY_URL = APP_URL + "/privacy"
 TERMS_URL = APP_URL + "/terms"
 CONTACT_URL = APP_URL + "/contact"
 
+# 本番LINE公式アカウントの友だち追加ショートリンク（LINEの「友だち追加QRコード/URL」機能で発行）。
+# /join の共有用ランディングページがOGPプレビュー表示後にここへリダイレクトする。
+# dev/本番どちらの /join も「一般公開して友だちを増やす対象」は本番botなので、この既定値を共通で使う。
+# 別のリンクに差し替えたい場合のみ Render の環境変数 LINE_FRIEND_URL で上書きする。
+LINE_FRIEND_URL = os.environ.get("LINE_FRIEND_URL", "https://lin.ee/OwbCDKU5")
+
 _CLS_ORDER_KEYS = ["基盤", "人文", "社会", "自然", "総合", "健康", "外国語"]
 
 EASE_ORDER = {"SS": 0, "S": 1, "A": 2, "B": 3, "C": 4}

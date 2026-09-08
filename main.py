@@ -8,6 +8,7 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse as _JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
 from core import backup, liff_auth, line_client, prewarm, rate_limit
@@ -186,6 +187,9 @@ async def global_exception_handler(request: Request, exc: Exception):
     await save_error_log(exc, action=f"{request.method} {request.url.path}")
     return _JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
+
+# 静的ファイル（/join の共有用OGP画像など）。Renderの作業ディレクトリはリポジトリ直下。
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── ルーター登録 ────────────────────────────────────────────────
 app.include_router(webhook.router)

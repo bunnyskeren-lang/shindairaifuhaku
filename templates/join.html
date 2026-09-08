@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja" prefix="og: https://ogp.me/ns#">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>神大ライフハック｜LINEで友だち追加</title>
+  <meta name="description" content="神大生の履修えらびをサポートするLINE bot。授業レビューの閲覧・投稿、楽単・鬼単ランキング。神戸大学 起業部の学生が開発（神戸大学公式のサービスではありません）。">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="神大ライフハック">
+  <meta property="og:title" content="神大ライフハック｜神大生の履修えらびをサポートするLINE bot">
+  <meta property="og:description" content="授業レビューの閲覧・投稿、楽単・鬼単ランキング。神戸大学 起業部の学生が開発。※神戸大学公式のサービスではありません。">
+  <meta property="og:image" content="{{ app_url }}/static/join-ogp.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url" content="{{ app_url }}/join">
+  <meta property="og:locale" content="ja_JP">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="神大ライフハック｜神大生の履修えらびをサポートするLINE bot">
+  <meta name="twitter:description" content="授業レビューの閲覧・投稿、楽単・鬼単ランキング。神戸大学 起業部の学生が開発。※神戸大学公式のサービスではありません。">
+  <meta name="twitter:image" content="{{ app_url }}/static/join-ogp.png">
+
+  <!-- 人間のブラウザだけLINE友だち追加へ転送する。クローラー（LINE/Discord等）は
+       JS/メタリフレッシュを追わずに上のOGPだけを読むため、サーバー側301/302は使わない。 -->
+  <meta http-equiv="refresh" content="0; url={{ friend_url }}">
+  <style>
+    body {
+      margin: 0; min-height: 100vh; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+      font-family: "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN",
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic", sans-serif;
+      background: #FFFCF5; color: #3A2A1C;
+    }
+    .box { text-align: center; max-width: 420px; }
+    .box h1 { font-size: 20px; margin: 0 0 8px; }
+    .box p { font-size: 14px; color: #8A7B6B; margin: 0 0 20px; line-height: 1.6; }
+    a.cta {
+      display: inline-block; padding: 14px 32px; border-radius: 999px;
+      background: #06C755; color: #fff; text-decoration: none; font-weight: 700;
+      font-size: 17px;
+    }
+    .note { margin-top: 18px; font-size: 12px; color: #A79684; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>神大ライフハックを友だち追加</h1>
+    <p>LINEの友だち追加ページへ移動します。<br>自動で移動しない場合は下のボタンから。</p>
+    <a id="cta" class="cta" href="{{ friend_url }}">LINEで友だち追加</a>
+    <div class="note">※本サービスは神戸大学公式のものではありません。<br>神戸大学 起業部の学生が開発・運営しています。</div>
+  </div>
+  <script>
+    location.replace({{ friend_url | tojson }});
+  </script>
+</body>
+</html>
