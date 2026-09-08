@@ -337,13 +337,21 @@ async def init_db():
         # 投稿可と判定する) が素通りし、他学科の専門科目が投稿候補に出ていた。
         # classification 完全一致でのみ更新する。農学部は classification に学部名プレフィックスが
         # 無いため直後の専用ループで別途学科単位で補完する。領域単位の海洋政策科学部は対象外。冪等。
+        # NOT EXISTS ガード: dev→本番同期で department 入りの正規行と department 空の
+        # 旧行が両方残ることがある（同期スクリプトは syllabi 紐付きの本番固有行を消さず
+        # KEEP する）。ガード無しで空行を UPDATE すると
+        # uq_subjects_name_faculty_department_classification に衝突して init_db() 全体が
+        # 落ちる（2026-09-08 本番で発生）。同名の正規行が既にあるなら空行はそのまま残す。
         from core.config import FACULTY_DEPARTMENTS as _FACULTY_DEPARTMENTS
         for _fac, _depts in _FACULTY_DEPARTMENTS.items():
             for _dept in _depts:
                 await conn.execute(text(
                     "UPDATE subjects SET department = :dept "
                     "WHERE faculty = :fac AND COALESCE(department, '') = '' "
-                    "AND classification = :cls"
+                    "AND classification = :cls "
+                    "AND NOT EXISTS (SELECT 1 FROM subjects s2 "
+                    "  WHERE s2.name = subjects.name AND s2.faculty = :fac "
+                    "  AND s2.department = :dept AND s2.classification = :cls)"
                 ), {"dept": _dept, "fac": _fac, "cls": f"{_fac}{_dept}専門科目"})
         # 農学部の subjects.department バックフィル（2026-09-08）: 農学部の専門科目は
         # classification が "{学科名}専門科目"（学部名プレフィックス無し）で、会員登録は
@@ -356,7 +364,10 @@ async def init_db():
             await conn.execute(text(
                 "UPDATE subjects SET department = :dept "
                 "WHERE faculty = '農学部' AND COALESCE(department, '') = '' "
-                "AND classification = :cls"
+                "AND classification = :cls "
+                "AND NOT EXISTS (SELECT 1 FROM subjects s2 "
+                "  WHERE s2.name = subjects.name AND s2.faculty = '農学部' "
+                "  AND s2.department = :dept AND s2.classification = :cls)"
             ), {"dept": _dept, "cls": f"{_dept}専門科目"})
         # subjects.category バックフィル（2026-09-08）: classification は専門科目なのに
         # category 列が NULL のまま取り残された行を "専門" で補完する。国際人間科学部の
