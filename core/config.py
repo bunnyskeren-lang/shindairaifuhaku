@@ -77,10 +77,10 @@ ON_DEMAND_SAME_CONTENT_SUBJECTS = frozenset({
 ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信であり、他教員のクラスも内容は同一です"
 
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数。
-# 2026-09-07より、レビュー投稿先の科目カテゴリで枚数を分ける（教養2枚・専門1枚）。
+# 2026-09-07より、レビュー投稿先の科目カテゴリで枚数を分ける（教養5枚・専門3枚）。
 # 実際の付与・消費判定は review_approval_unlock_credits() に集約する。
-REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO = 2
-REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON = 1
+REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO = 5
+REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON = 3
 # カテゴリが取得できない/教養・専門以外のレビュー（通常発生しない）向けフォールバック
 REVIEW_APPROVAL_UNLOCK_CREDITS = 1
 
