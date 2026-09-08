@@ -754,7 +754,7 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
                                    count=edu_count, sub="系統から探す"),
                             _tile("🎓", "専門科目", "専門",
                                    "#e0f2fe", "#bae6fd", "#0369a1", "#bae6fd",
-                                   pill=("閲覧は準備中", "#fcd34d", "#8a4b00"),
+                                   pill=("閲覧準備中", "#fcd34d", "#8a4b00"),
                                    notes=[("✅ 投稿は募集中", "#047857")]),
                         ],
                     ),
