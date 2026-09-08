@@ -1461,9 +1461,14 @@
       // 必ずクリアされる）シラバス導線は出さない。選ばれていれば、その教員チップに載っている
       // data-syllabus-url を使う（未登録・オムニバスなら空文字でボタンは隠れる）。
       const hasInstr = !!document.getElementById('selectedInstructorHidden').value;
-      const active = document.querySelector(
-        '#instructorChips .chip-btn.active, #instructorCourseItems .chip-btn.active'
-      );
+      // アクティブチップは「今のモードの容器」からだけ拾う。#instructorChips（科目名モード）と
+      // #instructorCourseItems（先生名モード）の両方を1つのセレクタで見ると、モードを跨いだ際に
+      // もう片方の容器へ古い .active チップが残ったままになり（各ハンドラは相手側の容器を
+      // クリアしない）、querySelector が DOM 出現順で先にある #instructorCourseItems 側の
+      // 古いチップを拾って、別科目のシラバスに飛ぶバグになる。各容器は科目/教員選択のたびに
+      // innerHTML ごと再描画されるので、現モードの容器だけ見れば取り違えは起きない。
+      const containerSel = searchMode === 'course' ? '#instructorChips' : '#instructorCourseItems';
+      const active = document.querySelector(containerSel + ' .chip-btn.active');
       _currentSyllabusUrl = (hasInstr && active && active.dataset.syllabusUrl) || '';
       syllabusLinkBtn.classList.toggle('hidden', !_currentSyllabusUrl);
     }
