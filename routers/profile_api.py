@@ -270,7 +270,11 @@ async def register_profile(
         "form_register_success.html", {
             "request": request,
             "liff_id": REGISTER_LIFF_ID,
-            "welcome_credits": REGISTRATION_WELCOME_UNLOCK_CREDITS if is_new_registration else 0,
+            # 既存ユーザーの再登録（友だち再追加後の再会員登録・生協質問埋め等）でも、
+            # 完了画面は初回登録と同じ「特典」文面を表示する（ユーザー指示・2026-09-08）。
+            # 実際のチケット付与は初回INSERT時のみ（UPSERTのSET対象外）で、再登録では
+            # 増えない＝表示のみ初回と揃える。
+            "welcome_credits": REGISTRATION_WELCOME_UNLOCK_CREDITS,
             "approval_credits_kyoyo": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
             "approval_credits_senmon": REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
         }

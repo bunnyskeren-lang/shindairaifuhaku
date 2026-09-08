@@ -66,7 +66,8 @@ async def test_register_existing_user_does_not_double_grant_credits(http_client_
     updated_form = {**VALID_FORM, "name": "神戸次郎"}
     second = await client.post("/api/register", data=updated_form)
     assert second.status_code == 200
-    assert "プレゼント" not in second.text
+    # 完了画面の文面は初回登録と同一にする方針（2026-09-08、ユーザー指示）。
+    # 二重付与しないことはDB上の unlock_credits で担保する。
 
     async with test_sessionmaker() as session:
         profile = await session.get(UserProfile, USER_ID)
