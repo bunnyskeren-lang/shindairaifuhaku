@@ -498,6 +498,22 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             else:
                 reviews_raw = []
 
+            # 教員別の承認済みレビュー件数（チケット解除前でも「どの教員に何件レビューが
+            # あるか」を表示するため、locked状態に関わらず集計する。2026-09-08 ユーザー指示）。
+            # selected_instructor（投稿者が選んだ担当教員名）優先、無ければcourse_section由来。
+            instr_review_counts: dict[str, int] = {}
+            if cs_ids:
+                _cs_id_to_instr_nm = {cs.id: instr.name for cs, instr in cs_instr_rows}
+                _ic_rows = (await session.execute(
+                    select(Review.selected_instructor, Review.course_section_id, func.count(Review.id))
+                    .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
+                    .group_by(Review.selected_instructor, Review.course_section_id)
+                )).all()
+                for _si, _csid, _c in _ic_rows:
+                    _nm = (_si or "").strip() or _cs_id_to_instr_nm.get(_csid, "")
+                    if _nm:
+                        instr_review_counts[_nm] = instr_review_counts.get(_nm, 0) + _c
+
             sc_row = (await session.execute(
                 select(Syllabus.timetable_code)
                 .join(CourseSection, CourseSection.id == Syllabus.course_section_id)
@@ -634,6 +650,8 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             # チケット解除前でも担当教員を選んでシラバスだけ見られるようにするため、
             # レビュー由来ではなくcourse_sections由来の教員名一覧をlocked状態に関わらず返す
             "instructor_names": instr_names,
+            # 教員別の承認済みレビュー件数（name -> 件数）。チケット解除前でも返す。
+            "instructor_review_counts": instr_review_counts if not view_restricted else {},
             "review_count": review_count,
             "locked": locked,
             "view_restricted": view_restricted,
