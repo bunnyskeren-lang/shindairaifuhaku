@@ -403,10 +403,9 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
         + `<div class="a-lock-sub">解除すると全${n}件をまとめて読めます</div>`
         + `</div></div>`;
   // 教員別の投稿数（チケット解除前に「どの教員に何件あるか」を確認できるようにする）。
-  // 教員が2人以上に分かれているときだけ出す（1人だけなら上の合計と重複するため）。
   const _brk = Object.entries(data.instructor_review_counts || {})
     .filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
-  if (_brk.length >= 2) {
+  if (_brk.length) {
     html += `<div class="lk-brk"><div class="lk-brk-h">教員別の投稿数（解除前に確認できます）</div>`
           + _brk.map(([nm, c]) =>
               `<div class="lk-brk-row"><span class="nm">${esc(nm)}</span>`
