@@ -222,13 +222,14 @@ async def submit(
 
         # 末尾バリアントグループ（例: 線形代数1/2/3/4）に属する科目は、同じ教員が複数メンバーを
         # 担当している場合、レビュー閲覧側では既に1つの科目としてまとめて表示している
-        # （routers/liff_api.py _group_subject_ids）。投稿側の重複防止・上限判定もグループ全体で
-        # 見ないと、同じ教員のバリアント違い科目それぞれに1件ずつ投稿でき「1科目1件まで」の
-        # 上限をすり抜けられてしまう（2026-09-01発覚）。
+        # （routers/liff_api.py _group_subject_ids）。投稿側の重複投稿防止（同一学生が同じ
+        # 科目×教員に複数投稿できないようにする dup_review）もグループ全体で見ないと、同じ教員の
+        # バリアント違い科目それぞれに1件ずつ投稿できてしまう（2026-09-01発覚。件数上限そのものは
+        # 2026-09-08に撤廃したが、重複投稿防止のためグループ単位で見る必要は残る）。
         group_subject_ids = await cache.get_variant_group_subject_ids(subject)
 
         if is_omnibus:
-            # オムニバスは残り枠・1件上限の管理対象外。同一学籍番号での
+            # オムニバスは重複投稿チェックも専用。同一学籍番号での
             # オムニバス重複投稿だけを科目（バリアントグループ）単位で防ぐ。
             dup_omnibus = (await session.execute(
                 select(Review.id)
@@ -242,13 +243,15 @@ async def submit(
             )).scalars().first()
             if dup_omnibus is not None:
                 return _form_error("この科目のオムニバスには、既にレビューを投稿済みです", telemetry=True)
-            group_cs_ids = []  # 下の上限チェックはスキップ（is_omnibus分岐で通らない）
+            group_cs_ids = []  # 下の dup_review は is_omnibus 分岐で通らない
         else:
             group_cs_ids = [cs_obj.id]
         if not is_omnibus and len(group_subject_ids) > 1:
             if is_hoken_gakka_senko(subject.faculty or "", subject.department or ""):
                 # 保健学科4専攻をまたいだ完全同名科目は、担当教員（専攻）が異なっていても
-                # レビュー1件で全専攻分の募集を締め切る共有プールとして扱う（2026-09-06、ユーザー指示）
+                # 同一学生の重複投稿判定を全専攻分の同名科目で共有する（ある専攻で投稿済みなら
+                # 他専攻の同名科目にも再投稿させない。2026-09-06、ユーザー指示。件数上限を
+                # 共有する意図だった名残だが、上限撤廃後も重複投稿の共有プールとして機能させる）
                 group_cs_ids = (await session.execute(
                     select(CourseSection.id).where(CourseSection.subject_id.in_(group_subject_ids))
                 )).scalars().all()
@@ -262,7 +265,7 @@ async def submit(
 
         # 修正理由: 同じ学籍番号の人が同じ科目×担当教員の組み合わせへ複数回レビュー投稿できてしまっていたため、
         # 既に投稿済み（待機中+承認済み）があればサーバー側で拒否する（フォーム側のグレーアウトは補助的なもの）
-        # （オムニバスは上の is_omnibus 分岐で専用の重複チェック済み・上限管理対象外）
+        # （オムニバスは上の is_omnibus 分岐で専用の重複チェック済み）
         if not is_omnibus:
             dup_review = (await session.execute(
                 select(Review.id).where(
