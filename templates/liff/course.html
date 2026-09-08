@@ -189,17 +189,6 @@
   .rev-comment-h { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: .04em; margin-bottom: 7px; }
   .rev-h-ic { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
 
-  /* スクショ禁止：レビューカードのテキスト最背面に薄い斜め透かしを敷く */
-  .rev { position: relative; }
-  .rev-wm { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; -webkit-user-select: none; user-select: none; }
-  .rev-wm span {
-    position: absolute; left: -45%; right: -45%;
-    font-size: 20px; font-weight: 800; letter-spacing: .3em;
-    color: rgba(220,38,38,.07); white-space: nowrap; text-align: center;
-    transform: rotate(-24deg);
-  }
-  .rev-sec { position: relative; z-index: 1; }
-
   /* シラバス導線カード（旧: 地味なグレーの二次ボタン → 独立カードで目立たせる） */
   .syllabus-card {
     background: #fff; border: 1.5px solid #c7ccfa; border-radius: 12px;
@@ -393,9 +382,6 @@ const IC_DOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 const IC_EXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
 const IC_CLIP = '<svg class="rev-h-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>';
 const IC_CHAT = '<svg class="rev-h-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h8M8 14h5"/><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/></svg>';
-// スクショ禁止の透かし（レビューカードのテキスト最背面に敷く斜めタイル）
-const REV_WATERMARK = [5,22,39,56,73,90]
-  .map(t => `<span style="top:${t}%">スクショ禁止　スクショ禁止　スクショ禁止</span>`).join("");
 
 function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   const n = data.review_count;
@@ -749,10 +735,8 @@ async function main() {
     const yearLabel = r.academic_year ? `${r.academic_year}年度` : "";
     const metaParts = [yearLabel, byLabel].filter(Boolean).join(" ・ ");
 
-    // スクショ禁止の透かしをカードの最背面に敷く（.rev-wm は z-index:0、本文 .rev-sec は z-index:1）
-    let html = `<div class="rev-wm">${REV_WATERMARK}</div>`;
     // 教員行のピル群 → 中黒区切りの1行メタに集約（案A）
-    html += `<div class="rev-sec">
+    let html = `<div class="rev-sec">
       <div class="rev-ins">${instrLabel}${variantBadge}${mineTag}</div>
       <div class="rev-meta">${metaParts}</div>
     </div>`;
