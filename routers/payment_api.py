@@ -1,3 +1,4 @@
+import asyncio
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -5,7 +6,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from core.activity_log import save_error_log
 from core.config import BAN_MESSAGE_TEXT, IS_DEV, STUDENT_ID_RE, normalize_student_id
+from core.push import send_payment_request_push_notification
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -202,5 +205,16 @@ async def payment_apply_submit(
                 if prior_amount is not None:
                     return _done_redirect(prior_amount, dup=True)
             return _error("既に送信済みです。処理をお待ちください")
+
+    # 新規申請がDBに入ったときだけ管理者へプッシュ通知する（再送検知・処理待ちの
+    # 二重送信は上で return 済みなのでここには来ない）。お問い合わせと同様に
+    # レスポンスを待たせずバックグラウンドで送る
+    async def _notify() -> None:
+        try:
+            await send_payment_request_push_notification(name, sid, amount_val)
+        except Exception as exc:
+            await save_error_log(exc, action="payment_push_notification")
+
+    asyncio.create_task(_notify())
 
     return _done_redirect(amount_val)

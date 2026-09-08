@@ -81,6 +81,16 @@ async def send_inquiry_push_notification(category: str, content: str):
     )
 
 
+async def send_payment_request_push_notification(
+    name: str, student_id: str, amount: int
+):
+    await _send_to_subscribers(
+        title=f"💰 新着支払い申請: {amount}円",
+        body=f"{name}（{student_id}）",
+        url="/admin/payments",
+    )
+
+
 async def send_error_push_notification(action: str | None, error_type: str, error_message: str):
     await _send_to_subscribers(
         title=f"⚠️ エラー発生: {action or error_type}",
