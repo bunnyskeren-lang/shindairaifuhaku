@@ -219,6 +219,7 @@
     padding: 13px; font-size: 14.5px; font-weight: 700; text-decoration: none; cursor: pointer;
   }
   .syllabus-card .syl-btn svg { width: 15px; height: 15px; }
+  .syllabus-card .syl-none { margin-top: 10px; font-size: 12px; color: #94a3b8; }
 
   /* 教員別のレビュー件数（解除前の #lock-card 内） */
   .lk-brk { margin-top: 14px; }
@@ -910,6 +911,7 @@ async function main() {
     </div>
     <a id="btn-syllabus" class="syl-btn" href="#" target="_blank" style="display:none">${IC_EXT}シラバスを開く</a>
     <div id="syllabus-prompt" class="syllabus-prompt" style="display:none;margin-top:11px"><span>科目・教員を選択するとここにシラバスが表示されます</span></div>
+    <div id="syllabus-none" class="syl-none" style="display:none">この科目のシラバスはありません</div>
   </div>`;
 
   if (!data.locked && data.reviews && data.reviews.length > 1
@@ -1032,43 +1034,42 @@ async function main() {
     const cardEl = document.getElementById("syllabus-card");
     const sylBtn = document.getElementById("btn-syllabus");
     const promptEl = document.getElementById("syllabus-prompt");
+    const noneEl = document.getElementById("syllabus-none");
     const instrEl = document.getElementById("syl-instr");
     if (!cardEl || !sylBtn) return;
     // 見出し「シラバス」の横に全角2スペースを空けて担当教員名を併記する（担当教員名と同じ書式）
     const setInstr = (nm) => { if (instrEl) instrEl.textContent = nm ? ("　　" + nm) : ""; };
+    // btn / prompt(未選択案内) / none(シラバスなし) の3択を切り替える
+    const show = (mode) => {
+      sylBtn.style.display = mode === "btn" ? "flex" : "none";
+      if (promptEl) promptEl.style.display = mode === "prompt" ? "flex" : "none";
+      if (noneEl) noneEl.style.display = mode === "none" ? "block" : "none";
+    };
+    cardEl.style.display = "block";
     if (isVariantMode) {
       // 開講科目 + 担当教員の両方が確定したときだけシラバスを出す。
       // 担当教員が1人しかいない開講科目は曖昧さが無いので自動的に確定扱いにする。
-      cardEl.style.display = "block";
       const v = selectedVariant();
       let effInstr = instructorFilter;
       if (v && !effInstr && (v.instructors || []).length === 1) effInstr = v.instructors[0];
-      const url = (v && effInstr) ? ((v.syllabus_urls || {})[effInstr] || "") : "";
-      if (v && effInstr && url) {
-        sylBtn.href = url;
-        setInstr(effInstr);
-        sylBtn.style.display = "flex";
-        if (promptEl) promptEl.style.display = "none";
-      } else {
+      if (!v || !effInstr) {
         setInstr("");
-        sylBtn.style.display = "none";
-        if (promptEl) promptEl.style.display = "flex";
+        show("prompt");
+        return;
       }
+      const url = (v.syllabus_urls || {})[effInstr] || "";
+      setInstr(effInstr);
+      if (url) { sylBtn.href = url; show("btn"); }
+      else { show("none"); }
       return;
     }
-    // 非バリアント科目: 教員で絞り込み中はその教員のシラバスURLに切り替える。無ければカードごと隠す
+    // 非バリアント科目: 教員で絞り込み中はその教員のシラバスURLに切り替える
     const url = instructorFilter
       ? (data.instructor_syllabus_urls || {})[instructorFilter] || ""
       : data.syllabus_url;
-    if (url) {
-      sylBtn.href = url;
-      setInstr(instructorFilter || (instructorNames.length === 1 ? instructorNames[0] : ""));
-      sylBtn.style.display = "flex";
-      if (promptEl) promptEl.style.display = "none";
-      cardEl.style.display = "block";
-    } else {
-      cardEl.style.display = "none";
-    }
+    setInstr(instructorFilter || (instructorNames.length === 1 ? instructorNames[0] : ""));
+    if (url) { sylBtn.href = url; show("btn"); }
+    else { show("none"); }
   }
   if (isVariantMode) {
     syncInstructorChips();
