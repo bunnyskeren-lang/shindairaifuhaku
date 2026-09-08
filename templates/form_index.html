@@ -112,13 +112,12 @@
             style="background:#fff;color:#6b7280">👨‍🏫 先生名で探す</button>
         </div>
 
-        <div class="text-xs text-amber-600 font-medium mb-3">
-          <p class="mb-1">💡 レビューが承認されると閲覧チケットを付与（<b>コメントが長いほど多くもらえます</b>）</p>
-          <ul class="list-disc list-inside text-amber-500 leading-relaxed">
-            <li>〜{{ comment_len_tier1_max }}字：教養＋{{ unlock_credit_tiers_kyoyo[0] }}枚／専門＋{{ unlock_credit_tiers_senmon[0] }}枚</li>
-            <li>{{ comment_len_tier1_max + 1 }}〜{{ comment_len_tier2_max }}字：教養＋{{ unlock_credit_tiers_kyoyo[1] }}枚／専門＋{{ unlock_credit_tiers_senmon[1] }}枚</li>
-            <li>{{ comment_len_tier2_max + 1 }}字〜：教養＋{{ unlock_credit_tiers_kyoyo[2] }}枚／専門＋{{ unlock_credit_tiers_senmon[2] }}枚</li>
-          </ul>
+        <div class="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
+          <span class="text-base shrink-0 leading-tight">🎫</span>
+          <p class="text-[11px] text-amber-700 leading-snug">
+            レビューが承認されると<b>閲覧チケット</b>がもらえます。付与枚数は<b>コメントの長さで変わり</b>、
+            教養科目は最大<b>＋{{ unlock_credit_tiers_kyoyo[2] }}枚</b>、専門科目は最大<b>＋{{ unlock_credit_tiers_senmon[2] }}枚</b>です（詳しくはコメント欄の下に表示）。
+          </p>
         </div>
         <p class="text-xs text-gray-400 mb-3">選択肢に見当たらない科目・先生がいた場合は<a href="/contact" target="_blank" class="underline hover:text-indigo-500">お問い合わせフォーム</a>よりご連絡ください</p>
 
@@ -423,15 +422,27 @@
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
           required maxlength="500"></textarea>
 
-        <!-- 文字数フィードバック + 保存状態 -->
-        <div class="flex items-center justify-between gap-2 mt-2">
-          <span id="commentFeedback" class="text-xs font-medium text-gray-400"></span>
-          <span class="flex items-center gap-1 text-xs text-green-600 font-medium shrink-0">
-            💾 <span id="saveStatus">自動保存済み ✓</span>
-          </span>
-        </div>
-        <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mt-1">
-          <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
+        <!-- 文字数 + 閲覧チケットバッジ + 保存状態 -->
+        <div class="mt-2 space-y-1.5">
+          <div class="flex flex-wrap items-center justify-end gap-1.5">
+            <span class="text-xs text-gray-500 mr-0.5"><b id="commentLenNum" class="text-gray-700 text-sm">0</b> 字</span>
+            <span class="relative inline-flex">
+              <button type="button" id="creditInfoBtn" aria-label="閲覧チケットとは"
+                class="w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold leading-none flex items-center justify-center">?</button>
+              <span id="creditInfoTip"
+                class="hidden absolute right-0 bottom-6 z-20 w-56 rounded-xl bg-gray-800 text-white text-[11px] leading-relaxed px-3 py-2 shadow-lg text-left">
+                <b>🎫 閲覧チケット</b>＝ほかの人のレビューを1科目ぶん見られる券。投稿が承認されるともらえます。コメントが長いほど多くもらえます。
+              </span>
+            </span>
+            <span id="creditGetBadge" class="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-400 text-xs font-bold px-2.5 py-1 transition"></span>
+          </div>
+          <div class="flex flex-wrap items-center justify-end gap-1.5">
+            <span id="creditMidBadge" class="inline-flex items-center rounded-full text-xs px-2.5 py-1 transition"></span>
+            <span id="creditTopBadge" class="inline-flex items-center rounded-full text-xs px-2.5 py-1 transition"></span>
+          </div>
+          <div class="flex items-center justify-end">
+            <span class="flex items-center gap-1 text-xs text-green-600 font-medium shrink-0">💾 <span id="saveStatus">自動保存済み ✓</span></span>
+          </div>
         </div>
       </div>
 
@@ -1790,21 +1801,76 @@
       });
     }
 
-    const COMMENT_FEEDBACK = [
-      [0,   '',    '#e5e7eb', 0],
-      [1,   'もう少し詳しく書いてみよう！✍️', '#fbbf24', 5],
-      [10,  'いい感じ！もう少し書いてみて💪', '#f97316', 25],
-      [25,  'ナイス！後輩の参考になりそう😊', '#6366f1', 55],
-      [40,  '充実したレビューです！🎉', '#10b981', 80],
-      [60,  '神レビュー！ありがとうございます🙏', '#10b981', 100],
-    ];
-    function updateCommentFeedback(len) {
-      let row = COMMENT_FEEDBACK[0];
-      for (const r of COMMENT_FEEDBACK) { if (len >= r[0]) row = r; }
-      document.getElementById('commentFeedback').textContent = row[1];
-      document.getElementById('charBar').style.width = row[3] + '%';
-      document.getElementById('charBar').style.background = row[2];
+    // 閲覧チケット付与枚数：投稿先カテゴリ（教養/専門）× コメント文字数の3段階。
+    // サーバー側 core.config.review_approval_unlock_credits() と対応させること。
+    const CREDIT_TIERS = {
+      "{{ submission_kyoyo_category }}":  [{{ unlock_credit_tiers_kyoyo[0] }}, {{ unlock_credit_tiers_kyoyo[1] }}, {{ unlock_credit_tiers_kyoyo[2] }}],
+      "{{ submission_senmon_category }}": [{{ unlock_credit_tiers_senmon[0] }}, {{ unlock_credit_tiers_senmon[1] }}, {{ unlock_credit_tiers_senmon[2] }}],
+    };
+    const CREDIT_TIERS_DEFAULT = CREDIT_TIERS["{{ submission_kyoyo_category }}"];
+    const CMT_T1_MAX = {{ comment_len_tier1_max }};   // 〜10字
+    const CMT_T2_MAX = {{ comment_len_tier2_max }};   // 11〜50字 / 51字〜
+
+    // 選択中の科目のカテゴリ（教養/専門）を _preload から解決する。
+    // selectCourse 系はカテゴリを引数で受け取らないため、course_id → category の対応表を
+    // _preload（/api/preload）から一度だけ作って引く。未解決時は教養扱い（多数派・寛容側）。
+    let _catByCourseId = null;
+    function _resolveSelectedCategory() {
+      const cid = (typeof currentCourseId !== 'undefined') ? currentCourseId : null;
+      if (cid == null) return '';
+      if (!_catByCourseId && _preload) {
+        _catByCourseId = new Map();
+        for (const c of (_preload.courses || [])) _catByCourseId.set(c.id, c.category || '');
+        for (const inst of (_preload.instructors || []))
+          for (const c of (inst.courses || []))
+            if (!_catByCourseId.has(c.id)) _catByCourseId.set(c.id, c.category || '');
+      }
+      return (_catByCourseId && _catByCourseId.get(cid)) || '';
     }
+
+    function _creditTargetBadge(el, reached, remain, amt, empty) {
+      if (reached) {
+        el.textContent = '✅ +' + amt + '枚 達成';
+        el.className = 'inline-flex items-center rounded-full text-xs px-2.5 py-1 transition font-semibold bg-emerald-50 text-emerald-600';
+      } else {
+        el.textContent = 'あと' + remain + '字で +' + amt + '枚';
+        el.className = 'inline-flex items-center rounded-full text-xs px-2.5 py-1 transition font-semibold '
+          + (empty ? 'bg-gray-100 text-gray-400' : 'bg-amber-100 text-amber-700');
+      }
+    }
+
+    // 引数 len は互換のため残すが、実際の文字数は #comment の値を前後空白除去して数える
+    // （サーバーの review_comment_char_count = strip() と揃える）。
+    function updateCommentFeedback(len) {
+      const el = document.getElementById('comment');
+      const n = el ? el.value.trim().length : (len || 0);
+      const amt = CREDIT_TIERS[_resolveSelectedCategory()] || CREDIT_TIERS_DEFAULT;
+      const ti = n <= CMT_T1_MAX ? 0 : (n <= CMT_T2_MAX ? 1 : 2);
+
+      document.getElementById('commentLenNum').textContent = n;
+
+      const get = document.getElementById('creditGetBadge');
+      if (n === 0) {
+        get.textContent = '🎫 コメントを書くと +' + amt[0] + '枚〜';
+        get.className = 'inline-flex items-center gap-1 rounded-full text-xs font-bold px-2.5 py-1 transition bg-gray-100 text-gray-400';
+      } else {
+        get.textContent = '🎫 +' + amt[ti] + '枚 GET中！' + (ti === 2 ? '🎉' : '');
+        get.className = 'inline-flex items-center gap-1 rounded-full text-xs font-bold px-2.5 py-1 transition '
+          + (ti === 2 ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-700');
+      }
+
+      _creditTargetBadge(document.getElementById('creditMidBadge'), n >= CMT_T1_MAX + 1, CMT_T1_MAX + 1 - n, amt[1], n === 0);
+      _creditTargetBadge(document.getElementById('creditTopBadge'), n >= CMT_T2_MAX + 1, CMT_T2_MAX + 1 - n, amt[2], n === 0);
+    }
+
+    (function () {
+      const btn = document.getElementById('creditInfoBtn');
+      const tip = document.getElementById('creditInfoTip');
+      if (btn && tip) {
+        btn.addEventListener('click', e => { e.stopPropagation(); tip.classList.toggle('hidden'); });
+        document.addEventListener('click', () => tip.classList.add('hidden'));
+      }
+    })();
 
     document.querySelectorAll('.prompt-chip').forEach(chip => {
       chip.addEventListener('click', () => {
@@ -2002,6 +2068,7 @@
     function saveData() {
       document.getElementById('saveStatus').textContent = '保存中...';
       syncSyllabusLink();  // 全状態変更でここを通るので、シラバス導線は現在の選択から毎回導出できる
+      updateCommentFeedback();  // 科目を選び直すと付与枚数（教養/専門）が変わるため毎回更新
       updateProgressUI();
       updateGradingProgress();
       updateErrorBanner();
@@ -2388,6 +2455,7 @@
     })();
     updateProgressUI();
     updateGradingProgress();
+    updateCommentFeedback();  // 初期表示：閲覧チケットバッジを描画
 
     // 学籍番号キャッシュの読み書き（uid なしでアクセスされた場合の保険）
     (function() {
