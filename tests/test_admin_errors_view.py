@@ -6,7 +6,6 @@ error_logs には本物の障害に加えて「レビュー二重送信（submit
 NOT LIKE 条件で取りこぼされないことも確認する。
 """
 import pytest
-from sqlalchemy import select
 
 import routers.admin.users_errors as users_errors
 from core.config import ADMIN_COOKIE
