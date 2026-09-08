@@ -1816,10 +1816,10 @@
       document.getElementById('charBar').style.background = row[2];
     }
 
-    // コメントは MIN_COMMENT_LEN 文字以上を推奨。未満でもフォームからの送信自体はでき、
-    // その場合サーバー側 /submit が受信直後に「30文字以上で」エラーで弾く。
-    // フォーム側は入力が1文字以上 MIN_COMMENT_LEN 文字未満の間だけ「もう少し書こう」＋
-    // 現在の文字数ヒントを常時表示し（到達すると自動で消える）、ハードブロックはしない。
+    // コメントは MIN_COMMENT_LEN 文字以上を必須とする。未満の間は送信ボタンが非活性表示に
+    // なり、押しても送信されない（reviewForm submit 内で valid=false）。1文字以上
+    // MIN_COMMENT_LEN 文字未満の間は「もう少し書こう」＋残り文字数ヒントを表示し、
+    // 到達すると自動で消える。サーバー側 /submit の同チェックはバックストップとして残す。
     // 閾値は core/config.py MIN_COMMENT_LEN が正。
     const MIN_COMMENT_LEN = {{ min_comment_len }};
     function commentLen() {
@@ -1954,9 +1954,9 @@
       { label: '楽単度', done: () => currentEase > 0, focus: () => scrollToItem(document.getElementById('easeCard')) },
       { label: '充実度', done: () => currentRating > 0, focus: () => scrollToItem(document.getElementById('ratingCard')) },
       { label: '成績評価方法', done: isGradingMethodComplete, focus: () => scrollToItem(document.getElementById('gradingCard')) },
-      // 進捗・送信ボタンの活性は「1文字でも入力済み」で満たす。MIN_COMMENT_LEN 未満は
-      // 琥珀ヒントで促すだけでブロックせず、送信直後にサーバー側 /submit が弾く。
-      { label: 'コメント', done: () => document.getElementById('comment').value.trim().length > 0, focus: () => scrollToItem(document.getElementById('comment')) },
+      // コメントは MIN_COMMENT_LEN 文字以上で「入力済み」とみなす。未満の間は送信ボタンが
+      // 非活性表示になり、押しても送信されず未入力バナー＋琥珀ヒントで残り文字数を促す。
+      { label: 'コメント', done: () => commentLen() >= MIN_COMMENT_LEN, focus: () => scrollToItem(document.getElementById('comment')) },
     ];
 
     // ── 未入力項目のまとめバナー ──
@@ -2314,10 +2314,12 @@
           valid = false;
         }
       }
-      // コメントは空だけをフォーム側で弾く。MIN_COMMENT_LEN 文字未満はそのまま通し、
-      // 送信直後にサーバー側 /submit が「30文字以上で入力してください」で弾く。
-      if (!document.getElementById('comment').value.trim()) {
-        document.getElementById('comment').classList.add('ring-2', 'ring-red-400', 'border-red-400');
+      // コメントは MIN_COMMENT_LEN 文字未満をフォーム側でも弾く（サーバー側 /submit の
+      // 「30文字以上で入力してください」チェックはバックストップとして残す）。
+      if (commentLen() < MIN_COMMENT_LEN) {
+        const c = document.getElementById('comment');
+        c.classList.remove('ring-amber-400', 'border-amber-400');
+        c.classList.add('ring-2', 'ring-red-400', 'border-red-400');
         valid = false;
       }
       if (!valid) {
