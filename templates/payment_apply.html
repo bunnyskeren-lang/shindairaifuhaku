@@ -137,8 +137,8 @@
         本申請について、運営側からご連絡させていただくことがあります。メールアドレスは普段使うものをご入力ください。
       </div>
 
-      <button type="submit"
-        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm shadow-sm">
+      <button type="submit" id="submitBtn"
+        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">
         申請する
       </button>
     </form>
@@ -191,7 +191,23 @@
       studentIdDebounce = setTimeout(refreshEligibility, 300);
     });
 
+    let isSubmitting = false;
+    // 送信に失敗して「戻る」で戻ってきたとき（bfcache復元）にボタンが押せないまま
+    // 固まらないよう、ページ表示のたびに送信中フラグとボタン状態をリセットする。
+    window.addEventListener('pageshow', function() {
+      isSubmitting = false;
+      const b = document.getElementById('submitBtn');
+      if (b) { b.disabled = false; b.textContent = '申請する'; }
+    });
+
     document.getElementById('paymentForm').addEventListener('submit', function(e) {
+      // 応答が返る前の2回目タップ（Renderのコールドスタート・弱電波で待たされる間の連打や
+      // タッチ誤検知）で2発目のPOSTが飛ぶのを入口で止める。冪等キー(submit_nonce)は
+      // それでも漏れた再送のための第2の砦。
+      if (isSubmitting) {
+        e.preventDefault();
+        return;
+      }
       const nameInput = document.getElementById('name');
       const displayNameInput = document.getElementById('paypay_display_name');
       const paypayInput = document.getElementById('paypay_id');
@@ -227,10 +243,16 @@
         amountError.classList.remove('hidden');
         return;
       }
-      // ここまで来たら送信確定。本人は「申請する」を1回押しただけでも、OS/webviewが
-      // バックグラウンド復帰時に保留POSTを再送することがある。送信操作ごとに1回だけ
-      // 冪等キーを発行しておけば、再送されても同じ値が載るのでサーバー側で1件に収束できる
-      // （reviewsの二重送信対策と同じ仕組み）。
+      // ここまで来たら送信確定。ボタンを無効化＋「送信中…」にして、応答待ちの間の
+      // 追加タップを物理的に受け付けなくする。
+      isSubmitting = true;
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '送信中…';
+      // 本人は「申請する」を1回押しただけでも、OS/webviewがバックグラウンド復帰時に
+      // 保留POSTを再送したり、通信層が応答ロスト時に自動リトライすることがある。
+      // 送信操作ごとに1回だけ冪等キーを発行しておけば、再送されても同じ値が載るので
+      // サーバー側で1件に収束できる（reviewsの二重送信対策と同じ仕組み）。
       document.getElementById('submitNonceHidden').value =
         (window.crypto && crypto.randomUUID
           ? crypto.randomUUID()
