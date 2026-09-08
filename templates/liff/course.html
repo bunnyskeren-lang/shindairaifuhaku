@@ -72,15 +72,7 @@
     border: 1px solid #e2e8f0; background: #fff; color: #64748b; white-space: nowrap;
   }
   .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .chip .lamp { font-size: 9px; vertical-align: 1px; margin-left: 5px; }
-  .chip .lamp.open { color: #16a34a; }
-  .chip .lamp.closed { color: #dc2626; }
-  .chip.active .lamp.open, .chip.active .lamp.closed { color: #fff; }
 
-  .recruit-note { font-size: 11.5px; line-height: 1.6; border-radius: 8px; padding: 8px 11px; }
-  .recruit-note.all { background: #f1f5f9; color: #64748b; }
-  .recruit-note.open { background: #ecfdf5; color: #047857; }
-  .recruit-note.closed { background: #fef2f2; color: #b91c1c; }
   .syllabus-prompt {
     display: flex; align-items: center; justify-content: center; gap: 7px;
     background: #eef2ff; border: 1.5px dashed var(--accent); color: #4338ca;
@@ -163,19 +155,18 @@
   .sum-tile .cap { font-size: 11px; color: #64748b; }
   .sum-sep { height: 1px; background: #f1f5f9; margin: 12px 0; }
 
-  /* ── 注意・禁止事項（折りたたみ） ── */
+  /* ── 注意・禁止事項（常時表示・強調。トグルにしない） ── */
   .notice {
-    margin: 2px 16px 10px; background: #fff; border-radius: 12px; padding: 11px 14px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    margin: 2px 16px 12px; background: #fff1f1; border: 1.5px solid #f4a6a6;
+    border-radius: 12px; padding: 13px 15px; box-shadow: 0 1px 4px rgba(220,38,38,.08);
   }
-  .notice > summary {
-    list-style: none; cursor: pointer; font-size: 11.5px; font-weight: 700;
-    color: #9a3412; display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  }
-  .notice > summary::-webkit-details-marker { display: none; }
-  .notice > summary::after { content: "▾"; color: #94a3b8; flex-shrink: 0; }
-  .notice[open] > summary::after { content: "▴"; }
-  .notice p { font-size: 10.5px; color: #6b7280; line-height: 1.65; margin: 9px 0 0; }
+  .notice-h { font-size: 13.5px; font-weight: 900; color: #b91c1c; letter-spacing: .03em; }
+  .notice ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+  .notice li { position: relative; padding-left: 15px; }
+  .notice li::before { content: "▪"; position: absolute; left: 0; top: 1px; color: #dc2626; font-size: 12px; line-height: 1.5; }
+  /* 太字リード文は担当教員名（.rev-ins）と同じ 14.5px / weight 700 */
+  .notice .lead { display: block; font-size: 14.5px; font-weight: 700; color: #991b1b; line-height: 1.5; }
+  .notice .rest { display: block; margin-top: 4px; font-size: 12px; color: #9b2c2c; line-height: 1.7; }
 
   /* ── レビューカード（案A：1カード／ヘアライン区切り） ── */
   .card.mine { border: none; border-left: 3px solid var(--accent); }
@@ -196,6 +187,47 @@
     padding: 3px 8px; border-radius: 5px; white-space: nowrap; flex-shrink: 0; margin-top: 1px;
   }
   .rev-comment-h { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: .04em; margin-bottom: 7px; }
+  .rev-h-ic { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+
+  /* スクショ禁止：レビューカードのテキスト最背面に薄い斜め透かしを敷く */
+  .rev { position: relative; }
+  .rev-wm { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; -webkit-user-select: none; user-select: none; }
+  .rev-wm span {
+    position: absolute; left: -45%; right: -45%;
+    font-size: 20px; font-weight: 800; letter-spacing: .3em;
+    color: rgba(220,38,38,.07); white-space: nowrap; text-align: center;
+    transform: rotate(-24deg);
+  }
+  .rev-sec { position: relative; z-index: 1; }
+
+  /* シラバス導線カード（旧: 地味なグレーの二次ボタン → 独立カードで目立たせる） */
+  .syllabus-card {
+    background: #fff; border: 1.5px solid #c7ccfa; border-radius: 12px;
+    margin: 2px 0 0; padding: 14px 15px; box-shadow: 0 1px 4px rgba(99,102,241,.08);
+  }
+  .syllabus-card .syl-top { display: flex; gap: 11px; align-items: center; }
+  .syllabus-card .syl-badge {
+    width: 36px; height: 36px; flex-shrink: 0; border-radius: 9px; color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    display: flex; align-items: center; justify-content: center;
+  }
+  .syllabus-card .syl-badge svg { width: 18px; height: 18px; }
+  .syllabus-card .syl-h { font-size: 15px; font-weight: 700; color: #1f2937; }
+  .syllabus-card .syl-btn {
+    margin-top: 11px; display: flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    padding: 13px; font-size: 14.5px; font-weight: 700; text-decoration: none; cursor: pointer;
+  }
+  .syllabus-card .syl-btn svg { width: 15px; height: 15px; }
+
+  /* 教員別のレビュー件数（解除前の #lock-card 内） */
+  .lk-brk { margin-top: 14px; }
+  .lk-brk-h { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; color: var(--accent); margin-bottom: 7px; }
+  .lk-brk-row { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 9px; background: #f7f8fc; margin-bottom: 5px; font-size: 12.5px; }
+  .lk-brk-row:last-child { margin-bottom: 0; }
+  .lk-brk-row .nm { font-weight: 700; color: #1f2937; }
+  .lk-brk-row .cnt { margin-left: auto; font-weight: 700; color: #1f2937; background: #fff; border: 1px solid #e6e8ef; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+  .lk-brk-row .cnt b { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -265,11 +297,23 @@
     </details>
   </div>
 
-  <details class="notice" id="notice">
-    <summary>⚠️ 注意・禁止事項（個人の感想・無断共有禁止）</summary>
-    <p>レビューは投稿者個人の感想です。内容の正確性は保証されません。必ずご自身の判断でご活用ください（これによって生じた損害について、運営は一切の責任を負いません）。</p>
-    <p>スクショ・転載・再配布・他人への共有は、いかなる理由でも禁止です。違反はアカウント永久停止・法的措置の対象となります。<a href="/terms" target="_blank" style="color:#9a3412;text-decoration:underline">利用規約</a>をご確認ください。</p>
-  </details>
+  <div class="notice" id="notice">
+    <div class="notice-h">⚠️ 注意・禁止事項</div>
+    <ul>
+      <li>
+        <span class="lead">レビューは投稿者個人の感想です。</span>
+        <span class="rest">内容の正確性は保証されません。必ずご自身の判断でご活用ください。</span>
+      </li>
+      <li>
+        <span class="lead">スクショ・転載・第三者への共有は禁止です。</span>
+        <span class="rest">レビューの内容を無断で保存・公開・配布する行為も禁止しています。</span>
+      </li>
+      <li>
+        <span class="lead">レビューの閲覧履歴（誰が・いつ・どの科目を閲覧したか）を記録しています。</span>
+        <span class="rest">万が一、無断転載・配布等が確認された場合は、閲覧履歴等をもとに事実確認を行い、厳正に対処します。違反が確認された場合、アカウントの利用停止や法的措置等の対象となる場合があります。<a href="/terms" target="_blank" style="color:#b91c1c;text-decoration:underline">利用規約</a>をご確認ください。</span>
+      </li>
+    </ul>
+  </div>
 
   <div id="review-controls" class="review-controls"></div>
 
@@ -342,6 +386,15 @@ const EASE_STARS = { C: "★☆☆☆☆", B: "★★☆☆☆", A: "★★★�
 // 楽単順ソート用。数字が小さいほど楽単（SSが最も楽）。未評価は最後に回す
 const EASE_ORDER = { SS: 0, S: 1, A: 2, B: 3, C: 4 };
 
+// インラインSVGアイコン（絵文字の代わり。カラーは currentColor 継承）
+const IC_DOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h1.5"/></svg>';
+const IC_EXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+const IC_CLIP = '<svg class="rev-h-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>';
+const IC_CHAT = '<svg class="rev-h-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h8M8 14h5"/><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/></svg>';
+// スクショ禁止の透かし（レビューカードのテキスト最背面に敷く斜めタイル）
+const REV_WATERMARK = [5,22,39,56,73,90]
+  .map(t => `<span style="top:${t}%">スクショ禁止　スクショ禁止　スクショ禁止</span>`).join("");
+
 function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   const n = data.review_count;
   let html = `<div class="card" style="border:1.5px solid var(--accent)">`;
@@ -349,6 +402,17 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
         + `<div class="a-lock-h">レビュー${n}件がロック中</div>`
         + `<div class="a-lock-sub">解除すると全${n}件をまとめて読めます</div>`
         + `</div></div>`;
+  // 教員別の投稿数（チケット解除前に「どの教員に何件あるか」を確認できるようにする）。
+  // 教員が2人以上に分かれているときだけ出す（1人だけなら上の合計と重複するため）。
+  const _brk = Object.entries(data.instructor_review_counts || {})
+    .filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+  if (_brk.length >= 2) {
+    html += `<div class="lk-brk"><div class="lk-brk-h">教員別の投稿数（解除前に確認できます）</div>`
+          + _brk.map(([nm, c]) =>
+              `<div class="lk-brk-row"><span class="nm">${esc(nm)}</span>`
+              + `<span class="cnt">レビュー <b>${c}</b> 件</span></div>`).join("")
+          + `</div>`;
+  }
   if (userId) {
     const credits = data.unlock_credits || 0;
     html += `<div class="a-tix">`
@@ -684,8 +748,10 @@ async function main() {
     const yearLabel = r.academic_year ? `${r.academic_year}年度` : "";
     const metaParts = [yearLabel, byLabel].filter(Boolean).join(" ・ ");
 
+    // スクショ禁止の透かしをカードの最背面に敷く（.rev-wm は z-index:0、本文 .rev-sec は z-index:1）
+    let html = `<div class="rev-wm">${REV_WATERMARK}</div>`;
     // 教員行のピル群 → 中黒区切りの1行メタに集約（案A）
-    let html = `<div class="rev-sec">
+    html += `<div class="rev-sec">
       <div class="rev-ins">${instrLabel}${variantBadge}${mineTag}</div>
       <div class="rev-meta">${metaParts}</div>
     </div>`;
@@ -699,7 +765,7 @@ async function main() {
     // 成績評価方法は既存の「📋 見出し + ラベル + 本文」表示を維持（外側のグレー箱だけ廃止しカードに統合）
     const gmParts = r.grading_method || [];
     if (gmParts.length) {
-      let gmHtml = '<div class="rev-sec rev-grade"><div class="gh">📋 成績評価方法</div>';
+      let gmHtml = `<div class="rev-sec rev-grade"><div class="gh">${IC_CLIP}成績評価方法</div>`;
       for (const part of gmParts) {
         const { main, extra } = splitGradingText(part.text);
         const extraHtml = extra
@@ -723,7 +789,7 @@ async function main() {
       wrap.className = "rev-sec";
       const label = document.createElement("div");
       label.className = "rev-comment-h";
-      label.textContent = "💬 コメント";
+      label.innerHTML = IC_CHAT + "コメント";
       wrap.appendChild(label);
       const box = document.createElement("div");
       box.className = "comment-box";
@@ -806,13 +872,12 @@ async function main() {
   let controlsHtml = "";
 
   if (isVariantMode) {
-    // ランプ（🟢募集中 / 🔴締切）はレビュー投稿を受け付ける教養科目でのみ意味を持つ
-    const showLamp = data.category === "教養";
+    // 募集状況（🟢募集中 / 🔴締切）はシラバス閲覧の文脈では表示しない（2026-09-08、ユーザー指示）
     controlsHtml += `<div class="chips-block">
       <span class="chips-label">開講科目で絞り込み</span>
       <div class="filter-chips" id="variant-chips">
         <button type="button" class="chip active" data-vid="">すべて</button>
-        ${variants.map(v => `<button type="button" class="chip" data-vid="${v.id}">${esc(v.name)}${showLamp ? `<span class="lamp ${v.open ? "open" : "closed"}">●</span>` : ""}</button>`).join("")}
+        ${variants.map(v => `<button type="button" class="chip" data-vid="${v.id}">${esc(v.name)}</button>`).join("")}
       </div>
     </div>`;
   }
@@ -835,18 +900,18 @@ async function main() {
     }
   }
 
-  // 募集状況の注記（教養のバリアント統合科目のみ）
-  if (isVariantMode && data.category === "教養") {
-    controlsHtml += `<div id="recruit-note" class="recruit-note all"></div>`;
-  }
-
-  // 教員チップの直下に配置し、選んだ教員のシラバスであることが見た目で分かるようにする。
+  // シラバス導線は独立カード（.syllabus-card）で目立たせる。見出しは「シラバス」の横に
+  // 全角2スペースを空けて担当教員名を同じ太さ・大きさで併記する。
   // バリアント統合科目では「開講科目 + 担当教員の両方を選んだとき」だけボタンを出し、
-  // それ以外は同じ場所に案内（#syllabus-prompt）を出す。
-  controlsHtml += `<a id="btn-syllabus" class="btn btn-secondary" href="#" style="display:none">📄 シラバスを見る</a>`;
-  if (isVariantMode) {
-    controlsHtml += `<div id="syllabus-prompt" class="syllabus-prompt"><span>📄</span><span>科目・教員を選択するとここにシラバスが表示されます</span></div>`;
-  }
+  // それ以外は同じカード内に案内（#syllabus-prompt）を出す。
+  controlsHtml += `<div class="syllabus-card" id="syllabus-card" style="display:none">
+    <div class="syl-top">
+      <span class="syl-badge">${IC_DOC}</span>
+      <div class="syl-h">シラバス<span id="syl-instr"></span></div>
+    </div>
+    <a id="btn-syllabus" class="syl-btn" href="#" target="_blank" style="display:none">${IC_EXT}シラバスを開く</a>
+    <div id="syllabus-prompt" class="syllabus-prompt" style="display:none;margin-top:11px"><span>科目・教員を選択するとここにシラバスが表示されます</span></div>
+  </div>`;
 
   if (!data.locked && data.reviews && data.reviews.length > 1
       && instructorNames.length > 1 && !isVariantMode) {
@@ -869,22 +934,6 @@ async function main() {
     });
   }
 
-  function updateRecruitNote() {
-    const el = document.getElementById("recruit-note");
-    if (!el) return;
-    const v = selectedVariant();
-    if (!v) {
-      el.className = "recruit-note all";
-      el.textContent = "開講科目を選ぶと、その回のレビュー募集状況が表示されます";
-    } else if (v.open) {
-      el.className = "recruit-note open";
-      el.textContent = `🟢 ${v.name} は現在レビュー募集中です`;
-    } else {
-      el.className = "recruit-note closed";
-      el.textContent = `✋ ${v.name} は募集を締め切りました`;
-    }
-  }
-
   const vchipsEl = document.getElementById("variant-chips");
   if (vchipsEl) {
     vchipsEl.addEventListener("click", (e) => {
@@ -895,7 +944,6 @@ async function main() {
       variantFilter = btn.dataset.vid || "";
       instructorFilter = "";
       syncInstructorChips();
-      updateRecruitNote();
       updateSubmitButton();
       updateSyllabusButton();
       if (!data.locked) renderReviewCards();
@@ -982,40 +1030,49 @@ async function main() {
   }
 
   function updateSyllabusButton() {
+    const cardEl = document.getElementById("syllabus-card");
     const sylBtn = document.getElementById("btn-syllabus");
     const promptEl = document.getElementById("syllabus-prompt");
+    const instrEl = document.getElementById("syl-instr");
+    if (!cardEl || !sylBtn) return;
+    // 見出し「シラバス」の横に全角2スペースを空けて担当教員名を併記する（担当教員名と同じ書式）
+    const setInstr = (nm) => { if (instrEl) instrEl.textContent = nm ? ("　　" + nm) : ""; };
     if (isVariantMode) {
-      // 開講科目 + 担当教員の両方が確定したときだけシラバスボタンを出す。
+      // 開講科目 + 担当教員の両方が確定したときだけシラバスを出す。
       // 担当教員が1人しかいない開講科目は曖昧さが無いので自動的に確定扱いにする。
+      cardEl.style.display = "block";
       const v = selectedVariant();
       let effInstr = instructorFilter;
       if (v && !effInstr && (v.instructors || []).length === 1) effInstr = v.instructors[0];
       const url = (v && effInstr) ? ((v.syllabus_urls || {})[effInstr] || "") : "";
       if (v && effInstr && url) {
         sylBtn.href = url;
-        sylBtn.textContent = `📄 シラバスを見る（${v.name}／${effInstr}）`;
-        sylBtn.style.display = "block";
+        setInstr(effInstr);
+        sylBtn.style.display = "flex";
         if (promptEl) promptEl.style.display = "none";
       } else {
+        setInstr("");
         sylBtn.style.display = "none";
         if (promptEl) promptEl.style.display = "flex";
       }
       return;
     }
-    // 非バリアント科目: 教員で絞り込み中はその教員のシラバスURLに切り替える。無ければ隠す
+    // 非バリアント科目: 教員で絞り込み中はその教員のシラバスURLに切り替える。無ければカードごと隠す
     const url = instructorFilter
       ? (data.instructor_syllabus_urls || {})[instructorFilter] || ""
       : data.syllabus_url;
     if (url) {
       sylBtn.href = url;
-      sylBtn.style.display = "block";
+      setInstr(instructorFilter || (instructorNames.length === 1 ? instructorNames[0] : ""));
+      sylBtn.style.display = "flex";
+      if (promptEl) promptEl.style.display = "none";
+      cardEl.style.display = "block";
     } else {
-      sylBtn.style.display = "none";
+      cardEl.style.display = "none";
     }
   }
   if (isVariantMode) {
     syncInstructorChips();
-    updateRecruitNote();
     updateSubmitButton();
   }
   updateSyllabusButton();
