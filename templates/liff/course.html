@@ -170,8 +170,18 @@
 
   /* ── レビューカード（案A：1カード／ヘアライン区切り） ── */
   .card.mine { border: none; border-left: 3px solid var(--accent); }
-  .rev { padding: 0; overflow: hidden; }
+  .rev { padding: 0; overflow: hidden; position: relative; }
   .rev-sec { padding: 12px 15px; }
+  /* スクショ禁止：各カード右上に赤枠ピル。position:absolute で1行目に重ね、カードの高さは増やさない */
+  .rev-noshot + .rev-sec { padding-right: 116px; }
+  .rev-noshot {
+    position: absolute; top: 9px; right: 12px; z-index: 2;
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #fff; border: 1.5px solid #dc2626; border-radius: 999px;
+    padding: 3px 9px; font-size: 12px; font-weight: 900; color: #dc2626;
+    line-height: 1; white-space: nowrap; pointer-events: none;
+  }
+  .rev-noshot svg { width: 13px; height: 13px; }
   .rev-sec + .rev-sec { border-top: 1px solid #f1f5f9; }
   .rev-ins { font-size: 14.5px; font-weight: 700; color: #1f2937; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
   .rev-badge { font-size: 11px; font-weight: 700; color: var(--accent); background: #eef2ff; border-radius: 6px; padding: 2px 7px; }
@@ -382,6 +392,8 @@ const IC_DOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 const IC_EXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
 const IC_CLIP = '<svg class="rev-h-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>';
 const IC_CHAT = '<svg class="rev-h-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h8M8 14h5"/><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/></svg>';
+// スクショ禁止ピル（各レビューカード右上）。カメラ＋斜線
+const REV_NOSHOT = '<div class="rev-noshot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2l20 20"/><path d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h13"/><path d="M22 16.8V8a2 2 0 0 0-2-2h-4l-1.5-2"/><path d="M9.5 9.6A3.5 3.5 0 0 0 12 15.5c.9 0 1.7-.3 2.3-.9"/></svg>スクショ禁止</div>';
 
 function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
   const n = data.review_count;
@@ -735,8 +747,9 @@ async function main() {
     const yearLabel = r.academic_year ? `${r.academic_year}年度` : "";
     const metaParts = [yearLabel, byLabel].filter(Boolean).join(" ・ ");
 
+    // スクショ禁止ピルを各カード右上に重ねる（1行目セクションに absolute 配置。カードの高さは増やさない）
     // 教員行のピル群 → 中黒区切りの1行メタに集約（案A）
-    let html = `<div class="rev-sec">
+    let html = REV_NOSHOT + `<div class="rev-sec">
       <div class="rev-ins">${instrLabel}${variantBadge}${mineTag}</div>
       <div class="rev-meta">${metaParts}</div>
     </div>`;
