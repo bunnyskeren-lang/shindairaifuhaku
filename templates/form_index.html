@@ -1487,6 +1487,9 @@
       // 統合科目（isGroup）は教員を選ぶまでどの変種か確定しないため、courseNameHiddenは
       // 一旦空にしておき（送信バリデーションで弾かれる）、教員選択時に実際の科目名へ差し替える
       currentCourseId = isGroup ? null : (courseId ?? null);
+      // オンデマンド配信科目（担当教員によらず内容が同一）は「担当教員選択は不要」と案内する
+      const _isOnDemand = _onDemandCids.has(courseId)
+        || currentInstructors.some(i => (i.courseId != null) && _onDemandCids.has(i.courseId));
       document.getElementById('courseNameHidden').value = isGroup ? '' : name;
       // 統合科目は教員選択後も「英語科教育論(A1/A2/B1/B2)」のようにグループ全体の表記を
       // 表示し続ける（実際にどの変種に紐づいたか＝courseNameHiddenの値をユーザーに
@@ -1512,7 +1515,11 @@
       // 担当教員チップは常に表示する（末尾のオムニバス擬似候補は全科目で選べるため、
       // 登録教員が0人の科目でも「募集していません」ではなくオムニバスで投稿できる）
       chipsEl.classList.remove('hidden');
-      document.getElementById('instructorHint').classList.remove('hidden');
+      const _instrHint = document.getElementById('instructorHint');
+      _instrHint.textContent = _isOnDemand
+        ? '👆 この科目は担当教員の選択は不要です（どれでも可）。1つ選んで進んでください'
+        : '👆 担当教員をタップして選択してください';
+      _instrHint.classList.remove('hidden');
       const withReviewed = currentInstructors.map(inst => {
         const cid = inst.courseId ?? currentCourseId;
         return {
@@ -1540,12 +1547,10 @@
         }
         return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
       }).join('') + omnibusChip;
-      // オンデマンド配信科目は担当教員によらず内容が同一なので、どの先生を選んでも構わない旨を案内する
-      const _isOnDemand = (currentCourseId != null && _onDemandCids.has(currentCourseId))
-        || currentInstructors.some(i => (i.courseId != null) && _onDemandCids.has(i.courseId));
+      // オンデマンド配信科目は担当教員によらず内容が同一なので、選択は不要である旨を案内する
       const _limitNotice = document.getElementById('instructorLimitNotice');
       _limitNotice.textContent = _isOnDemand
-        ? 'この科目はオンデマンド配信のため、どの先生を選んでもレビュー内容は同じです。どちらを選んでもかまいません。'
+        ? 'この科目はオンデマンド配信のため、担当教員の選択は不要です。どの先生を選んでも構いません（レビュー内容は教員に紐づきません）。'
         : '同じ科目・先生の組み合わせに投稿済みの場合は選べません。';
       _limitNotice.classList.remove('hidden');
       chipsEl.querySelectorAll('.chip-btn:not([disabled])').forEach(btn => {
