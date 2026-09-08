@@ -64,16 +64,29 @@ async def init_db():
         Inquiry, SubjectUnlock, AdminSession,
     )
     from sqlalchemy import text
-    async with engine.begin() as conn:
-        # 修正理由: 複数ワーカー・再デプロイ時の新旧プロセス並行起動等でinit_db()が
-        # 同時に走ると、後続のALTER TABLE群がプロセス間でロック順序違いのデッドロックを
-        # 起こすことがある(2026-09-02、大西さんが登録済みなのに再度会員登録を求められた
-        # 事象の調査で発覚。DeadlockDetectedError on chk_do_kind制約追加)。
-        # トランザクションスコープのアドバイザリーロックで直列化する
-        # (pg_advisory_xact_lockはCOMMIT/ROLLBACKで自動解放されるため、PgBouncerの
-        # transactionモードpooler経由でも安全にセッションをまたがず使える)
+    # 修正理由: 複数ワーカー・再デプロイ時の新旧プロセス並行起動等でinit_db()が
+    # 同時に走ると、後続のALTER TABLE群がプロセス間でロック順序違いのデッドロックを
+    # 起こすことがある(2026-09-02、大西さんが登録済みなのに再度会員登録を求められた
+    # 事象の調査で発覚。DeadlockDetectedError on chk_do_kind制約追加)。
+    # トランザクションスコープのアドバイザリーロックで直列化する
+    # (pg_advisory_xact_lockはCOMMIT/ROLLBACKで自動解放されるため、PgBouncerの
+    # transactionモードpooler経由でも安全にセッションをまたがず使える)
+    #
+    # 修正理由(2026-09-08): 以前は create_all も後続のマイグレーション/バックフィル群も
+    # すべて1つの engine.begin() トランザクションに入れていたため、後続のどこか1箇所でも
+    # 例外が出ると create_all で新規作成したテーブル・カラムまで巻き添えでロールバックされた。
+    # main.py の lifespan は init_db() の例外を握りつぶしてアプリを起動するので、
+    # 「新テーブルが存在しないままアプリだけ起動」という中途半端なスキーマ状態になり、
+    # 別ループ(core/backup.py の backup_loop 等)が relation does not exist で落ちる形で
+    # 遠回りに表面化していた(今回 liff_auth_events で発生)。
+    # スキーマ作成(create_all)だけを独立したトランザクションで先にコミットし、
+    # 後続バックフィルが落ちてもテーブル・カラムの新規作成は必ず残るようにする。
+    # advisory lock はトランザクション終了で解放されるため、②で取り直す。
+    async with engine.begin() as conn:  # ① スキーマ作成だけ先に確定
         await conn.execute(text("SELECT pg_advisory_xact_lock(727001)"))
         await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:  # ② 既存のマイグレーション/バックフィル群
+        await conn.execute(text("SELECT pg_advisory_xact_lock(727001)"))
         # classification_orders → display_orders(kind='classification') への移行
         # classification_ordersテーブルがまだ存在する場合のみ実行（移行後は削除済みで存在しない）
         table_exists = (await conn.execute(text(
