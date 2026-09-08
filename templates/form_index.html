@@ -427,16 +427,16 @@
           <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
         </div>
 
-        <!-- 30文字未満で送信を試みた時だけ出るヒント（現在の文字数つき） -->
+        <!-- {{ min_comment_len }}文字未満で送信を試みた時だけ出るヒント（現在の文字数つき） -->
         <div id="commentMinLenHint" class="hidden mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2.5">
           <p class="text-[13px] font-bold text-amber-800 flex items-center gap-1">
             <span>✍️</span><span>もう少しコメントを書こう</span>
           </p>
           <p class="text-xs text-amber-700 mt-1">
-            後輩の参考になるよう、<b>30文字以上</b>で具体的に書いてみてください。
+            後輩の参考になるよう、<b>{{ min_comment_len }}文字以上</b>で具体的に書いてみてください。
           </p>
           <p class="text-xs text-amber-700 mt-1.5">
-            現在 <b id="commentHintCur">0</b> 文字（あと <b id="commentHintRemain">30</b> 文字）
+            現在 <b id="commentHintCur">0</b> 文字（あと <b id="commentHintRemain">{{ min_comment_len }}</b> 文字）
           </p>
           <div class="w-full bg-amber-200 rounded-full h-1 overflow-hidden mt-1.5">
             <div id="commentHintBar" class="h-1 rounded-full bg-amber-500 transition-all duration-300" style="width:0%"></div>
@@ -1815,9 +1815,10 @@
       document.getElementById('charBar').style.background = row[2];
     }
 
-    // コメントは最低30文字必須。送信を試みて不足していた時だけ
-    // 「もう少し書こう」＋現在の文字数ヒントを表示する（入力で30到達すると自動で消える）。
-    const MIN_COMMENT_LEN = 30;
+    // コメントは最低 MIN_COMMENT_LEN 文字必須。送信を試みて不足していた時だけ
+    // 「もう少し書こう」＋現在の文字数ヒントを表示する（入力で到達すると自動で消える）。
+    // 閾値は core/config.py MIN_COMMENT_LEN が正（サーバー側 /submit も同じ値で弾く）。
+    const MIN_COMMENT_LEN = {{ min_comment_len }};
     let commentHintArmed = false;
     function commentLen() {
       return document.getElementById('comment').value.trim().length;
@@ -2310,7 +2311,7 @@
           valid = false;
         }
       }
-      // コメント必須（空 or 30文字未満）
+      // コメント必須（空 or MIN_COMMENT_LEN 文字未満）
       if (!document.getElementById('comment').value.trim()) {
         document.getElementById('comment').classList.add('ring-2', 'ring-red-400', 'border-red-400');
         valid = false;

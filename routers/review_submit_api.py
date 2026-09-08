@@ -10,6 +10,7 @@ from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
+    MIN_COMMENT_LEN,
     OMNIBUS_INSTRUCTOR_LABEL,
     REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
     REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
@@ -114,8 +115,11 @@ async def submit(
         return _form_error("受講年度を選択してください")
     if not comment.strip():
         return _form_error("コメントを入力してください")
-    if len(comment.strip()) < 30:
-        return _form_error(f"コメントは30文字以上で入力してください（現在 {len(comment.strip())} 文字）")
+    if len(comment.strip()) < MIN_COMMENT_LEN:
+        return _form_error(
+            f"コメントは{MIN_COMMENT_LEN}文字以上で入力してください"
+            f"（現在 {len(comment.strip())} 文字）"
+        )
 
     sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):
