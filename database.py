@@ -522,6 +522,23 @@ async def init_db():
             EXCEPTION WHEN duplicate_object THEN NULL;
             END $$
         """))
+        # ── 2026-09-08: 支払い申請フォームにPayPay表示名・連絡先メール・二重送信対策nonceを追加 ──
+        # payment_requests は create_all() で新規作成されるが、既存DBには列が無いため後追いで追加する。
+        # 既存行は空文字埋め（当該機能は公開直後でテスト申請のみのため実害なし）。
+        await conn.execute(text(
+            "ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS paypay_display_name TEXT NOT NULL DEFAULT ''"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS submit_nonce TEXT"
+        ))
+        # 再送POSTを1回目の申請に収束させる部分UNIQUE（NULLは重複可）
+        await conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_requests_submit_nonce "
+            "ON payment_requests (submit_nonce) WHERE submit_nonce IS NOT NULL"
+        ))
 
         # ── 2026-08-24: お問い合わせフォーム（質問・情報の誤り指摘・新情報の追加提案等） ──
         # inquiriesテーブル自体はcreate_all()で新規作成されるため、ここではCHECK制約の追加のみ行う

@@ -53,6 +53,7 @@
     </div>
 
     <form id="paymentForm" action="/payment/apply/submit" method="post" novalidate class="space-y-4">
+      <input type="hidden" name="submit_nonce" id="submitNonceHidden">
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label for="name" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -73,6 +74,19 @@
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
           autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
         <p id="studentIdError" class="hidden mt-1 text-red-500 text-xs">学籍番号が正しくありません（例：2345678S、医学部：2345678MM）</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="paypay_display_name" class="block text-sm font-semibold text-gray-700 mb-2">
+          🏷️ PayPayの表示名 <span class="text-red-500">*</span>
+        </label>
+        <input type="text" name="paypay_display_name" id="paypay_display_name"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          placeholder="PayPayアプリのホーム上部に表示される名前" required maxlength="50">
+        <p id="displayNameError" class="hidden mt-1 text-red-500 text-xs">PayPayの表示名を入力してください</p>
+        <p class="mt-2 text-xs text-gray-400 leading-relaxed">
+          送金先を取り違えないよう、送金時に表示されるお名前と照合するために使用します。
+        </p>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -107,6 +121,20 @@
           placeholder="学籍番号を入力すると自動表示されます">
         <p class="mt-1 text-xs text-gray-400">運営が確認のうえ決定した金額が自動で入ります</p>
         <p id="amountError" class="hidden mt-1 text-red-500 text-xs">申請できる金額がありません</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
+          📧 メールアドレス <span class="text-red-500">*</span>
+        </label>
+        <input type="email" name="email" id="email"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+          placeholder="例：example@gmail.com" required maxlength="200" autocomplete="email">
+        <p id="emailError" class="hidden mt-1 text-red-500 text-xs">メールアドレスの形式が正しくありません</p>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-700">
+        本申請について、運営側からご連絡させていただくことがあります。メールアドレスは普段使うものをご入力ください。
       </div>
 
       <button type="submit"
@@ -165,15 +193,25 @@
 
     document.getElementById('paymentForm').addEventListener('submit', function(e) {
       const nameInput = document.getElementById('name');
+      const displayNameInput = document.getElementById('paypay_display_name');
       const paypayInput = document.getElementById('paypay_id');
+      const emailInput = document.getElementById('email');
       const nameError = document.getElementById('nameError');
+      const displayNameError = document.getElementById('displayNameError');
       const paypayError = document.getElementById('paypayError');
+      const emailError = document.getElementById('emailError');
+      const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
       // レビュー投稿フォームと同様、送信直前に前後の空白を除去してからDBへ送る
       nameInput.value = nameInput.value.trim();
+      displayNameInput.value = displayNameInput.value.trim();
       paypayInput.value = paypayInput.value.trim();
+      emailInput.value = emailInput.value.trim();
       nameError.classList.toggle('hidden', !!nameInput.value);
+      displayNameError.classList.toggle('hidden', !!displayNameInput.value);
       paypayError.classList.toggle('hidden', !!paypayInput.value);
-      if (!nameInput.value || !paypayInput.value) {
+      const emailOk = EMAIL_RE.test(emailInput.value);
+      emailError.classList.toggle('hidden', emailOk);
+      if (!nameInput.value || !displayNameInput.value || !paypayInput.value || !emailOk) {
         e.preventDefault();
         return;
       }
@@ -189,6 +227,14 @@
         amountError.classList.remove('hidden');
         return;
       }
+      // ここまで来たら送信確定。本人は「申請する」を1回押しただけでも、OS/webviewが
+      // バックグラウンド復帰時に保留POSTを再送することがある。送信操作ごとに1回だけ
+      // 冪等キーを発行しておけば、再送されても同じ値が載るのでサーバー側で1件に収束できる
+      // （reviewsの二重送信対策と同じ仕組み）。
+      document.getElementById('submitNonceHidden').value =
+        (window.crypto && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Date.now().toString(36) + Math.random().toString(36).slice(2));
     });
   </script>
 </body>

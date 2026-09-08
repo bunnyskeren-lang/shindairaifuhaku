@@ -251,15 +251,31 @@ class PaymentRequest(TimestampMixin, Base):
     承認時に対象のreviews（古い順にamount/100件）へpayment_request_idを付与して予約し、
     二重申請・二重支払いを防ぐ（reviews側の紐付けが実質の「支払い済みフラグ」）。"""
     __tablename__ = "payment_requests"
+    # submit_nonce（二重送信対策の冪等キー）は NULL 複数可・非NULLは一意の部分UNIQUE。
+    # 本人は「申請する」を1回押しただけでも、OS/webview がバックグラウンド復帰時に保留POSTを
+    # 再送することがあるため、同じ nonce の2回目以降は新規INSERTせず1回目の受付済み画面へ流す
+    # （reviews.submit_nonce と同じ仕組み。init_db() 側にも既存DB向けの同名 IF NOT EXISTS を残す）。
+    __table_args__ = (
+        Index(
+            "uq_payment_requests_submit_nonce", "submit_nonce", unique=True,
+            postgresql_where=text("submit_nonce IS NOT NULL"),
+            sqlite_where=text("submit_nonce IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     student_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    # PayPayアプリ上の表示名。送金先を取り違えないよう申請時に自己申告してもらう
+    paypay_display_name: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     paypay_id: Mapped[str] = mapped_column(Text, nullable=False)
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 入金不備・確認事項が生じた際に運営から連絡するための連絡先メールアドレス
+    email: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     # 'pending'(支払い待ち) / 'paid'(支払い済み) / 'rejected'(却下、予約したreviewsは解放)
     status: Mapped[str] = mapped_column(Text, nullable=False, default=PaymentRequestStatus.PENDING)
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    submit_nonce: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class Review(TimestampMixin, Base):

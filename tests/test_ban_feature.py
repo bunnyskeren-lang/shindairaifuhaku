@@ -229,7 +229,9 @@ async def test_banned_student_cannot_submit_payment_request(http_client_factory,
 
     client = http_client_factory(payment_api, monkeypatch)
     resp = await client.post("/payment/apply/submit", data={
-        "name": "太郎", "student_id": "2345678S", "paypay_id": "taro123", "amount": "200",
+        "name": "太郎", "student_id": "2345678S",
+        "paypay_display_name": "タロウ", "paypay_id": "taro123",
+        "email": "taro@example.com", "amount": "200",
     })
     assert resp.status_code == 400
     assert "利用を停止" in resp.text
@@ -256,13 +258,19 @@ async def test_non_banned_student_can_submit_payment_request(http_client_factory
 
     client = http_client_factory(payment_api, monkeypatch)
     resp = await client.post("/payment/apply/submit", data={
-        "name": "花子", "student_id": "2345678S", "paypay_id": "hanako123",
+        "name": "花子", "student_id": "2345678S",
+        "paypay_display_name": "ハナコ", "paypay_id": "hanako123",
+        "email": "hanako@example.com",
     })
-    assert resp.status_code == 200
+    # 成功は PRG（Post/Redirect/Get）で /payment/apply/done へ 303
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/payment/apply/done"
 
     async with test_sessionmaker() as session:
         pr = (await session.execute(select(PaymentRequest))).scalars().first()
         assert pr is not None and pr.amount == 200
+        assert pr.paypay_display_name == "ハナコ"
+        assert pr.email == "hanako@example.com"
 
 
 @pytest.mark.asyncio
@@ -272,10 +280,83 @@ async def test_student_without_payment_limit_cannot_submit(http_client_factory, 
 
     client = http_client_factory(payment_api, monkeypatch)
     resp = await client.post("/payment/apply/submit", data={
-        "name": "花子", "student_id": "2345678S", "paypay_id": "hanako123",
+        "name": "花子", "student_id": "2345678S",
+        "paypay_display_name": "ハナコ", "paypay_id": "hanako123",
+        "email": "hanako@example.com",
     })
     assert resp.status_code == 400
 
+    async with test_sessionmaker() as session:
+        count = (await session.execute(select(func.count()).select_from(PaymentRequest))).scalar_one()
+        assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_payment_apply_duplicate_submit_shows_already_sent(http_client_factory, monkeypatch, test_sessionmaker):
+    """本人は「申請する」を1回押しただけでも、OS/webviewの保留POST再送で2回届くことがある。
+    同じ submit_nonce の2回目はエラー画面（送信できませんでした）ではなく
+    『既に送信済みです』（PRGで /payment/apply/done?dup=1）へ流し、DB上も1件に収束する。"""
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False, payment_limit=200)
+    client = http_client_factory(payment_api, monkeypatch)
+    payload = {
+        "name": "花子", "student_id": "2345678S",
+        "paypay_display_name": "ハナコ", "paypay_id": "hanako123",
+        "email": "hanako@example.com", "submit_nonce": "nonce-abc-123",
+    }
+
+    resp1 = await client.post("/payment/apply/submit", data=payload)
+    assert resp1.status_code == 303
+    assert resp1.headers["location"] == "/payment/apply/done"
+
+    resp2 = await client.post("/payment/apply/submit", data=payload)
+    assert resp2.status_code == 303
+    assert resp2.headers["location"] == "/payment/apply/done?dup=1"
+
+    async with test_sessionmaker() as session:
+        count = (await session.execute(select(func.count()).select_from(PaymentRequest))).scalar_one()
+        assert count == 1
+
+    done = await client.get("/payment/apply/done", params={"dup": "1"})
+    assert done.status_code == 200
+    assert "既に送信済みです" in done.text
+
+
+@pytest.mark.asyncio
+async def test_payment_apply_second_pending_without_nonce_shows_already_sent(http_client_factory, monkeypatch, test_sessionmaker):
+    """nonce が一致しない二重送信（古いキャッシュのフォーム等）でも、既に支払い待ちの
+    申請があれば『既に送信済みです』へ寄せる（エラー画面にしない）。"""
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False, payment_limit=200)
+    client = http_client_factory(payment_api, monkeypatch)
+    base = {
+        "name": "花子", "student_id": "2345678S",
+        "paypay_display_name": "ハナコ", "paypay_id": "hanako123",
+        "email": "hanako@example.com",
+    }
+
+    resp1 = await client.post("/payment/apply/submit", data={**base, "submit_nonce": "n1"})
+    assert resp1.status_code == 303
+    assert resp1.headers["location"] == "/payment/apply/done"
+
+    resp2 = await client.post("/payment/apply/submit", data={**base, "submit_nonce": "n2"})
+    assert resp2.status_code == 303
+    assert resp2.headers["location"] == "/payment/apply/done?dup=1"
+
+    async with test_sessionmaker() as session:
+        count = (await session.execute(select(func.count()).select_from(PaymentRequest))).scalar_one()
+        assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_payment_apply_rejects_bad_email(http_client_factory, monkeypatch, test_sessionmaker):
+    await _seed_profile(test_sessionmaker, OTHER_UID, banned=False, payment_limit=200)
+    client = http_client_factory(payment_api, monkeypatch)
+    resp = await client.post("/payment/apply/submit", data={
+        "name": "花子", "student_id": "2345678S",
+        "paypay_display_name": "ハナコ", "paypay_id": "hanako123",
+        "email": "not-an-email",
+    })
+    assert resp.status_code == 400
+    assert "メールアドレス" in resp.text
     async with test_sessionmaker() as session:
         count = (await session.execute(select(func.count()).select_from(PaymentRequest))).scalar_one()
         assert count == 0

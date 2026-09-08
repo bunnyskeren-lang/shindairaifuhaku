@@ -54,8 +54,12 @@
           </span>
           <span class="payment-key">🎓 学籍番号</span>
           <span>{{ r.student_id }}</span>
+          <span class="payment-key">🏷️ PayPay表示名</span>
+          <span>{{ r.paypay_display_name }}</span>
           <span class="payment-key">📱 PayPay ID</span>
           <span>{{ r.paypay_id }}</span>
+          <span class="payment-key">📧 メール</span>
+          <span>{{ r.email }}</span>
         </div>
         <div class="payment-footer">
           <form method="post" action="/admin/payments/reject/{{ r.id }}" style="margin:0"
@@ -92,8 +96,12 @@
           <span>{{ r.name }}</span>
           <span class="payment-key">🎓 学籍番号</span>
           <span>{{ r.student_id }}</span>
+          <span class="payment-key">🏷️ PayPay表示名</span>
+          <span>{{ r.paypay_display_name }}</span>
           <span class="payment-key">📱 PayPay ID</span>
           <span>{{ r.paypay_id }}</span>
+          <span class="payment-key">📧 メール</span>
+          <span>{{ r.email }}</span>
         </div>
       </div>
       {% endfor %}
