@@ -427,7 +427,8 @@
           <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
         </div>
 
-        <!-- {{ min_comment_len }}文字未満で送信を試みた時だけ出るヒント（現在の文字数つき） -->
+        <!-- コメントが1文字以上{{ min_comment_len }}文字未満の間だけ常時出るヒント（現在の文字数つき）。
+             送信自体はブロックせず、不足のまま送るとサーバー側 /submit が受信直後に弾く -->
         <div id="commentMinLenHint" class="hidden mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2.5">
           <p class="text-[13px] font-bold text-amber-800 flex items-center gap-1">
             <span>✍️</span><span>もう少しコメントを書こう</span>
@@ -1815,11 +1816,12 @@
       document.getElementById('charBar').style.background = row[2];
     }
 
-    // コメントは最低 MIN_COMMENT_LEN 文字必須。送信を試みて不足していた時だけ
-    // 「もう少し書こう」＋現在の文字数ヒントを表示する（入力で到達すると自動で消える）。
-    // 閾値は core/config.py MIN_COMMENT_LEN が正（サーバー側 /submit も同じ値で弾く）。
+    // コメントは MIN_COMMENT_LEN 文字以上を推奨。未満でもフォームからの送信自体はでき、
+    // その場合サーバー側 /submit が受信直後に「30文字以上で」エラーで弾く。
+    // フォーム側は入力が1文字以上 MIN_COMMENT_LEN 文字未満の間だけ「もう少し書こう」＋
+    // 現在の文字数ヒントを常時表示し（到達すると自動で消える）、ハードブロックはしない。
+    // 閾値は core/config.py MIN_COMMENT_LEN が正。
     const MIN_COMMENT_LEN = {{ min_comment_len }};
-    let commentHintArmed = false;
     function commentLen() {
       return document.getElementById('comment').value.trim().length;
     }
@@ -1828,9 +1830,8 @@
       if (!hint) return;
       const el = document.getElementById('comment');
       const len = commentLen();
-      if (!commentHintArmed || len >= MIN_COMMENT_LEN) {
+      if (len === 0 || len >= MIN_COMMENT_LEN) {
         hint.classList.add('hidden');
-        commentHintArmed = false;
         el.classList.remove('ring-2', 'ring-amber-400', 'border-amber-400');
         return;
       }
@@ -1953,7 +1954,9 @@
       { label: '楽単度', done: () => currentEase > 0, focus: () => scrollToItem(document.getElementById('easeCard')) },
       { label: '充実度', done: () => currentRating > 0, focus: () => scrollToItem(document.getElementById('ratingCard')) },
       { label: '成績評価方法', done: isGradingMethodComplete, focus: () => scrollToItem(document.getElementById('gradingCard')) },
-      { label: 'コメント', done: () => document.getElementById('comment').value.trim().length >= MIN_COMMENT_LEN, focus: () => scrollToItem(document.getElementById('comment')) },
+      // 進捗・送信ボタンの活性は「1文字でも入力済み」で満たす。MIN_COMMENT_LEN 未満は
+      // 琥珀ヒントで促すだけでブロックせず、送信直後にサーバー側 /submit が弾く。
+      { label: 'コメント', done: () => document.getElementById('comment').value.trim().length > 0, focus: () => scrollToItem(document.getElementById('comment')) },
     ];
 
     // ── 未入力項目のまとめバナー ──
@@ -2311,13 +2314,10 @@
           valid = false;
         }
       }
-      // コメント必須（空 or MIN_COMMENT_LEN 文字未満）
+      // コメントは空だけをフォーム側で弾く。MIN_COMMENT_LEN 文字未満はそのまま通し、
+      // 送信直後にサーバー側 /submit が「30文字以上で入力してください」で弾く。
       if (!document.getElementById('comment').value.trim()) {
         document.getElementById('comment').classList.add('ring-2', 'ring-red-400', 'border-red-400');
-        valid = false;
-      } else if (commentLen() < MIN_COMMENT_LEN) {
-        commentHintArmed = true;
-        updateCommentHint();
         valid = false;
       }
       if (!valid) {
@@ -2407,7 +2407,6 @@
       if (el && el.value) {
         el.value = '';
         updateCommentFeedback(0);
-        commentHintArmed = false;
         updateCommentHint();
         updateProgressUI();
       }
