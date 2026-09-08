@@ -678,7 +678,12 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
     系統/学部選択（make_classification_grid_flex）の2画面構成に戻した）。"""
 
     def _tile(icon: str, label: str, data: str, count: int, sub: str,
-               bg: str, border: str, text_color: str, badge_bg: str) -> FlexBox:
+               bg: str, border: str, text_color: str, badge_bg: str,
+               notes: list[tuple[str, str]] | None = None) -> FlexBox:
+        note_texts = [
+            FlexText(text=t, size="xxs", color=c, align="center", wrap=True, weight="bold")
+            for t, c in (notes or [])
+        ]
         return FlexBox(
             layout="vertical",
             action=PostbackAction(label=label[:20], data=data),
@@ -693,6 +698,7 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
                                          color=text_color, align="center")],
                 ),
                 FlexText(text=sub, size="xxs", color="#64748b", align="center"),
+                *note_texts,
             ],
             background_color=bg,
             border_width="1.5px",
@@ -734,7 +740,9 @@ def make_category_entry_flex(edu_count: int, senmon_count: int) -> FlexMessage:
                             _tile("📚", "教養科目", "教養", edu_count, "系統から探す",
                                    "#eef2ff", "#c7d2fe", "#4338ca", "#e0e7ff"),
                             _tile("🎓", "専門科目", "専門", senmon_count, "学部から探す",
-                                   "#e0f2fe", "#bae6fd", "#0369a1", "#bae6fd"),
+                                   "#e0f2fe", "#bae6fd", "#0369a1", "#bae6fd",
+                                   notes=[("閲覧は準備中", "#94a3b8"),
+                                          ("投稿は募集中", "#0369a1")]),
                         ],
                     ),
                 ],
