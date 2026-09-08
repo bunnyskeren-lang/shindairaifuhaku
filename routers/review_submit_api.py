@@ -10,7 +10,6 @@ from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
-    MAX_REVIEWS_PER_COURSE_SECTION,
     OMNIBUS_INSTRUCTOR_LABEL,
     REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
     REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
@@ -268,14 +267,8 @@ async def submit(
             if dup_review is not None:
                 return _form_error("この科目・担当教員の組み合わせには、既にレビューを投稿済みです", telemetry=True)
 
-            existing_review_count = (await session.execute(
-                select(func.count(Review.id)).where(
-                    Review.course_section_id.in_(group_cs_ids),
-                    Review.status.in_((ReviewStatus.PENDING, ReviewStatus.APPROVED)),
-                )
-            )).scalar_one()
-            if existing_review_count >= MAX_REVIEWS_PER_COURSE_SECTION:
-                return _form_error("この科目・担当教員へのレビュー投稿数が上限に達したため、募集は締め切りました")
+            # 2026-09-08、ユーザー指示で「科目×教員あたりの投稿受付上限」を撤廃。
+            # 同一学生の重複投稿禁止（上の dup_review）だけを残し、件数上限チェックは廃止した。
 
         review = Review(
             course_section_id=cs_obj.id,

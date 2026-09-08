@@ -152,7 +152,7 @@
             <p class="text-xs text-gray-500 mb-2" id="instructorCourseLabel"></p>
             <div id="instructorCourseItems" class="flex flex-wrap gap-2"></div>
             <p id="instructorCourseUnregistered" class="hidden text-xs text-gray-400">{{ no_review_msg }}</p>
-            <p id="instructorCourseLimitNotice" class="hidden mt-1.5 text-[11px] text-gray-400">レビューの募集は1科目の先生1人あたり1件までです。投稿済みの組み合わせも選べません。</p>
+            <p id="instructorCourseLimitNotice" class="hidden mt-1.5 text-[11px] text-gray-400">同じ科目・先生の組み合わせに投稿済みの場合は選べません。</p>
           </div>
         </div>
 
@@ -180,7 +180,7 @@
           <p id="instructorHint" class="hidden text-xs font-medium text-indigo-500 mb-2">👆 担当教員をタップして選択してください</p>
           <div id="instructorChips" class="hidden flex flex-wrap gap-2"></div>
           <p id="instructorUnregistered" class="hidden text-xs text-gray-400">{{ no_review_msg }}</p>
-          <p id="instructorLimitNotice" class="hidden mt-1.5 text-[11px] text-gray-400">レビューの募集は1科目の先生1人あたり1件までです。投稿済みの組み合わせも選べません。</p>
+          <p id="instructorLimitNotice" class="hidden mt-1.5 text-[11px] text-gray-400">同じ科目・先生の組み合わせに投稿済みの場合は選べません。</p>
           <p id="instructorError" class="hidden mt-1 text-red-500 text-xs">担当教員を選択してください</p>
         </div>
 
@@ -1262,13 +1262,15 @@
     const searchInput = document.getElementById('courseSearchInput');
     const dropdown = document.getElementById('courseDropdown');
 
-    // 残り枠バッジ（募集締切の理由を検索結果の行ごとに一目でわかるようにする）
+    // 募集終了バッジ（オンデマンド配信など、件数と無関係に締め切った科目×教員に付ける）。
+    // 2026-09-08に「科目×教員の投稿上限」を撤廃したため「残り○枠」は表示しない
+    // （full=true になるのは closed のケースのみ）。
     function remainingBadgeHtml(remaining) {
       if (remaining == null) return '';
       if (remaining <= 0) {
         return `<span style="font-size:11px;font-weight:700;border-radius:999px;padding:4px 10px;margin-left:6px;background:#f3f4f6;color:#9ca3af;white-space:nowrap">募集終了</span>`;
       }
-      return `<span style="font-size:11px;font-weight:700;border-radius:999px;padding:4px 10px;margin-left:6px;background:#eef2ff;color:#4f46e5;white-space:nowrap">残り${remaining}枠</span>`;
+      return '';
     }
 
     function escapeHtml(s) {
