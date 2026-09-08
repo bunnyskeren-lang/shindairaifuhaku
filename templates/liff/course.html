@@ -216,9 +216,10 @@
   .syllabus-card .syl-btn {
     margin-top: 11px; display: flex; align-items: center; justify-content: center; gap: 7px;
     width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 9px;
-    padding: 13px; font-size: 14.5px; font-weight: 700; text-decoration: none; cursor: pointer;
+    padding: 12px 13px; font-size: 14px; font-weight: 700; line-height: 1.45;
+    text-decoration: none; cursor: pointer; text-align: center;
   }
-  .syllabus-card .syl-btn svg { width: 15px; height: 15px; }
+  .syllabus-card .syl-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
   .syllabus-card .syl-none { margin-top: 10px; font-size: 12px; color: #94a3b8; }
 
   /* 教員別のレビュー件数（解除前の #lock-card 内） */
@@ -426,9 +427,9 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
       html += `<div class="a-lock-zero">チケットが0枚です。下の「レビューを投稿」からレビューを書いて承認されるとチケットがもらえます。</div>`;
     }
     // 報酬(+2/+1)は現状の表と0枚ボックスで二重掲載していたのを、下部のチップ1箇所に集約
-    html += `<div class="a-reward"><span class="rl">レビュー承認でチケット追加</span>`
-          + `<span class="chip2">教養 <b>+${UNLOCK_REWARD_KYOYO}</b></span>`
-          + `<span class="chip2">専門 <b>+${UNLOCK_REWARD_SENMON}</b></span></div>`;
+    html += `<div class="a-reward"><span class="rl">レビュー承認でチケット追加（コメントが長いほど多い）</span>`
+          + `<span class="chip2">教養 <b>最大+${UNLOCK_REWARD_KYOYO}</b></span>`
+          + `<span class="chip2">専門 <b>最大+${UNLOCK_REWARD_SENMON}</b></span></div>`;
   } else if (isInClient || profileFetchFailed) {
     // LINEアプリ内で開いているのにログイン情報が取得できなかった異常系。
     // 「LINEアプリから開いてください」は誤案内になるため、開き直しを促す
@@ -900,16 +901,16 @@ async function main() {
     }
   }
 
-  // シラバス導線は独立カード（.syllabus-card）で目立たせる。見出しは「シラバス」の横に
-  // 全角2スペースを空けて担当教員名を同じ太さ・大きさで併記する。
+  // シラバス導線は独立カード（.syllabus-card）で目立たせる。
+  // 「シラバスを開く」ボタンの文字の横に（科目名 ／ 担当教員名）を併記する。
   // バリアント統合科目では「開講科目 + 担当教員の両方を選んだとき」だけボタンを出し、
   // それ以外は同じカード内に案内（#syllabus-prompt）を出す。
   controlsHtml += `<div class="syllabus-card" id="syllabus-card" style="display:none">
     <div class="syl-top">
       <span class="syl-badge">${IC_DOC}</span>
-      <div class="syl-h">シラバス<span id="syl-instr"></span></div>
+      <div class="syl-h">シラバス</div>
     </div>
-    <a id="btn-syllabus" class="syl-btn" href="#" target="_blank" style="display:none">${IC_EXT}シラバスを開く</a>
+    <a id="btn-syllabus" class="syl-btn" href="#" target="_blank" style="display:none">${IC_EXT}<span id="syl-btn-label">シラバスを開く</span></a>
     <div id="syllabus-prompt" class="syllabus-prompt" style="display:none;margin-top:11px"><span>科目・教員を選択するとここにシラバスが表示されます</span></div>
     <div id="syllabus-none" class="syl-none" style="display:none">この科目のシラバスはありません</div>
   </div>`;
@@ -990,7 +991,7 @@ async function main() {
     // 投稿を後押しする（review_count===0の科目はunlocked扱いなので必ずlocked===false）
     if (!data.locked && data.review_count === 0) {
       btnReview.insertAdjacentHTML("beforebegin",
-        `<div style="text-align:center"><span style="font-size:11.5px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:999px;padding:5px 14px;display:inline-block">🌟 初レビューでチケット+${UNLOCK_REWARD}枚もらえます</span></div>`);
+        `<div style="text-align:center"><span style="font-size:11.5px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:999px;padding:5px 14px;display:inline-block">🌟 初レビューでチケット最大+${UNLOCK_REWARD}枚もらえます</span></div>`);
       btnReview.textContent = "✏️ 最初のレビューを書く";
       btnReview.style.boxShadow = "0 0 0 4px #e0e7ff, 0 6px 16px rgba(99,102,241,.35)";
     }
@@ -1035,10 +1036,14 @@ async function main() {
     const sylBtn = document.getElementById("btn-syllabus");
     const promptEl = document.getElementById("syllabus-prompt");
     const noneEl = document.getElementById("syllabus-none");
-    const instrEl = document.getElementById("syl-instr");
+    const labelEl = document.getElementById("syl-btn-label");
     if (!cardEl || !sylBtn) return;
-    // 見出し「シラバス」の横に全角2スペースを空けて担当教員名を併記する（担当教員名と同じ書式）
-    const setInstr = (nm) => { if (instrEl) instrEl.textContent = nm ? ("　　" + nm) : ""; };
+    // 「シラバスを開く」の文字の横に（科目名 ／ 担当教員名）を併記する
+    const setLabel = (courseName, instr) => {
+      if (!labelEl) return;
+      const paren = [courseName, instr].filter(Boolean).join(" ／ ");
+      labelEl.textContent = paren ? `シラバスを開く（${paren}）` : "シラバスを開く";
+    };
     // btn / prompt(未選択案内) / none(シラバスなし) の3択を切り替える
     const show = (mode) => {
       sylBtn.style.display = mode === "btn" ? "flex" : "none";
@@ -1052,13 +1057,9 @@ async function main() {
       const v = selectedVariant();
       let effInstr = instructorFilter;
       if (v && !effInstr && (v.instructors || []).length === 1) effInstr = v.instructors[0];
-      if (!v || !effInstr) {
-        setInstr("");
-        show("prompt");
-        return;
-      }
+      if (!v || !effInstr) { show("prompt"); return; }
       const url = (v.syllabus_urls || {})[effInstr] || "";
-      setInstr(effInstr);
+      setLabel(v.name, effInstr);
       if (url) { sylBtn.href = url; show("btn"); }
       else { show("none"); }
       return;
@@ -1067,7 +1068,8 @@ async function main() {
     const url = instructorFilter
       ? (data.instructor_syllabus_urls || {})[instructorFilter] || ""
       : data.syllabus_url;
-    setInstr(instructorFilter || (instructorNames.length === 1 ? instructorNames[0] : ""));
+    const instr = instructorFilter || (instructorNames.length === 1 ? instructorNames[0] : "");
+    setLabel(data.group_label || data.name, instr);
     if (url) { sylBtn.href = url; show("btn"); }
     else { show("none"); }
   }
