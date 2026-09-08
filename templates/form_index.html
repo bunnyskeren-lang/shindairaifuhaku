@@ -254,7 +254,7 @@
       <div id="gradingCard" class="bg-white rounded-2xl shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
           <span class="text-sm font-semibold text-gray-700">📋 成績評価方法 <span class="text-red-500">*</span></span>
-          <span id="gradingProgressCount" class="text-xs font-bold text-gray-400">0 / 5</span>
+          <span id="gradingProgressCount" class="text-xs font-bold text-gray-400">0 / 4</span>
         </div>
         <input type="hidden" name="grading_method" id="gradingMethodHidden">
 
@@ -361,7 +361,7 @@
 
         <!-- 評価方法 -->
         <div class="rounded-xl bg-indigo-50 border border-indigo-100 p-3 mb-3">
-          <p class="text-xs font-bold text-indigo-700 mb-2">🎯 評価方法 <span class="text-red-500">*</span> <span class="font-normal text-indigo-400">複数選択可</span></p>
+          <p class="text-xs font-bold text-indigo-700 mb-2">🎯 評価方法 <span class="font-normal text-indigo-400">任意・複数選択可</span></p>
           <div class="flex flex-wrap gap-2">
             <button type="button" class="chip-btn multi" data-group="eval" data-value="期末テスト">期末テスト</button>
             <button type="button" class="chip-btn multi" data-group="eval" data-value="中間テスト">中間テスト</button>
@@ -376,7 +376,6 @@
             class="hidden w-full mt-2 border border-indigo-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition bg-white"
             placeholder="例：口頭試問、実技など" maxlength="50">
           <p id="evalCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
-          <p id="evalError" class="hidden mt-1.5 text-red-500 text-xs">1つ以上選択してください</p>
 
           <!-- 評価方法の割合（2つ以上選択時のみ表示） -->
           <div id="evalPercentContainer" class="hidden mt-3 pt-3 border-t border-indigo-200">
@@ -891,7 +890,7 @@
         } else {
           btn.classList.toggle('active');
         }
-        const errMap = { attendance: 'attendanceError', attendance_method: 'attendanceMethodError', attendance_surprise: 'attendanceSurpriseError', homework: 'homeworkError', homework_frequency: 'homeworkFrequencyError', eval: 'evalError', class_format: 'classFormatError' };
+        const errMap = { attendance: 'attendanceError', attendance_method: 'attendanceMethodError', attendance_surprise: 'attendanceSurpriseError', homework: 'homeworkError', homework_frequency: 'homeworkFrequencyError', class_format: 'classFormatError' };
         if (errMap[btn.dataset.group]) document.getElementById(errMap[btn.dataset.group]).classList.add('hidden');
         if (btn.dataset.value === '__custom__') {
           const customInput = document.getElementById('evalCustomInput');
@@ -1840,9 +1839,10 @@
     // ── 入力状況（7項目）の進捗計算 ──
     // 送信時の厳密なバリデーション（reviewForm submit内）とは別の、表示専用の簡易チェック。
     // 既存の送信時バリデーションはそのまま残し、これは進捗カード・送信ボタンのラベル切り替えにのみ使う。
-    // 成績評価方法カードの5小問（授業形式・出席確認・課題の頻度・課題の量・評価方法）
+    // 成績評価方法カードの必須4小問（授業形式・出席確認・課題の頻度・課題の量）
     // それぞれの充足判定。isGradingMethodComplete()（進捗カードの1項目としての判定）と
-    // gradingProgressCountの「◯/5」表示の両方でこの5関数を共有する。
+    // gradingProgressCountの「◯/4」表示の両方でこの4関数を共有する。
+    // 🎯 評価方法（eval）は任意入力なのでこの充足判定には含めない。
     function classFormatDone() {
       const fmtActives = [...document.querySelectorAll('[data-group="class_format"].active')];
       if (fmtActives.length === 0) return false;
@@ -1873,28 +1873,17 @@
       return !!document.querySelector('[data-group="homework"].active');
     }
     function homeworkFrequencyDone() { return !!document.querySelector('[data-group="homework_frequency"].active'); }
-    function evalDone() {
-      const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
-      if (evalActives.length === 0) return false;
-      if (evalActives.some(b => b.dataset.value === '__custom__') &&
-          !document.getElementById('evalCustomInput').value.trim()) return false;
-      if (evalActives.length >= 2) {
-        const inputs = [...document.querySelectorAll('.percent-input[data-slider-group="eval"]')];
-        const total = inputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
-        if (inputs.length !== evalActives.length || total !== 100) return false;
-      }
-      return true;
-    }
+    // 評価方法（🎯 eval）は任意入力なので進捗カウント・完了判定の対象外（2026-09-08、ユーザー指示）。
 
     function isGradingMethodComplete() {
-      return classFormatDone() && attendanceDone() && homeworkDone() && homeworkFrequencyDone() && evalDone();
+      return classFormatDone() && attendanceDone() && homeworkDone() && homeworkFrequencyDone();
     }
 
     function updateGradingProgress() {
-      const count = [classFormatDone(), attendanceDone(), homeworkDone(), homeworkFrequencyDone(), evalDone()]
+      const count = [classFormatDone(), attendanceDone(), homeworkDone(), homeworkFrequencyDone()]
         .filter(Boolean).length;
       const el = document.getElementById('gradingProgressCount');
-      if (el) el.textContent = `${count} / 5`;
+      if (el) el.textContent = `${count} / 4`;
     }
 
     function scrollToItem(el) {
@@ -2150,7 +2139,6 @@
         ['attendanceMethodError','gradingCard'],
         ['homeworkError','gradingCard'],
         ['homeworkFrequencyError','gradingCard'],
-        ['evalError','gradingCard'],
       ];
       map.forEach(([errId, cardId]) => {
         const errEl = document.getElementById(errId);
@@ -2172,7 +2160,7 @@
       ['studentIdError','academicYearError',
        'courseError','instructorError','ratingError','easeError',
        'classFormatError','formatCustomError','attendanceError','attendanceSurpriseError','attendanceMethodError','attendanceMethodCustomError','homeworkError',
-       'homeworkFrequencyError','evalError','evalCustomError','evalPercentError','formatPercentError'].forEach(id => {
+       'homeworkFrequencyError','evalCustomError','evalPercentError','formatPercentError'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -2241,13 +2229,10 @@
         document.getElementById('homeworkError').classList.remove('hidden');
         valid = false;
       }
-      // 評価方法
+      // 評価方法（任意入力。選択されたときのみ「その他」の記述・割合をチェックする）
       const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
-      if (evalActives.length === 0) {
-        document.getElementById('evalError').classList.remove('hidden');
-        valid = false;
-      } else if (evalActives.some(b => b.dataset.value === '__custom__') &&
-                 !document.getElementById('evalCustomInput').value.trim()) {
+      if (evalActives.some(b => b.dataset.value === '__custom__') &&
+          !document.getElementById('evalCustomInput').value.trim()) {
         document.getElementById('evalCustomError').classList.remove('hidden');
         document.getElementById('evalCustomInput').classList.add('border-red-400');
         valid = false;
