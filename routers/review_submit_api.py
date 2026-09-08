@@ -203,8 +203,9 @@ async def submit(
 
         # 学部をまたぐ同名科目は担当教員で subject を確定させたあとに判定する。
         # 教養科目は全員、専門科目は投稿者本人の学部（会員登録情報）のぶんのみ受け付ける。
-        if subject.id in await cache.get_on_demand_subject_ids_cached():
-            return _form_error("この科目はオンデマンド配信のため内容が教員によらず同一です。レビュー募集は終了しました")
+        # 2026-09-08、ユーザー指示でオンデマンド配信科目のレビュー募集締切ロジックを撤廃。
+        # 「教員によらず内容は同一」は科目閲覧LIFFの注記（ON_DEMAND_SAME_CONTENT_NOTE）で
+        # 案内するのみとし、投稿自体は担当教員を問わず受け付ける。
         if not subject_submittable_for_profile(
             subject.category, subject.faculty, subject.department,
             existing.faculty, existing.department,

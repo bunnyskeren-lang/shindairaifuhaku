@@ -177,18 +177,20 @@ async def search_courses(q: str = "", faculty: str = "", _rl=Depends(_search_rat
         on_demand_ids = await cache.get_on_demand_subject_ids_cached()
         insts_by_course: dict = {}
         for cs, inst in cs_rows:
+            # オンデマンド配信科目は「担当教員によらず内容が同一」だが、2026-09-08以降は
+            # 募集締切扱いにはしない（投稿は受け付け、フォーム側で「どちらの先生でも可」と案内する）
             remaining = remaining_map.get((cs.subject_id, inst.name), MAX_REVIEWS_PER_COURSE_SECTION)
-            closed = cs.subject_id in on_demand_ids
             insts_by_course.setdefault(cs.subject_id, []).append({
                 "name": inst.name,
                 "url": cs_url_map.get(cs.id, ""),
-                "full": closed or remaining <= 0,
-                "remaining": 0 if closed else remaining,
+                "full": remaining <= 0,
+                "remaining": remaining,
             })
     return {"courses": [
         {"id": c.id, "name": c.name,
          "category": c.category or "",
          "faculty": c.faculty or "", "department": c.department or "",
+         "on_demand": c.id in on_demand_ids,
          "instructors": insts_by_course.get(c.id, [])}
         for c in courses
     ]}
@@ -260,17 +262,19 @@ async def api_preload(faculty: str = ""):
         cache.set_preload_cache(data, faculty)
 
     # 「full」/「remaining」（募集締切・残り枠）はレビュー投稿状況で頻繁に変わりうるため、
-    # 構造データ本体（数千件規模でTTL 3600秒キャッシュ）とは切り離し、毎リクエスト時に付与する
+    # 構造データ本体（数千件規模でTTL 3600秒キャッシュ）とは切り離し、毎リクエスト時に付与する。
+    # オンデマンド配信科目は 2026-09-08 以降は募集締切扱いにせず、フロントで「担当教員を
+    # 問わず内容は同一（どちらの先生を選んでも可）」と案内するための on_demand フラグのみ渡す。
     remaining_map = await cache.get_review_remaining_cached()
     on_demand_ids = await cache.get_on_demand_subject_ids_cached()
     if remaining_map or on_demand_ids:
         def _full(sid, name):
-            return sid in on_demand_ids or remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION) <= 0
+            return remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION) <= 0
         def _remaining(sid, name):
-            return 0 if sid in on_demand_ids else remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION)
+            return remaining_map.get((sid, name), MAX_REVIEWS_PER_COURSE_SECTION)
         data = {
             "courses": [
-                {**c, "instructors": [
+                {**c, "on_demand": c["id"] in on_demand_ids, "instructors": [
                     {**i, "full": _full(c["id"], i["name"]), "remaining": _remaining(c["id"], i["name"])}
                     for i in c["instructors"]
                 ]}
@@ -278,7 +282,8 @@ async def api_preload(faculty: str = ""):
             ],
             "instructors": [
                 {**inst, "courses": [
-                    {**cn, "full": _full(cn["id"], inst["name"]), "remaining": _remaining(cn["id"], inst["name"])}
+                    {**cn, "on_demand": cn["id"] in on_demand_ids,
+                     "full": _full(cn["id"], inst["name"]), "remaining": _remaining(cn["id"], inst["name"])}
                     for cn in inst["courses"]
                 ]}
                 for inst in data["instructors"]
@@ -339,10 +344,11 @@ async def search_instructors(q: str = "", faculty: str = "", _rl=Depends(_search
             courses_by_inst: dict[str, list] = {name: [] for name in insts}
             for inst_name, c_id, c_name, c_cat, c_fac, c_dept in all_rows:
                 if not any(x["id"] == c_id for x in courses_by_inst[inst_name]):
-                    closed = c_id in on_demand_ids
-                    remaining = 0 if closed else remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
+                    # オンデマンド配信科目は募集締切扱いにしない（on_demand フラグのみ渡す）
+                    remaining = remaining_map.get((c_id, inst_name), MAX_REVIEWS_PER_COURSE_SECTION)
                     courses_by_inst[inst_name].append({
-                        "id": c_id, "name": c_name, "full": closed or remaining <= 0, "remaining": remaining,
+                        "id": c_id, "name": c_name, "full": remaining <= 0, "remaining": remaining,
+                        "on_demand": c_id in on_demand_ids,
                         "category": c_cat or "", "faculty": c_fac or "", "department": c_dept or "",
                         **_variant_group_fields(c_cat, c_id, c_name, variant_map, senmon_group),
                     })
@@ -530,9 +536,8 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                         _syl_by_sid.setdefault(cs.subject_id, {}).setdefault(instr.name, _u)
                 for _sid in group_subject_ids:
                     _v_instrs = _instr_by_sid.get(_sid, [])
-                    if _sid in on_demand_ids:
-                        _is_open = False
-                    elif _v_instrs:
+                    # オンデマンド配信科目も 2026-09-08 以降は締切扱いにしない
+                    if _v_instrs:
                         _is_open = any(
                             _remaining_map_v.get((_sid, nm), MAX_REVIEWS_PER_COURSE_SECTION) > 0
                             for nm in _v_instrs
