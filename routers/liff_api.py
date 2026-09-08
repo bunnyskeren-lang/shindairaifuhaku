@@ -462,14 +462,22 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     for cs, _instr in cs_instr_rows
                 }
 
-            # 評価の内訳表示（充実度★1〜5・楽単度SS〜Cそれぞれの件数分布）のため、
-            # ease_rating単独ではなく(ease_rating, rating)の2軸でgroup byする。
-            # 平均・総件数はどちらもこの1本の結果から再合成できる
+            # 承認済みレビューの集計を1本のGROUP BYにまとめる。以下すべてこの結果から再合成する:
+            #   - 充実度★1〜5・楽単度SS〜Cの件数分布（ease_rating × rating の2軸）
+            #   - 平均充実度・総件数
+            #   - 教員別の承認済みレビュー件数（チケット解除前でも「どの教員に何件あるか」を
+            #     出すため locked 状態に関わらず集計。selected_instructor 優先、無ければ
+            #     course_section 由来の教員名。2026-09-08 ユーザー指示）
+            # そのため group by キーに selected_instructor・course_section_id も足す（行数は
+            # 増えるが集計値は同じ。以前ここで別クエリを1本投げていたのを統合した）。
+            _cs_id_to_instr_nm = {cs.id: instr.name for cs, instr in cs_instr_rows}
             if cs_ids:
                 ease_rows = (await session.execute(
-                    select(Review.ease_rating, Review.rating, func.count(Review.id))
+                    select(Review.ease_rating, Review.rating, Review.selected_instructor,
+                           Review.course_section_id, func.count(Review.id))
                     .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
-                    .group_by(Review.ease_rating, Review.rating)
+                    .group_by(Review.ease_rating, Review.rating, Review.selected_instructor,
+                              Review.course_section_id)
                 )).all()
             else:
                 ease_rows = []
@@ -478,7 +486,8 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             rating_sum = 0
             rating_total = 0
             review_count = 0
-            for ease, rating, cnt in ease_rows:
+            instr_review_counts: dict[str, int] = {}
+            for ease, rating, sel_instr, csid, cnt in ease_rows:
                 review_count += cnt
                 if ease:
                     ease_counts[ease] = ease_counts.get(ease, 0) + cnt
@@ -486,6 +495,9 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                     rating_counts[rating] = rating_counts.get(rating, 0) + cnt
                     rating_sum += rating * cnt
                     rating_total += cnt
+                _nm = (sel_instr or "").strip() or _cs_id_to_instr_nm.get(csid, "")
+                if _nm:
+                    instr_review_counts[_nm] = instr_review_counts.get(_nm, 0) + cnt
             avg_rating = (rating_sum / rating_total) if rating_total else None
 
             if cs_ids:
@@ -497,22 +509,6 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 )).scalars().all()
             else:
                 reviews_raw = []
-
-            # 教員別の承認済みレビュー件数（チケット解除前でも「どの教員に何件レビューが
-            # あるか」を表示するため、locked状態に関わらず集計する。2026-09-08 ユーザー指示）。
-            # selected_instructor（投稿者が選んだ担当教員名）優先、無ければcourse_section由来。
-            instr_review_counts: dict[str, int] = {}
-            if cs_ids:
-                _cs_id_to_instr_nm = {cs.id: instr.name for cs, instr in cs_instr_rows}
-                _ic_rows = (await session.execute(
-                    select(Review.selected_instructor, Review.course_section_id, func.count(Review.id))
-                    .where(Review.course_section_id.in_(cs_ids), Review.status == ReviewStatus.APPROVED)
-                    .group_by(Review.selected_instructor, Review.course_section_id)
-                )).all()
-                for _si, _csid, _c in _ic_rows:
-                    _nm = (_si or "").strip() or _cs_id_to_instr_nm.get(_csid, "")
-                    if _nm:
-                        instr_review_counts[_nm] = instr_review_counts.get(_nm, 0) + _c
 
             sc_row = (await session.execute(
                 select(Syllabus.timetable_code)
