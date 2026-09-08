@@ -114,6 +114,8 @@ async def submit(
         return _form_error("受講年度を選択してください")
     if not comment.strip():
         return _form_error("コメントを入力してください")
+    if len(comment.strip()) < 30:
+        return _form_error(f"コメントは30文字以上で入力してください（現在 {len(comment.strip())} 文字）")
 
     sid = normalize_student_id(student_id)
     if not STUDENT_ID_RE.match(sid):

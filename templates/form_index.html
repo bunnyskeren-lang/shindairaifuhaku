@@ -426,6 +426,22 @@
         <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden mt-1">
           <div id="charBar" class="h-1.5 rounded-full transition-all duration-300" style="width:0%;background:#e5e7eb"></div>
         </div>
+
+        <!-- 30文字未満で送信を試みた時だけ出るヒント（現在の文字数つき） -->
+        <div id="commentMinLenHint" class="hidden mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2.5">
+          <p class="text-[13px] font-bold text-amber-800 flex items-center gap-1">
+            <span>✍️</span><span>もう少しコメントを書こう</span>
+          </p>
+          <p class="text-xs text-amber-700 mt-1">
+            後輩の参考になるよう、<b>30文字以上</b>で具体的に書いてみてください。
+          </p>
+          <p class="text-xs text-amber-700 mt-1.5">
+            現在 <b id="commentHintCur">0</b> 文字（あと <b id="commentHintRemain">30</b> 文字）
+          </p>
+          <div class="w-full bg-amber-200 rounded-full h-1 overflow-hidden mt-1.5">
+            <div id="commentHintBar" class="h-1 rounded-full bg-amber-500 transition-all duration-300" style="width:0%"></div>
+          </div>
+        </div>
       </div>
 
       <!-- 虚偽投稿への警告 -->
@@ -1799,6 +1815,32 @@
       document.getElementById('charBar').style.background = row[2];
     }
 
+    // コメントは最低30文字必須。送信を試みて不足していた時だけ
+    // 「もう少し書こう」＋現在の文字数ヒントを表示する（入力で30到達すると自動で消える）。
+    const MIN_COMMENT_LEN = 30;
+    let commentHintArmed = false;
+    function commentLen() {
+      return document.getElementById('comment').value.trim().length;
+    }
+    function updateCommentHint() {
+      const hint = document.getElementById('commentMinLenHint');
+      if (!hint) return;
+      const el = document.getElementById('comment');
+      const len = commentLen();
+      if (!commentHintArmed || len >= MIN_COMMENT_LEN) {
+        hint.classList.add('hidden');
+        commentHintArmed = false;
+        el.classList.remove('ring-2', 'ring-amber-400', 'border-amber-400');
+        return;
+      }
+      document.getElementById('commentHintCur').textContent = len;
+      document.getElementById('commentHintRemain').textContent = MIN_COMMENT_LEN - len;
+      document.getElementById('commentHintBar').style.width =
+        Math.round(len / MIN_COMMENT_LEN * 100) + '%';
+      hint.classList.remove('hidden');
+      el.classList.add('ring-2', 'ring-amber-400', 'border-amber-400');
+    }
+
     document.querySelectorAll('.prompt-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const el = document.getElementById('comment');
@@ -1809,6 +1851,7 @@
         el.focus();
         el.setSelectionRange(el.value.length, el.value.length);
         updateCommentFeedback(el.value.length);
+        updateCommentHint();
         saveData();
       });
     });
@@ -1817,6 +1860,7 @@
       const el = document.getElementById('comment');
       updateCommentFeedback(el.value.length);
       if (el.value.trim()) el.classList.remove('ring-2', 'ring-red-400', 'border-red-400');
+      updateCommentHint();
       saveData();
     });
     const studentIdInput = document.getElementById('student_id');
@@ -1908,7 +1952,7 @@
       { label: '楽単度', done: () => currentEase > 0, focus: () => scrollToItem(document.getElementById('easeCard')) },
       { label: '充実度', done: () => currentRating > 0, focus: () => scrollToItem(document.getElementById('ratingCard')) },
       { label: '成績評価方法', done: isGradingMethodComplete, focus: () => scrollToItem(document.getElementById('gradingCard')) },
-      { label: 'コメント', done: () => document.getElementById('comment').value.trim() !== '', focus: () => scrollToItem(document.getElementById('comment')) },
+      { label: 'コメント', done: () => document.getElementById('comment').value.trim().length >= MIN_COMMENT_LEN, focus: () => scrollToItem(document.getElementById('comment')) },
     ];
 
     // ── 未入力項目のまとめバナー ──
@@ -2266,9 +2310,13 @@
           valid = false;
         }
       }
-      // コメント必須
+      // コメント必須（空 or 30文字未満）
       if (!document.getElementById('comment').value.trim()) {
         document.getElementById('comment').classList.add('ring-2', 'ring-red-400', 'border-red-400');
+        valid = false;
+      } else if (commentLen() < MIN_COMMENT_LEN) {
+        commentHintArmed = true;
+        updateCommentHint();
         valid = false;
       }
       if (!valid) {
@@ -2358,6 +2406,8 @@
       if (el && el.value) {
         el.value = '';
         updateCommentFeedback(0);
+        commentHintArmed = false;
+        updateCommentHint();
         updateProgressUI();
       }
       // フラグの消費は pageshow 側だけで行う。インライン実行時点ではブラウザの
