@@ -1516,8 +1516,9 @@
       // 登録教員が0人の科目でも「募集していません」ではなくオムニバスで投稿できる）
       chipsEl.classList.remove('hidden');
       const _instrHint = document.getElementById('instructorHint');
+      // オンデマンド配信科目は「タップして選択」ではなく、どの教員でも構わない旨だけを案内する
       _instrHint.textContent = _isOnDemand
-        ? '👆 この科目は担当教員の選択は不要です（どれでも可）。1つ選んで進んでください'
+        ? 'この科目は担当教員はどの先生を選んでもかまいません。'
         : '👆 担当教員をタップして選択してください';
       _instrHint.classList.remove('hidden');
       const withReviewed = currentInstructors.map(inst => {
@@ -1547,11 +1548,10 @@
         }
         return `<button type="button" class="chip-btn single" data-group="instructor" data-value="${escapeHtml(inst.name)}"${cidAttr} style="display:inline-flex;align-items:center">${escapeHtml(label)}${remainingBadgeHtml(inst.remaining)}</button>`;
       }).join('') + omnibusChip;
-      // オンデマンド配信科目は担当教員によらず内容が同一なので、選択は不要である旨を案内する
+      // オンデマンド配信科目の案内は担当教員ラベル直下の #instructorHint に集約したため、
+      // 下の注記は常に重複投稿の共通文言のみ
       const _limitNotice = document.getElementById('instructorLimitNotice');
-      _limitNotice.textContent = _isOnDemand
-        ? 'この科目はオンデマンド配信のため、担当教員の選択は不要です。どの先生を選んでも構いません（レビュー内容は教員に紐づきません）。'
-        : '同じ科目・先生の組み合わせに投稿済みの場合は選べません。';
+      _limitNotice.textContent = '同じ科目・先生の組み合わせに投稿済みの場合は選べません。';
       _limitNotice.classList.remove('hidden');
       chipsEl.querySelectorAll('.chip-btn:not([disabled])').forEach(btn => {
         btn.onclick = () => {
