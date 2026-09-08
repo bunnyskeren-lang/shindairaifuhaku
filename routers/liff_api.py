@@ -592,7 +592,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
                 )
 
             # レビュー閲覧権（デフォルトでは他人のレビューは見られず、承認されたレビュー1件につき
-            # core.config.review_approval_unlock_credits(科目category) 枚（教養2枚・専門1枚）の
+            # core.config.review_approval_unlock_credits(科目category) 枚（教養5枚・専門3枚）の
             # 閲覧権チケットが付与される。閲覧権はsubject単位・バリアントグループ内で共有）
             # 専門科目は投稿解禁後もチケット解除・件数/評価集計表示を含め一切閲覧不可にする
             # （2026-09-06、ユーザー指示。閲覧解禁は別途指示があるまで行わない）

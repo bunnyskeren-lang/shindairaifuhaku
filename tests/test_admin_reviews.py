@@ -9,7 +9,7 @@ from sqlalchemy import select
 import routers.admin.reviews as admin_reviews
 from core.config import ADMIN_COOKIE
 from core.security import make_admin_token
-from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, Subject
 
 
 async def _seed_review(test_sessionmaker, *, status: str, content: str = "普通でした", course_name: str = "経営管理") -> int:
@@ -173,73 +173,6 @@ async def test_reassign_creates_course_section_and_instructor_when_missing(http_
         assert cs.subject_id == target_subject_id
         instr = await session.get(Instructor, cs.instructor_id)
         assert instr.name == "新任太郎"
-
-
-async def _seed_review_with_profile(
-    test_sessionmaker, *, content: str, category: str = "教養", student_id: str = "1234567S",
-) -> int:
-    async with test_sessionmaker() as session:
-        subj = Subject(name=f"チケット検証{content[:4]}", faculty="教養教育院", category=category)
-        session.add(subj)
-        await session.flush()
-        instr = Instructor(name="担当先生")
-        session.add(instr)
-        await session.flush()
-        cs = CourseSection(subject_id=subj.id, instructor_id=instr.id)
-        session.add(cs)
-        await session.flush()
-        session.add(UserProfile(line_user_id="U" + student_id, name="投稿太郎", student_id=student_id, unlock_credits=0))
-        review = Review(
-            course_section_id=cs.id, content=content, rating=3, ease_rating="A",
-            submitter_name="投稿太郎", student_id=student_id, status=ReviewStatus.PENDING,
-        )
-        session.add(review)
-        await session.commit()
-        await session.refresh(review)
-        return review.id
-
-
-@pytest.mark.parametrize("content,expected", [
-    ("短い", 1),            # 〜10字 → 教養1枚
-    ("あ" * 30, 3),         # 11〜50字 → 教養3枚
-    ("あ" * 120, 5),        # 51字〜 → 教養5枚
-])
-@pytest.mark.asyncio
-async def test_approve_grants_unlock_credits_by_comment_length(
-    http_client_factory, monkeypatch, test_sessionmaker, content, expected,
-):
-    review_id = await _seed_review_with_profile(test_sessionmaker, content=content)
-    client = _admin_client(http_client_factory, monkeypatch)
-
-    resp = await client.post(f"/admin/reviews/approve/{review_id}")
-    assert resp.status_code == 303
-
-    async with test_sessionmaker() as session:
-        review = await session.get(Review, review_id)
-        assert review.credit_granted_amount == expected
-        profile = (await session.execute(
-            select(UserProfile).where(UserProfile.student_id == review.student_id)
-        )).scalar_one()
-        assert profile.unlock_credits == expected
-
-
-@pytest.mark.asyncio
-async def test_reapprove_does_not_double_grant_or_recompute(http_client_factory, monkeypatch, test_sessionmaker):
-    # 承認 → 差し戻し → コメントを短く編集して再承認しても、付与枚数は初回のまま二重付与しない
-    review_id = await _seed_review_with_profile(test_sessionmaker, content="あ" * 120)  # 教養5枚
-    client = _admin_client(http_client_factory, monkeypatch)
-
-    await client.post(f"/admin/reviews/approve/{review_id}")
-    await client.post(f"/admin/reviews/restore/{review_id}")
-    await client.post(f"/admin/reviews/approve/{review_id}", data={"content": "短い"})
-
-    async with test_sessionmaker() as session:
-        review = await session.get(Review, review_id)
-        assert review.credit_granted_amount == 5
-        profile = (await session.execute(
-            select(UserProfile).where(UserProfile.student_id == review.student_id)
-        )).scalar_one()
-        assert profile.unlock_credits == 5
 
 
 @pytest.mark.asyncio

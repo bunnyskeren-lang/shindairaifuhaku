@@ -179,20 +179,15 @@ async def admin_review_approve(
                 profile = (await session.execute(
                     select(UserProfile).where(UserProfile.student_id == review.student_id)
                 )).scalar_one_or_none()
-                granted = 0
                 if profile:
-                    # 付与枚数はレビュー投稿先の科目カテゴリ（教養/専門）とコメント文字数で分岐。
-                    # 承認時に _apply_review_edits 済みの review.content（=最終確定文面）で算出し、
-                    # 枚数を review.credit_granted_amount に保存する（消費・集計はこの列を読む）
+                    # 付与枚数はレビュー投稿先の科目カテゴリで分岐（教養5枚・専門3枚）
                     category = (await session.execute(
                         select(Subject.category)
                         .join(CourseSection, CourseSection.subject_id == Subject.id)
                         .where(CourseSection.id == review.course_section_id)
                     )).scalar_one_or_none()
-                    granted = review_approval_unlock_credits(category, review.content)
-                    profile.unlock_credits += granted
+                    profile.unlock_credits += review_approval_unlock_credits(category)
                 review.credit_granted_at = datetime.now(timezone.utc)
-                review.credit_granted_amount = granted
             await session.commit()
     cache.invalidate_review_cache()
     return RedirectResponse("/admin/reviews", status_code=303)

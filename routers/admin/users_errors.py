@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 
 from core import cache
-from core.config import credit_tickets_granted_clause
+from core.config import credit_tickets_granted_clause, review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -80,25 +80,25 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
         # レビュー閲覧権チケットの「付与数」（実際に付与したレビューぶんの合計枚数）・
         # 使用数（付与総数 - 現在残数）・解除済み科目一覧を、このページに表示する分だけ集計する。
-        # 付与枚数は科目カテゴリ×コメント文字数で異なるが、承認時に確定した枚数が
-        # reviews.credit_granted_amount に入っているので student_id ごとに合算するだけでよい。
+        # 付与枚数は科目カテゴリで異なる（教養5枚・専門3枚）ため、カテゴリ別件数に枚数を掛けて合算する。
         # NULL（未付与）も番兵値（現金換算済み・付与なし）も除外する
         # → credit_tickets_granted_clause() に集約。
         granted_count_map: dict[str, int] = {}
         if student_ids:
             granted_rows = (await session.execute(
-                select(
-                    Review.student_id,
-                    func.coalesce(func.sum(Review.credit_granted_amount), 0),
-                )
+                select(Review.student_id, Subject.category, func.count(Review.id))
+                .join(CourseSection, CourseSection.id == Review.course_section_id)
+                .join(Subject, Subject.id == CourseSection.subject_id)
                 .where(
                     Review.student_id.in_(student_ids),
                     credit_tickets_granted_clause(Review.credit_granted_at),
                 )
-                .group_by(Review.student_id)
+                .group_by(Review.student_id, Subject.category)
             )).all()
-            for sid, total in granted_rows:
-                granted_count_map[sid] = int(total)
+            for sid, category, cnt in granted_rows:
+                granted_count_map[sid] = (
+                    granted_count_map.get(sid, 0) + cnt * review_approval_unlock_credits(category)
+                )
 
         line_user_ids = [u.user_id for u in users]
         unlocked_subjects_map: dict[str, list] = {}

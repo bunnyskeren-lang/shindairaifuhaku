@@ -13,9 +13,7 @@ from core.config import (
     OMNIBUS_INSTRUCTOR_LABEL,
     REGISTER_LIFF_ID,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
-    REVIEW_COMMENT_LEN_TIER1_MAX, REVIEW_COMMENT_LEN_TIER2_MAX,
     REVIEW_FORM_URL, REVIEW_LIFF_ID,
-    review_unlock_credit_tiers,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY,
 )
 from core.templates import templates
@@ -45,11 +43,6 @@ async def index(request: Request, uid: str = Query(default="")):
             "nogaku_course_to_department": NOGAKU_COURSE_TO_DEPARTMENT,
             "unlock_credits_kyoyo": REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
             "unlock_credits_senmon": REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
-            # チケット付与枚数は投稿先カテゴリ×コメント文字数の3段階（〜10字/11〜50字/51字〜）
-            "unlock_credit_tiers_kyoyo": review_unlock_credit_tiers("教養"),
-            "unlock_credit_tiers_senmon": review_unlock_credit_tiers("専門"),
-            "comment_len_tier1_max": REVIEW_COMMENT_LEN_TIER1_MAX,
-            "comment_len_tier2_max": REVIEW_COMMENT_LEN_TIER2_MAX,
             "omnibus_instructor_label": OMNIBUS_INSTRUCTOR_LABEL,
         },
     )
