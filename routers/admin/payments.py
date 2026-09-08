@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
-from core.config import credit_tickets_granted_clause, review_approval_unlock_credits
+from core.config import credit_tickets_granted_clause
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, PaymentRequest, PaymentRequestStatus, Review, Subject, UserProfile
+from models import PaymentRequest, PaymentRequestStatus, Review, UserProfile
 
 router = APIRouter()
 
@@ -59,24 +59,18 @@ async def admin_payment_pay(request_id: int, _: str = Depends(check_admin)):
             payment_request.paid_at = datetime.now(timezone.utc)
 
             # PayPayで現金化した分だけ、レビュー承認時に付与済みの閲覧チケットを使用済みにする
-            # （現金と閲覧権チケットの二重取得を防ぐため）。付与枚数は科目カテゴリで異なる
-            # （教養2枚・専門1枚）ため、件数×定数ではなくレビューごとに合算する。
+            # （現金と閲覧権チケットの二重取得を防ぐため）。付与枚数は科目カテゴリ×コメント文字数で
+            # 異なるが、承認時に確定した枚数が reviews.credit_granted_amount に入っているので合算する。
             # 実際にチケットを付与したレビューだけが消費対象（NULL＝未付与、番兵値＝現金換算済み
             # で付与なし、はいずれも除外）。判定は credit_tickets_granted_clause() に集約する。
-            paid_review_categories = (await session.execute(
-                select(Subject.category)
-                .select_from(Review)
-                .join(CourseSection, CourseSection.id == Review.course_section_id)
-                .join(Subject, Subject.id == CourseSection.subject_id)
+            credits_to_use = (await session.execute(
+                select(func.coalesce(func.sum(Review.credit_granted_amount), 0))
                 .where(
                     Review.payment_request_id == payment_request.id,
                     credit_tickets_granted_clause(Review.credit_granted_at),
                 )
-            )).scalars().all()
-            if paid_review_categories:
-                credits_to_use = sum(
-                    review_approval_unlock_credits(c) for c in paid_review_categories
-                )
+            )).scalar_one()
+            if credits_to_use:
                 await session.execute(
                     UserProfile.__table__.update()
                     .where(UserProfile.student_id == payment_request.student_id)

@@ -318,6 +318,11 @@ class Review(TimestampMixin, Base):
     # レビュー閲覧権チケットを付与済みかどうか（承認時に1度だけ付与するための冪等性チェック用）。
     # 却下・待機中への差し戻し後に再承認しても二重付与しないよう、一度付与したら値は変更しない
     credit_granted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 承認時に実際に付与した閲覧権チケット枚数（core.config.review_approval_unlock_credits で
+    # カテゴリ×コメント文字数から算出。承認後にコメントを編集しても付与済み枚数はぶれさせない）。
+    # 支払い済み化時のチケット消費・管理画面の付与数集計はこの列を合算する。
+    # NULL＝未付与 or 旧データ（database.py init_db() で旧ルールの枚数をバックフィル）
+    credit_granted_amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # 全く同じ科目名を別分類にも登録する際、既存科目のレビューをそのまま複製して見せるための
     # コピー元レビューid（NULL＝通常の投稿）。買取（支払い）対象クエリはpayment_request_id IS NULLで
     # 判定するため、そのまま複製すると1件の投稿が二重に支払い対象としてカウントされてしまう。

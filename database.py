@@ -575,6 +575,31 @@ async def init_db():
             "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS credit_granted_at TIMESTAMPTZ"
         ))
 
+        # ── 2026-09-08: 閲覧権チケット付与枚数をコメント文字数でも分ける ──
+        # 承認時に確定した枚数を reviews.credit_granted_amount に保存し、支払い済み化時の
+        # チケット消費・管理画面の付与数集計はこの列を合算する（承認後にコメントが編集されても
+        # 付与済み枚数がぶれないようにするため）。既に付与済みの旧レビューは、当時の
+        # カテゴリのみのルール（教養5枚・専門3枚・その他1枚）で枚数をバックフィルする。
+        # credit_granted_at が NULL（未付与）・番兵値 1970-01-01（現金換算済みで付与なし）の
+        # 行は対象外。
+        await conn.execute(text(
+            "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS credit_granted_amount INTEGER"
+        ))
+        await conn.execute(text("""
+            UPDATE reviews r
+            SET credit_granted_amount = CASE s.category
+                WHEN '教養' THEN 5
+                WHEN '専門' THEN 3
+                ELSE 1
+            END
+            FROM course_sections cs
+            JOIN subjects s ON s.id = cs.subject_id
+            WHERE r.course_section_id = cs.id
+              AND r.credit_granted_amount IS NULL
+              AND r.credit_granted_at IS NOT NULL
+              AND r.credit_granted_at > TIMESTAMPTZ '1970-01-01 00:00:00+00'
+        """))
+
         # ── 2026-08-24: 会員登録の学年入力を廃止 ──
         # 学年を使う機能（旧・単位チェッカー等）は既に全廃止済みで、実質未使用の項目だったため
         # 登録フォームから削除。既存ユーザーの値もユーザーの了承のもと削除する

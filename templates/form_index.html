@@ -112,7 +112,14 @@
             style="background:#fff;color:#6b7280">👨‍🏫 先生名で探す</button>
         </div>
 
-        <p class="text-xs text-amber-600 font-medium mb-3">💡 レビュー承認1件でチケット付与：<b>教養＋{{ unlock_credits_kyoyo }}枚</b> ／ <b>専門＋{{ unlock_credits_senmon }}枚</b></p>
+        <div class="text-xs text-amber-600 font-medium mb-3">
+          <p class="mb-1">💡 レビューが承認されると閲覧チケットを付与（<b>コメントが長いほど多くもらえます</b>）</p>
+          <ul class="list-disc list-inside text-amber-500 leading-relaxed">
+            <li>〜{{ comment_len_tier1_max }}字：教養＋{{ unlock_credit_tiers_kyoyo[0] }}枚／専門＋{{ unlock_credit_tiers_senmon[0] }}枚</li>
+            <li>{{ comment_len_tier1_max + 1 }}〜{{ comment_len_tier2_max }}字：教養＋{{ unlock_credit_tiers_kyoyo[1] }}枚／専門＋{{ unlock_credit_tiers_senmon[1] }}枚</li>
+            <li>{{ comment_len_tier2_max + 1 }}字〜：教養＋{{ unlock_credit_tiers_kyoyo[2] }}枚／専門＋{{ unlock_credit_tiers_senmon[2] }}枚</li>
+          </ul>
+        </div>
         <p class="text-xs text-gray-400 mb-3">選択肢に見当たらない科目・先生がいた場合は<a href="/contact" target="_blank" class="underline hover:text-indigo-500">お問い合わせフォーム</a>よりご連絡ください</p>
 
         <input type="hidden" name="course_name" id="courseNameHidden">

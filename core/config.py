@@ -83,12 +83,31 @@ ON_DEMAND_SAME_CONTENT_SUBJECTS = frozenset({
 ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信であり、他教員のクラスも内容は同一です"
 
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数。
-# 2026-09-07より、レビュー投稿先の科目カテゴリで枚数を分ける（教養5枚・専門3枚）。
-# 実際の付与・消費判定は review_approval_unlock_credits() に集約する。
+# 2026-09-07: レビュー投稿先の科目カテゴリで枚数を分ける（教養/専門）。
+# 2026-09-08: さらにコメント本文の文字数で3段階に分ける（下記 _UNLOCK_CREDIT_TIERS）。
+#   教養: 〜10字=1枚 / 11〜50字=3枚 / 51字〜=5枚
+#   専門: 〜10字=1枚 / 11〜50字=2枚 / 51字〜=3枚
+# 定数は「51字〜（最上位）」の枚数。実際の枚数決定は review_approval_unlock_credits() に集約し、
+# 承認時に確定した枚数を reviews.credit_granted_amount へ保存する（消費・集計はその列を読む。
+# 承認後にコメントが編集されても付与済み枚数がぶれないようにするため）。
 REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO = 5
 REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON = 3
 # カテゴリが取得できない/教養・専門以外のレビュー（通常発生しない）向けフォールバック
 REVIEW_APPROVAL_UNLOCK_CREDITS = 1
+
+# コメント本文の文字数（前後空白を除いた文字数）の区切り。この値「以下」で下位ランク。
+REVIEW_COMMENT_LEN_TIER1_MAX = 10   # 〜10字
+REVIEW_COMMENT_LEN_TIER2_MAX = 50   # 11〜50字
+# category → (〜10字, 11〜50字, 51字〜) の付与枚数
+_UNLOCK_CREDIT_TIERS = {
+    "教養": (1, 3, REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO),
+    "専門": (1, 2, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON),
+}
+_UNLOCK_CREDIT_TIERS_DEFAULT = (
+    REVIEW_APPROVAL_UNLOCK_CREDITS,
+    REVIEW_APPROVAL_UNLOCK_CREDITS,
+    REVIEW_APPROVAL_UNLOCK_CREDITS,
+)
 
 # reviews.credit_granted_at は1列で3状態を表す（2026-09-08〜）:
 #   - NULL                     … まだ付与も番兵マークもしていない。承認時にチケットを付与すべき
@@ -119,14 +138,27 @@ def credit_tickets_granted_clause(credit_granted_at_col):
     return credit_granted_at_col > CREDIT_GRANTED_SENTINEL
 
 
-def review_approval_unlock_credits(category) -> int:
-    """このカテゴリの科目へのレビューが1件承認されたとき付与するチケット枚数。"""
-    c = (category or "").strip()
-    if c == "教養":
-        return REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO
-    if c == "専門":
-        return REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON
-    return REVIEW_APPROVAL_UNLOCK_CREDITS
+def review_comment_char_count(content) -> int:
+    """チケット枚数判定に使うコメント本文の文字数（前後の空白・改行を除く）。"""
+    return len((content or "").strip())
+
+
+def review_approval_unlock_credits(category, content=None) -> int:
+    """このレビューが1件承認されたとき付与する閲覧権チケット枚数。
+    投稿先の科目カテゴリ（教養/専門）とコメント本文の文字数で決まる。
+    content 省略時は最短ランク（1枚）として扱う。"""
+    tiers = review_unlock_credit_tiers(category)
+    n = review_comment_char_count(content)
+    if n <= REVIEW_COMMENT_LEN_TIER1_MAX:
+        return tiers[0]
+    if n <= REVIEW_COMMENT_LEN_TIER2_MAX:
+        return tiers[1]
+    return tiers[2]
+
+
+def review_unlock_credit_tiers(category) -> tuple:
+    """このカテゴリの (〜10字, 11〜50字, 51字〜) の付与枚数タプル。フォームの案内表示にも使う。"""
+    return _UNLOCK_CREDIT_TIERS.get((category or "").strip(), _UNLOCK_CREDIT_TIERS_DEFAULT)
 
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1

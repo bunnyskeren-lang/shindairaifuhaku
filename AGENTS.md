@@ -341,10 +341,10 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `instructors` | 教員マスタ |
 | `course_sections` | 科目×教員のセクション |
 | `syllabi` | シラバス（年度・クォーター・時間割コード。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み、target_grades/subject_category列は2026-07-30に廃止済み） |
-| `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い。`credit_granted_at`は閲覧権チケット付与済みフラグ、承認時に一度だけ付与するための冪等性チェック用） |
+| `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い。`credit_granted_at`は閲覧権チケット付与済みフラグ、承認時に一度だけ付与するための冪等性チェック用。`credit_granted_amount`は承認時に実際に付与した閲覧権チケット枚数を保存する列で、支払い済み化時の消費・管理画面の付与数集計はこの列を合算する＝承認後にコメントを編集しても付与済み枚数はぶれない） |
 | `payment_requests` | レビュー報酬（1件100円、100円単位＝1件単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/100件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
 | `course_section_views` | 科目セクションの閲覧数 |
-| `subject_unlocks` | レビュー閲覧権の解除記録（line_user_id, subject_id）。デフォルトでは他人のレビューは閲覧できず、会員登録（初回）で`REGISTRATION_WELCOME_UNLOCK_CREDITS`（1枚）、自分のレビューが1件承認されるたびに`core.config.review_approval_unlock_credits(科目category)`（教養`REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO`=2枚・専門`REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON`=1枚、それ以外は`REVIEW_APPROVAL_UNLOCK_CREDITS`=1枚のフォールバック。2026-09-07にカテゴリ別へ分岐）が`user_profiles.unlock_credits`に加算され、任意の科目でチケットを1枚消費して解除する（`routers/liff_api.py` `/api/course/{id}/unlock`）。語尾バリアントグループはグループ内の全subject_idをまとめて解除する。支払い済み化時のチケット消費（`routers/admin/payments.py`）もレビューごとにカテゴリ別枚数を合算する |
+| `subject_unlocks` | レビュー閲覧権の解除記録（line_user_id, subject_id）。デフォルトでは他人のレビューは閲覧できず、会員登録（初回）で`REGISTRATION_WELCOME_UNLOCK_CREDITS`（1枚）、自分のレビューが1件承認されるたびに`core.config.review_approval_unlock_credits(科目category, コメント本文)`が返す枚数が`user_profiles.unlock_credits`に加算され、任意の科目でチケットを1枚消費して解除する（`routers/liff_api.py` `/api/course/{id}/unlock`）。付与枚数は投稿先の科目カテゴリ（教養/専門）とコメント本文の文字数（前後空白除く）で決まる：教養＝〜10字1枚/11〜50字3枚/51字〜5枚、専門＝〜10字1枚/11〜50字2枚/51字〜3枚、教養・専門以外は`REVIEW_APPROVAL_UNLOCK_CREDITS`=1枚フォールバック（2026-09-07にカテゴリ別へ、2026-09-08に文字数別へ分岐）。承認時に確定した枚数は`reviews.credit_granted_amount`に保存し、消費・集計はその列を合算する（承認後のコメント編集で付与済み枚数がぶれないようにするため）。語尾バリアントグループはグループ内の全subject_idをまとめて解除する。支払い済み化時のチケット消費（`routers/admin/payments.py`）・管理画面の付与数集計（`routers/admin/users_errors.py`）も`credit_granted_amount`の合算 |
 
 共通・運用系:
 
