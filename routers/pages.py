@@ -91,18 +91,26 @@ async def coop_redirect(request: Request):
     return templates.TemplateResponse("coop_redirect.html", {"request": request})
 
 
+# static/join-ogp.png を差し替えたらこの値を必ず変える。LINE/Discordは画像URL単位で
+# キャッシュするため、?v= を変えないと同じファイル名では古い画像が表示され続ける。
+JOIN_OGP_IMAGE_VERSION = "20260908c"
+
+
 @router.get("/join", response_class=HTMLResponse)
 async def join_line(request: Request):
     # LINE/Discord等にそのままlin.eeを貼るとデフォルト画像になるため、OGP画像付きの
-    # このページを共有してもらう。クローラーはOGPだけ読み、人間のブラウザはJS/メタリフレッシュで
-    # LINE友だち追加へ転送される（サーバー側リダイレクトにするとクローラーもlin.ee側のOGPを
-    # 拾ってしまうので、あえて200 HTMLを返す）。
+    # このページを共有してもらう。
+    # 重要: <meta http-equiv="refresh"> は入れない。LINE/Discordのクローラーはこれを
+    # 追ってlin.ee側へ飛び、lin.eeのOGP（"Add LINE friend" + デフォルト画像）を拾ってしまう。
+    # 人間のブラウザへの転送は join.html の location.replace（JS）だけで行う
+    # （クローラーはJSを実行しない）。JS無効環境向けに画面内の友だち追加ボタンを残す。
     response = templates.TemplateResponse(
         "join.html",
         {
             "request": request,
             "friend_url": LINE_FRIEND_URL,
             "app_url": APP_URL,
+            "img_version": JOIN_OGP_IMAGE_VERSION,
         },
     )
     # OGP画像を差し替えたときにLINE/Discordのキャッシュ更新を妨げないよう短めに

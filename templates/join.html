@@ -11,9 +11,12 @@
   <meta property="og:site_name" content="神大ライフハック">
   <meta property="og:title" content="神大ライフハック｜神大生の履修えらびをサポートするLINE bot">
   <meta property="og:description" content="授業レビューの閲覧・投稿、楽単・鬼単ランキング。神戸大学 起業部の学生が開発。※神戸大学公式のサービスではありません。">
-  <meta property="og:image" content="{{ app_url }}/static/join-ogp.png">
+  <meta property="og:image" content="{{ app_url }}/static/join-ogp.png?v={{ img_version }}">
+  <meta property="og:image:secure_url" content="{{ app_url }}/static/join-ogp.png?v={{ img_version }}">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="神大ライフハック">
   <meta property="og:url" content="{{ app_url }}/join">
   <meta property="og:locale" content="ja_JP">
 
@@ -21,11 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="神大ライフハック｜神大生の履修えらびをサポートするLINE bot">
   <meta name="twitter:description" content="授業レビューの閲覧・投稿、楽単・鬼単ランキング。神戸大学 起業部の学生が開発。※神戸大学公式のサービスではありません。">
-  <meta name="twitter:image" content="{{ app_url }}/static/join-ogp.png">
-
-  <!-- 人間のブラウザだけLINE友だち追加へ転送する。クローラー（LINE/Discord等）は
-       JS/メタリフレッシュを追わずに上のOGPだけを読むため、サーバー側301/302は使わない。 -->
-  <meta http-equiv="refresh" content="0; url={{ friend_url }}">
+  <meta name="twitter:image" content="{{ app_url }}/static/join-ogp.png?v={{ img_version }}">
   <style>
     body {
       margin: 0; min-height: 100vh; box-sizing: border-box;
