@@ -85,7 +85,8 @@ VALID_FORM = {
     "course_name": "経営管理",
     "rating": "4",
     "ease_rating": "A",
-    "comment": "とても勉強になりました",
+    # コメントは core/config.py MIN_COMMENT_LEN(=30) 文字以上ないとサーバー側で弾かれる
+    "comment": "とても勉強になりました。予習と復習をきちんとやれば単位は取りやすい印象でした。",
     "id_token": "valid-token",
     "student_id": "2345678S",
     "academic_year": "2026",
@@ -108,7 +109,7 @@ async def test_submit_creates_review_for_registered_user(http_client_factory, mo
     async with test_sessionmaker() as session:
         reviews = (await session.execute(select(Review))).scalars().all()
         assert len(reviews) == 1
-        assert reviews[0].content == "とても勉強になりました"
+        assert reviews[0].content == VALID_FORM["comment"]
         assert reviews[0].status == "pending"
         assert reviews[0].submitter_name == "神戸太郎"
 
@@ -274,6 +275,21 @@ async def test_submit_empty_comment_returns_400(http_client_factory, monkeypatch
     assert resp.status_code == 400
 
 
+@pytest.mark.asyncio
+async def test_submit_short_comment_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """コメントが MIN_COMMENT_LEN(30) 文字未満なら、他が全て妥当でも400で弾く。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    form = dict(VALID_FORM, comment="短い")
+    resp = await client.post("/submit", data=form)
+    assert resp.status_code == 400
+    assert "30文字以上" in resp.text
+
+
 # ── 境界値 ──────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -304,12 +320,13 @@ async def test_submit_rating_out_of_range_returns_400(http_client_factory, monke
     assert resp.status_code == 400
 
 
-# ── 末尾バリアントグループ（例: 線形代数1/2）の募集枠共有 ──────────────────────────
+# ── 末尾バリアントグループ（例: 線形代数1/2）の重複投稿判定 ──────────────────────────
 
 @pytest.mark.asyncio
-async def test_submit_variant_group_shares_recruitment_slot(http_client_factory, monkeypatch, test_sessionmaker):
-    """同一教員が担当する線形代数1/線形代数2は表示上1科目に統合されるため、
-    先に線形代数1で枠が埋まったら線形代数2への投稿も上限扱いで拒否されるべき。"""
+async def test_submit_variant_group_allows_different_students(http_client_factory, monkeypatch, test_sessionmaker):
+    """線形代数1/線形代数2は表示上1科目に統合されるが、2026-09-08に「科目×教員あたりの
+    投稿件数上限」は撤廃済み。別の学生であればグループ内の別メンバーへ続けて投稿できる
+    （同一学生の重複だけを blocks_same_student_dup で防ぐ）。"""
     _fake_verify(monkeypatch, user_id="U1".ljust(33, "0"))
     _stub_push_notification(monkeypatch)
     await _seed_variant_courses(test_sessionmaker, ["線形代数1", "線形代数2"])
@@ -322,12 +339,11 @@ async def test_submit_variant_group_shares_recruitment_slot(http_client_factory,
     _fake_verify(monkeypatch, user_id="U2".ljust(33, "0"))
     await _seed_profile(test_sessionmaker, user_id="U2".ljust(33, "0"), student_id="2222222S", name="別学生")
     resp2 = await client.post("/submit", data=dict(VALID_FORM, course_name="線形代数2", student_id="2222222S"))
-    assert resp2.status_code == 400
-    assert "上限に達した" in resp2.text
+    assert resp2.status_code == 303
 
     async with test_sessionmaker() as session:
         reviews = (await session.execute(select(Review))).scalars().all()
-        assert len(reviews) == 1
+        assert len(reviews) == 2
 
 
 @pytest.mark.asyncio
@@ -355,9 +371,10 @@ async def test_submit_variant_group_blocks_same_student_dup(http_client_factory,
 # ── 医学部保健学科4専攻をまたいだ完全同名科目のレビュー共有 ──────────────────────
 
 @pytest.mark.asyncio
-async def test_submit_hoken_gakka_cross_department_shares_recruitment_slot(http_client_factory, monkeypatch, test_sessionmaker):
-    """看護学専攻の「生理学」で枠が埋まったら、担当教員（専攻）が別の理学療法学専攻
-    「生理学」への投稿も上限扱いで拒否されるべき（専攻をまたいだ完全同名科目はレビューを共有する）。"""
+async def test_submit_hoken_gakka_cross_department_allows_different_students(http_client_factory, monkeypatch, test_sessionmaker):
+    """看護学専攻の「生理学」に1件投稿があっても、別の学生であれば担当教員（専攻）が
+    別の理学療法学専攻「生理学」へ続けて投稿できる（2026-09-08に件数上限は撤廃。専攻を
+    またいだ重複は同一学生のぶんだけ blocks_same_student_dup で防ぐ）。"""
     _fake_verify(monkeypatch, user_id="U1".ljust(33, "0"))
     _stub_push_notification(monkeypatch)
     await _seed_hoken_gakka_courses(test_sessionmaker)
@@ -374,12 +391,11 @@ async def test_submit_hoken_gakka_cross_department_shares_recruitment_slot(http_
     resp2 = await client.post("/submit", data=dict(
         VALID_FORM, course_name="生理学", student_id="2222222S", selected_instructor="理学花子",
     ))
-    assert resp2.status_code == 400
-    assert "上限に達した" in resp2.text
+    assert resp2.status_code == 303
 
     async with test_sessionmaker() as session:
         reviews = (await session.execute(select(Review))).scalars().all()
-        assert len(reviews) == 1
+        assert len(reviews) == 2
 
 
 @pytest.mark.asyncio

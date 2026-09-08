@@ -119,7 +119,9 @@ async def test_banned_user_cannot_submit_review(http_client_factory, monkeypatch
         "course_name": "経営管理",
         "rating": "4",
         "ease_rating": "A",
-        "comment": "とても勉強になりました",
+        # コメントは MIN_COMMENT_LEN(30) 文字以上ないと長さチェックで先に弾かれるため、
+        # BANチェックまで到達する十分な長さの本文にする
+        "comment": "とても勉強になりました。予習と復習をきちんとやれば単位は取りやすい印象でした。",
         "id_token": "valid-token",
         "student_id": "2345678S",
         "academic_year": "2026",
