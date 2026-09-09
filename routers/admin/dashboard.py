@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import MessageLog, PushSubscription
+from models import MessageLog, PushSubscription, UserProfile
 
 router = APIRouter()
 
@@ -16,10 +16,21 @@ async def admin_page(request: Request, _: str = Depends(check_admin), page: int 
     per_page = 50
     async with AsyncSessionLocal() as session:
         total = (await session.execute(select(func.count(MessageLog.id)))).scalar_one()
+        # 送信者を LINE user_id ではなく会員登録時の氏名・学籍番号で表示するため
+        # user_profiles を left join する（未登録ユーザーの行も残すので outerjoin）。
         logs = (await session.execute(
-            select(MessageLog).order_by(MessageLog.created_at.desc())
+            select(
+                MessageLog.user_id,
+                MessageLog.direction,
+                MessageLog.message,
+                MessageLog.created_at,
+                UserProfile.name.label("name"),
+                UserProfile.student_id.label("student_id"),
+            )
+            .outerjoin(UserProfile, UserProfile.line_user_id == MessageLog.user_id)
+            .order_by(MessageLog.created_at.desc())
             .offset((page - 1) * per_page).limit(per_page)
-        )).scalars().all()
+        )).all()
     total_pages = max(1, (total + per_page - 1) // per_page)
     return templates.TemplateResponse("admin/logs.html", {
         "request": request,

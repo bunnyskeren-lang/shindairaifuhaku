@@ -2,23 +2,54 @@
 {% block title %}管理画面{% endblock %}
 {% block heading %}🛡️ 管理画面{% endblock %}
 
-{% block content %}
+{% block extra_style %}
+.log-table td{vertical-align:top}
+.log-time{white-space:nowrap;font-size:11px;color:#6b7280}
+.log-user-name{font-weight:700;color:#111827}
+.log-user-sub{color:#9ca3af;font-size:11px}
+.log-dir{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.log-dir-in{background:#dcfce7;color:#166534}
+.log-dir-out{background:#e0e7ff;color:#3730a3}
+.log-msg{font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.log-msg-sys{color:#6b7280;font-style:italic}
+{% endblock %}
+
 {% from "admin/base.html" import pager %}
+{% block content %}
 <div class="card">
   <h2 style="margin-top:0">メッセージログ（全{{ total }}件）</h2>
-  <table>
-    <tr><th>ユーザー</th><th>方向</th><th>メッセージ</th><th>日時</th></tr>
+  <div class="table-wrap">
+  <table class="log-table">
+    <tr>
+      <th style="width:1%">日時</th>
+      <th style="width:1%">ユーザー</th>
+      <th style="width:1%">方向</th>
+      <th>メッセージ</th>
+    </tr>
     {% for l in logs %}
     <tr>
-      <td>{{ l.user_id[:10] }}…</td>
-      <td>{{ "→" if l.direction == "in" else "←" }}</td>
-      <td>{{ l.message[:60] }}</td>
-      <td>{{ l.created_at | jst }}</td>
+      <td class="log-time">{{ l.created_at | jst }}</td>
+      <td>
+        {% if l.name %}<span class="log-user-name">{{ l.name }}</span>{% else %}<span class="log-user-sub">未登録ユーザー</span>{% endif %}
+        {% if l.student_id %}<br><span class="log-user-sub">{{ l.student_id }}</span>{% endif %}
+        <br><span class="log-user-sub">{{ l.user_id[:8] }}…</span>
+      </td>
+      <td>
+        {% if l.direction == "in" %}
+        <span class="log-dir log-dir-in">受信 →</span>
+        {% else %}
+        <span class="log-dir log-dir-out">← 送信</span>
+        {% endif %}
+      </td>
+      <td>
+        <span class="log-msg{{ ' log-msg-sys' if l.message.startswith('[') }}">{{ l.message }}</span>
+      </td>
     </tr>
     {% else %}
     <tr><td colspan="4" class="empty">ログなし</td></tr>
     {% endfor %}
   </table>
+  </div>
   {{ pager(page, total_pages, total, url_prefix) }}
 </div>
 {% endblock %}

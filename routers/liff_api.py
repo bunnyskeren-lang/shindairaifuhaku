@@ -1,3 +1,4 @@
+import asyncio
 import re as _re
 from datetime import datetime, timezone
 
@@ -7,7 +8,7 @@ from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, moderation
-from core.activity_log import save_error_log
+from core.activity_log import save_error_log, save_log_bg
 from core.config import (
     BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, KYOTSU_SENMON_KISO_FACULTY,
     MAX_REVIEWS_PER_COURSE_SECTION,
@@ -430,6 +431,11 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             subject = await session.get(Subject, course_id)
             if not subject:
                 raise HTTPException(status_code=404, detail="course not found")
+            # 科目閲覧LIFFのタップもメッセージログに残す。このAPIはLIFFページ表示時に
+            # 1回だけ呼ばれる。リッチメニューやFlexのボタンからLIFFを直接開く導線は
+            # postback/messageを伴わないため、従来この操作はログに一切現れなかった。
+            if uid:
+                asyncio.create_task(save_log_bg(uid, "in", f"[科目閲覧] {subject.name}"))
             # 語尾バリアントグループに属する科目は、レビュー閲覧も1つの科目として扱い、
             # グループ内の全科目のレビュー・評価をまとめて表示する（レビュー投稿フォームの
             # 科目検索での統合表示と対にするため）
