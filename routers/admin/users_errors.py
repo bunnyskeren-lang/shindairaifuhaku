@@ -101,27 +101,39 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 )
 
         line_user_ids = [u.user_id for u in users]
-        unlocked_subjects_map: dict[str, list] = {}
+        # チケットを使って解除した科目を「いつ・何を」解除したか分かる形で集める。
+        # 語尾バリアントグループ（例: 生物学各論A1/A2）は1回の解除で複数のsubject_id行が
+        # 同時刻に作られるため、unlocked_at でまとめて「1チケット＝1解除」を1行にする。
+        unlock_events_map: dict[str, list] = {}
         if line_user_ids:
             unlock_rows = (await session.execute(
-                select(SubjectUnlock.line_user_id, Subject.name)
+                select(SubjectUnlock.line_user_id, SubjectUnlock.unlocked_at, Subject.name)
                 .join(Subject, Subject.id == SubjectUnlock.subject_id)
                 .where(SubjectUnlock.line_user_id.in_(line_user_ids))
-                .order_by(Subject.name)
+                .order_by(SubjectUnlock.unlocked_at.desc(), Subject.name)
             )).all()
-            for uid, name in unlock_rows:
-                unlocked_subjects_map.setdefault(uid, []).append(name)
+            grouped: dict[str, dict[str, dict]] = {}
+            for uid, unlocked_at, name in unlock_rows:
+                key = unlocked_at.isoformat() if unlocked_at else "?"
+                entry = grouped.setdefault(uid, {}).setdefault(
+                    key, {"unlocked_at": unlocked_at, "names": []}
+                )
+                entry["names"].append(name)
+            # query は unlocked_at desc 順なので dict の挿入順＝新しい解除が先頭
+            unlock_events_map = {uid: list(v.values()) for uid, v in grouped.items()}
 
         ticket_map: dict[str, dict] = {}
         for u in users:
             granted = granted_count_map.get(u.student_id, 0) if u.student_id else 0
             balance = u.unlock_credits or 0
+            events = unlock_events_map.get(u.user_id, [])
             ticket_map[u.user_id] = {
                 "balance": balance,
                 "granted": granted,
                 # 付与総数-現在残数=使用数。マイナスにはならない想定だが、表示上の破綻を避けるためガードする
                 "used": max(granted - balance, 0),
-                "subjects": unlocked_subjects_map.get(u.user_id, []),
+                "unlock_events": events,
+                "unlocked_count": sum(len(e["names"]) for e in events),
             }
 
     total_pages = max(1, (total + per_page - 1) // per_page)

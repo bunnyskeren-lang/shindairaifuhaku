@@ -37,20 +37,25 @@
         {% endif %}
       </td>
       <td>
-        {% if tk and (tk.granted > 0 or tk.balance > 0) %}
-        <div style="font-size:12px;font-weight:700;color:var(--accent)">残{{ tk.balance }} / 付与{{ tk.granted }} / 使用{{ tk.used }}</div>
-        {% if tk.subjects %}
+        {% set tk = tk or {"balance": 0, "granted": 0, "used": 0, "unlock_events": [], "unlocked_count": 0} %}
+        <div style="font-size:12px;font-weight:700;color:var(--accent)">残り{{ tk.balance }}枚</div>
+        {% if tk.granted > 0 %}
+        <div style="font-size:10px;color:#9ca3af">付与{{ tk.granted }} / 使用{{ tk.used }}</div>
+        {% endif %}
+        {% if tk.unlock_events %}
         <details>
-          <summary style="cursor:pointer;font-size:11px;color:#6b7280">解除済み{{ tk.subjects|length }}科目</summary>
+          <summary style="cursor:pointer;font-size:11px;color:#6b7280">チケット解除履歴（{{ tk.unlock_events|length }}回・{{ tk.unlocked_count }}科目）</summary>
           <ul style="margin:4px 0 0;padding-left:16px;font-size:11px;color:#6b7280;list-style:disc">
-            {% for name in tk.subjects %}
-            <li>{{ name }}</li>
+            {% for ev in tk.unlock_events %}
+            <li>
+              {{ ev.names|join("・") }}
+              {% if ev.unlocked_at %}<br><span style="color:#9ca3af">{{ ev.unlocked_at | jst }} 解除</span>{% endif %}
+            </li>
             {% endfor %}
           </ul>
         </details>
-        {% endif %}
         {% else %}
-        <span style="font-size:12px;color:#d1d5db">―</span>
+        <div style="font-size:10px;color:#d1d5db">解除履歴なし</div>
         {% endif %}
       </td>
       <td>
