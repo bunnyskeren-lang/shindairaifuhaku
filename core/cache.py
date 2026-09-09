@@ -22,6 +22,7 @@ from core.subject_variants import (
     compute_variant_groups,
     compute_variant_member_suffix_map,
     is_hoken_gakka_senko,
+    is_remote_tagged,
 )
 from database import AsyncSessionLocal
 from models import (
@@ -620,12 +621,19 @@ async def get_variant_group_subject_ids(subject: Subject) -> list[int]:
     else:
         # compute_variant_groups()はラベル文字列（ベース名）しか返さないため、別学部の科目が
         # 偶然同じベース名グループを持つ場合の誤統合を避け、対象subjectと同じfaculty/departmentの
-        # 科目だけに絞り込む（liff_api.py _group_subject_ids参照）
+        # 科目だけに絞り込む（liff_api.py _group_subject_ids参照）。
+        # さらに遠隔クラス（「（遠隔）」タグ付き）と対面クラスは授業形態が異なるため
+        # 別グループとして扱う（compute_variant_bases()のnum_basesはタグ完全一致でグループ化
+        # しているが、compute_variant_groups()が返すベース名ラベルはタグ抜きで遠隔/対面が
+        # 同じ文字列になるため、ここでラベル一致に加えてタグの有無も揃える。2026-09-09、
+        # 教養(外国語第1)のAcademic English等で遠隔・対面のレビューが1つのLIFFページに
+        # 混在していた不具合の修正。[[project_remote_variant_group_split_20260831]]）
         ids = [
             c.id for c in all_courses
             if variant_map.get(c.name) == label
             and (c.faculty or "") == (subject.faculty or "")
             and (c.department or "") == (subject.department or "")
+            and is_remote_tagged(c.name) == is_remote_tagged(subject.name)
         ]
 
     # 医学部保健学科の4専攻（看護学/理学療法学/作業療法学/検査技術科学）は、専攻ごとに
