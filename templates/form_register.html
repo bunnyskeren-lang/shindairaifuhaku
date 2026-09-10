@@ -7,10 +7,14 @@
   <script src="https://cdn.tailwindcss.com"></script>
   {% if liff_id %}<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>{% endif %}
   {% include "_partials/liff_auth.html" %}
+  <style>
+    .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
+  </style>
 </head>
 <body class="{% if IS_DEV %}bg-gradient-to-br from-orange-50 to-amber-100{% else %}bg-gradient-to-br from-blue-50 to-indigo-100{% endif %} min-h-screen pb-16">
 
   <div class="max-w-md mx-auto px-4 pt-8">
+    <div id="formWrapper" class="blurred">
 
     {% if IS_DEV %}
     <div class="bg-orange-500 text-white text-center text-sm font-bold py-2 px-4 rounded-2xl mb-4">
@@ -114,6 +118,14 @@
         に同意したものとみなします。
       </p>
     </form>
+    </div>
+  </div>
+
+  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div id="authOverlayBox" class="bg-white rounded-2xl shadow-xl p-6 max-w-xs w-full text-center space-y-3">
+      <div class="text-4xl">⏳</div>
+      <p class="text-sm text-gray-500">確認中...</p>
+    </div>
   </div>
 
   <script>
@@ -212,40 +224,119 @@
     }
     restoreRegisterDraft();
 
-    // 修正理由: 以前は ?uid= をサーバー側でDB照会してテンプレートに直接
-    // 埋め込んでいたため他人のPIIが閲覧できてしまっていた。ID token検証済みの
-    // /api/profile/prefill から取得した本人の既存プロフィールのみを反映する。
-    if (LIFF_ID) {
-      (async () => {
-        try {
-          await ensureLiffInit();
-          if (!liff.isLoggedIn()) return;
-          const idToken = await liff.getIDToken();
-          if (!idToken) return;
-          if (idTokenExpired(idToken)) { forceReauth('expired', 'page_load', idToken); return; }
-          const res = await fetch('/api/profile/prefill', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_token: idToken }),
-          });
-          const d = await res.json();
-          if (d.auth_failed) { forceReauth('auth_failed', 'page_load', idToken); return; }
-          clearReauthFlag(idToken);
-          if (!d.found) return;
-          // 未入力の欄だけサーバー値で埋める（入力途中の下書きを上書きしない）
-          const nameEl = document.getElementById('name');
-          if (d.name && !nameEl.value) nameEl.value = d.name;
-          const sidEl = document.getElementById('student_id');
-          if (d.student_id && !sidEl.value) sidEl.value = d.student_id;
-          if (d.faculty && !facultySel.value) {
-            facultySel.value = d.faculty;
-            populateDepartments(d.faculty, d.department || '');
-          }
-          const coopEl = document.getElementById('coop_jobsite_known');
-          if (d.coop_jobsite_known && !coopEl.value) coopEl.value = d.coop_jobsite_known;
-        } catch (e) {}
-      })();
+    function showOverlay(html) {
+      document.getElementById('authOverlayBox').innerHTML = html;
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('formWrapper').classList.add('blurred');
     }
+    function hideOverlay() {
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('formWrapper').classList.remove('blurred');
+    }
+
+    // 修正理由: 以前はページ表示時のプリフィルを best-effort な IIFE で回すだけで、
+    // LINEログインが無い/IDトークンが取れない端末では何の導線も出さず、登録ボタンを
+    // 押して初めて手詰まりの alert（「LINEアプリから開き直してください」）が出ていた。
+    // しかも未ログイン経路は forceReauth を通らずテレメトリにも残らないため、どの状態で
+    // 詰まっているのか把握できなかった（2026-09-10、特定ユーザーの登録不可報告）。
+    // contact.html と同じく表示時にオーバーレイでゲートし、未ログインは liff.login() か
+    // 「LINEでログイン」ボタンへ誘導、未ログイン/トークン取得失敗もテレメトリへ送る。
+    // （PIIプリフィルは従来どおりID token検証済みの /api/profile/prefill 経由のみ）
+    async function initAuthCheck() {
+      if (!LIFF_ID) { hideOverlay(); return; }
+      try {
+        await ensureLiffInit();
+      } catch (e) {
+        LiffAuth.sendEvent('init_failed', 'page_load', false, null);
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">LINEログインの確認に失敗しました。<br>LINEアプリを最新版に更新し、Botのメニューから開き直してください。</p>`);
+        return;
+      }
+
+      const isInClient = LiffAuth.safe(() => liff.isInClient()) === true;
+      if (isInClient && !liff.isLoggedIn()) {
+        // LINEアプリ内なのに未ログイン。/register はLIFFエンドポイント登録済みなので
+        // liff.login({redirectUri}) で復帰できる。
+        LiffAuth.sendEvent('not_logged_in', 'page_load', false, null);
+        try { liff.login({ redirectUri: location.href }); } catch (e) {}
+        return;
+      }
+      if (!liff.isLoggedIn()) {
+        LiffAuth.sendEvent('not_logged_in', 'page_load', false, null);
+        showOverlay(`<div class="text-4xl">📱</div>
+          <p class="text-sm text-gray-500">会員登録にはLINEログインが必要です。</p>
+          <button type="button" id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">LINEでログイン</button>`);
+        document.getElementById('loginBtn').onclick = () => { try { liff.login({ redirectUri: location.href }); } catch (e) {} };
+        return;
+      }
+
+      let idToken;
+      try {
+        idToken = await liff.getIDToken();
+      } catch (e) {
+        idToken = null;
+      }
+      if (!idToken) {
+        LiffAuth.sendEvent('no_id_token', 'page_load', false, null);
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン情報の取得に失敗しました。<br>LINEアプリを最新版に更新してから、もう一度お試しください。</p>
+          <button type="button" id="reloginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">再ログイン</button>`);
+        document.getElementById('reloginBtn').onclick = () => {
+          try { liff.logout(); } catch (e) {}
+          try { liff.login({ redirectUri: location.href }); } catch (e) {}
+        };
+        return;
+      }
+      if (idTokenExpired(idToken)) {
+        if (forceReauth('expired', 'page_load', idToken)) return;
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン情報の有効期限が切れています。LINEアプリからこのページを開き直してください。</p>`);
+        return;
+      }
+
+      let d;
+      try {
+        const res = await fetch('/api/profile/prefill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken }),
+        });
+        d = await res.json();
+      } catch (e) {
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">通信に失敗しました。もう一度お試しください。</p>
+          <button type="button" onclick="location.reload()" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
+        return;
+      }
+      if (d.auth_failed) {
+        if (forceReauth('auth_failed', 'page_load', idToken)) return;
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">ログイン確認に失敗しました。LINEアプリからこのページを開き直してください。</p>`);
+        return;
+      }
+      clearReauthFlag(idToken);
+      document.getElementById('idTokenHidden').value = idToken;
+
+      if (d.found) {
+        // 未入力の欄だけサーバー値で埋める（入力途中の下書きを上書きしない）
+        const nameEl = document.getElementById('name');
+        if (d.name && !nameEl.value) nameEl.value = d.name;
+        const sidEl = document.getElementById('student_id');
+        if (d.student_id && !sidEl.value) sidEl.value = d.student_id;
+        if (d.faculty && !facultySel.value) {
+          facultySel.value = d.faculty;
+          populateDepartments(d.faculty, d.department || '');
+        }
+        const coopEl = document.getElementById('coop_jobsite_known');
+        if (d.coop_jobsite_known && !coopEl.value) coopEl.value = d.coop_jobsite_known;
+      }
+      hideOverlay();
+    }
+    initAuthCheck().catch(() => {
+      showOverlay(`<div class="text-4xl">⚠️</div>
+        <p class="text-sm text-gray-500">読み込みに失敗しました。</p>
+        <button type="button" onclick="location.reload()" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">🔄 再読み込み</button>`);
+    });
 
     document.getElementById('registerForm').addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -280,17 +371,27 @@
       try {
         await ensureLiffInit();
         const idToken = liff.isLoggedIn() ? await liff.getIDToken() : null;
-        if (!idToken) throw new Error('not logged in');
+        if (!idToken) {
+          // 表示時ゲート(initAuthCheck)を通っていれば通常ここには来ない。来た場合は
+          // 再ログインを試み、ループ防止済みで復帰不能なときだけオーバーレイ案内。
+          LiffAuth.sendEvent('no_id_token', 'submit', false, null);
+          if (forceReauth('auth_failed', 'submit', idToken)) return;
+          showOverlay(`<div class="text-4xl">⚠️</div>
+            <p class="text-sm text-gray-500">LINEログインの確認に失敗しました。LINEアプリからこのページを開き直してください。</p>`);
+          return;
+        }
         if (idTokenExpired(idToken)) {
           // 期限切れなら再ログインで新しいIDトークンを取り直す（リダイレクトで復帰）。
-          // 再ログインループ防止フラグ済みで復帰不能なときのみ従来のalert誘導へフォールバック。
           // 送信直前なのでフォーム入力は下書き(registerDraft)に保存済み。
           if (forceReauth('expired', 'submit', idToken)) return;
-          throw new Error('id token expired');
+          showOverlay(`<div class="text-4xl">⚠️</div>
+            <p class="text-sm text-gray-500">ログイン情報の有効期限が切れています。LINEアプリからこのページを開き直してください。</p>`);
+          return;
         }
         document.getElementById('idTokenHidden').value = idToken;
       } catch (err) {
-        alert('LINEアプリでのログイン確認に失敗しました。LINEアプリから開き直してください。');
+        showOverlay(`<div class="text-4xl">⚠️</div>
+          <p class="text-sm text-gray-500">LINEログインの確認に失敗しました。LINEアプリからこのページを開き直してください。</p>`);
         return;
       }
       e.target.submit();
