@@ -253,20 +253,32 @@
         return;
       }
 
-      const isInClient = LiffAuth.safe(() => liff.isInClient()) === true;
-      if (isInClient && !liff.isLoggedIn()) {
-        // LINEアプリ内なのに未ログイン。/register はLIFFエンドポイント登録済みなので
-        // liff.login({redirectUri}) で復帰できる。
-        LiffAuth.sendEvent('not_logged_in', 'page_load', false, null);
-        try { liff.login({ redirectUri: location.href }); } catch (e) {}
-        return;
-      }
       if (!liff.isLoggedIn()) {
-        LiffAuth.sendEvent('not_logged_in', 'page_load', false, null);
+        // PC・外部ブラウザ・アプリ内を問わず、未ログインなら自動でLINEログインへ飛ばす（強制）。
+        // /register はLIFFエンドポイント登録済みなので liff.login({redirectUri}) で戻れる。
+        // ただし1回飛ばして戻ってもまだ未ログイン＝同意しなかった/ログインが成立しない場合は
+        // 無限ループになるため、sessionStorage で1回に制限し、以降は手動ボタン＋説明に切替。
+        let autoTried = false;
+        try { autoTried = sessionStorage.getItem('registerAutoLogin') === '1'; } catch (e) {}
+        LiffAuth.sendEvent('not_logged_in', 'page_load', autoTried, null);
+        if (!autoTried) {
+          try { sessionStorage.setItem('registerAutoLogin', '1'); } catch (e) {}
+          try { liff.login({ redirectUri: location.href }); return; } catch (e) {}
+        }
         showOverlay(`<div class="text-4xl">📱</div>
-          <p class="text-sm text-gray-500">会員登録にはLINEログインが必要です。</p>
-          <button type="button" id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">LINEでログイン</button>`);
-        document.getElementById('loginBtn').onclick = () => { try { liff.login({ redirectUri: location.href }); } catch (e) {} };
+          <p class="text-sm text-gray-700 font-semibold">LINEログインが必要です</p>
+          <p class="text-xs text-gray-500 text-left leading-relaxed">
+            会員登録には、あなたのLINEアカウントとの紐付け（本人確認）が必須です。
+            LINEログイン画面で「許可する」を選んでください。氏名・学籍番号などが
+            LINE社や第三者に送られることはありません。<br>
+            「キャンセル」を選ぶと登録できません。その場合はこのボタンからやり直せます。
+          </p>
+          <button type="button" id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">LINEでログインして続ける</button>`);
+        document.getElementById('loginBtn').onclick = () => {
+          try { sessionStorage.removeItem('registerAutoLogin'); } catch (e) {}
+          try { liff.logout(); } catch (e) {}
+          try { liff.login({ redirectUri: location.href }); } catch (e) {}
+        };
         return;
       }
 
@@ -277,11 +289,19 @@
         idToken = null;
       }
       if (!idToken) {
+        // ログインはしたがIDトークンが取れない＝LINEの権限確認で「許可する」を
+        // 押していない（または古いLINEアプリ）。許可を取り直す。
         LiffAuth.sendEvent('no_id_token', 'page_load', false, null);
         showOverlay(`<div class="text-4xl">⚠️</div>
-          <p class="text-sm text-gray-500">ログイン情報の取得に失敗しました。<br>LINEアプリを最新版に更新してから、もう一度お試しください。</p>
-          <button type="button" id="reloginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">再ログイン</button>`);
+          <p class="text-sm text-gray-700 font-semibold">LINEの許可が必要です</p>
+          <p class="text-xs text-gray-500 text-left leading-relaxed">
+            本人確認のため、LINEログイン画面で「許可する」を選ぶ必要があります。
+            前回「キャンセル」を選んだ場合は、下のボタンからやり直してください。
+            LINEアプリが古いと取得できないことがあるため、最新版への更新もお試しください。
+          </p>
+          <button type="button" id="reloginBtn" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-sm">許可を取り直す</button>`);
         document.getElementById('reloginBtn').onclick = () => {
+          try { sessionStorage.removeItem('registerAutoLogin'); } catch (e) {}
           try { liff.logout(); } catch (e) {}
           try { liff.login({ redirectUri: location.href }); } catch (e) {}
         };
@@ -315,6 +335,7 @@
         return;
       }
       clearReauthFlag(idToken);
+      try { sessionStorage.removeItem('registerAutoLogin'); } catch (e) {}
       document.getElementById('idTokenHidden').value = idToken;
 
       if (d.found) {
