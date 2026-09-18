@@ -51,7 +51,7 @@ GitHubブランチ名は2026-09-18に`shindairaifuhaku-dev`→`dev`、`shindaira
 |---|---|---|
 | **dev** (shindairaifuhaku-1) | `dev` | `git push origin dev` |
 | **本番** (shindairaifuhaku) | `prod` | `git push origin dev:prod` |
-| **ゲスト**（会員登録なしのお試し体験用、本番DBを共有。2026-09-18新設） | `guest` | `git push origin dev:guest` |
+| **ゲスト** (shindairaifuhaku-guest、会員登録なしのお試し体験用、本番DBを共有。2026-09-18新設) | `guest` | `git push origin dev:guest` |
 
 ## setup_richmenu.py の実行ルール
 
