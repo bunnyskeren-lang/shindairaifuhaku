@@ -62,6 +62,10 @@ class UserProfile(TimestampMixin, Base):
     # 既存の登録済みユーザーはこの列がNULLのままになり、次回操作時に一度だけ再登録を求められる
     # （友だち追加者を把握する目的。"いいえ" も回答済みとして扱えるよう真偽値でなく文字列で保持する）。
     coop_jobsite_known: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # ゲスト用LINEチャンネル(core.config.IS_GUEST)経由で会員登録を経ず自動発行された
+    # ダミープロフィールかどうか。本番DBを共有するため、管理画面の集計・支払い対象等から
+    # 除外する目的でのみ使う。
+    is_guest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
 
 class ErrorLog(TimestampMixin, Base):
