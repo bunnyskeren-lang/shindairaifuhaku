@@ -10,6 +10,7 @@ from core import cache, moderation
 from core.activity_log import save_error_log
 from core.config import (
     BAN_MESSAGE_TEXT,
+    IS_GUEST,
     MIN_COMMENT_LEN,
     OMNIBUS_INSTRUCTOR_LABEL,
     REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
@@ -107,6 +108,11 @@ async def submit(
             "form_error.html", {"request": request, "message": msg}, status_code=400
         )
 
+    if IS_GUEST:
+        # ゲスト用LINEチャンネル(IS_GUEST)は学籍番号による本人確認ができないため、
+        # LINE bot側のボタン・案内文は非表示にしてあるが(line_bot/handler.py,
+        # line_bot/flex_builders.py)、直接POSTされた場合の最終防衛として必ず拒否する
+        return _form_error("現在ゲスト体験ではレビュー投稿は受け付けていません")
     if not (1 <= rating <= 5):
         return _form_error("評価が不正です")
     if ease_rating not in ("SS", "S", "A", "B", "C"):

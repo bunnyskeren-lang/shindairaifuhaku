@@ -849,6 +849,8 @@ async def _get_rakutan_ranking() -> list:
     # (2026-09-03、リクエストの都度Subject×CourseSection×Review全件JOINしていた重い設計を解消)
     extremes = await cache.get_ease_extremes_cached()
     if not extremes:
+        if IS_GUEST:
+            return [TextMessage(text="まだ承認済みレビューがありません。")]
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     course_best: dict[int, tuple[str, str]] = {sid: (name, best) for sid, (name, best, _worst) in extremes.items()}
     tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: EASE_ORDER.get(e, 99))
@@ -872,6 +874,8 @@ async def _get_onitan_ranking() -> list:
     # TTLキャッシュ済み(2026-09-03、リクエストの都度全件JOINしていた重い設計を解消)
     extremes = await cache.get_ease_extremes_cached()
     if not extremes:
+        if IS_GUEST:
+            return [TextMessage(text="まだ承認済みレビューがありません。")]
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     course_best: dict[int, tuple[str, str]] = {sid: (name, worst) for sid, (name, _best, worst) in extremes.items()}
     tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: -EASE_ORDER.get(e, -1))
@@ -902,6 +906,8 @@ async def _get_omikuji() -> list:
         cache.get_ease_extremes_cached(),
     )
     if not reviewed_names:
+        if IS_GUEST:
+            return [TextMessage(text="まだ承認済みレビューがありません。")]
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     pool = [cbn[name] for name in reviewed_names if name in cbn]
     random.shuffle(pool)
@@ -1112,6 +1118,8 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     exact = cbn.get(t)
     if exact:
         if exact.category != REVIEW_VIEW_CATEGORY:
+            if IS_GUEST:
+                return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
             return [TextMessage(text=f"{REVIEW_VIEW_RESTRICTED_MESSAGE}\n\n"
                                       f"{REVIEW_VIEW_RESTRICTED_FORM_LABEL}\n"
                                       f"{make_review_liff_url(exact.name, user_id)}")]
@@ -1124,6 +1132,8 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     if len(_unique_exact) == 1:
         rep = _unique_exact[0]["rep"]
         if rep.category != REVIEW_VIEW_CATEGORY:
+            if IS_GUEST:
+                return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
             return [TextMessage(text=f"{REVIEW_VIEW_RESTRICTED_MESSAGE}\n\n"
                                       f"{REVIEW_VIEW_RESTRICTED_FORM_LABEL}\n"
                                       f"{make_review_liff_url(rep.name, user_id)}")]
@@ -1250,6 +1260,8 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await _handle_faculty_menu(t, user_id)
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
+        if IS_GUEST:
+            return [TextMessage(text="🙇‍♀️ ゲスト体験ではレビュー投稿は行えません（閲覧のみご利用いただけます）")]
         url = make_review_liff_url(user_id=user_id)
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 

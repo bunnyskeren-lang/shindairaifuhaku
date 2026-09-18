@@ -145,7 +145,7 @@ async def prewarm_flex_cache() -> None:
 
 def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
     liff_url = make_course_liff_url(course.id)
-    can_submit = course.category == REVIEW_SUBMISSION_CATEGORY
+    can_submit = (not IS_GUEST) and course.category == REVIEW_SUBMISSION_CATEGORY
 
     footer_buttons = []
     if can_submit:
@@ -161,7 +161,7 @@ def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
 
     second_line = (
         "あなたが最初のレビュワーになりませんか？🌟" if can_submit
-        else REVIEW_SUBMISSION_RESTRICTED_MESSAGE
+        else ("ゲスト体験ではレビュー投稿は行えません" if IS_GUEST else REVIEW_SUBMISSION_RESTRICTED_MESSAGE)
     )
 
     return FlexMessage(
@@ -579,7 +579,8 @@ def make_rakutan_card(items: list[dict]) -> FlexMessage:
         "😴 楽単5選", items, header_bg="#f59e0b", row_bg="#fffbeb", accent="#f59e0b",
         subtitle="承認済みレビューから厳選", row_bg_top="#fef3c7",
         rank_colors=_RAKUTAN_RANK_COLORS, top_emoji="👑",
-        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
+        footer_button_label=None if IS_GUEST else "📝 レビューを投稿",
+        footer_button_uri=None if IS_GUEST else make_review_liff_url(),
     )
 
 
@@ -588,7 +589,8 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
         "👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c",
         subtitle="承認済みレビューから厳選", row_bg_top="#fee2e2",
         rank_colors=_ONITAN_RANK_COLORS, top_emoji="💀",
-        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
+        footer_button_label=None if IS_GUEST else "📝 レビューを投稿",
+        footer_button_uri=None if IS_GUEST else make_review_liff_url(),
     )
 
 
@@ -640,6 +642,19 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
         for i in range(0, len(items), 2)
     ]
 
+    footer = None
+    if not IS_GUEST:
+        footer = FlexBox(
+            layout="vertical",
+            padding_all="md",
+            contents=[
+                FlexButton(
+                    action=URIAction(label="📝 レビューを投稿", uri=make_review_liff_url()),
+                    style="primary", color=accent, height="sm",
+                ),
+            ],
+        )
+
     bubble = FlexBubble(
         header=FlexBox(
             layout="vertical",
@@ -651,16 +666,7 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
             ],
         ),
         body=FlexBox(layout="vertical", contents=rows, padding_all="md"),
-        footer=FlexBox(
-            layout="vertical",
-            padding_all="md",
-            contents=[
-                FlexButton(
-                    action=URIAction(label="📝 レビューを投稿", uri=make_review_liff_url()),
-                    style="primary", color=accent, height="sm",
-                ),
-            ],
-        ),
+        footer=footer,
     )
     return FlexMessage(alt_text="⛩️ 10連おみくじ", contents=bubble)
 
@@ -683,7 +689,7 @@ def _make_search_result_row(item: dict) -> FlexBox:
         FlexText(text=stars_text, size="xxs", color=stars_color, flex=0,
                   align="end", gravity="center"),
     ]
-    if not item["stars"] and item.get("category") == REVIEW_SUBMISSION_CATEGORY:
+    if not IS_GUEST and not item["stars"] and item.get("category") == REVIEW_SUBMISSION_CATEGORY:
         form_url = make_review_liff_url(item['name'])
         row_contents.append(
             FlexText(
