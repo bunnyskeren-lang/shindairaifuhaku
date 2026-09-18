@@ -24,7 +24,7 @@
 
 ## 本番デプロイ時の「コード以外の反映作業」洗い出しルール（必須）
 
-**dev→本番デプロイ（`git push origin dev:shindairaifuhaku-prod`）を行う際は、ユーザーに指摘される前に、コードのpush以外に必要な作業がないか自動で洗い出して案内すること。** 具体的には、直前の本番デプロイ地点（旧`shindairaifuhaku-prod`のコミット）から今回pushする内容までの差分全体を対象に、以下を機械的にチェックする：
+**dev→本番デプロイ（`git push origin dev:prod`）を行う際は、ユーザーに指摘される前に、コードのpush以外に必要な作業がないか自動で洗い出して案内すること。** 具体的には、直前の本番デプロイ地点（旧`prod`のコミット）から今回pushする内容までの差分全体を対象に、以下を機械的にチェックする：
 
 1. **新規環境変数**: `git diff <旧本番コミット> <新dev内容> -- '*.py' | grep "os.environ\|os.getenv"` 等で新規追加された環境変数を全て洗い出し、Render本番Environmentへの登録が必要か案内する（上記「環境変数の追加ルール」参照）
 2. **新規LIFF ID**: 新設されたLIFF機能があれば、本番用LIFFアプリがLINE Developers Consoleで作成済みか・IDがRender本番に登録済みかを確認・案内する
@@ -38,18 +38,19 @@
 
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
 - dev環境（shindairaifuhaku-1.onrender.com）に関するpush・デプロイ操作は、確認を取らず自由に実行してよい
-  - `git push origin dev`（devブランチへの通常push）
-  - `git push origin dev:shindairaifuhaku-dev`（dev環境へのデプロイ）
+  - `git push origin dev`（devブランチへの通常push＝dev環境へのデプロイ。GitHubブランチ名は2026-09-18に`shindairaifuhaku-dev`から`dev`へリネーム済みで、ローカル作業ブランチと同名になったため、通常pushとdev環境デプロイは同一コマンドになった）
   - `python setup_richmenu.py --env dev`（devリッチメニュー更新）
   - その他 dev サービス・dev DB のみに影響する操作全般
-- `git push` の push先が `origin shindairaifuhaku-prod`（本番ブランチ）の場合は必ず確認を取ること。**本番は `shindairaifuhaku-prod` のみで、`main` ブランチは本番として使わない**
+- `git push` の push先が `origin prod`（本番ブランチ）の場合は必ず確認を取ること。**本番は `prod` のみで、`main` ブランチは本番として使わない**
 
 ## ブランチとRenderサービスの対応
 
+GitHubブランチ名は2026-09-18に`shindairaifuhaku-dev`→`dev`、`shindairaifuhaku-prod`→`prod`へリネーム済み（Renderサービス自体の名前・URLは変更なし）。
+
 | Renderサービス | GitHub ブランチ | コマンド |
 |---|---|---|
-| **dev** (shindairaifuhaku-dev) | `shindairaifuhaku-dev` | `git push origin dev:shindairaifuhaku-dev` |
-| **本番** (shindairaifuhaku) | `shindairaifuhaku-prod` | `git push origin dev:shindairaifuhaku-prod` |
+| **dev** (shindairaifuhaku-1) | `dev` | `git push origin dev` |
+| **本番** (shindairaifuhaku) | `prod` | `git push origin dev:prod` |
 
 ## setup_richmenu.py の実行ルール
 
@@ -88,7 +89,7 @@ LINE botの1回の返信には上限（40バブル≒240科目、`line_bot/handl
 
 ```bash
 # 1. コードを本番ブランチにプッシュ
-git push origin dev:shindairaifuhaku-prod
+git push origin dev:prod
 
 # 2. 本番リッチメニューを更新（programing files/ から実行すること）
 cd "programing files" && python -X utf8 setup_richmenu.py --env prod
