@@ -88,7 +88,11 @@ SIDE_MID = 1410  # サイドバー左右2列の境界
 
 
 def _review_action():
-    if REVIEW_LIFF_ID:
+    # guestはREVIEW_LIFF_IDが設定されていてもレビュー投稿フォームへ直リンクしない
+    # (IS_GUESTは学籍番号による本人確認ができず投稿不可。line_bot/handler.pyの
+    # IS_GUEST分岐・routers/review_submit_api.pyの/submit拒否と矛盾させないため、
+    # PostbackAction経由でbot側の「ゲスト体験ではレビュー投稿は行えません」案内に必ず通す)
+    if REVIEW_LIFF_ID and args.env != "guest":
         return URIAction(label="レビュー投稿", uri=f"https://liff.line.me/{REVIEW_LIFF_ID}")
     return PostbackAction(label="レビュー投稿", data="レビュー投稿")
 
@@ -176,12 +180,14 @@ AREAS = [
 
 
 # 登録前ユーザー用: 全ボタンを会員登録LIFFへのURIActionにした同一画像のリッチメニュー。
+# guestはREGISTER_LIFF_IDが設定されていても登録前メニュー自体を作らない
+# (IS_GUESTは会員登録フロー自体が無く、フォロー時に自動でダミー登録済みになるため)
 _register_button_uri = f"https://liff.line.me/{REGISTER_LIFF_ID}"
 
 PREREG_AREAS = [
     {**a, "action": URIAction(label="会員登録", uri=_register_button_uri)}
     for a in AREAS
-] if REGISTER_LIFF_ID else []
+] if (REGISTER_LIFF_ID and args.env != "guest") else []
 
 
 def load_custom_image(path: str) -> bytes:
