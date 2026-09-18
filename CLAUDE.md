@@ -51,14 +51,16 @@ GitHubブランチ名は2026-09-18に`shindairaifuhaku-dev`→`dev`、`shindaira
 |---|---|---|
 | **dev** (shindairaifuhaku-1) | `dev` | `git push origin dev` |
 | **本番** (shindairaifuhaku) | `prod` | `git push origin dev:prod` |
+| **ゲスト**（会員登録なしのお試し体験用、本番DBを共有。2026-09-18新設） | `guest` | `git push origin dev:guest` |
 
 ## setup_richmenu.py の実行ルール
 
 - **必ず `--env` 引数を指定して実行すること**
-  - dev:  `python setup_richmenu.py --env dev`   → `programing files/.env.dev` を使用
-  - 本番: `python setup_richmenu.py --env prod`  → `programing files/.env` を使用（確認プロンプトあり）
+  - dev:    `python setup_richmenu.py --env dev`   → `programing files/.env.dev` を使用
+  - 本番:   `python setup_richmenu.py --env prod`  → `programing files/.env` を使用（確認プロンプトあり）
+  - ゲスト: `python setup_richmenu.py --env guest` → `programing files/.env.guest` を使用
 - `--env prod` は**ユーザーから明示的に「本番のリッチメニューを更新して」と言われた場合のみ**実行すること
-- `--env dev` はユーザーの許可のもとで自由に実行してよい
+- `--env dev` / `--env guest` はユーザーの許可のもとで自由に実行してよい（ゲスト用チャンネルはdevと同じく低リスクの別チャンネルのため）
 
 ## モデル変更時のルール
 
@@ -154,6 +156,7 @@ python -X utf8 sync_db_to_prod.py
 |---|---|
 | `programing files/.env.dev` | **dev** ボット用トークン |
 | `programing files/.env` | **本番** ボット用トークン |
+| `programing files/.env.guest` | **ゲスト**（会員登録なしのお試し体験用）ボット用トークン。`DATABASE_URL`は本番と同じ値を設定する |
 
 ## データベース接続情報
 
