@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, Response
 from core import cache
 from core.activity_log import save_error_log
 from core.config import (
-    APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KAIYO_SEISAKU_FACULTY,
+    APP_URL, FACULTY_DEPARTMENTS, IS_DEV, IS_GUEST, KAIYO_SEISAKU_FACULTY,
     KYOTSU_SENMON_KISO_FACULTY,
     LIFF_ID, LINE_FRIEND_URL, MAX_REVIEWS_PER_COURSE_SECTION,
     MIN_COMMENT_LEN,
@@ -36,6 +36,7 @@ async def index(request: Request, uid: str = Query(default="")):
             "liff_id": REVIEW_LIFF_ID,
             "register_liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
+            "IS_GUEST": IS_GUEST,
             "max_reviews_per_course_section": MAX_REVIEWS_PER_COURSE_SECTION,
             "min_comment_len": MIN_COMMENT_LEN,
             "submission_kyoyo_category": REVIEW_SUBMISSION_CATEGORY,
@@ -69,6 +70,7 @@ async def register_page(request: Request, uid: str = Query(default="")):
             "faculty_departments_json": json.dumps(FACULTY_DEPARTMENTS, ensure_ascii=False),
             "liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
+            "IS_GUEST": IS_GUEST,
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

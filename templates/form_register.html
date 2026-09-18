@@ -103,8 +103,11 @@
         </select>
       </div>
 
-      <button type="submit"
-        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">
+      {% if IS_GUEST %}
+      <p class="text-center text-xs font-bold text-amber-600 mb-2">ゲスト体験ではご利用いただけません</p>
+      {% endif %}
+      <button type="submit" {% if IS_GUEST %}disabled{% endif %}
+        class="w-full {% if IS_GUEST %}bg-gray-300 text-white cursor-not-allowed{% else %}bg-indigo-600 text-white hover:bg-indigo-700{% endif %} font-bold py-3.5 rounded-2xl transition text-sm">
         登録する
       </button>
 
