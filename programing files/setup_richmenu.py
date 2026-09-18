@@ -7,12 +7,14 @@
 必要な環境変数 (.env.dev / .env / .env.guest):
   LINE_CHANNEL_ACCESS_TOKEN
   REVIEW_FORM_URL
-  REVIEW_LIFF_ID     (レビュー投稿ボタンのLIFF URL用。guestは未設定のままでよい
-                       ＝レビュー投稿ボタンはPostbackAction("レビュー投稿")のままになり、
-                       IS_GUESTのline_bot/handler.pyが投稿不可の案内を返す)
+  REVIEW_LIFF_ID     (レビュー投稿ボタンのLIFF URL用)
   CONTACT_LIFF_ID    (お問い合わせボタンのLIFF URL用)
-  REGISTER_LIFF_ID   (会員登録ボタンのLIFF URL用。guestは未設定のままでよい
-                       ＝会員登録フロー自体が無いため、登録前メニュー自体を作らない)
+  REGISTER_LIFF_ID   (会員登録ボタンのLIFF URL用)
+
+guestはボタン構成・リッチメニュー画像とも本番/devと完全に同一にする
+（見た目は同じ、投稿・登録の実際の可否だけIS_GUEST側のロジックで制御する。
+ユーザー指示 2026-09-18）。REVIEW_LIFF_ID/REGISTER_LIFF_IDともguestチャンネル配下で
+発行した値を設定すること。
 """
 import argparse
 import asyncio
@@ -88,11 +90,7 @@ SIDE_MID = 1410  # サイドバー左右2列の境界
 
 
 def _review_action():
-    # guestはREVIEW_LIFF_IDが設定されていてもレビュー投稿フォームへ直リンクしない
-    # (IS_GUESTは学籍番号による本人確認ができず投稿不可。line_bot/handler.pyの
-    # IS_GUEST分岐・routers/review_submit_api.pyの/submit拒否と矛盾させないため、
-    # PostbackAction経由でbot側の「ゲスト体験ではレビュー投稿は行えません」案内に必ず通す)
-    if REVIEW_LIFF_ID and args.env != "guest":
+    if REVIEW_LIFF_ID:
         return URIAction(label="レビュー投稿", uri=f"https://liff.line.me/{REVIEW_LIFF_ID}")
     return PostbackAction(label="レビュー投稿", data="レビュー投稿")
 
@@ -180,14 +178,12 @@ AREAS = [
 
 
 # 登録前ユーザー用: 全ボタンを会員登録LIFFへのURIActionにした同一画像のリッチメニュー。
-# guestはREGISTER_LIFF_IDが設定されていても登録前メニュー自体を作らない
-# (IS_GUESTは会員登録フロー自体が無く、フォロー時に自動でダミー登録済みになるため)
 _register_button_uri = f"https://liff.line.me/{REGISTER_LIFF_ID}"
 
 PREREG_AREAS = [
     {**a, "action": URIAction(label="会員登録", uri=_register_button_uri)}
     for a in AREAS
-] if (REGISTER_LIFF_ID and args.env != "guest") else []
+] if REGISTER_LIFF_ID else []
 
 
 def load_custom_image(path: str) -> bytes:
@@ -333,9 +329,6 @@ def main():
             prereg_id = _create_and_upload(api, "神大ライフハック（登録前）", PREREG_AREAS, image_data)
             api.set_default_rich_menu(prereg_id)
             print(f"[完了] 登録前リッチメニューをデフォルトに設定しました: {prereg_id}")
-        elif args.env == "guest":
-            print("[情報] guestは会員登録フロー自体が無いため、登録前メニューは作成せず通常メニューをデフォルトに設定します")
-            api.set_default_rich_menu(main_id)
         else:
             print("[警告] REGISTER_LIFF_ID が未設定のため、登録前リッチメニューは作成されませんでした")
             print("[警告] 登録前メニューが無いため、代わりに通常メニューをデフォルトに設定します")

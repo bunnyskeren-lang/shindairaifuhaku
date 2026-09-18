@@ -60,7 +60,6 @@ from line_bot.flex_builders import (
     make_category_entry_flex,
     make_classification_grid_flex,
     make_classification_select_flex,
-    make_guest_welcome_flex,
     make_help_flex,
     make_no_review_flex,
     make_omikuji_card,
@@ -849,8 +848,6 @@ async def _get_rakutan_ranking() -> list:
     # (2026-09-03、リクエストの都度Subject×CourseSection×Review全件JOINしていた重い設計を解消)
     extremes = await cache.get_ease_extremes_cached()
     if not extremes:
-        if IS_GUEST:
-            return [TextMessage(text="まだ承認済みレビューがありません。")]
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     course_best: dict[int, tuple[str, str]] = {sid: (name, best) for sid, (name, best, _worst) in extremes.items()}
     tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: EASE_ORDER.get(e, 99))
@@ -874,8 +871,6 @@ async def _get_onitan_ranking() -> list:
     # TTLキャッシュ済み(2026-09-03、リクエストの都度全件JOINしていた重い設計を解消)
     extremes = await cache.get_ease_extremes_cached()
     if not extremes:
-        if IS_GUEST:
-            return [TextMessage(text="まだ承認済みレビューがありません。")]
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     course_best: dict[int, tuple[str, str]] = {sid: (name, worst) for sid, (name, _best, worst) in extremes.items()}
     tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: -EASE_ORDER.get(e, -1))
@@ -906,8 +901,6 @@ async def _get_omikuji() -> list:
         cache.get_ease_extremes_cached(),
     )
     if not reviewed_names:
-        if IS_GUEST:
-            return [TextMessage(text="まだ承認済みレビューがありません。")]
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
     pool = [cbn[name] for name in reviewed_names if name in cbn]
     random.shuffle(pool)
@@ -1118,8 +1111,6 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     exact = cbn.get(t)
     if exact:
         if exact.category != REVIEW_VIEW_CATEGORY:
-            if IS_GUEST:
-                return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
             return [TextMessage(text=f"{REVIEW_VIEW_RESTRICTED_MESSAGE}\n\n"
                                       f"{REVIEW_VIEW_RESTRICTED_FORM_LABEL}\n"
                                       f"{make_review_liff_url(exact.name, user_id)}")]
@@ -1132,8 +1123,6 @@ async def _handle_course_search(t: str, user_id: str) -> list:
     if len(_unique_exact) == 1:
         rep = _unique_exact[0]["rep"]
         if rep.category != REVIEW_VIEW_CATEGORY:
-            if IS_GUEST:
-                return [TextMessage(text=REVIEW_VIEW_RESTRICTED_MESSAGE)]
             return [TextMessage(text=f"{REVIEW_VIEW_RESTRICTED_MESSAGE}\n\n"
                                       f"{REVIEW_VIEW_RESTRICTED_FORM_LABEL}\n"
                                       f"{make_review_liff_url(rep.name, user_id)}")]
@@ -1260,8 +1249,6 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return await _handle_faculty_menu(t, user_id)
 
     if t in ["レビュー投稿", "レビュー", "投稿"] or "レビュー投稿" in t:
-        if IS_GUEST:
-            return [TextMessage(text="🙇‍♀️ ゲスト体験ではレビュー投稿は行えません（閲覧のみご利用いただけます）")]
         url = make_review_liff_url(user_id=user_id)
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 
@@ -1335,10 +1322,8 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
         if await _registration_incomplete(user_id):
             if IS_GUEST:
                 # 通常はFollowEvent時点で自動登録済みのはずだが、稀に取りこぼした場合の保険
+                # (自己修復のみ。表示するFlexは非ゲストと全く同じmake_registration_flex)
                 await _ensure_guest_profile(user_id)
-                await line_client.reply(event.reply_token, [make_guest_welcome_flex()])
-                _log_reply_timing(f"{label}:guest_register", t0)
-                return
             register_url = make_register_url(user_id)
             await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
             _log_reply_timing(f"{label}:register", t0)
@@ -1380,20 +1365,12 @@ async def process_events(events) -> None:
                     _log_reply_timing("follow:banned", _t0)
                     continue
                 if IS_GUEST:
-                    # ゲスト用チャンネルは会員登録フォームを経由せず、フォロー時点で
-                    # 自動でダミープロフィール(チケットGUEST_WELCOME_UNLOCK_CREDITS枚)を発行する
+                    # ゲスト用チャンネルは見た目(Flex・リッチメニュー)を本番/devと完全に同じにし、
+                    # 裏側だけ会員登録フォームを経由せず自動でダミープロフィール
+                    # (チケットGUEST_WELCOME_UNLOCK_CREDITS枚)を発行する(ユーザー指示 2026-09-18)。
+                    # これにより直後の_registration_incomplete()は常にFalseになり、以降は
+                    # 非ゲストと全く同じ分岐(通常メニューへのlink_rich_menu)を通る。
                     await _ensure_guest_profile(user_id)
-                    try:
-                        await line_client.reply(event.reply_token, [make_guest_welcome_flex()])
-                        asyncio.create_task(save_log_bg(user_id, "in", "[follow:guest]"))
-                    except Exception as exc:
-                        await save_error_log(exc, user_id=user_id, action="follow_guest")
-                    try:
-                        await line_client.link_rich_menu(user_id, RICHMENU_ID_MAIN)
-                    except Exception as exc:
-                        await save_error_log(exc, user_id=user_id, action="follow_richmenu")
-                    _log_reply_timing("follow:guest", _t0)
-                    continue
                 # LINEはブロック解除でも新規フォローと同じFollowEventを送るため、
                 # 登録済みユーザーがブロック解除した場合も、初めて友だち追加した時と
                 # 同じウェルカムFlex(会員登録Flex)を返す(2026-09-07)
