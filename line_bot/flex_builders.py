@@ -13,6 +13,7 @@ from linebot.v3.messaging import (
 from core import cache
 from core.config import (
     CONTACT_URL, EASE_COLOR, EASE_LABEL, EASE_STARS, PRIVACY_URL, TERMS_URL,
+    GUEST_WELCOME_UNLOCK_CREDITS, IS_GUEST,
     REGISTRATION_WELCOME_UNLOCK_CREDITS,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
@@ -400,6 +401,69 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                                 height="sm",
                             ),
                         ],
+                    ),
+                ],
+                padding_all="md",
+            ),
+        ),
+    )
+
+
+def make_guest_welcome_flex() -> FlexMessage:
+    """ゲスト用LINEチャンネル(IS_GUEST)でのフォロー時に返すウェルカムメッセージ。
+    会員登録は行わず、_ensure_guest_profile()が自動発行したダミープロフィールへ
+    GUEST_WELCOME_UNLOCK_CREDITS枚を既に付与済みであることを案内するだけでよい。"""
+    return FlexMessage(
+        alt_text="🎓 神大ライフハック ゲスト体験へようこそ！",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(text="🎓 神大ライフハックへ", weight="bold", color="#ffffff", size="xl"),
+                    FlexText(text="ゲスト体験、ようこそ！", color="#c7d2fe", size="lg", weight="bold"),
+                ],
+                background_color="#6366f1",
+                padding_all="xl",
+            ),
+            body=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexText(
+                        text="先輩のリアルなレビューで\n授業選びをサポートします📖",
+                        wrap=True,
+                        size="sm",
+                        color="#374151",
+                    ),
+                    FlexText(
+                        text=f"レビュー閲覧チケットを{GUEST_WELCOME_UNLOCK_CREDITS}枚プレゼントしました🎟️\n"
+                             "メニューから科目を検索して、さっそくレビューを見てみてください",
+                        size="xs",
+                        color="#4338ca",
+                        wrap=True,
+                        margin="md",
+                    ),
+                    FlexText(
+                        text="🚧 ゲスト体験では会員登録・レビュー投稿は行えません（閲覧のみ）",
+                        size="xxs",
+                        color="#9ca3af",
+                        wrap=True,
+                        margin="md",
+                    ),
+                ],
+                padding_all="lg",
+            ),
+            footer=FlexBox(
+                layout="horizontal",
+                contents=[
+                    FlexButton(
+                        action=URIAction(label="利用規約", uri=TERMS_URL),
+                        style="link",
+                        height="sm",
+                    ),
+                    FlexButton(
+                        action=URIAction(label="プライバシーポリシー", uri=PRIVACY_URL),
+                        style="link",
+                        height="sm",
                     ),
                 ],
                 padding_all="md",

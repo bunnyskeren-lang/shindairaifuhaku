@@ -17,6 +17,7 @@ from linebot.v3.messaging import (
     URIAction,
 )
 from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, line_client
 from core.activity_log import save_error_log, save_log_bg
@@ -25,11 +26,15 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     EASE_ORDER,
     EASE_STARS,
+    GUEST_PROFILE_NAME,
+    GUEST_WELCOME_UNLOCK_CREDITS,
+    IS_GUEST,
     RICHMENU_ID_MAIN,
     RICHMENU_ID_PREREGISTER,
     REVIEW_VIEW_CATEGORY,
     REVIEW_VIEW_RESTRICTED_FORM_LABEL,
     REVIEW_VIEW_RESTRICTED_MESSAGE,
+    guest_student_id,
     make_cls_sort,
     make_course_liff_url,
     make_register_url,
@@ -55,6 +60,7 @@ from line_bot.flex_builders import (
     make_category_entry_flex,
     make_classification_grid_flex,
     make_classification_select_flex,
+    make_guest_welcome_flex,
     make_help_flex,
     make_no_review_flex,
     make_omikuji_card,
@@ -64,6 +70,8 @@ from line_bot.flex_builders import (
     make_review_badge_legend,
     make_search_result_card,
 )
+from database import AsyncSessionLocal
+from models import UserProfile
 
 
 # BAN判定・登録完了判定・解除済み科目取得の3つは、受信イベントごとに個別のDB往復を
@@ -91,6 +99,32 @@ async def _registration_incomplete(user_id: str) -> bool:
         return False
     _banned, complete, _unlocked = await cache.get_linebot_user_state_cached(user_id)
     return not complete
+
+
+async def _ensure_guest_profile(user_id: str) -> None:
+    """ゲスト用LINEチャンネル(IS_GUEST)でのフォロー時、会員登録フォームを経由せず
+    自動でUserProfileを発行する。student_id/faculty/department/coop_jobsite_known全てを
+    非空で埋めるのはcore.config.is_profile_complete()を満たすため。on_conflict_do_nothingに
+    より、既存行があれば何もしない(再フォロー・ブロック解除のたびにunlock_creditsが
+    100へリセットされることはない)。"""
+    stmt = pg_insert(UserProfile).values(
+        line_user_id=user_id,
+        name=GUEST_PROFILE_NAME,
+        student_id=guest_student_id(user_id),
+        faculty=GUEST_PROFILE_NAME,
+        department=GUEST_PROFILE_NAME,
+        coop_jobsite_known=GUEST_PROFILE_NAME,
+        unlock_credits=GUEST_WELCOME_UNLOCK_CREDITS,
+        is_guest=True,
+    ).on_conflict_do_nothing(index_elements=[UserProfile.line_user_id])
+    async with AsyncSessionLocal() as session:
+        try:
+            await session.execute(stmt)
+            await session.commit()
+        except Exception as exc:
+            await session.rollback()
+            await save_error_log(exc, user_id=user_id, action="guest_auto_register")
+    cache.invalidate_linebot_user_state(user_id)
 
 
 # ── 科目名の末尾「文字+数字」バリアント判定 ────────────────────────
@@ -1287,6 +1321,12 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
             _log_reply_timing(f"{label}:banned", t0)
             return
         if await _registration_incomplete(user_id):
+            if IS_GUEST:
+                # 通常はFollowEvent時点で自動登録済みのはずだが、稀に取りこぼした場合の保険
+                await _ensure_guest_profile(user_id)
+                await line_client.reply(event.reply_token, [make_guest_welcome_flex()])
+                _log_reply_timing(f"{label}:guest_register", t0)
+                return
             register_url = make_register_url(user_id)
             await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
             _log_reply_timing(f"{label}:register", t0)
@@ -1326,6 +1366,21 @@ async def process_events(events) -> None:
                     except Exception as exc:
                         await save_error_log(exc, user_id=user_id, action="follow_banned")
                     _log_reply_timing("follow:banned", _t0)
+                    continue
+                if IS_GUEST:
+                    # ゲスト用チャンネルは会員登録フォームを経由せず、フォロー時点で
+                    # 自動でダミープロフィール(チケットGUEST_WELCOME_UNLOCK_CREDITS枚)を発行する
+                    await _ensure_guest_profile(user_id)
+                    try:
+                        await line_client.reply(event.reply_token, [make_guest_welcome_flex()])
+                        asyncio.create_task(save_log_bg(user_id, "in", "[follow:guest]"))
+                    except Exception as exc:
+                        await save_error_log(exc, user_id=user_id, action="follow_guest")
+                    try:
+                        await line_client.link_rich_menu(user_id, RICHMENU_ID_MAIN)
+                    except Exception as exc:
+                        await save_error_log(exc, user_id=user_id, action="follow_richmenu")
+                    _log_reply_timing("follow:guest", _t0)
                     continue
                 # LINEはブロック解除でも新規フォローと同じFollowEventを送るため、
                 # 登録済みユーザーがブロック解除した場合も、初めて友だち追加した時と
