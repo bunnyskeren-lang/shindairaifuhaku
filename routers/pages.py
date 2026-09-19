@@ -7,6 +7,8 @@ from core import cache
 from core.activity_log import save_error_log
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, IS_GUEST, KAIYO_SEISAKU_FACULTY,
+    GUEST_DEFAULT_NAME, GUEST_DEFAULT_STUDENT_ID, GUEST_DEFAULT_FACULTY,
+    GUEST_DEFAULT_DEPARTMENT, GUEST_DEFAULT_COOP_JOBSITE_KNOWN,
     KYOTSU_SENMON_KISO_FACULTY,
     LIFF_ID, LINE_FRIEND_URL, MAX_REVIEWS_PER_COURSE_SECTION,
     MIN_COMMENT_LEN,
@@ -71,6 +73,13 @@ async def register_page(request: Request, uid: str = Query(default="")):
             "liff_id": REGISTER_LIFF_ID,
             "IS_DEV": IS_DEV,
             "IS_GUEST": IS_GUEST,
+            "guest_defaults_json": json.dumps({
+                "name": GUEST_DEFAULT_NAME,
+                "student_id": GUEST_DEFAULT_STUDENT_ID,
+                "faculty": GUEST_DEFAULT_FACULTY,
+                "department": GUEST_DEFAULT_DEPARTMENT,
+                "coop_jobsite_known": GUEST_DEFAULT_COOP_JOBSITE_KNOWN,
+            }, ensure_ascii=False),
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

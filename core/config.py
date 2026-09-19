@@ -140,17 +140,13 @@ def review_approval_unlock_credits(category) -> int:
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
 
-# ゲスト用LINE bot（IS_GUEST）で、フォロー時に会員登録フォームを経由せず自動発行する
-# ダミープロフィールへ最初からまとめて渡すレビュー閲覧権チケット枚数（ユーザー指示 2026-09-18）。
-GUEST_WELCOME_UNLOCK_CREDITS = 100
-GUEST_PROFILE_NAME = "ゲスト"
-GUEST_STUDENT_ID_PREFIX = "GUEST"
-
-
-def guest_student_id(line_user_id: str) -> str:
-    """ゲスト自動登録用の仮学籍番号。user_profiles.student_idのUNIQUE制約・VARCHAR(20)を
-    満たすため、line_user_id（チャンネル内で一意）の先頭部分を使い短く一意な値にする。"""
-    return (GUEST_STUDENT_ID_PREFIX + line_user_id)[:20]
+# ゲスト用LINE bot（IS_GUEST）でも会員登録フォームの入力・送信は必須のままとし、
+# 手間を省くためフォームに最初から入れておくダミー値（ユーザー指示 2026-09-19）。
+GUEST_DEFAULT_NAME = "ななしのごんべい"
+GUEST_DEFAULT_STUDENT_ID = "9999999A"
+GUEST_DEFAULT_FACULTY = "経営学部"
+GUEST_DEFAULT_DEPARTMENT = "経営学科"
+GUEST_DEFAULT_COOP_JOBSITE_KNOWN = "いいえ"
 
 # 虚偽投稿等でLINE bot利用を永久停止（UserProfile.banned_at）されたユーザーへの定型応答
 BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止しております。心当たりがある場合は、お問い合わせフォームよりご連絡ください。"
