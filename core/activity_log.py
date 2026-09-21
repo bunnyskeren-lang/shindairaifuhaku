@@ -7,7 +7,11 @@ from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database import AsyncSessionLocal
-from models import ErrorLog, LiffAuthEvent, MessageLog, UserActivity
+from models import ErrorLog, LiffAuthEvent, MessageLog, UserActivity, UserProfile
+
+# メッセージログが「大西英恋」本人以外により動いた（受信方向のログが記録された）ときに
+# 管理者端末へ通知するための照合名。未登録ユーザー（user_profiles未登録）も対象に含める。
+_OWNER_NAME = "大西英恋"
 
 _LOG_RETENTION_DAYS = 30
 
@@ -83,9 +87,24 @@ async def save_log_bg(user_id: str, direction: str, message: str) -> None:
                     )
                 )
                 await session.execute(stmt)
+
+                profile = await session.get(UserProfile, user_id)
+                other_user_name = profile.name if profile else None
+                if other_user_name != _OWNER_NAME:
+                    asyncio.create_task(_notify_other_user_activity(other_user_name, message))
             await session.commit()
     except Exception as exc:
         await save_error_log(exc, user_id=user_id, action=f"save_log_{direction}")
+
+
+async def _notify_other_user_activity(name: str | None, message: str) -> None:
+    try:
+        # circular import回避のため遅延import（core.push が core.activity_log.save_error_log を使うため）
+        from core.push import send_other_user_activity_push_notification
+        await send_other_user_activity_push_notification(name, message)
+    except Exception as push_exc:
+        # ここでsave_error_logを呼ぶと無限ループになるためprintのみに留める
+        print(f"[other_user_activity_push_notify_failed] {type(push_exc).__name__}: {push_exc}", flush=True)
 
 
 async def cleanup_old_logs():

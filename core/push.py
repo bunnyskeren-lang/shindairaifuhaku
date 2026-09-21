@@ -97,3 +97,12 @@ async def send_error_push_notification(action: str | None, error_type: str, erro
         body=f"{error_type}: {error_message[:120]}",
         url="/admin/errors",
     )
+
+
+async def send_other_user_activity_push_notification(name: str | None, message: str):
+    who = name or "未登録ユーザー"
+    await _send_to_subscribers(
+        title=f"👀 大西英恋以外の操作: {who}",
+        body=message[:120],
+        url="/admin",
+    )
