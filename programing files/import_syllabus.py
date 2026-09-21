@@ -148,6 +148,16 @@ def normalize_term_type(term: str) -> str | None:
     return None
 
 
+# syllabi.academic_termの許容値。core.config.SYLLABUS_ACADEMIC_TERMSおよびdatabase.py
+# init_db()のCHECK制約(chk_syllabi_academic_term)と同じ値集合に保つこと。値を追加・変更する
+# 際は3箇所とも揃える（本スクリプトはprograming files/専用の別プロセスでcore.configを
+# importしない設計のため、programing files/models.py同様の理由で値を複製している）。
+_VALID_ACADEMIC_TERMS = {
+    "前期", "後期", "通年", "年度", "集中",
+    "第1クォーター", "第2クォーター", "第3クォーター", "第4クォーター",
+}
+
+
 # ══════════════════════════════════════════════
 # 教養科目の分類判定（旧import_kyoyo_courses.pyのCOURSE_MAPを移植）
 # 所属列が「教養教育院」の行はここで科目名から分類を自動判定する
@@ -379,7 +389,11 @@ def parse_file(filepath: str) -> list[dict]:
         if not year_str.isdigit():
             continue
         year = int(year_str)
-        term = parts[2].strip()
+        # 全角数字混入（「第１クォーター」等）を半角化してから許容値と照合する。
+        # 表記ゆれのまま通すと同じクォーターのはずのシラバスが別academic_termとして
+        # 重複登録されてしまう（database.py init_db()のCHECK制約chk_syllabi_academic_termとの
+        # 二重防御）
+        term = normalize_alnum(parts[2].strip())
         department = parts[3].strip()
         raw_name = parts[4].strip()
         if is_crosslist_secondary(raw_name):
@@ -392,6 +406,9 @@ def parse_file(filepath: str) -> list[dict]:
         timetable_code = parts[7].strip()
         slots = parse_slots(slot_str)
         if not slots:
+            continue
+        if term not in _VALID_ACADEMIC_TERMS:
+            _log(f"[WARN:未知の開講区分でスキップ] term={term!r} name={name!r} timetable_code={timetable_code!r} file={Path(filepath).name}")
             continue
         courses.append({
             "year": year,

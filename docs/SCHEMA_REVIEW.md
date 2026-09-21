@@ -193,10 +193,8 @@ instructors ──CASCADE──> course_sections
 
 - **現状**: id, course_section_id (FK→course_sections CASCADE), year, academic_term, timetable_code (index); UNIQUE(course_section_id, year, academic_term)
 - **問題点**:
-  1. `academic_term` は自由 `Text` でCHECK制約なし。有効値の定義がアプリ層に分散している。
+  1. ~~`academic_term` は自由 `Text` でCHECK制約なし。有効値の定義がアプリ層に分散している。~~ 2026-09-22に対応済み。許容値を`core.config.SYLLABUS_ACADEMIC_TERMS`に集約し、`database.py` `init_db()`にCHECK制約(`chk_syllabi_academic_term`)を追加。取り込み元の`programing files/import_syllabus.py`側でも全角数字を半角化した上で許容値と照合し、未知の表記は`_log()`で警告を出してスキップする（値集合は3箇所で同期を保つ必要あり、コメント参照）。
   2. `academic_term` は2026-07頃に `quarter` からリネームされた経緯があり（`database.py` の `RENAME COLUMN` 処理）、旧名の名残がコード内コメント等に残っていないか注意が必要。
-- **改善案**:
-  - `academic_term` の許容値を1箇所（例: `core/config.py`）に集約する
 - **リスク**: リファクタリングのみで既存データへの影響はない。
 
 ---
@@ -264,7 +262,7 @@ instructors ──CASCADE──> course_sections
 ## 横断的な問題点
 
 ### 1. CHECK制約の適用が不均一
-`message_logs.direction` にはCHECK制約があるのに、同様に値集合が固定されている `syllabi.academic_term` にはない（`reviews.rating`/`reviews.ease_rating`/`display_orders.kind`は2026-08-25に追加済み）。整備の優先順位が場当たり的になっている。
+`message_logs.direction` にはCHECK制約があるのに、同様に値集合が固定されている `syllabi.academic_term` にはない（`reviews.rating`/`reviews.ease_rating`/`display_orders.kind`は2026-08-25に追加済み、`syllabi.academic_term`は2026-09-22に追加済み）。整備の優先順位が場当たり的になっている。
 
 ### 2. `subjects.faculty` のNULL許容がUNIQUE制約を無効化（2026-08-25対応済み）
 `(name, faculty, department)` の複合UNIQUEはPostgreSQLのNULL非等価性により `faculty IS NULL` の行では機能しない問題があったが、`database.py` `init_db()` で既存NULL行（共通専門基礎科目2件→`教養教育院`、他は空文字）を補完した上で `faculty` をNOT NULL化した。
@@ -301,7 +299,7 @@ instructors ──CASCADE──> course_sections
 | # | 対象 | 問題 | 改善方針 |
 |---|---|---|---|
 | 4 | `reviews`削除チェック | 複数エンドポイントに同一ロジックがコピペ | 共通ヘルパー関数へ統一 |
-| 5 | `syllabi.academic_term` | 許容値がアプリ層に分散 | 1箇所に集約 |
+| 5 | `syllabi.academic_term` | ~~許容値がアプリ層に分散~~ → 2026-09-22対応済み | `core.config.SYLLABUS_ACADEMIC_TERMS`に集約しDB側CHECK制約(`chk_syllabi_academic_term`)を追加、取り込み元でも全角数字正規化＋許容値照合 |
 | 6 | `programing files/models.py` | ルート`models.py`とテーブル定義・正規化関数が乖離 → 2026-08-25、正規化関数は`tests/test_normalize_functions_sync.py`で同期検証を追加。未使用テーブルの型定義欠如は実害なしと確認済み | 定期的な同期、または共通モジュール化 |
 | 7 | 全体 | マイグレーション管理が `init_db()` の逐次ALTERのみで肥大化 | Alembic導入を中長期的に検討 |
 | 8 | `instructors` | 異体字等の表記ゆれが正規化されず重複が発生しうる | 優先度低・運用でのマージ対応を継続 |

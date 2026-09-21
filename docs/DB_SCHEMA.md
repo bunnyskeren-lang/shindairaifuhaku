@@ -62,11 +62,12 @@ subjects ─┬─< course_sections >─┬─ instructors
 | `id` | BigInteger PK | - | |
 | `course_section_id` | BigInteger FK→course_sections.id (CASCADE), index | NOT NULL | |
 | `year` | Integer | NOT NULL | |
-| `academic_term` | Text | NOT NULL | 「第1クォーター」〜「第4クォーター」「後期」「集中」等の自由文字列 |
+| `academic_term` | Text | NOT NULL | 「第1クォーター」〜「第4クォーター」「前期」「後期」「通年」「年度」「集中」の9値のみ（`core.config.SYLLABUS_ACADEMIC_TERMS`）。CHECK制約`chk_syllabi_academic_term`あり |
 | `timetable_code` | Text | NULL可, index | 神戸大学シラバスサイトの時間割コード。シラバスURLはこの列+`department`から`core.config.make_syllabus_url()`で**毎回動的生成**する（URL列は持たない） |
 | `created_at` | DateTime(tz) | NOT NULL | |
 
-- UNIQUE制約: `(course_section_id, year, academic_term)`
+- UNIQUE制約: `(course_section_id, year, academic_term)` — 同一「科目×教員」でも年度・学期が違えば複数行を持てる
+- `academic_term`の許容値は`core.config.SYLLABUS_ACADEMIC_TERMS`に集約し、取り込み元の`programing files/import_syllabus.py`側でも全角数字を半角化した上で照合・未知値はスキップする（2026-09-22、表記ゆれによる重複レコード化防止）
 - `syllabi.department`列は2026-07-18に廃止済み（`subjects.faculty`との94%重複が判明したため。学科粒度が必要な場合は`subjects.department`を参照）。
 - `syllabi.target_grades`/`subject_category`列は2026-07-30の大規模リニューアル（My時間割機能全廃止）で廃止済み。
 

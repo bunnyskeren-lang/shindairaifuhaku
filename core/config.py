@@ -288,6 +288,17 @@ EASE_LABEL = {"SS": "天国", "S": "楽々", "A": "標準", "B": "大変", "C": 
 EASE_COLOR = {"SS": "#10b981", "S": "#6366f1", "A": "#f59e0b", "B": "#f97316", "C": "#ef4444"}
 EASE_STARS = {"SS": "★★★★★", "S": "★★★★☆", "A": "★★★☆☆", "B": "★★☆☆☆", "C": "★☆☆☆☆"}
 
+# syllabi.academic_termの許容値。Text型でCHECK制約が無いため表記ゆれ（全角数字混入・
+# 別表記の追加等）で同じクォーターのはずのシラバスが別レコードとして重複しうるリスクへの対処
+# （docs/SCHEMA_REVIEW.md P5指摘）。database.py init_db()のCHECK制約(chk_syllabi_academic_term)
+# はこの値をそのままDDLに埋め込む。取り込み元のprograming files/import_syllabus.pyは
+# core.configをimportしない別プロセス（programing files/models.py同様の理由）のため
+# _VALID_ACADEMIC_TERMSとして値を複製している。値を追加・変更する際は3箇所とも揃えること。
+SYLLABUS_ACADEMIC_TERMS = (
+    "前期", "後期", "通年", "年度", "集中",
+    "第1クォーター", "第2クォーター", "第3クォーター", "第4クォーター",
+)
+
 # 以下、programing files/fetch_syllabus_info.pyのFACULTY_PATH/DEPARTMENT_PATH_OVERRIDE/
 # ENGINEERING_RANGES/MEDICINE_RANGES/MEDICINE_SUBLETTERSと同じ対応表。
 # シラバスURL生成ロジックを変更する際は、programing files/fetch_syllabus_info.py側も

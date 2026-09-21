@@ -688,6 +688,22 @@ async def init_db():
             END $$
         """))
 
+        # ── 2026-09-22: syllabi.academic_termへのCHECK制約追加 ──
+        # Text型でCHECK制約が無く、表記ゆれ（全角数字混入・別表記等）が起きると同一
+        # クォーターのはずのシラバスが別レコードとして重複登録されうるリスクがあった
+        # （docs/SCHEMA_REVIEW.md P5指摘）。許容値はcore.config.SYLLABUS_ACADEMIC_TERMSに
+        # 集約し取り込み元(programing files/import_syllabus.py)側でも検証するが、
+        # DB側にも同じ値集合でCHECK制約を張り最終防御線とする
+        from core.config import SYLLABUS_ACADEMIC_TERMS as _SYLLABUS_ACADEMIC_TERMS
+        _academic_term_list_sql = ", ".join(f"'{t}'" for t in _SYLLABUS_ACADEMIC_TERMS)
+        await conn.execute(text(f"""
+            DO $$ BEGIN
+              ALTER TABLE syllabi ADD CONSTRAINT chk_syllabi_academic_term
+                CHECK (academic_term IN ({_academic_term_list_sql}));
+            EXCEPTION WHEN duplicate_object OR check_violation THEN NULL;
+            END $$
+        """))
+
         # ── 2026-09-05: 全く同じ科目名を別の分類にも登録できるようにする ──
         # 管理画面の科目編集で、科目名を別の分類に存在するのと全く同じ(name, faculty, department)に
         # 変更しようとするとUNIQUE制約違反(IntegrityError)が発生し、フロント側では
