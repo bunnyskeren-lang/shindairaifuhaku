@@ -809,15 +809,17 @@ async def handle_course_list(category: str = "", classification: str = "", facul
 
 # ── Ranking ──────────────────────────────────────────────────────
 
-async def _get_rakutan_ranking() -> list:
-    # 「楽単度が最も高い」科目群からランダムに5件選ぶ。抽選結果は毎回変えたいのでキャッシュしないが、
-    # 母集団(科目ごとの最良楽単度)はcache.get_ease_extremes_cached()側でTTLキャッシュ済み
+async def _get_ranking_by_tier(pick_ease, sort_key, make_card) -> list:
+    # 楽単5選・鬼単5選の共通ロジック。「pick_ease」でどちらの極値(best/worst)を使うか、
+    # 「sort_key」で並び順(楽単=易しい順/鬼単=厳しい順)を切り替える。
+    # 抽選結果は毎回変えたいのでキャッシュしないが、母集団(科目ごとの最良/最悪楽単度)は
+    # cache.get_ease_extremes_cached()側でTTLキャッシュ済み
     # (2026-09-03、リクエストの都度Subject×CourseSection×Review全件JOINしていた重い設計を解消)
     extremes = await cache.get_ease_extremes_cached()
     if not extremes:
         return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
-    course_best: dict[int, tuple[str, str]] = {sid: (name, best) for sid, (name, best, _worst) in extremes.items()}
-    tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: EASE_ORDER.get(e, 99))
+    course_best: dict[int, tuple[str, str]] = {sid: (name, pick_ease(best, worst)) for sid, (name, best, worst) in extremes.items()}
+    tiers = sorted({ease for _, ease in course_best.values()}, key=sort_key)
     selected: list[tuple[int, str, str]] = []
     for tier in tiers:
         if len(selected) >= 5:
@@ -829,30 +831,25 @@ async def _get_rakutan_ranking() -> list:
         {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, ""), "ease": ease}
         for i, (sid, name, ease) in enumerate(selected, 1)
     ]
-    return [make_rakutan_card(items)]
+    return [make_card(items)]
+
+
+async def _get_rakutan_ranking() -> list:
+    # 「楽単度が最も高い」科目群からランダムに5件選ぶ
+    return await _get_ranking_by_tier(
+        pick_ease=lambda best, worst: best,
+        sort_key=lambda e: EASE_ORDER.get(e, 99),
+        make_card=make_rakutan_card,
+    )
 
 
 async def _get_onitan_ranking() -> list:
-    # 「鬼単度が最も高い」(=楽単度が最も低い)科目群からランダムに5件選ぶ。抽選結果は毎回変えたいので
-    # キャッシュしないが、母集団(科目ごとの最悪楽単度)はcache.get_ease_extremes_cached()側で
-    # TTLキャッシュ済み(2026-09-03、リクエストの都度全件JOINしていた重い設計を解消)
-    extremes = await cache.get_ease_extremes_cached()
-    if not extremes:
-        return [TextMessage(text=f"まだ承認済みレビューがありません。\nレビューを投稿してください！\n\n{make_review_liff_url()}")]
-    course_best: dict[int, tuple[str, str]] = {sid: (name, worst) for sid, (name, _best, worst) in extremes.items()}
-    tiers = sorted({ease for _, ease in course_best.values()}, key=lambda e: -EASE_ORDER.get(e, -1))
-    selected: list[tuple[int, str, str]] = []
-    for tier in tiers:
-        if len(selected) >= 5:
-            break
-        pool = [(sid, name, ease) for sid, (name, ease) in course_best.items() if ease == tier]
-        random.shuffle(pool)
-        selected.extend(pool[:5 - len(selected)])
-    items = [
-        {"rank": i, "id": sid, "name": name, "stars": EASE_STARS.get(ease, ""), "ease": ease}
-        for i, (sid, name, ease) in enumerate(selected, 1)
-    ]
-    return [make_onitan_card(items)]
+    # 「鬼単度が最も高い」(=楽単度が最も低い)科目群からランダムに5件選ぶ
+    return await _get_ranking_by_tier(
+        pick_ease=lambda best, worst: worst,
+        sort_key=lambda e: -EASE_ORDER.get(e, -1),
+        make_card=make_onitan_card,
+    )
 
 
 async def _get_omikuji() -> list:
