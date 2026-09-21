@@ -4,7 +4,7 @@ import re as _re
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
-from core.activity_log import save_error_log
+from core.activity_log import save_error_log, save_log_bg
 from core.config import CONTACT_LIFF_ID, IS_DEV
 from core.liff_auth import verify_liff_id_token
 from core.push import send_inquiry_push_notification
@@ -81,6 +81,8 @@ async def contact_submit(
             status=InquiryStatus.PENDING,
         ))
         await session.commit()
+
+    asyncio.create_task(save_log_bg(uid, "in", f"[お問い合わせ送信] {cat}"))
 
     # お問い合わせは既にcommit済みのため、レビュー投稿と同様に
     # レスポンスを待たせずバックグラウンドで通知する

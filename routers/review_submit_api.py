@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from core import cache, moderation
-from core.activity_log import save_error_log
+from core.activity_log import save_error_log, save_log_bg
 from core.config import (
     BAN_MESSAGE_TEXT,
     MIN_COMMENT_LEN,
@@ -312,6 +312,8 @@ async def submit(
         cache.invalidate_full_pairs_cache()
 
         review_count = await _review_count(session, sid)
+
+    asyncio.create_task(save_log_bg(uid, "in", f"[レビュー投稿] {course_name.strip()}"))
 
     # レビューは既にcommit済みのため、push通知はレスポンスを待たせず
     # バックグラウンドで送る（購読者数が増えても投稿完了レスポンスの速度に影響しないように）。
