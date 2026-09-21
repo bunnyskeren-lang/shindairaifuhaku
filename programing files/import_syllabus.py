@@ -515,9 +515,12 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 # 教養教育院由来だが、既存レコードがcategory="専門"（共通専門基礎科目等）として
                 # 意図的に区別されているケースがある。その場合は既存分類を壊さず再利用する
                 # （category="教養"限定で再検索すると見つからず、重複INSERTでunique制約違反になるため）
+                # faculty無しでnameだけ検索すると、同名の専門科目が他学部にも存在する場合（例:
+                # 「生化学」「免疫学」等、2026-09-22時点で77科目名が複数学部に重複存在）に
+                # MultipleResultsFoundでバッチごとクラッシュしていたため、faculty=KYOYO_FACULTYで絞る
                 subj = (await session.execute(
-                    select(Subject).where(Subject.name == search_name)
-                )).scalar_one_or_none()
+                    select(Subject).where(Subject.name == search_name, Subject.faculty == KYOYO_FACULTY)
+                )).scalars().first()
 
             if subj is None:
                 if also_courses:
