@@ -289,7 +289,7 @@ async def submit(
         review = Review(
             course_section_id=cs_obj.id,
             submitter_name=submitter_name,
-            content=comment.strip()[:500],
+            content=comment.strip(),
             rating=rating,
             ease_rating=ease_rating,
             # 修正理由: JSON配列形式（core/grading_method.py）に変わり構造上のオーバーヘッドが

@@ -412,9 +412,26 @@
           <button type="button" class="prompt-chip" data-prompt="内職可">内職可</button>
         </div>
 
+        <!-- お知らせ: 2026-09-21 文字数上限（旧500文字）撤廃 -->
+        <div class="mb-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2.5">
+          <p class="text-[13px] font-bold text-indigo-800 flex items-center gap-1">
+            <span>📢</span><span>お知らせ：文字数制限をなくしました！</span>
+          </p>
+          <p class="text-xs text-indigo-700 mt-1">
+            これまでコメント欄は500文字までしか書けませんでしたが、上限を撤廃し、何文字でも自由に書けるようになりました✍️
+          </p>
+          <p class="text-xs text-indigo-700 mt-1">
+            「テスト形式」「授業の進め方」「持ち込み可否」など、伝えたいことをどんどん書いてもらってOKです！長文でも入力欄が自動で広がるので、スクロールせず書きやすくなっています📝
+          </p>
+          <p class="text-xs text-indigo-700 mt-1.5">
+            いつもレビュー投稿をありがとうございます。
+          </p>
+        </div>
+
         <textarea name="comment" id="comment" rows="5"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition resize-none"
-          required maxlength="500"></textarea>
+          style="overflow-y:hidden;"
+          required></textarea>
 
         <!-- 文字数フィードバック + 保存状態 -->
         <div class="flex items-center justify-between gap-2 mt-2">
@@ -1847,6 +1864,18 @@
       el.classList.add('ring-2', 'ring-amber-400', 'border-amber-400');
     }
 
+    // コメント欄は入力量に応じて高さを自動で伸ばす（長文でもスクロールせず書ける）。
+    // rows=5の初期高さを下限に、最大60vhまで伸ばしてそれ以降は内部スクロールにする。
+    function autoGrowComment() {
+      const el = document.getElementById('comment');
+      const maxHeight = Math.round(window.innerHeight * 0.6);
+      el.style.height = 'auto';
+      const next = Math.min(el.scrollHeight, maxHeight);
+      el.style.height = next + 'px';
+      el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }
+    autoGrowComment();
+
     document.querySelectorAll('.prompt-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const el = document.getElementById('comment');
@@ -1858,6 +1887,7 @@
         el.setSelectionRange(el.value.length, el.value.length);
         updateCommentFeedback(el.value.length);
         updateCommentHint();
+        autoGrowComment();
         saveData();
       });
     });
@@ -1867,6 +1897,7 @@
       updateCommentFeedback(el.value.length);
       if (el.value.trim()) el.classList.remove('ring-2', 'ring-red-400', 'border-red-400');
       updateCommentHint();
+      autoGrowComment();
       saveData();
     });
     const studentIdInput = document.getElementById('student_id');
@@ -2157,6 +2188,7 @@
         if (d.comment) {
           document.getElementById('comment').value = d.comment;
           updateCommentFeedback(d.comment.length);
+          autoGrowComment();
         }
         if (d.classFormatExtra) document.getElementById('classFormatExtraInput').value = d.classFormatExtra;
         if (d.attendanceMethodExtra) document.getElementById('attendanceMethodExtraInput').value = d.attendanceMethodExtra;
