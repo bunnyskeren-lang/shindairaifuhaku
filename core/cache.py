@@ -1,10 +1,12 @@
 import time
 from collections import defaultdict
+from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from core.config import (
     EASE_ORDER,
+    JST,
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_SUBJECTS,
     REVIEW_SUBMISSION_SENMON_CATEGORY,
@@ -28,7 +30,12 @@ from database import AsyncSessionLocal
 from models import (
     CourseSection,
     DisplayOrder,
+    ErrorLog,
+    Inquiry,
+    InquiryStatus,
     Instructor,
+    PaymentRequest,
+    PaymentRequestStatus,
     Review,
     ReviewStatus,
     Subject,
@@ -937,6 +944,60 @@ def invalidate_linebot_user_state(line_user_id: str) -> None:
     _linebot_user_state_cache.pop(line_user_id, None)
 
 
+# ── 管理画面ナビの件数バッジ（概要ダッシュボード・サイドバー共通） ──────────────
+# 単独運営者が巡回すべきキュー（レビュー承認・お問い合わせ・支払い申請・エラー）の
+# 待機件数。ログアウト状態確認(_ADMIN_REVOKE_CACHE_TTL=10)と同程度、操作直後の
+# 反映遅延を抑えたいためTTLは短め。
+_NAV_COUNTS_TTL = 30
+# routers/admin/users_errors.py の _SUBMIT_DUPLICATE_ACTION_PREFIX と同じ値（循環import回避のため
+# ここでも定義する）。レビュー二重送信の「既に投稿済み」拒否はテレメトリであり本物の障害ではないため、
+# 「本日のエラー」バッジからは除外する。
+_SUBMIT_DUPLICATE_ACTION_PREFIX = "submit_duplicate:"
+
+
+async def _fetch_admin_nav_counts() -> dict:
+    async with AsyncSessionLocal() as s:
+        pending_reviews = (await s.execute(
+            select(func.count(Review.id)).where(Review.status == ReviewStatus.PENDING)
+        )).scalar_one()
+        unhandled_inquiries = (await s.execute(
+            select(func.count(Inquiry.id)).where(Inquiry.status == InquiryStatus.PENDING)
+        )).scalar_one()
+        unpaid_payments = (await s.execute(
+            select(func.count(PaymentRequest.id)).where(PaymentRequest.status == PaymentRequestStatus.PENDING)
+        )).scalar_one()
+        today_start = datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        dup_like = ErrorLog.action.like(_SUBMIT_DUPLICATE_ACTION_PREFIX + "%")
+        errors_today = (await s.execute(
+            select(func.count(ErrorLog.id)).where(
+                ErrorLog.created_at >= today_start,
+                or_(ErrorLog.action.is_(None), ~dup_like),
+            )
+        )).scalar_one()
+    return {
+        "pending_reviews": pending_reviews,
+        "unhandled_inquiries": unhandled_inquiries,
+        "unpaid_payments": unpaid_payments,
+        "errors_today": errors_today,
+    }
+
+
+_nav_counts = _TTLCache(_NAV_COUNTS_TTL, _fetch_admin_nav_counts, bool, dict)
+
+
+async def get_admin_nav_counts_cached() -> dict:
+    """サイドバーの件数バッジ・概要ダッシュボードのKPIタイルが共通で使う、
+    レビュー承認待ち・お問い合わせ未対応・支払い申請未処理・本日のエラー件数。
+    管理画面のGETハンドラはこれを呼び、テンプレートへ `nav_counts` として渡す。"""
+    return await _nav_counts.get()
+
+
+def invalidate_admin_nav_counts_cache() -> None:
+    """承認・却下・支払い処理・お問い合わせ対応などバッジに影響する操作の直後に呼ぶ
+    （呼び忘れても最大_NAV_COUNTS_TTL秒で自然に解消する）。"""
+    _nav_counts.invalidate()
+
+
 async def warm_query_caches() -> None:
     import asyncio
     # 修正理由: 全部を一度にasyncio.gatherすると起動時にDBセッションが同数同時に開き、
@@ -960,6 +1021,7 @@ async def warm_query_caches() -> None:
         get_variant_map_cached(),
         get_senmon_variant_group_cached(),
         get_ease_extremes_cached(),
+        get_admin_nav_counts_cached(),
     ]
     _BATCH = 3
     for i in range(0, len(_tasks), _BATCH):

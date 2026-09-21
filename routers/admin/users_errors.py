@@ -140,6 +140,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
     return templates.TemplateResponse("admin/users.html", {
         "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
         "users": users,
         "review_map": review_map,
         "ticket_map": ticket_map,
@@ -201,6 +202,7 @@ async def admin_errors(
     total_pages = max(1, (total + per_page - 1) // per_page)
     return templates.TemplateResponse("admin/errors.html", {
         "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
         "errors": errors,
         "page": page,
         "total_pages": total_pages,
@@ -244,6 +246,7 @@ async def admin_liff_reauth(
     total_pages = max(1, (total + per_page - 1) // per_page)
     return templates.TemplateResponse("admin/liff_reauth.html", {
         "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
         "rows": rows,
         "page": page,
         "total_pages": total_pages,

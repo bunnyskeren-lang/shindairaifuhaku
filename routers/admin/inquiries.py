@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
+from core import cache
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -39,6 +40,7 @@ async def admin_inquiries(
 
     return templates.TemplateResponse("admin/inquiries.html", {
         "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
         "pending": pending,
         "handled": handled,
         "hpage": hpage,
@@ -55,6 +57,7 @@ async def admin_inquiry_handle(inquiry_id: int, _: str = Depends(check_admin)):
             inquiry.status = InquiryStatus.HANDLED
             inquiry.handled_at = datetime.now(UTC)
             await session.commit()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/inquiries", status_code=303)
 
 
@@ -66,4 +69,5 @@ async def admin_inquiry_reopen(inquiry_id: int, _: str = Depends(check_admin)):
             inquiry.status = InquiryStatus.PENDING
             inquiry.handled_at = None
             await session.commit()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/inquiries", status_code=303)

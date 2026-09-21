@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 
+from core import cache
 from core.config import credit_tickets_granted_clause, review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
@@ -42,6 +43,7 @@ async def admin_payments(
 
     return templates.TemplateResponse("admin/payments.html", {
         "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
         "pending": pending_rows,
         "paid": paid_rows,
         "ppage": ppage,
@@ -84,6 +86,7 @@ async def admin_payment_pay(request_id: int, _: str = Depends(check_admin)):
                 )
 
             await session.commit()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/payments", status_code=303)
 
 
@@ -100,4 +103,5 @@ async def admin_payment_reject(request_id: int, _: str = Depends(check_admin)):
             )
             payment_request.status = PaymentRequestStatus.REJECTED
             await session.commit()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/payments", status_code=303)

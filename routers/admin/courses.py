@@ -321,6 +321,7 @@ async def admin_courses(
 
     return templates.TemplateResponse("admin/courses.html", {
         "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
         "courses": courses,
         "grouped_courses": list(regular_grouped.items()),
         "parent_subgroups": parent_subgroups_sorted,

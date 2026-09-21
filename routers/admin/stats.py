@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 
+from core import cache
 from core.config import IS_DEV, VAPID_PUBLIC_KEY
 from core.security import check_admin
 from core.templates import templates
@@ -103,6 +104,7 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin), page: int 
 
     return templates.TemplateResponse("admin/usage_stats.html", {
         "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
         "uri_stats": uri_stats,
         "msg_btn_stats": msg_btn_stats,
         "msg_ranking": msg_ranking,

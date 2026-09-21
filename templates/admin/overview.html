@@ -1,0 +1,134 @@
+{% extends "admin/base.html" %}
+{% from "admin/_icons.html" import icon %}
+{% block title %}概要{% endblock %}
+{% block heading %}概要{% endblock %}
+
+{% block extra_style %}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);padding:16px 18px;box-shadow:var(--shadow)}
+.kpi-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px}
+.kpi-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kpi-label{font-size:12px;font-weight:600;color:var(--ink-soft)}
+.kpi-num{font-family:var(--font-mono);font-weight:700;font-size:26px;line-height:1;color:var(--ink)}
+.kpi-sub{font-size:11px;color:var(--ink-faint);margin-top:5px}
+.grid-2{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
+@media (max-width:900px){.grid-2{grid-template-columns:1fr}}
+.panel-head{margin:0 0 6px}
+.panel-head h2{margin:0}
+.attn-row{display:flex;align-items:center;gap:12px;padding:11px 4px}
+.attn-row+.attn-row{border-top:1px solid var(--border)}
+.attn-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.attn-title{font-size:13px;font-weight:600;color:var(--ink)}
+.attn-meta{font-size:11.5px;color:var(--ink-faint);margin-top:1px}
+.attn-go{margin-left:auto;font-size:12px;font-weight:700;color:var(--accent-text);white-space:nowrap;flex-shrink:0;text-decoration:none}
+.activity-list{display:flex;flex-direction:column}
+.act-item{display:flex;gap:10px;padding:9px 4px;align-items:flex-start}
+.act-item:not(:last-child){border-bottom:1px dashed var(--border)}
+.act-time{flex-shrink:0;width:78px;padding-top:1px;font-size:10.5px;color:var(--ink-faint);font-family:var(--font-mono)}
+.act-text{font-size:12.5px;line-height:1.55;color:var(--ink-soft)}
+.act-text b{font-weight:700;color:var(--ink)}
+.act-link{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:var(--accent-text);text-decoration:none}
+{% endblock %}
+
+{% block content %}
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-label">待機中レビュー</div>
+      <div class="kpi-icon" style="background:var(--accent-soft);color:var(--accent-text)">{{ icon('check-circle', 16) }}</div>
+    </div>
+    <div class="kpi-num">{{ nc.pending_reviews }}件</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-label">未対応の問い合わせ</div>
+      <div class="kpi-icon" style="background:var(--warning-soft);color:var(--warning)">{{ icon('mail', 16) }}</div>
+    </div>
+    <div class="kpi-num">{{ nc.unhandled_inquiries }}件</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-label">未処理の支払い申請</div>
+      <div class="kpi-icon" style="background:#eef1f5;color:#64748b">{{ icon('wallet', 16) }}</div>
+    </div>
+    <div class="kpi-num">{{ "{:,}".format(unpaid_amount) }}円</div>
+    <div class="kpi-sub">{{ nc.unpaid_payments }}件</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-label">本日のエラー</div>
+      <div class="kpi-icon" style="background:var(--danger-soft);color:var(--danger)">{{ icon('alert-triangle', 16) }}</div>
+    </div>
+    <div class="kpi-num">{{ nc.errors_today }}件</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="panel-head"><h2>対応が必要な項目</h2></div>
+    {% set has_any = nc.pending_reviews or nc.unhandled_inquiries or nc.unpaid_payments or nc.errors_today %}
+    {% if has_any %}
+      {% if nc.errors_today %}
+      <div class="attn-row">
+        <div class="attn-icon" style="background:var(--danger-soft);color:var(--danger)">{{ icon('alert-triangle', 15) }}</div>
+        <div>
+          <div class="attn-title">本日のエラー {{ nc.errors_today }}件{% if latest_error %}（直近: {{ latest_error.action or latest_error.error_type }}）{% endif %}</div>
+          {% if latest_error %}<div class="attn-meta">{{ latest_error.created_at | jst }}</div>{% endif %}
+        </div>
+        <a class="attn-go" href="/admin/errors">確認する →</a>
+      </div>
+      {% endif %}
+      {% if nc.pending_reviews %}
+      <div class="attn-row">
+        <div class="attn-icon" style="background:var(--accent-soft);color:var(--accent-text)">{{ icon('check-circle', 15) }}</div>
+        <div>
+          <div class="attn-title">レビュー {{ nc.pending_reviews }}件が承認待ち</div>
+          {% if oldest_pending_review %}<div class="attn-meta">最も古い投稿: {{ oldest_pending_review | jst }}</div>{% endif %}
+        </div>
+        <a class="attn-go" href="/admin/reviews">確認する →</a>
+      </div>
+      {% endif %}
+      {% if nc.unhandled_inquiries %}
+      <div class="attn-row">
+        <div class="attn-icon" style="background:var(--warning-soft);color:var(--warning)">{{ icon('mail', 15) }}</div>
+        <div>
+          <div class="attn-title">お問い合わせ {{ nc.unhandled_inquiries }}件が未対応</div>
+          {% if oldest_inquiry %}<div class="attn-meta">最も古い受信: {{ oldest_inquiry | jst }}</div>{% endif %}
+        </div>
+        <a class="attn-go" href="/admin/inquiries">対応する →</a>
+      </div>
+      {% endif %}
+      {% if nc.unpaid_payments %}
+      <div class="attn-row">
+        <div class="attn-icon" style="background:#eef1f5;color:#64748b">{{ icon('wallet', 15) }}</div>
+        <div>
+          <div class="attn-title">PayPay支払い申請 {{ nc.unpaid_payments }}件・合計{{ "{:,}".format(unpaid_amount) }}円</div>
+          <div class="attn-meta">承認待ち</div>
+        </div>
+        <a class="attn-go" href="/admin/payments">確認する →</a>
+      </div>
+      {% endif %}
+    {% else %}
+    <p class="empty">対応が必要な項目はありません</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="panel-head"><h2>最近のアクティビティ</h2></div>
+    <div class="activity-list">
+      {% for l in recent_logs %}
+      <div class="act-item">
+        <span class="act-time">{{ l.created_at | jst }}</span>
+        <span class="act-text">
+          {% if l.direction == "in" %}{% if l.name %}<b>{{ l.name }}</b>さんから{% else %}未登録ユーザーから{% endif %}受信: {{ l.message }}
+          {% else %}{% if l.name %}<b>{{ l.name }}</b>さんへ{% else %}未登録ユーザーへ{% endif %}送信: {{ l.message }}{% endif %}
+        </span>
+      </div>
+      {% else %}
+      <p class="empty">ログがありません</p>
+      {% endfor %}
+    </div>
+    <a class="act-link" href="/admin/logs">すべてのログを見る →</a>
+  </div>
+</div>
+{% endblock %}

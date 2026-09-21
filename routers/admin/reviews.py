@@ -95,6 +95,7 @@ async def admin_reviews(
     msg: str | None = Query(default=None),
 ):
     variant_labels = await cache.get_variant_full_label_map_cached()
+    nav_counts = await cache.get_admin_nav_counts_cached()
 
     async with AsyncSessionLocal() as session:
         # reviews.student_id（フォーム手入力のテキスト）とuser_profiles.student_idの
@@ -142,6 +143,7 @@ async def admin_reviews(
     rejected = [_make_review_ns(r, variant_labels.get(n, n)) for r, n in rejected_rows]
     return templates.TemplateResponse("admin/reviews.html", {
         "request": request,
+        "nav_counts": nav_counts,
         "pending": pending,
         "approved": approved,
         "rejected": rejected,
@@ -189,6 +191,7 @@ async def admin_review_approve(
                 review.credit_granted_at = datetime.now(UTC)
             await session.commit()
     cache.invalidate_review_cache()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
 
 
@@ -210,6 +213,7 @@ async def admin_review_update(
             _apply_review_edits(review, content, rating, ease_rating, grading_method, selected_instructor, nickname)
             await session.commit()
     cache.invalidate_review_cache()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
 
 
@@ -284,6 +288,7 @@ async def admin_review_reassign(
             review.selected_instructor = normalize_instructor_name(name)
             await session.commit()
     cache.invalidate_review_cache()
+    cache.invalidate_admin_nav_counts_cache()
     cache.invalidate_courses_cache()
     cache.invalidate_full_pairs_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
@@ -299,6 +304,7 @@ async def admin_review_reject(review_id: int, _: str = Depends(check_admin)):
             review.status = ReviewStatus.REJECTED
             await session.commit()
     cache.invalidate_review_cache()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
 
 
@@ -312,4 +318,5 @@ async def admin_review_restore(review_id: int, _: str = Depends(check_admin)):
             review.status = ReviewStatus.PENDING
             await session.commit()
     cache.invalidate_review_cache()
+    cache.invalidate_admin_nav_counts_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
