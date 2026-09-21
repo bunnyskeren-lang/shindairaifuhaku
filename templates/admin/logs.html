@@ -4,26 +4,26 @@
 
 {% block extra_style %}
 .log-table td{vertical-align:top}
-.log-time{white-space:nowrap;font-size:11px;color:#6b7280}
-.log-user-name{font-weight:700;color:#111827}
-.log-user-sub{color:#9ca3af;font-size:11px}
-.log-dir{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
-.log-dir-in{background:#dcfce7;color:#166534}
-.log-dir-out{background:#e0e7ff;color:#3730a3}
+.log-time{white-space:nowrap;font-size:11px;color:var(--ink-faint)}
+.log-user-name{font-weight:700;color:var(--ink)}
+.log-user-sub{color:var(--ink-faint);font-size:11px}
 .log-msg{font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
-.log-msg-sys{color:#6b7280;font-style:italic}
+.log-msg-sys{color:var(--ink-faint);font-style:italic}
 {% endblock %}
 
 {% from "admin/base.html" import pager %}
 {% block content %}
 <div class="card">
   <h2 style="margin-top:0">メッセージログ（全{{ total }}件）</h2>
+  <p style="font-size:12.5px;color:var(--ink-faint);margin:-8px 0 14px">
+    ユーザーが実際に行った操作（検索・タップ・投稿など）のみを表示しています。
+    応答の成否・所要時間の調査は<a href="/admin/debug-logs" style="color:var(--accent-text)">デバッグログ</a>を参照してください。
+  </p>
   <div class="table-wrap">
   <table class="log-table">
     <tr>
       <th style="width:1%">日時</th>
       <th style="width:1%">ユーザー</th>
-      <th style="width:1%">方向</th>
       <th>メッセージ</th>
     </tr>
     {% for l in logs %}
@@ -32,21 +32,13 @@
       <td>
         {% if l.name %}<span class="log-user-name">{{ l.name }}</span>{% else %}<span class="log-user-sub">未登録ユーザー</span>{% endif %}
         {% if l.student_id %}<br><span class="log-user-sub">{{ l.student_id }}</span>{% endif %}
-        <br><span class="log-user-sub">{{ l.user_id[:8] }}…</span>
-      </td>
-      <td>
-        {% if l.direction == "in" %}
-        <span class="log-dir log-dir-in">受信 →</span>
-        {% else %}
-        <span class="log-dir log-dir-out">← 送信</span>
-        {% endif %}
       </td>
       <td>
         <span class="log-msg{{ ' log-msg-sys' if l.message.startswith('[') }}">{{ l.message }}</span>
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="4" class="empty">ログなし</td></tr>
+    <tr><td colspan="3" class="empty">ログなし</td></tr>
     {% endfor %}
   </table>
   </div>

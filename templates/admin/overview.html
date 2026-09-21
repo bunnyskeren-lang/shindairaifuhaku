@@ -120,8 +120,7 @@
       <div class="act-item">
         <span class="act-time">{{ l.created_at | jst }}</span>
         <span class="act-text">
-          {% if l.direction == "in" %}{% if l.name %}<b>{{ l.name }}</b>さんから{% else %}未登録ユーザーから{% endif %}受信: {{ l.message }}
-          {% else %}{% if l.name %}<b>{{ l.name }}</b>さんへ{% else %}未登録ユーザーへ{% endif %}送信: {{ l.message }}{% endif %}
+          {% if l.name %}<b>{{ l.name }}</b>さん{% else %}未登録ユーザー{% endif %}: {{ l.message }}
         </span>
       </div>
       {% else %}

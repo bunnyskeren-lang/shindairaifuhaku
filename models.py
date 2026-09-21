@@ -90,6 +90,25 @@ class ErrorLog(TimestampMixin, Base):
     traceback: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class DebugLog(TimestampMixin, Base):
+    """バグ調査用の動作ログ（2026-09-22追加）。error_logsが例外発生時のみを記録するのに対し、
+    こちらはLINE bot応答1件ごと（正常終了・タイムアウト・エラーいずれも）の処理内容と所要時間を
+    毎回記録する。エラー発生時、その直前直後に「実際どんな操作がどれだけの時間で行われていたか」を
+    管理画面から追えるようにするための補助ログ（line_bot/handler.py `_log_reply_timing()`参照）。
+    message_logs（ユーザーの関心事が分かる生メッセージ）とは目的が異なるため別テーブルにする。"""
+    __tablename__ = "debug_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # 例: "postback:レビュー閲覧" "message:統計学入門:timeout" "follow"
+    action: Mapped[str] = mapped_column(String(200), nullable=False)
+    # 'ok' / 'slow'（_SLOW_REPLY_MS超過） / 'timeout' / 'error'
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="ok")
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 計算時間/送信時間の内訳など、補足情報があれば入れる（任意）
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class LiffAuthEvent(TimestampMixin, Base):
     """LIFF IDトークン期限切れ→強制再ログインの発生状況テレメトリ。
     サーバーエラーではないため error_logs には入れず専用テーブルに分離する

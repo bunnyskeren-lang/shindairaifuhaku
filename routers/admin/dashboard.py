@@ -56,15 +56,16 @@ async def admin_overview(request: Request, _: str = Depends(check_admin)):
             .limit(1)
         )).first()
 
-        # 最近のアクティビティ: 直近のメッセージログ（送信者は会員登録済みなら氏名で表示）
+        # 最近のアクティビティ: 直近のメッセージログ（ユーザー自身の操作＝direction="in"のみ。
+        # 送信者は会員登録済みなら氏名で表示）
         recent_logs = (await session.execute(
             select(
-                MessageLog.direction,
                 MessageLog.message,
                 MessageLog.created_at,
                 UserProfile.name.label("name"),
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == MessageLog.user_id)
+            .where(MessageLog.direction == "in")
             .order_by(MessageLog.created_at.desc())
             .limit(8)
         )).all()
@@ -85,19 +86,27 @@ async def admin_logs_page(request: Request, _: str = Depends(check_admin), page:
     per_page = 50
     nav_counts = await cache.get_admin_nav_counts_cached()
     async with AsyncSessionLocal() as session:
-        total = (await session.execute(select(func.count(MessageLog.id)))).scalar_one()
+        # 「ユーザーが何に関心を示したか」が分かるログとして、ユーザー自身の操作
+        # （direction="in"）のみを対象にする。bot側の応答（旧"out"の"[N msg(s)]"だけの行）は
+        # 情報量がなく無駄なノイズだったため、そもそも記録しない運用に変更した
+        # （line_bot/handler.py _handle_reply_event参照）。応答の成否・所要時間は
+        # 別画面「デバッグログ」（/admin/debug-logs、DebugLog）で追える。
+        total = (await session.execute(
+            select(func.count(MessageLog.id)).where(MessageLog.direction == "in")
+        )).scalar_one()
         # 送信者を LINE user_id ではなく会員登録時の氏名・学籍番号で表示するため
         # user_profiles を left join する（未登録ユーザーの行も残すので outerjoin）。
+        # 生のLINE user_idは関心の把握には不要なノイズのため表示しない
+        # （デバッグ目的でIDが必要な場合はデバッグログ側を参照）。
         logs = (await session.execute(
             select(
-                MessageLog.user_id,
-                MessageLog.direction,
                 MessageLog.message,
                 MessageLog.created_at,
                 UserProfile.name.label("name"),
                 UserProfile.student_id.label("student_id"),
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == MessageLog.user_id)
+            .where(MessageLog.direction == "in")
             .order_by(MessageLog.created_at.desc())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()

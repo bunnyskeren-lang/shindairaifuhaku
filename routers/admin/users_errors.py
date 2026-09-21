@@ -10,7 +10,7 @@ from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
 from models import (
-    CourseSection, ErrorLog, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserProfile,
+    CourseSection, DebugLog, ErrorLog, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserProfile,
 )
 
 router = APIRouter()
@@ -253,6 +253,59 @@ async def admin_liff_reauth(
         "total": total,
         "stuck_total": stuck_total,
         "url_prefix": "/admin/liff-reauth?page=",
+    })
+
+
+_DEBUG_LOG_STATUSES = ("ok", "slow", "timeout", "error")
+
+
+@router.get("/admin/debug-logs", response_class=HTMLResponse)
+async def admin_debug_logs(
+    request: Request,
+    _: str = Depends(check_admin),
+    page: int = Query(default=1, ge=1),
+    status: str = Query(default=""),
+):
+    """バグ調査用の動作ログ（debug_logs）。LINE botの応答1件ごとに、正常終了・タイムアウト・
+    エラーいずれのケースも操作名(action)と所要時間を記録している（line_bot/handler.py
+    `_log_reply_timing()`参照）。message_logs（ユーザーの関心が分かる生メッセージ）とは別画面。"""
+    per_page = 50
+    status = status if status in _DEBUG_LOG_STATUSES else ""
+    where_clause = [DebugLog.status == status] if status else []
+    async with AsyncSessionLocal() as session:
+        total = (await session.execute(
+            select(func.count(DebugLog.id)).where(*where_clause)
+        )).scalar_one()
+        status_counts_rows = (await session.execute(
+            select(DebugLog.status, func.count(DebugLog.id)).group_by(DebugLog.status)
+        )).all()
+        rows = (await session.execute(
+            select(
+                DebugLog.created_at,
+                DebugLog.user_id,
+                UserProfile.name,
+                UserProfile.student_id,
+                DebugLog.action,
+                DebugLog.status,
+                DebugLog.duration_ms,
+                DebugLog.detail,
+            )
+            .outerjoin(UserProfile, UserProfile.line_user_id == DebugLog.user_id)
+            .where(*where_clause)
+            .order_by(DebugLog.created_at.desc())
+            .offset((page - 1) * per_page).limit(per_page)
+        )).all()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return templates.TemplateResponse("admin/debug_logs.html", {
+        "request": request,
+        "nav_counts": await cache.get_admin_nav_counts_cached(),
+        "rows": rows,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "status_filter": status,
+        "status_counts": dict(status_counts_rows),
+        "url_prefix": f"/admin/debug-logs?status={status}&page=" if status else "/admin/debug-logs?page=",
     })
 
 

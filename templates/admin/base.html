@@ -166,6 +166,7 @@ main.content{flex:1;padding:22px 26px 36px}
       <div class="nav-group">
         <div class="nav-label">監視</div>
         <a href="/admin/errors" class="nav-item{{ ' active' if path == '/admin/errors' }}">{{ icon('alert-triangle') }}<span class="nav-txt">エラー</span>{% if nc.errors_today %}<span class="nav-badge danger">{{ nc.errors_today }}</span>{% endif %}</a>
+        <a href="/admin/debug-logs" class="nav-item{{ ' active' if path == '/admin/debug-logs' }}">{{ icon('activity') }}<span class="nav-txt">デバッグログ</span></a>
         <a href="/admin/liff-reauth" class="nav-item{{ ' active' if path == '/admin/liff-reauth' }}">{{ icon('refresh') }}<span class="nav-txt">再ログイン</span></a>
       </div>
     </nav>

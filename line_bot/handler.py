@@ -19,7 +19,7 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMessageContent
 
 from core import cache, line_client
-from core.activity_log import save_error_log, save_log_bg
+from core.activity_log import save_debug_log, save_error_log, save_log_bg
 from core.background_tasks import fire_and_forget
 from core.config import (
     APP_URL,
@@ -1256,19 +1256,35 @@ async def handle_message(text: str, user_id: str = "") -> list:
 _SLOW_REPLY_MS = 2000
 
 
-def _log_reply_timing(kind: str, start: float, compute_ms: float | None = None) -> None:
+def _log_reply_timing(kind: str, start: float, compute_ms: float | None = None, user_id: str = "") -> None:
     """webhook受信からreply()完了までの実時間を記録する。
     routers/webhook.pyの/callbackは即座に202相当を返すためRenderのアクセスログには
     実際のLINE bot応答速度が出ない。process_events側で計測する。
     compute_ms を渡すと handle_message() の計算時間とLINE API送信(reply())時間を
     切り分けて記録できる（大きなFlexMessageの送信自体が遅いのか、こちら側の計算が
-    遅いのかを区別するため）。"""
+    遅いのかを区別するため）。
+
+    Renderの標準出力(print)に残すだけでなく、管理画面「バグ調査ログ」からも追えるよう
+    DebugLog（core.activity_log.save_debug_log）にも毎回保存する（2026-09-22追加。
+    正常終了・タイムアウト・エラーいずれのケースもここを通るのが唯一の合流点）。"""
     duration_ms = (time.perf_counter() - start) * 1000
-    marker = " SLOW" if duration_ms >= _SLOW_REPLY_MS else ""
+    is_slow = duration_ms >= _SLOW_REPLY_MS
+    marker = " SLOW" if is_slow else ""
     if compute_ms is not None:
         print(f"[linebot_reply] {kind} {duration_ms:.0f}ms (compute={compute_ms:.0f}ms send={duration_ms - compute_ms:.0f}ms){marker}", flush=True)
+        detail = f"compute={compute_ms:.0f}ms / send={duration_ms - compute_ms:.0f}ms"
     else:
         print(f"[linebot_reply] {kind} {duration_ms:.0f}ms{marker}", flush=True)
+        detail = None
+    if kind.endswith(":error"):
+        status = "error"
+    elif kind.endswith(":timeout"):
+        status = "timeout"
+    elif is_slow:
+        status = "slow"
+    else:
+        status = "ok"
+    fire_and_forget(save_debug_log(kind, user_id=user_id or None, status=status, duration_ms=duration_ms, detail=detail))
 
 
 async def _handle_reply_event(event, user_id: str, input_text: str, label: str, log_text: str, t0: float) -> None:
@@ -1282,32 +1298,35 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
         fire_and_forget(save_log_bg(user_id, "in", log_text))
         if await _user_banned(user_id):
             await line_client.reply(event.reply_token, [TextMessage(text=BAN_MESSAGE_TEXT)])
-            _log_reply_timing(f"{label}:banned", t0)
+            _log_reply_timing(f"{label}:banned", t0, user_id=user_id)
             return
         if await _registration_incomplete(user_id):
             register_url = make_register_url(user_id)
             await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
-            _log_reply_timing(f"{label}:register", t0)
+            _log_reply_timing(f"{label}:register", t0, user_id=user_id)
             return
         messages = await asyncio.wait_for(handle_message(input_text, user_id), timeout=25.0)
         t_compute = time.perf_counter()
         await line_client.reply(event.reply_token, messages[:5])
-        fire_and_forget(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
-        _log_reply_timing(f"{label}:{input_text[:30]}", t0, compute_ms=(t_compute - t0) * 1000)
+        # 修正理由: "[N msg(s)]"という件数だけのoutログは、ユーザーの関心が分かる情報として
+        # 無意味な一方でmessage_logsを水増ししていた。応答の所要時間・成否はDebugLog
+        # （_log_reply_timing）側で毎回記録しているため、こちらはinのみ（ユーザー自身の
+        # 操作）を残す運用に統一する（2026-09-22）。
+        _log_reply_timing(f"{label}:{input_text[:30]}", t0, compute_ms=(t_compute - t0) * 1000, user_id=user_id)
     except TimeoutError:
         await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=f"{label}:{input_text}")
         try:
             await line_client.reply(event.reply_token, [TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")])
         except Exception as reply_exc:
             await save_error_log(reply_exc, user_id=user_id, action=f"{label}_reply_failed:{input_text}")
-        _log_reply_timing(f"{label}:{input_text[:30]}:timeout", t0)
+        _log_reply_timing(f"{label}:{input_text[:30]}:timeout", t0, user_id=user_id)
     except Exception as exc:
         await save_error_log(exc, user_id=user_id, action=f"{label}:{input_text}")
         try:
             await line_client.reply(event.reply_token, [TextMessage(text="エラーが発生しました。しばらくしてからもう一度お試しください。")])
         except Exception as reply_exc:
             await save_error_log(reply_exc, user_id=user_id, action=f"{label}_reply_failed:{input_text}")
-        _log_reply_timing(f"{label}:{input_text[:30]}:error", t0)
+        _log_reply_timing(f"{label}:{input_text[:30]}:error", t0, user_id=user_id)
 
 
 async def process_events(events) -> None:
@@ -1323,7 +1342,7 @@ async def process_events(events) -> None:
                         fire_and_forget(save_log_bg(user_id, "in", "[follow:banned]"))
                     except Exception as exc:
                         await save_error_log(exc, user_id=user_id, action="follow_banned")
-                    _log_reply_timing("follow:banned", _t0)
+                    _log_reply_timing("follow:banned", _t0, user_id=user_id)
                     continue
                 # LINEはブロック解除でも新規フォローと同じFollowEventを送るため、
                 # 登録済みユーザーがブロック解除した場合も、初めて友だち追加した時と
@@ -1345,7 +1364,7 @@ async def process_events(events) -> None:
                         await line_client.link_rich_menu(user_id, RICHMENU_ID_MAIN)
                 except Exception as exc:
                     await save_error_log(exc, user_id=user_id, action="follow_richmenu")
-                _log_reply_timing("follow", _t0)
+                _log_reply_timing("follow", _t0, user_id=user_id)
                 continue
 
             if isinstance(event, PostbackEvent):

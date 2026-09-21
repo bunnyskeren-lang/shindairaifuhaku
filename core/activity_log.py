@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.background_tasks import fire_and_forget
 from database import AsyncSessionLocal
-from models import ErrorLog, LiffAuthEvent, MessageLog, UserActivity, UserProfile
+from models import DebugLog, ErrorLog, LiffAuthEvent, MessageLog, UserActivity, UserProfile
 
 # メッセージログが「大西英恋」本人以外により動いた（受信方向のログが記録された）ときに
 # 管理者端末へ通知するための照合名。未登録ユーザー（user_profiles未登録）も対象に含める。
@@ -73,6 +73,30 @@ async def save_error_log(
     fire_and_forget(_notify())
 
 
+async def save_debug_log(
+    action: str,
+    user_id: str | None = None,
+    status: str = "ok",
+    duration_ms: float | None = None,
+    detail: str | None = None,
+) -> None:
+    """バグ調査用の動作ログ（DebugLog）を保存する。エラーの有無に関わらず毎回呼ばれる想定
+    （line_bot/handler.py `_log_reply_timing()`参照）ため、save_error_logと同様に例外を
+    握りつぶしてprintのみに留め、呼び出し元の処理を絶対に止めない。"""
+    try:
+        async with AsyncSessionLocal() as session:
+            session.add(DebugLog(
+                user_id=user_id,
+                action=action[:200],
+                status=status,
+                duration_ms=int(duration_ms) if duration_ms is not None else None,
+                detail=detail[:500] if detail else None,
+            ))
+            await session.commit()
+    except Exception as log_exc:
+        print(f"[debug_log_failed] {type(log_exc).__name__}: {log_exc}", flush=True)
+
+
 async def save_log_bg(user_id: str, direction: str, message: str) -> None:
     try:
         async with AsyncSessionLocal() as session:
@@ -109,13 +133,14 @@ async def _notify_other_user_activity(name: str | None, message: str) -> None:
 
 
 async def cleanup_old_logs():
-    """message_logs / error_logs / liff_auth_eventsの古い行を削除する（Supabase Freeプランの
-    ストレージ上限対策。いずれもreviews等と異なり永続保存が前提のデータではない）。"""
+    """message_logs / error_logs / debug_logs / liff_auth_eventsの古い行を削除する
+    （Supabase Freeプランのストレージ上限対策。いずれもreviews等と異なり永続保存が前提のデータではない）。"""
     try:
         cutoff = datetime.now(UTC) - timedelta(days=_LOG_RETENTION_DAYS)
         async with AsyncSessionLocal() as session:
             await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
             await session.execute(delete(ErrorLog).where(ErrorLog.created_at < cutoff))
+            await session.execute(delete(DebugLog).where(DebugLog.created_at < cutoff))
             await session.execute(delete(LiffAuthEvent).where(LiffAuthEvent.created_at < cutoff))
             await session.commit()
     except Exception as exc:

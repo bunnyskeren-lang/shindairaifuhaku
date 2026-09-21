@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% block title %}デバッグログ{% endblock %}
+{% block heading %}デバッグログ{% endblock %}
+
+{% block extra_style %}
+.dbg-status{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.dbg-status-ok{background:var(--success-soft);color:var(--success)}
+.dbg-status-slow{background:var(--warning-soft);color:var(--warning)}
+.dbg-status-timeout{background:#ffe4cc;color:#c2410c}
+.dbg-status-error{background:var(--danger-soft);color:var(--danger)}
+{% endblock %}
+
+{% from "admin/base.html" import pager %}
+{% block content %}
+<div class="card">
+  <p style="font-size:13px;color:var(--ink-faint);margin:0 0 16px">
+    LINE botの応答1件ごとに、正常終了・タイムアウト・エラーいずれの場合も操作内容と所要時間を記録しています。
+    エラーそのものの内容（トレースバック等）は<a href="/admin/errors" style="color:var(--accent-text)">エラーログ</a>を参照してください。
+  </p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px">
+    <a href="/admin/debug-logs" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if not status_filter %}background:var(--ink);color:#fff{% else %}background:var(--surface-alt);color:var(--ink-soft){% endif %}">すべて（{{ status_counts.values() | sum }}）</a>
+    {% for s in ["ok", "slow", "timeout", "error"] %}
+    <a href="/admin/debug-logs?status={{ s }}" style="font-size:12px;padding:5px 12px;border-radius:999px;text-decoration:none;{% if status_filter == s %}background:var(--ink);color:#fff{% else %}background:var(--surface-alt);color:var(--ink-soft){% endif %}">{{ s }}（{{ status_counts.get(s, 0) }}）</a>
+    {% endfor %}
+  </div>
+  <div class="table-wrap">
+  <table>
+    <tr>
+      <th>日時</th>
+      <th>ユーザー</th>
+      <th>操作</th>
+      <th>状態</th>
+      <th>所要時間</th>
+      <th>詳細</th>
+    </tr>
+    {% for r in rows %}
+    <tr style="vertical-align:top">
+      <td style="white-space:nowrap;font-size:11px">{{ r.created_at | jst }}</td>
+      <td style="font-size:12px">
+        {{ r.name or "―" }}
+        {% if r.student_id %}<br><span style="color:var(--ink-faint);font-size:11px">{{ r.student_id }}</span>{% endif %}
+      </td>
+      <td style="font-size:12px;max-width:220px;word-break:break-word">{{ r.action }}</td>
+      <td><span class="dbg-status dbg-status-{{ r.status }}">{{ r.status }}</span></td>
+      <td style="font-size:12px;white-space:nowrap">{{ (r.duration_ms | int) if r.duration_ms is not none else "―" }}{{ "ms" if r.duration_ms is not none }}</td>
+      <td style="font-size:11px;color:var(--ink-faint)">{{ r.detail or "―" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">記録なし</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+  {{ pager(page, total_pages, total, url_prefix) }}
+</div>
+{% endblock %}

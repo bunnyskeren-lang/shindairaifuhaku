@@ -57,7 +57,7 @@ class Base(DeclarativeBase):
 
 async def init_db():
     from models import (  # noqa: F401
-        MessageLog, UserProfile, UserActivity, ErrorLog, LiffAuthEvent,
+        MessageLog, UserProfile, UserActivity, ErrorLog, DebugLog, LiffAuthEvent,
         PushSubscription, DisplayOrder, RichMenuTap,
         Subject, Instructor, CourseSection, Syllabus, Review,
         CourseSectionView, PaymentRequest,
