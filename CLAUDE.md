@@ -29,12 +29,12 @@
 1. **新規環境変数**: `git diff <旧本番コミット> <新dev内容> -- '*.py' | grep "os.environ\|os.getenv"` 等で新規追加された環境変数を全て洗い出し、Render本番Environmentへの登録が必要か案内する（上記「環境変数の追加ルール」参照）
 2. **新規LIFF ID**: 新設されたLIFF機能があれば、本番用LIFFアプリがLINE Developers Consoleで作成済みか・IDがRender本番に登録済みかを確認・案内する
 3. **リッチメニュー変更**: `programing files/assets/richmenu.png`や`setup_richmenu.py`のボタン配置が変わっていれば、`--env prod`の実行が必要なことを案内する（実行すると`RICHMENU_ID_MAIN`と`RICHMENU_ID_PREREGISTER`の**両方**が新しいIDに変わるため、`.env`更新後、必ずRender本番Environmentの両方の値を実機で更新してもらう。この更新漏れは過去に複数回発生し、旧IDがLINE側で削除済みのため`link_rich_menu_id_to_user`が404「richmenu not found」を高頻度で出し続ける実害に直結した（2026-09-02〜03）。ユーザーから「更新済み」と口頭申告されても鵜呑みにせず、可能なら`curl`等で本番の動作を確認するか、Renderダッシュボードの値を直接見せてもらって新IDと一致するか照合すること。[[feedback_verify_prod_env_vars_live_not_memory]]）
-4. **DB同期**: 対象4テーブル（`display_orders`/`subjects`/`instructors`/`course_sections`）の同期（`sync_db_to_prod.py`）が必要なことを案内する
+4. **DB同期**: 対象5テーブル（`display_orders`/`subjects`/`instructors`/`course_sections`/`syllabi`）の同期（`sync_db_to_prod.py`）が必要なことを案内する
 5. **その他の外部サービス設定**: 新しい外部サービス連携（メール送信ドメイン認証、DNS設定等）が絡む場合、dev側で完了済みの設定が本番用にも別途必要かを確認し案内する
 
-これらは`本番デプロイ手順`の実行前後に必ず一度チェックし、ユーザーから聞かれるまで待たない。
+これらは「本番デプロイ手順」の実行前後に必ず一度チェックし、ユーザーから聞かれるまで待たない。
 
----
+## push・デプロイ操作の許可範囲
 
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
 - dev環境（shindairaifuhaku-1.onrender.com）に関するpush・デプロイ操作は、確認を取らず自由に実行してよい
@@ -59,29 +59,6 @@ GitHubブランチ名は2026-09-18に`shindairaifuhaku-dev`→`dev`、`shindaira
   - 本番: `python setup_richmenu.py --env prod`  → `programing files/.env` を使用（確認プロンプトあり）
 - `--env prod` は**ユーザーから明示的に「本番のリッチメニューを更新して」と言われた場合のみ**実行すること
 - `--env dev` はユーザーの許可のもとで自由に実行してよい
-
-## モデル変更時のルール
-
-- `models.py` でクラスを追加・削除したら、**必ず `database.py` の `init_db()` 内の import も同時に更新すること**
-- 新しいモデルを追加した場合は import に追加、削除した場合は import から除去する
-- `programing files/models.py` はルートの `models.py` とは別定義（スクリプト群専用）。scriptsが触るテーブル（`subjects`/`instructors`/`course_sections`/`syllabi`/`schedules`等）の列を追加・変更・削除したら、`programing files/models.py` 側の対応するカラム定義も忘れずに確認・更新すること
-
-### 科目名を触るときのルール
-
-科目名の正規化（ローマ数字表記統一）・LINE bot一覧のバリアント統合表示など、詳細は `docs/SUBJECT_NAME_RULES.md` を参照。`models.py` でこの領域を変更したら同ドキュメントも更新すること。
-
-### LINE bot科目一覧の表示件数について（新学部・大量科目追加時に意識すること）
-
-LINE botの1回の返信には上限（40バブル≒240科目、`line_bot/handler.py`の`_split_to_bubbles`/`messages[:5]`参照）がある。`classification`が学部単位で1つにまとまっている学部（`import_syllabus.py`で分類を細分化しなかった場合）は、科目数が閾値（`_ALPHA_SPLIT_THRESHOLD`=48件）を超えると`handle_course_list()`が自動でよみがな順の均等分割メニューを挟むため、**新しい学部・大量の科目を追加する際に明示的な分類分け作業は不要**（2026-07-15、国際人間科学部1005件のうち76%が上限超過で非表示になっていたバグの修正で導入）。
-
-分割ラベルはよみがな（`subjects.reading`）の先頭文字を使うため、新規科目追加時に`reading`が空文字のまま残らないよう注意すること（`import_syllabus.py`は新規作成時に`reading=""`をプレースホルダで入れ、`database.py`の`init_db()`起動時バックフィルが`WHERE reading IS NULL OR reading = ''`で毎回自動生成する設計。バックフィル条件を`IS NULL`だけに戻すと空文字のまま埋まらなくなるので変更しないこと）。
-
-## データ保護ルール
-
-- **投稿されたレビュー（reviews テーブル）は、ユーザーから絶対に消去しないこと**
-- 科目の削除・変更・マージなど、いかなる操作においても、その科目に紐づくレビューを巻き添えで削除しないこと
-- レビューに影響しうるDB操作を行う前は、必ずユーザーに確認を取ること
-- レビューの状態は `reviews.status`（'pending'待機中/'approved'承認/'rejected'却下）の3値で管理する（2026-08-23、旧`is_approved` Booleanから移行）。**却下も物理削除ではなく`status='rejected'`として保持し、管理画面から復元・承認できるようにすること**。孤立レビューの自動削除（`admin_reviews_cleanup`）も対象は`status='pending'`のみに限定する
 
 ## 本番デプロイ手順
 
@@ -139,6 +116,7 @@ python -X utf8 sync_db_to_prod.py
 - `LIFF_ID` は Render の各サービス環境変数で管理する（本番はコードデフォルト値と一致）
 
 ### REVIEW_FORM_URL の固定ルール
+
 | 環境 | REVIEW_FORM_URL |
 |---|---|
 | **本番** | `https://shindairaifuhaku.onrender.com` |
@@ -166,9 +144,40 @@ python -X utf8 sync_db_to_prod.py
 | **dev** | `ofsvkcptzngbsxtdbqzj`（aws-1-ap-northeast-1） |
 | **本番** | `sagubqrhjnzrtcvlmzqy`（aws-1-ap-northeast-2） |
 
-## シラバスURL生成ルール
+---
 
-### シラバスと担当教員の対応について
+# モデル・DBスキーマ変更ルール
+
+## モデル変更時のルール
+
+- `models.py` でクラスを追加・削除したら、**必ず `database.py` の `init_db()` 内の import も同時に更新すること**
+- 新しいモデルを追加した場合は import に追加、削除した場合は import から除去する
+- `programing files/models.py` はルートの `models.py` とは別定義（スクリプト群専用）。scriptsが触るテーブル（`subjects`/`instructors`/`course_sections`/`syllabi`/`schedules`等）の列を追加・変更・削除したら、`programing files/models.py` 側の対応するカラム定義も忘れずに確認・更新すること
+
+## 科目名を触るときのルール
+
+科目名の正規化（ローマ数字表記統一）・LINE bot一覧のバリアント統合表示など、詳細は `docs/SUBJECT_NAME_RULES.md` を参照。`models.py` でこの領域を変更したら同ドキュメントも更新すること。
+
+## LINE bot科目一覧の表示件数について（新学部・大量科目追加時に意識すること）
+
+LINE botの1回の返信には上限（40バブル≒240科目、`line_bot/handler.py`の`_split_to_bubbles`/`messages[:5]`参照）がある。`classification`が学部単位で1つにまとまっている学部（`import_syllabus.py`で分類を細分化しなかった場合）は、科目数が閾値（`_ALPHA_SPLIT_THRESHOLD`=48件）を超えると`handle_course_list()`が自動でよみがな順の均等分割メニューを挟むため、**新しい学部・大量の科目を追加する際に明示的な分類分け作業は不要**（2026-07-15、国際人間科学部1005件のうち76%が上限超過で非表示になっていたバグの修正で導入）。
+
+分割ラベルはよみがな（`subjects.reading`）の先頭文字を使うため、新規科目追加時に`reading`が空文字のまま残らないよう注意すること（`import_syllabus.py`は新規作成時に`reading=""`をプレースホルダで入れ、`database.py`の`init_db()`起動時バックフィルが`WHERE reading IS NULL OR reading = ''`で毎回自動生成する設計。バックフィル条件を`IS NULL`だけに戻すと空文字のまま埋まらなくなるので変更しないこと）。
+
+---
+
+# データ保護ルール
+
+- **投稿されたレビュー（reviews テーブル）は、ユーザーから絶対に消去しないこと**
+- 科目の削除・変更・マージなど、いかなる操作においても、その科目に紐づくレビューを巻き添えで削除しないこと
+- レビューに影響しうるDB操作を行う前は、必ずユーザーに確認を取ること
+- レビューの状態は `reviews.status`（'pending'待機中/'approved'承認/'rejected'却下）の3値で管理する（2026-08-23、旧`is_approved` Booleanから移行）。**却下も物理削除ではなく`status='rejected'`として保持し、管理画面から復元・承認できるようにすること**。孤立レビューの自動削除（`admin_reviews_cleanup`）も対象は`status='pending'`のみに限定する
+
+---
+
+# シラバスURL生成ルール
+
+## シラバスと担当教員の対応について
 
 **シラバスは科目名だけでなく担当教員に強く依存する。** 同じ科目名でも担当教員が異なればシラバスの内容（到達目標・授業計画・評価方法）は別物になる。
 そのため、シラバスURLは「科目名」だけに紐づけるのではなく、**「科目名 × 担当教員」の組み合わせ**に紐づけることが望ましい。
@@ -207,7 +216,7 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 `_faculty_department_split`（既存データの一回限りバックフィル）にも学部名+学科名の複合文字列→
 (学部名, 学科名)のペアを追記すること。
 
-### シラバスページのHTMLパース
+## シラバスページのHTMLパース
 
 神戸大学シラバスページの実際のHTML構造（2026年度確認済み）：
 
@@ -231,7 +240,7 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
     単体で実行する必要は通常ない（既存分の再取得や`--force`上書きをしたい場合のみ単体実行する）
   - **2026-07-30の大規模リニューアル（My時間割機能全廃止）で、対象年次・科目分類を取得する`run()`（`Syllabus.target_grades`/`subject_category`列）は削除済み**
 
-### シラバスDBテーブル構成（新スキーマ）
+## シラバスDBテーブル構成（新スキーマ）
 
 | テーブル | 用途 |
 |---|---|
@@ -246,11 +255,11 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 
 ---
 
-## プロジェクト構成
+# プロジェクト構成
 
 > **ルール**: ディレクトリ構成・テーブル・技術スタック・アーキテクチャに影響する作業をしたら、作業完了時に必ずこのセクションを更新すること。
 
-### 技術スタック
+## 技術スタック
 
 | 分類 | 技術 |
 |------|------|
@@ -265,9 +274,9 @@ https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026/{path}/data/2026_{code}.ht
 | ホスティング | Render（Web Service） |
 | HTTPクライアント | httpx（自己ping・DBバックアップのSupabase Storage API呼び出し） |
 
-### ディレクトリ構成
+## ディレクトリ構成
 
-main.py は 2026年7月に単一3800行ファイルから「core / line_bot / routers」パッケージ構成へリファクタリング済み。main.py 自体は app 生成・lifespan・include_router のみの薄いエントリポイント（約90行）。
+main.py は 2026年7月に単一3800行ファイルから「core / line_bot / routers」パッケージ構成へリファクタリング済み。main.py 自体は app 生成・lifespan・include_router のみの薄いエントリポイント。
 
 ```
 shindairaifuhaku/          ← Renderがデプロイするルート
@@ -280,35 +289,49 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── config.py            ← 環境変数・定数・シラバスURL生成・よみがな変換
 │   ├── security.py          ← 管理者トークン発行/検証・LINE署名検証・check_admin依存関数
 │   ├── cache.py              ← 全インメモリキャッシュ・invalidate/prewarm関数（rawなdictは外部公開しない）
-│   ├── activity_log.py        ← エラーログ・メッセージログ保存
+│   ├── activity_log.py        ← エラーログ・メッセージログ保存・log_cleanup_loop（30日自動削除）
 │   ├── line_client.py          ← LINE APIクライアント・reply送信・自己ping
-│   ├── push.py                  ← Web Push (VAPID) 通知送信
-│   ├── prewarm.py                ← 起動時キャッシュウォームアップの統合
-│   ├── templates.py               ← Jinja2Templates・jstフィルタ
-│   └── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
+│   ├── liff_auth.py             ← LIFF IDトークン検証（署名・有効期限チェック）
+│   ├── push.py                   ← Web Push (VAPID) 通知送信
+│   ├── prewarm.py                 ← 起動時キャッシュウォームアップの統合
+│   ├── templates.py                ← Jinja2Templates・jstフィルタ
+│   ├── backup.py                    ← DB自動バックアップ（BACKUP_INTERVAL_HOURS間隔、既定1時間ごとに全テーブルダンプ→Supabase Storageへアップロード、BACKUP_ENABLED=trueの時のみ動作）
+│   ├── rate_limit.py                 ← IPベースのレート制限（Cloudflare送信元IP範囲考慮）
+│   ├── moderation.py                  ← BAN判定の一元化（BAN操作自体はrouters/admin/users_errors.py）
+│   ├── subject_variants.py             ← 科目名の末尾バリアント統合ロジック（レビュー投稿フォーム・LINE bot・管理画面共通）
+│   ├── grading_method.py                ← Review.grading_method（成績評価方法）の構造化パース
+│   ├── undo.py                           ← 管理画面「元に戻す」用の直前削除内容の一時保持（プロセスメモリ、TTL10分）
+│   └── db_ssl.py                          ← Supabase(Supavisor pooler)向けSSLコンテキスト生成
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
 ├── routers/                 ← FastAPI APIRouter（URLプレフィックス単位）
 │   ├── webhook.py             ← POST /callback（LINE Webhook）
 │   ├── health.py               ← /health
-│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /privacy, /sw.js, /liff/course
+│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /liff/review, /coop, /join（LINE友だち追加OGPランディング）, /privacy, /terms, /sw.js, /liff/course
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
-│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/autofill, /submit, /api/course/{id}
-│   ├── payment_api.py               ← /payment/apply（レビュー報酬支払い申請フォーム）, /api/payment/eligible, /payment/apply/submit
-│   ├── push_api.py                   ← /push/enable, /push/subscribe（管理画面ログインCookieに依存しない通知購読専用。秘密トークン`PUSH_ENABLE_TOKEN`で認可）
-│   └── admin/                         ← /admin/* をURLプレフィックス単位でさらに分割
-│       ├── auth.py                     ← /admin/login, /admin/logout
-│       ├── dashboard.py                 ← /admin（メッセージログ）, /admin/push/subscribe
-│       ├── courses.py                    ← /admin/courses*（科目・教員・分類CRUD、教員/学部/分類の並び替え）
-│       ├── reviews.py                     ← /admin/reviews*
-│       ├── payments.py                     ← /admin/payments*（支払い申請の承認/支払い済み化/却下）
-│       ├── users_errors.py                 ← /admin/users, /admin/errors, /admin/liff-reauth（LIFF再ログインテレメトリ）
-│       └── stats.py                         ← /admin/usage-stats
+│   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/course/{id}, /api/course/{id}/unlock（閲覧権チケット消費）
+│   ├── profile_api.py               ← /api/liff-auth-event, /api/profile/status, /api/profile/prefill, /api/register（会員登録）
+│   ├── review_submit_api.py          ← /submit, /submit/done（レビュー投稿・PRGパターン）
+│   ├── payment_api.py                 ← /payment/apply, /payment/apply/done, /api/payment/eligible, /payment/apply/submit（レビュー報酬支払い申請フォーム）
+│   ├── contact_api.py                  ← /contact, /contact/submit（お問い合わせフォーム）
+│   ├── push_api.py                      ← /push/enable, /push/subscribe（管理画面ログインCookieに依存しない通知購読専用。秘密トークン`PUSH_ENABLE_TOKEN`で認可）
+│   └── admin/                            ← /admin/* をURLプレフィックス単位でさらに分割
+│       ├── _common.py                     ← 並び替え共通ヘルパー（reorder_sort_order等、各admin routerが共有）
+│       ├── auth.py                         ← /admin/login, /admin/logout
+│       ├── dashboard.py                     ← /admin（メッセージログ）, /admin/push/subscribe
+│       ├── courses.py                        ← /admin/courses*（科目CRUD・グループ統合/解除・パネル表示）
+│       ├── instructors.py                     ← /admin/courses/{id}/instructors/*（教員追加/削除）, 教員・学部の並び替え
+│       ├── classifications.py                  ← /admin/courses/classification/*（分類のrename/delete/move/set_parent）
+│       ├── reviews.py                            ← /admin/reviews*（承認/却下/復元/付け替え）
+│       ├── payments.py                            ← /admin/payments*（支払い申請の承認/支払い済み化/却下）
+│       ├── inquiries.py                            ← /admin/inquiries*（お問い合わせ対応）
+│       ├── users_errors.py                         ← /admin/users, /admin/errors, /admin/liff-reauth（LIFF再ログインテレメトリ）
+│       └── stats.py                                 ← /admin/usage-stats
 ├── templates/
 │   ├── _partials/
-│   │   └── liff_auth.html  ← LIFF IDトークン期限切れ→再ログイン共通JS（window.LiffAuth）。4フォームがincludeする
-│   ├── admin/              ← courses / reviews / logs / users / errors / liff_reauth /
+│   │   └── liff_auth.html  ← LIFF IDトークン期限切れ→再ログイン共通JS（window.LiffAuth）。複数フォームがincludeする
+│   ├── admin/              ← courses / reviews / logs / users / errors / liff_reauth / inquiries /
 │   │                          activity / usage_stats / richmenu / login / base 等
 │   ├── liff/
 │   │   └── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
@@ -325,14 +348,14 @@ shindairaifuhaku/          ← Renderがデプロイするルート
     ├── fetch_syllabus_info.py     ← シラバスページをスクレイピング（単位数・経営学部専門科目の群）
     ├── import_kyoyo_courses.py    ← 教養科目インポート
     ├── setup_richmenu.py          ← LINEリッチメニュー設定（--env dev/prod）
-    ├── sync_db_to_prod.py         ← dev→本番DBの4テーブル同期
+    ├── sync_db_to_prod.py         ← dev→本番DBの5テーブル同期
     ├── download_prod_backup.py    ← Supabase Storage上のDBバックアップをローカルbackups/へ差分ダウンロード（--env dev/prod）
     ├── models.py / database.py    ← スクリプト群専用のDBアクセス層（ルートのmodels.pyとは別定義）
     ├── assets/richmenu.png        ← リッチメニュー原本画像（setup_richmenu.pyのデフォルト画像、git管理下）
     └── .env / .env.dev            ← 環境変数（本番・dev）
 ```
 
-### DBテーブル一覧（models.py・新スキーマ）
+## DBテーブル一覧（models.py・新スキーマ）
 
 コアドメイン（科目・シラバス・レビュー）:
 
@@ -350,9 +373,11 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 共通・運用系:
 
 | テーブル | 用途 |
-|----------|------|
+|---|---|
 | `display_orders` | 表示順マスタ（汎用、`kind`列で対象種別を区別。`classification`=分類の表示順・親グループ、`faculty`=学部の表示順） |
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科。友だち追加時の会員登録で必須入力、旧`timetable_profiles`を統合済み。`unlock_credits`はレビュー閲覧権チケットの残数。`banned_at`は虚偽投稿等を理由にLINE bot利用を永久停止した日時（NULL＝有効）、`ban_reason`は管理者向け内部メモでユーザーには非公開。停止・解除は`/admin/users`から操作し`core/moderation.py`が判定を仲介する） |
+| `inquiries` | お問い合わせ（質問・情報の誤りの指摘・新情報の追加提案・情報のアップデート・誤字脱字の指摘等）。フォーム送信時にそのまま作成（メールアドレス認証なし）。`status`は'pending'/'handled'、`/admin/inquiries`で対応 |
+| `admin_sessions` | 管理画面の一括ログアウト用（単一行）。`revoked_before`より前に発行された管理者トークンを一律で無効化する（`ADMIN_PASSWORD`は全管理者共有の単一パスワードでトークンにセッションIDが無いため、個別セッションではなく発行時刻基準で失効させる設計、2026-08-25追加） |
 | `message_logs` | LINEメッセージ送受信ログ |
 | `user_activity` | LINEアクション統計（user_id, action, count） |
 | `error_logs` | サーバーエラーログ。`action`が`submit_duplicate:<form>`の行はエラーではなくレビュー二重送信の「既に投稿済み」拒否のテレメトリ（`/admin/errors?view=submit_duplicate`で絞れる）。LIFF再ログインのテレメトリは2026-09-08に`liff_auth_events`へ分離済み |
@@ -360,7 +385,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `push_subscriptions` | Web Push VAPID 購読情報 |
 | `richmenu_taps` | リッチメニュークリックログ |
 
-### アーキテクチャ概要
+## アーキテクチャ概要
 
 **プロセス構成（uvicornワーカー数、2026-07-21スケーラビリティ改善で追加）**
 
@@ -368,18 +393,21 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 - 履修登録開始時等の一斉アクセスに備えてワーカー数を増やす場合は、Renderのインスタンスプランを複数CPU対応にした上で`WEB_CONCURRENCY`環境変数を設定する（1CPU未満のFree/Starterのままではワーカーを増やしても並列に処理できるCPUが無く効果が薄い）
 - **複数ワーカーにする際の注意点**（未対応、実装時に検討すること）:
   - `core/cache.py`のインメモリキャッシュ・`core/rate_limit.py`のレート制限バケットはワーカーごとに独立する（プロセス間で共有されない）。キャッシュは各ワーカーが個別にTTL管理するだけで不整合は起きないが、レート制限は実質の上限がワーカー数倍に緩む
-  - `main.py`の`lifespan`（`init_db()`・`self_ping()`・`backup_loop()`・`log_cleanup_loop()`・`prewarm_caches()`）は各ワーカープロセスで個別に起動される。`init_db()`は冪等（`IF NOT EXISTS`等）なので同時実行自体は安全だが、`backup_loop()`はワーカー数分バックアップが重複生成されうる
+  - `main.py`の`lifespan`（`init_db()`・`self_ping()`・`backup_loop()`・`log_cleanup_loop()`・`rate_limit_cleanup_loop()`・`prewarm_caches()`）は各ワーカープロセスで個別に起動される。`init_db()`は冪等（`IF NOT EXISTS`等）なので同時実行自体は安全だが、`backup_loop()`はワーカー数分バックアップが重複生成されうる
   - ワーカー数を増やす場合、`DB_POOL_SIZE`/`DB_POOL_MAX_OVERFLOW`は「ワーカー数 × pool_size」がSupabase側のpooler接続上限を超えないよう再計算すること
 
 **main.py の構成（薄いエントリポイント）**
 
 ```
-core.line_client / core.prewarm 等のimport
-→ FastAPI app 生成 → lifespan（init_db + prewarm + self-ping、core.line_client.startup/shutdown）
+core.backup / core.liff_auth / core.line_client / core.prewarm / core.rate_limit 等のimport
+→ FastAPI app 生成 → lifespan（init_db + prewarm + self-ping、core.line_client.startup/shutdown、
+                     core.liff_auth.startup、backup_loop/log_cleanup_loop/rate_limit_cleanup_loop起動）
 → 例外ハンドラ登録（core.activity_log.save_error_log でエラーログ保存）
 → include_router（webhook / health / pages / richmenu / liff_api / profile_api / review_submit_api /
-                  admin.auth / admin.dashboard / admin.courses / admin.reviews /
-                  admin.users_errors / admin.stats）
+                  payment_api / contact_api / push_api /
+                  admin.auth / admin.dashboard / admin.courses / admin.instructors /
+                  admin.classifications / admin.reviews / admin.users_errors / admin.stats /
+                  admin.payments / admin.inquiries）
 ```
 
 **キャッシュ設計（core/cache.py に集約したモジュールレベルグローバル変数）**
@@ -406,6 +434,7 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 - ログイン: `routers/admin/auth.py`、`ADMIN_PASSWORD` と POST フォームを `py_secrets.compare_digest` で比較
 - トークン: `core.security.make_admin_token()` が `HMAC-SHA256(CHANNEL_SECRET + ADMIN_PASSWORD, "admin:{timestamp}")` を生成しCookieに保存
 - TTL: 4時間（`core.config.ADMIN_TOKEN_TTL`）、`core.security.check_admin` を全 `/admin/*` ルートに `Depends()` で付与
+- 一括ログアウト: `admin_sessions`テーブル（単一行）の`revoked_before`より前発行のトークンは`check_admin`で一律無効化される（2026-08-25追加）
 
 **非同期クエリのルール**
 
@@ -423,7 +452,7 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 
 ---
 
-## 開発ワークフロー
+# 開発ワークフロー
 
 - 作業は機能追加・バグ修正などの単位で小さく区切って進める。1つの作業が完了するごとに必ずgit commitする。
 - コミットメッセージは「何を」「なぜ」変更したかが分かるように具体的に書く（例：「LINE Webhookの署名検証を追加。不正リクエストを拒否するため」のように、変更内容と理由をセットで記載）。

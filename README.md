@@ -20,12 +20,15 @@
 - **LINE Bot**：科目名で検索するとレビュー・シラバス情報を Flex Message で返信（`/callback`）。「専門」メニューは学部一覧 → 学科・専攻一覧（or 群科目一覧）→ 科目一覧のドリルダウン方式
 - **友だち追加時の会員登録必須化**：氏名・学籍番号・学部・学年・学科を登録するまでリッチメニューの各機能は登録画面へ誘導（`user_profiles`）
 - **レビュー投稿フォーム**（`/submit`）：科目レビューを投稿 → 管理画面で承認後に公開。承認画面でコメント・評価・教員名等を編集してから承認可能
+- **レビュー閲覧チケット制**：他人のレビューはチケット（`subject_unlocks`）を消費して解除。会員登録・自分のレビュー承認時にチケットを付与
+- **レビュー報酬支払い申請フォーム**（`/payment/apply`）：承認済みレビュー件数に応じてPayPay送金を申請 → 管理画面で承認・支払い済み化
+- **お問い合わせフォーム**（`/contact`）：情報の誤り指摘・追加提案等を受付 → 管理画面で対応管理（`inquiries`）
 - **LIFF ページ**
   - `/liff/course`：科目詳細・レビュー閲覧
   - `/liff/review`：レビュー投稿への直接リダイレクト
   - `/register`：会員登録フォーム
 - **リッチメニュー連携**（`/r/{name}`）：クリック計測付きリダイレクト
-- **管理画面**（`/admin/*`）：科目・教員・分類・レビュー承認・ユーザー・エラーログ・利用統計・学生便覧×DB齟齬一覧などを管理（HMAC Cookie 認証）
+- **管理画面**（`/admin/*`）：科目・教員・分類・レビュー承認・支払い申請・お問い合わせ・ユーザー・エラーログ・利用統計・学生便覧×DB齟齬一覧などを管理（HMAC Cookie 認証）
 - **Web Push 通知**（VAPID、購読者への送信は非同期・並列化済み）
 - **DB 自動バックアップ**：本番アプリ自身が定期的に全テーブルを Supabase Storage へダンプ
 - **レート制限・リクエストサイズ制限**：ログイン試行・レビュー投稿・成績表解析等をIPアドレス単位で制限、リクエストボディサイズにも上限
@@ -54,16 +57,16 @@
 
 | レイヤー | 役割 |
 |---|---|
-| `core/` | 環境変数・定数・シラバス URL 生成（`config.py`）、管理者認証・LINE 署名検証（`security.py`）、インメモリキャッシュ（`cache.py`）、エラー/メッセージログ（`activity_log.py`）、LINE API クライアント（`line_client.py`）、LIFF ID token 検証＋キャッシュ（`liff_auth.py`）、Web Push（`push.py`）、起動時プリウォーム（`prewarm.py`）、Jinja2 テンプレート（`templates.py`）、レート制限（`rate_limit.py`）、Supabase 接続用 SSL コンテキスト（`db_ssl.py`）、DB 自動バックアップ（`backup.py`） |
+| `core/` | 環境変数・定数・シラバス URL 生成（`config.py`）、管理者認証・LINE 署名検証（`security.py`）、インメモリキャッシュ（`cache.py`）、エラー/メッセージログ（`activity_log.py`）、LINE API クライアント（`line_client.py`）、LIFF ID token 検証＋キャッシュ（`liff_auth.py`）、Web Push（`push.py`）、起動時プリウォーム（`prewarm.py`）、Jinja2 テンプレート（`templates.py`）、レート制限（`rate_limit.py`）、BAN判定（`moderation.py`）、科目名バリアント統合（`subject_variants.py`）、成績評価方法パース（`grading_method.py`）、管理画面「元に戻す」（`undo.py`）、Supabase 接続用 SSL コンテキスト（`db_ssl.py`）、DB 自動バックアップ（`backup.py`） |
 | `line_bot/` | LINE Bot 応答ロジック（`flex_builders.py`：FlexMessage 生成、`handler.py`：`handle_message` / `handle_course_list` / `process_events`） |
-| `routers/` | URL プレフィックス単位の FastAPI `APIRouter`（`webhook` / `health` / `pages` / `richmenu` / `liff_api` / `profile_api` / `review_submit_api`、`admin/` 配下 8 ファイル：`auth` / `dashboard` / `courses` / `instructors` / `classifications` / `reviews` / `users_errors` / `stats`） |
+| `routers/` | URL プレフィックス単位の FastAPI `APIRouter`（`webhook` / `health` / `pages` / `richmenu` / `liff_api` / `profile_api` / `review_submit_api` / `payment_api` / `contact_api` / `push_api`、`admin/` 配下：`auth` / `dashboard` / `courses` / `instructors` / `classifications` / `reviews` / `payments` / `inquiries` / `users_errors` / `stats`） |
 
 - **LINE Bot フロー**：`POST /callback`（`routers/webhook.py`） → `core.security.verify_line_signature` → `core.line_client.parser.parse()` → `asyncio.create_task` で `line_bot.handler.process_events()` を実行し即時200応答。`FollowEvent`（ウェルカム Flex Message、未登録なら会員登録LIFFへ誘導）／`MessageEvent`／`PostbackEvent` を分岐処理。返信は `core.line_client.reply()` 経由。
 - **キャッシュ設計**：`core/cache.py` に集約したモジュールレベルのグローバル変数に TTL 3600秒のインメモリキャッシュを複数保持。他モジュールは必ず `cache.get_*` / `cache.set_*` / `cache.invalidate_*` の関数経由でアクセスする。管理画面での CRUD 後に該当キャッシュを即時無効化。起動時に `core.prewarm.prewarm_caches()` で全ウォームアップ。
 - **管理画面認証**：`core.security.make_admin_token()` が `HMAC-SHA256(CHANNEL_SECRET + ADMIN_PASSWORD)` で署名した Cookie トークンを発行（TTL 4時間）。`core.security.check_admin` を全 `/admin/*` ルートに `Depends()` で付与。
 - **ミドルウェア（`main.py`、外側から順に適用）**：`RequestTimingMiddleware`（アクセスログ、3秒以上はSLOWマーカー）→ `BodySizeLimitMiddleware`（リクエストボディ2MB上限）→ `CORSMiddleware`（LIFF/LINEドメインのみ許可）→ `GZipMiddleware`（JSON応答等を圧縮）。前2つは Starlette の `BaseHTTPMiddleware` オーバーヘッドを避けるため素の ASGI 実装。加えて `/admin/login`・`/submit` 等には `core.rate_limit.rate_limiter()` を個別に付与しIPアドレス単位で制限（詳細は [`docs/API.md`](docs/API.md)）。
 - **起動処理（lifespan）**：`init_db()` → `prewarm.prewarm_caches()` を非同期起動 → `line_client.startup()` / `liff_auth.startup()` → 自己 ping（`SELF_URL` 設定時）・`backup.backup_loop()`（`BACKUP_ENABLED=true` 時のみ）・`activity_log.log_cleanup_loop()`・`rate_limit.rate_limit_cleanup_loop()` をバックグラウンドタスクとして起動。
-- **dev → 本番マスタデータ同期**：`programing files/sync_db_to_prod.py` をローカルから実行し、4テーブルを自然キー（id直コピーではなく name 等）でUPSERTする。詳細は [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
+- **dev → 本番マスタデータ同期**：`programing files/sync_db_to_prod.py` をローカルから実行し、5テーブル（`display_orders`/`subjects`/`instructors`/`course_sections`/`syllabi`）を自然キー（id直コピーではなく name 等）でUPSERTする。詳細は [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
 ## DB スキーマ
 
@@ -74,9 +77,12 @@
 | `subjects` / `instructors` / `course_sections` | 科目・教員マスタと科目×教員セクション |
 | `syllabi` | シラバス（年度別）。シラバスURLは`timetable_code`から動的生成（列としては持たない） |
 | `reviews` | 投稿レビュー（`status`(pending/approved/rejected)で承認管理、`ON DELETE RESTRICT`で誤削除を防止。却下も削除せずstatusで保持） |
+| `subject_unlocks` | レビュー閲覧権チケットの解除記録（line_user_id, subject_id） |
+| `payment_requests` | レビュー報酬（PayPay送金）の支払い申請 |
+| `inquiries` | お問い合わせ（情報の誤り指摘・追加提案等） |
 | `user_profiles` | LINEユーザーのプロフィール（氏名・学籍番号・学部・学年・学科） |
 | `display_orders` | 表示順マスタ（`kind`列で分類/学部を区別） |
-| `message_logs` / `user_activity` / `error_logs` / `push_subscriptions` / `richmenu_taps` / `course_section_views` | 運用・ログ系 |
+| `message_logs` / `user_activity` / `error_logs` / `liff_auth_events` / `push_subscriptions` / `richmenu_taps` / `course_section_views` / `admin_sessions` | 運用・ログ系 |
 
 ## ディレクトリ構成
 
