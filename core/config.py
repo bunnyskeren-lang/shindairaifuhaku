@@ -229,11 +229,6 @@ REVIEW_VIEW_CATEGORY = "教養"
 REVIEW_VIEW_RESTRICTED_MESSAGE = "専門科目のレビュー閲覧機能は、現在準備中です🙇‍♀️\n\nレビュー投稿は募集中です！✨"
 REVIEW_VIEW_RESTRICTED_FORM_LABEL = "📝 レビュー投稿フォームはこちら"
 
-
-def student_email(student_id: str) -> str:
-    """学籍番号から大学メールアドレスを導出する（例：2345678S → 2345678s@stu.kobe-u.ac.jp）。"""
-    return f"{student_id.strip().lower()}@stu.kobe-u.ac.jp"
-
 # 登録フォーム用の学部・学科選択肢（11学部）
 FACULTIES = [
     "文学部", "国際人間科学部", "法学部", "経済学部", "経営学部",
