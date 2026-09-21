@@ -780,6 +780,32 @@ def _parse_group_ids(ids: str) -> list[int]:
     return [int(x) for x in ids.split(",") if x.strip().isdigit()]
 
 
+def _group_response(is_ajax: bool, ok: bool = True, redirect_msg: str = "", **extra):
+    """group系エンドポイント共通のレスポンス分岐（AJAX経由→JSON／通常フォーム送信→
+    リダイレクト）。extraはJSON側にのみ追加され、リダイレクトのクエリはredirect_msgのみ
+    （従来通りmsgパラメータ1個までなのでこれで挙動は変わらない）。"""
+    if is_ajax:
+        return JSONResponse({"ok": ok, **extra})
+    url = "/admin/courses"
+    if redirect_msg:
+        url += f"?msg={redirect_msg}"
+    return RedirectResponse(url=url, status_code=303)
+
+
+async def _set_group_variant_merge_excluded(request: Request, ids: str, excluded: bool):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    id_list = _parse_group_ids(ids)
+    async with AsyncSessionLocal() as session:
+        member_courses = (await session.execute(
+            select(Subject).where(Subject.id.in_(id_list))
+        )).scalars().all()
+        for course in member_courses:
+            course.variant_merge_excluded = excluded
+        await session.commit()
+    cache.invalidate_courses_cache()
+    return _group_response(is_ajax)
+
+
 @router.post("/admin/courses/group/unmerge")
 async def admin_courses_group_unmerge(request: Request, _: str = Depends(check_admin), ids: str = Form(...)):
     """統合表示（生物学各論A1/A2/C1/C2等）の「統合解除」ボタン。指定した科目群を
@@ -788,38 +814,14 @@ async def admin_courses_group_unmerge(request: Request, _: str = Depends(check_a
     従来はcore/subject_variants.pyのNUM_MERGE_EXCLUDED_NAMESにコードでハードコードして
     いたが、都度コード変更・デプロイが要るため管理者がボタンで切り替えられるようにした
     （2026-09-06）。"""
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-    id_list = _parse_group_ids(ids)
-    async with AsyncSessionLocal() as session:
-        member_courses = (await session.execute(
-            select(Subject).where(Subject.id.in_(id_list))
-        )).scalars().all()
-        for course in member_courses:
-            course.variant_merge_excluded = True
-        await session.commit()
-    cache.invalidate_courses_cache()
-    if is_ajax:
-        return JSONResponse({"ok": True})
-    return RedirectResponse(url="/admin/courses", status_code=303)
+    return await _set_group_variant_merge_excluded(request, ids, excluded=True)
 
 
 @router.post("/admin/courses/group/remerge")
 async def admin_courses_group_remerge(request: Request, _: str = Depends(check_admin), ids: str = Form(...)):
     """admin_courses_group_unmerge()で解除した統合を元に戻す「元に戻す」ボタン。
     指定した科目群のsubjects.variant_merge_excludedをfalseに戻す。"""
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-    id_list = _parse_group_ids(ids)
-    async with AsyncSessionLocal() as session:
-        member_courses = (await session.execute(
-            select(Subject).where(Subject.id.in_(id_list))
-        )).scalars().all()
-        for course in member_courses:
-            course.variant_merge_excluded = False
-        await session.commit()
-    cache.invalidate_courses_cache()
-    if is_ajax:
-        return JSONResponse({"ok": True})
-    return RedirectResponse(url="/admin/courses", status_code=303)
+    return await _set_group_variant_merge_excluded(request, ids, excluded=False)
 
 
 @router.post("/admin/courses/group/update")
@@ -866,9 +868,7 @@ async def admin_courses_group_update(
                 "このまま別の分類として保存しますか？"
                 "（保存すると、既存科目の承認済みレビューがこの科目にもコピーされます）"
             )
-            if is_ajax:
-                return JSONResponse({"ok": False, "error": "duplicate_name", "message": message})
-            return RedirectResponse(url="/admin/courses?msg=duplicate_name", status_code=303)
+            return _group_response(is_ajax, ok=False, redirect_msg="duplicate_name", error="duplicate_name", message=message)
 
         for course in member_courses:
             course.classification = new_classification
@@ -883,9 +883,7 @@ async def admin_courses_group_update(
                 await _copy_approved_reviews(session, source=dup, target=course)
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
-    if is_ajax:
-        return JSONResponse({"ok": True})
-    return RedirectResponse(url="/admin/courses", status_code=303)
+    return _group_response(is_ajax)
 
 
 @router.post("/admin/courses/group/delete")
@@ -903,9 +901,7 @@ async def admin_courses_group_delete(request: Request, _: str = Depends(check_ad
                 select(func.count(Review.id)).where(Review.course_section_id.in_(cs_ids))
             )).scalar()
             if has_reviews:
-                if is_ajax:
-                    return JSONResponse({"ok": False, "error": "has_reviews"})
-                return RedirectResponse(url="/admin/courses?msg=has_reviews", status_code=303)
+                return _group_response(is_ajax, ok=False, redirect_msg="has_reviews", error="has_reviews")
         member_courses = (await session.execute(
             select(Subject).where(Subject.id.in_(id_list))
         )).scalars().all()
@@ -916,6 +912,4 @@ async def admin_courses_group_delete(request: Request, _: str = Depends(check_ad
         undo.set_last_deleted(snapshots)
     cache.invalidate_courses_cache()
     cache.invalidate_cls_caches()
-    if is_ajax:
-        return JSONResponse({"ok": True})
-    return RedirectResponse(url="/admin/courses", status_code=303)
+    return _group_response(is_ajax)
