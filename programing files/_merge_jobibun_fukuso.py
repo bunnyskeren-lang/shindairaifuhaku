@@ -5,7 +5,7 @@ _env.load_env("dev")
 
 from sqlalchemy import select
 from database import AsyncSessionLocal
-from models import Subject, CourseSection, Instructor, Syllabus, Review
+from models import Subject, CourseSection, Syllabus, Review
 
 import pykakasi as _pykakasi
 _kks = _pykakasi.kakasi()
