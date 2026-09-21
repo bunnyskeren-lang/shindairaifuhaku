@@ -8,6 +8,7 @@ from sqlalchemy import case, func, or_, select
 
 from core import cache, undo
 from core.config import (
+    SYLLABUS_ACADEMIC_TERMS,
     escape_like,
     make_cls_sort,
     make_syllabus_url,
@@ -334,6 +335,7 @@ async def admin_courses(
         "instructor_count_by_course": instructor_count_by_course,
         "all_instructors": all_instructors,
         "all_faculties": all_faculties,
+        "syllabus_academic_terms": SYLLABUS_ACADEMIC_TERMS,
         "error": msg,
         "total": total,
         "q": q,
@@ -396,6 +398,137 @@ async def admin_courses_panel_instructors(
         course_id=id_list[0] if len(id_list) == 1 else None,
     )
     return JSONResponse({"ok": True, "html": html})
+
+
+@router.get("/admin/courses/panel/syllabi")
+async def admin_courses_panel_syllabi(
+    course_id: int = Query(...), instructor_id: int = Query(...), _: str = Depends(check_admin),
+):
+    """科目管理画面の「担当教員」チップから開くシラバス登録モーダルの一覧取得。
+    科目×教員（course_sections）単位で年度×学期(academic_term)ごとのtimetable_codeを
+    複数保持できる（Syllabus.__table_args__のUNIQUE(course_section_id, year, academic_term)）。"""
+    async with AsyncSessionLocal() as session:
+        cs = (await session.execute(
+            select(CourseSection).where(
+                CourseSection.subject_id == course_id,
+                CourseSection.instructor_id == instructor_id,
+            )
+        )).scalar_one_or_none()
+        if not cs:
+            return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+        subject = await session.get(Subject, course_id)
+        dept = syllabus_department_key(subject) if subject else ""
+        rows = (await session.execute(
+            select(Syllabus).where(Syllabus.course_section_id == cs.id)
+        )).scalars().all()
+    items = [
+        {
+            "id": s.id,
+            "year": s.year,
+            "academic_term": s.academic_term,
+            "timetable_code": s.timetable_code or "",
+            "url": make_syllabus_url(s.timetable_code, dept) if s.timetable_code else "",
+        }
+        for s in rows
+    ]
+    return JSONResponse({"ok": True, "course_section_id": cs.id, "items": items})
+
+
+@router.post("/admin/courses/syllabus/add")
+async def admin_syllabus_add(
+    request: Request,
+    _: str = Depends(check_admin),
+    course_section_id: int = Form(...),
+    year: int = Form(...),
+    academic_term: str = Form(...),
+    timetable_code: str = Form(...),
+):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    code = timetable_code.strip()
+    if academic_term not in SYLLABUS_ACADEMIC_TERMS or not code:
+        message = "入力内容を確認してください"
+        return JSONResponse({"ok": False, "message": message}) if is_ajax else RedirectResponse("/admin/courses", status_code=303)
+
+    async with AsyncSessionLocal() as session:
+        cs = await session.get(CourseSection, course_section_id)
+        if not cs:
+            return JSONResponse({"ok": False, "message": "科目×教員の組み合わせが見つかりません"})
+        # 同じ年度・学期に既存登録があれば時間割コードを上書きする（UNIQUE制約への
+        # 抵触をエラーにせず、再登録＝更新として扱う）
+        existing = (await session.execute(
+            select(Syllabus).where(
+                Syllabus.course_section_id == course_section_id,
+                Syllabus.year == year,
+                Syllabus.academic_term == academic_term,
+            )
+        )).scalar_one_or_none()
+        if existing:
+            existing.timetable_code = code
+        else:
+            session.add(Syllabus(
+                course_section_id=course_section_id,
+                year=year,
+                academic_term=academic_term,
+                timetable_code=code,
+            ))
+        await session.commit()
+    cache.invalidate_courses_cache()
+    if is_ajax:
+        return JSONResponse({"ok": True})
+    return RedirectResponse("/admin/courses", status_code=303)
+
+
+@router.post("/admin/courses/syllabus/update/{syllabus_id}")
+async def admin_syllabus_update(
+    syllabus_id: int,
+    request: Request,
+    _: str = Depends(check_admin),
+    year: int = Form(...),
+    academic_term: str = Form(...),
+    timetable_code: str = Form(...),
+):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    code = timetable_code.strip()
+    if academic_term not in SYLLABUS_ACADEMIC_TERMS or not code:
+        message = "入力内容を確認してください"
+        return JSONResponse({"ok": False, "message": message}) if is_ajax else RedirectResponse("/admin/courses", status_code=303)
+
+    async with AsyncSessionLocal() as session:
+        syl = await session.get(Syllabus, syllabus_id)
+        if not syl:
+            return JSONResponse({"ok": False, "message": "対象のシラバス登録が見つかりません"})
+        conflict = (await session.execute(
+            select(Syllabus).where(
+                Syllabus.id != syllabus_id,
+                Syllabus.course_section_id == syl.course_section_id,
+                Syllabus.year == year,
+                Syllabus.academic_term == academic_term,
+            )
+        )).scalar_one_or_none()
+        if conflict:
+            return JSONResponse({"ok": False, "message": "同じ年度・学期の登録が既に別にあります"})
+        syl.year = year
+        syl.academic_term = academic_term
+        syl.timetable_code = code
+        await session.commit()
+    cache.invalidate_courses_cache()
+    if is_ajax:
+        return JSONResponse({"ok": True})
+    return RedirectResponse("/admin/courses", status_code=303)
+
+
+@router.post("/admin/courses/syllabus/delete/{syllabus_id}")
+async def admin_syllabus_delete(syllabus_id: int, request: Request, _: str = Depends(check_admin)):
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    async with AsyncSessionLocal() as session:
+        syl = await session.get(Syllabus, syllabus_id)
+        if syl:
+            await session.delete(syl)
+            await session.commit()
+    cache.invalidate_courses_cache()
+    if is_ajax:
+        return JSONResponse({"ok": True})
+    return RedirectResponse("/admin/courses", status_code=303)
 
 
 @router.get("/admin/courses/panel/reviews")

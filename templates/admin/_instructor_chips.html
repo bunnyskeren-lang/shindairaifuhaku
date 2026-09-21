@@ -1,7 +1,15 @@
 {% if instructors %}
 {% for inst in instructors %}
 <span id="inst-chip-{{ inst.id }}" data-name="{{ inst.name }}" class="chip">
-  {% if inst.url %}<a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>{% else %}{{ inst.name }}{% endif %}
+  {% if editable and course_id %}
+  <span role="button" tabindex="0" title="クリックしてシラバスを登録"
+        onclick="openSyllabusModal({{ course_id }}, {{ inst.id }}, this)"
+        style="color:var(--accent-text);text-decoration:underline;cursor:pointer">{{ inst.name }}</span>
+  {% elif inst.url %}
+  <a href="{{ inst.url }}" target="_blank" rel="noopener" style="color:var(--accent-text);text-decoration:underline">{{ inst.name }}</a>
+  {% else %}
+  {{ inst.name }}
+  {% endif %}
   {% if editable %}
   <button type="button" onclick="deleteInstructor({{ course_id }}, {{ inst.id }}, this)"
           style="background:none;border:none;cursor:pointer;color:var(--accent-light);font-size:12px;padding:0;line-height:1" title="削除">✕</button>

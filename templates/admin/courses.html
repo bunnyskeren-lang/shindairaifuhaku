@@ -6,6 +6,9 @@
 #editModal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:center;justify-content:center}
 #editModal.open{display:flex}
 #editBox{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:480px}
+#syllabusModal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:center;justify-content:center}
+#syllabusModal.open{display:flex}
+#syllabusBox{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:480px;max-height:80vh;overflow-y:auto}
 {% endblock %}
 
 {% from "admin/base.html" import pager %}
@@ -377,6 +380,33 @@
     </form>
   </div>
 </div>
+
+<div id="syllabusModal">
+  <div id="syllabusBox">
+    <h2 style="margin-top:0" id="syllabusModalTitle">📄 シラバス登録</h2>
+    <p id="syllabusModalSubtitle" style="font-size:12px;color:#6b7280;margin:-8px 0 12px"></p>
+    <div id="syllabusList" style="margin-bottom:14px"></div>
+    <form id="syllabusAddForm" style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid #e5e7eb;padding-top:12px;margin:0">
+      <label style="font-size:12px">年度
+        <input type="number" id="syllabusYear" name="year" required min="2000" max="2100" style="width:80px;display:block;margin-top:2px">
+      </label>
+      <label style="font-size:12px">学期・クォーター
+        <select id="syllabusTerm" name="academic_term" required style="display:block;margin-top:2px">
+          {% for t in syllabus_academic_terms %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+      </label>
+      <label style="font-size:12px">時間割コード
+        <input type="text" id="syllabusCode" name="timetable_code" required maxlength="20" placeholder="例：3U020" style="width:110px;display:block;margin-top:2px">
+      </label>
+      <button type="submit" class="btn btn-primary btn-xs">追加</button>
+      <button type="button" id="syllabusCancelEditBtn" class="btn btn-xs" style="display:none;background:#e5e7eb;color:#374151" onclick="resetSyllabusForm()">編集をやめる</button>
+    </form>
+    <p id="syllabusError" style="display:none;color:#ef4444;font-size:12px;margin:8px 0 0"></p>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button type="button" class="btn" style="background:#e5e7eb;color:#374151" onclick="closeSyllabusModal()">閉じる</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -710,17 +740,14 @@ function addInstructor(courseId) {
       chip.id = 'inst-chip-' + data.id;
       chip.dataset.name = data.name;
       chip.className = 'chip';
-      if (data.url) {
-        const nameLink = document.createElement('a');
-        nameLink.href = data.url;
-        nameLink.target = '_blank';
-        nameLink.rel = 'noopener';
-        nameLink.style.cssText = 'color:var(--accent-text);text-decoration:underline';
-        nameLink.textContent = data.name;
-        chip.appendChild(nameLink);
-      } else {
-        chip.appendChild(document.createTextNode(data.name));
-      }
+      const nameSpan = document.createElement('span');
+      nameSpan.setAttribute('role', 'button');
+      nameSpan.setAttribute('tabindex', '0');
+      nameSpan.title = 'クリックしてシラバスを登録';
+      nameSpan.style.cssText = 'color:var(--accent-text);text-decoration:underline;cursor:pointer';
+      nameSpan.textContent = data.name;
+      nameSpan.addEventListener('click', function() { openSyllabusModal(courseId, data.id, nameSpan); });
+      chip.appendChild(nameSpan);
       chip.appendChild(document.createTextNode(' '));
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
@@ -767,6 +794,169 @@ function deleteInstructor(courseId, instId, btn) {
     }
   }).catch(function() { showErrorToast(); });
 }
+
+// シラバス登録モーダル（科目管理画面「担当教員」チップから開く）。
+// 科目×教員（course_sections）1件につき年度×学期(academic_term)ごとに複数のtimetable_codeを
+// 登録できる。既存一覧の取得・追加・編集・削除はすべてこのモーダル内でAJAX完結させ、
+// 保存後は担当教員チップのURL表示を更新するため該当科目のチップ一覧を再取得する。
+let syllabusContext = null;
+let syllabusEditId = null;
+
+function openSyllabusModal(courseId, instructorId, nameEl) {
+  syllabusContext = { courseId: courseId, instructorId: instructorId, courseSectionId: null };
+  const c = COURSES[courseId];
+  document.getElementById('syllabusModalSubtitle').textContent =
+    (c ? c.name : '') + '　担当：' + nameEl.textContent;
+  document.getElementById('syllabusError').style.display = 'none';
+  document.getElementById('syllabusList').innerHTML = '<p style="color:#9ca3af;font-size:12px;margin:0">読み込み中...</p>';
+  resetSyllabusForm();
+  document.getElementById('syllabusModal').classList.add('open');
+  refreshSyllabusList();
+}
+
+function refreshSyllabusList() {
+  fetchJson('/admin/courses/panel/syllabi?course_id=' + syllabusContext.courseId + '&instructor_id=' + syllabusContext.instructorId)
+    .then(function(data) {
+      syllabusContext.courseSectionId = data.course_section_id;
+      renderSyllabusList(data.items);
+    })
+    .catch(function() {
+      document.getElementById('syllabusList').innerHTML = '<p style="color:#dc2626;font-size:12px;margin:0">読み込みに失敗しました</p>';
+    });
+}
+
+function renderSyllabusList(items) {
+  const el = document.getElementById('syllabusList');
+  el.innerHTML = '';
+  if (!items.length) {
+    el.innerHTML = '<p style="color:#9ca3af;font-size:12px;margin:0">登録済みのシラバスはありません</p>';
+    return;
+  }
+  items.sort(function(a, b) {
+    return b.year - a.year || a.academic_term.localeCompare(b.academic_term, 'ja');
+  });
+  items.forEach(function(item) {
+    const row = document.createElement('div');
+    row.id = 'syl-row-' + item.id;
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px';
+    const info = document.createElement('div');
+    if (item.url) {
+      const a = document.createElement('a');
+      a.href = item.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.style.cssText = 'color:var(--accent-text);text-decoration:underline';
+      a.textContent = item.year + '年度 ' + item.academic_term + '　' + item.timetable_code;
+      info.appendChild(a);
+    } else {
+      info.textContent = item.year + '年度 ' + item.academic_term + '　' + item.timetable_code;
+    }
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:4px;flex-shrink:0';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn btn-xs';
+    editBtn.textContent = '編集';
+    editBtn.addEventListener('click', function() { fillSyllabusFormForEdit(item); });
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'btn btn-danger btn-xs';
+    delBtn.textContent = '削除';
+    delBtn.addEventListener('click', function() { deleteSyllabus(item.id); });
+    btns.appendChild(editBtn);
+    btns.appendChild(delBtn);
+    row.appendChild(info);
+    row.appendChild(btns);
+    el.appendChild(row);
+  });
+}
+
+function fillSyllabusFormForEdit(item) {
+  syllabusEditId = item.id;
+  document.getElementById('syllabusYear').value = item.year;
+  document.getElementById('syllabusTerm').value = item.academic_term;
+  document.getElementById('syllabusCode').value = item.timetable_code;
+  document.querySelector('#syllabusAddForm button[type=submit]').textContent = '更新';
+  document.getElementById('syllabusCancelEditBtn').style.display = 'inline-block';
+}
+
+function resetSyllabusForm() {
+  syllabusEditId = null;
+  document.getElementById('syllabusYear').value = new Date().getFullYear();
+  document.getElementById('syllabusTerm').selectedIndex = 0;
+  document.getElementById('syllabusCode').value = '';
+  document.querySelector('#syllabusAddForm button[type=submit]').textContent = '追加';
+  document.getElementById('syllabusCancelEditBtn').style.display = 'none';
+}
+
+document.getElementById('syllabusAddForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('syllabusError');
+  errEl.style.display = 'none';
+  const year = document.getElementById('syllabusYear').value;
+  const term = document.getElementById('syllabusTerm').value;
+  const code = document.getElementById('syllabusCode').value.trim();
+  if (!year || !term || !code) return;
+  const url = syllabusEditId
+    ? '/admin/courses/syllabus/update/' + syllabusEditId
+    : '/admin/courses/syllabus/add';
+  const params = new URLSearchParams();
+  if (!syllabusEditId) params.set('course_section_id', syllabusContext.courseSectionId);
+  params.set('year', year);
+  params.set('academic_term', term);
+  params.set('timetable_code', code);
+  fetchJson(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+    body: params.toString()
+  }).then(function(data) {
+    if (!data.ok) {
+      errEl.textContent = data.message || '保存に失敗しました';
+      errEl.style.display = 'block';
+      return;
+    }
+    resetSyllabusForm();
+    refreshSyllabusList();
+    refreshInstructorChips(syllabusContext.courseId);
+  }).catch(function() {
+    errEl.textContent = '通信エラーが発生しました';
+    errEl.style.display = 'block';
+  });
+});
+
+function deleteSyllabus(id) {
+  askConfirm('このシラバス登録を削除しますか？', '削除する').then(function(ok) {
+    if (!ok) return;
+    fetchJson('/admin/courses/syllabus/delete/' + id, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function(data) {
+      if (data.ok) {
+        if (syllabusEditId === id) resetSyllabusForm();
+        refreshSyllabusList();
+        refreshInstructorChips(syllabusContext.courseId);
+      }
+    }).catch(function() { showErrorToast(); });
+  });
+}
+
+// 保存・削除後、その科目の担当教員チップ一覧（シラバスURL表示）を最新化する。
+// 統合表示（教員チップが複数科目にまたがる）ではこのモーダル自体を開けないため、
+// courseIdは常に単独科目のidになる
+function refreshInstructorChips(courseId) {
+  const list = document.getElementById('inst-list-' + courseId);
+  if (!list) return;
+  fetchJson('/admin/courses/panel/instructors?ids=' + courseId + '&editable=1')
+    .then(function(data) { list.innerHTML = data.html; })
+    .catch(function() {});
+}
+
+function closeSyllabusModal() {
+  document.getElementById('syllabusModal').classList.remove('open');
+}
+document.getElementById('syllabusModal').addEventListener('click', function(e) {
+  if (e.target === this) closeSyllabusModal();
+});
 
 // 修正理由: 科目行は<template>から複製される方式になったため、削除時は表示中の行だけでなく
 // 複製元の<template>側からも取り除かないと、折りたたんで開き直した時に削除済みの科目が
