@@ -499,6 +499,58 @@ def normalize_subject_name(name: str) -> str:
     return _ROMAN_NUMERAL_RE.sub(lambda m: _HALF_TO_FULL_ROMAN[m.group(1)], name)
 
 
+# 科目名の重複検索専用。カッコ・ダッシュ・英数字の全角/半角ゆれを総当たりした候補集合を返す
+# （表示用の科目名そのものは変更しない）。`programing files/import_syllabus.py`にも同種の
+# ロジックが別プロセス用に複製されている（スクリプト群はcore.configをimportしない設計のため）。
+_SUBJECT_NAME_FULLWIDTH_ALNUM = str.maketrans({
+    chr(c): chr(c - 0xFEE0)
+    for c in list(range(0xFF10, 0xFF1A)) + list(range(0xFF21, 0xFF3B)) + list(range(0xFF41, 0xFF5B))
+})
+_SUBJECT_NAME_HALFWIDTH_TO_FULLWIDTH_ALNUM = str.maketrans({
+    chr(c - 0xFEE0): chr(c)
+    for c in list(range(0xFF10, 0xFF1A)) + list(range(0xFF21, 0xFF3B)) + list(range(0xFF41, 0xFF5B))
+})
+_SUBJECT_NAME_PAREN_F2H = str.maketrans("（）", "()")
+_SUBJECT_NAME_PAREN_H2F = str.maketrans("()", "（）")
+_SUBJECT_NAME_DASH_F2H = str.maketrans({"－": "-"})
+_SUBJECT_NAME_DASH_H2F = str.maketrans({"-": "－"})
+_SUBJECT_NAME_WIDTH_TRANSFORMS = [
+    lambda s: s.translate(_SUBJECT_NAME_PAREN_F2H),
+    lambda s: s.translate(_SUBJECT_NAME_PAREN_H2F),
+    lambda s: s.translate(_SUBJECT_NAME_DASH_F2H),
+    lambda s: s.translate(_SUBJECT_NAME_DASH_H2F),
+    lambda s: s.translate(_SUBJECT_NAME_FULLWIDTH_ALNUM),
+    lambda s: s.translate(_SUBJECT_NAME_HALFWIDTH_TO_FULLWIDTH_ALNUM),
+]
+
+
+def normalize_alnum(name: str) -> str:
+    """全角英数字（Ａ-Ｚ, a-z, ０-９）のみ半角化する。括弧等の全角記号はそのまま残す。
+    `programing files/import_syllabus.py`の同名関数と同じロジック（シラバスインポート時の
+    科目名保存値もこちらで半角化されるため、管理画面側でも同じ表記に揃える）。"""
+    if not name:
+        return name
+    return name.translate(_SUBJECT_NAME_FULLWIDTH_ALNUM)
+
+
+def subject_name_width_variants(name: str) -> set[str]:
+    """科目名のカッコ・ダッシュ・英数字の全角/半角表記ゆれを総当たりした候補集合を返す
+    （name自身を含む）。管理画面の重複科目検索専用で、DB保存値は変更しない。"""
+    if not name:
+        return {name}
+    variants = {name}
+    changed = True
+    while changed:
+        changed = False
+        for v in list(variants):
+            for t in _SUBJECT_NAME_WIDTH_TRANSFORMS:
+                nv = t(v)
+                if nv not in variants:
+                    variants.add(nv)
+                    changed = True
+    return variants
+
+
 def cls_order(name: str) -> int:
     for i, kw in enumerate(_CLS_ORDER_KEYS):
         if kw in (name or ""):

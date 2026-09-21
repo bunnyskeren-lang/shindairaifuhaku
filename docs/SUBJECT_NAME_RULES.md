@@ -8,6 +8,26 @@
 
 - `programing files/models.py` 側にも同じロジックを複製済み。新しい正規化ルールを追加する際は**両方の`models.py`を更新**すること。
 
+### 重複登録の防止（検索専用の表記ゆれ吸収、2026-09-22）
+
+新規科目の登録経路（管理画面の新規作成・編集、`programing files/import_syllabus.py`のシラバス
+インポート）はいずれも、保存前に**既存の同名科目を探す**処理を持つ。この検索が表記ゆれを
+拾えないと、同一科目が表記違いだけで別レコードとして重複登録されてしまう（実際に3件の
+抜け漏れが見つかり修正済み）。
+
+- **管理画面** (`routers/admin/courses.py` `_find_duplicate_subject`): `core.config.subject_name_width_variants()`
+  でカッコ・ダッシュ・英数字の全角/半角を総当たりした候補集合を作り、`Subject.name.in_(...)`で
+  照合する。また新規作成・編集時、保存する科目名自体も`core.config.normalize_alnum()`で
+  全角英数字を半角化してから保存する（インポートスクリプト側の正規化と揃えるため）。
+- **シラバスインポート** (`programing files/import_syllabus.py` `import_courses`): `name_search_variants()`
+  が同種の総当たりを行う（管理画面側とは別プロセスのため実装は複製、ロジックは同じ）。
+  以前はダッシュの全角/半角ゆれが`classify_kyoyo()`（分類判定）にしか効いておらず、Subject検索
+  には含まれていなかった。また検索に使う名前がローマ数字の半角/全角正規化を経ていなかった
+  ため、既存レコード（全角化済み）とマッチせず、新規`Subject()`生成時にvalidatorで全角化されて
+  からUNIQUE制約に衝突し`IntegrityError`でバッチが失敗する不具合もあった（`search_name = normalize_subject_name(c["name"])`で解消）。
+- いずれも**表示用の科目名自体は変更しない**（検索のためだけに候補を作る）。新しい表記ゆれの
+  パターン（波ダッシュ・コロン・中黒等）に気づいた場合は、両方の実装に同じ変換を追記すること。
+
 ## 2. LINE bot科目一覧のバリアント統合表示
 
 `line_bot/handler.py`の科目一覧表示（`handle_course_list`）・テキスト検索では、**ベースの漢字部分が完全一致し末尾のアルファベット・数字だけが異なる科目は1行にまとめて表示する**。

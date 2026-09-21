@@ -11,8 +11,10 @@ from core.config import (
     escape_like,
     make_cls_sort,
     make_syllabus_url,
+    normalize_alnum,
     normalize_subject_name,
     reading,
+    subject_name_width_variants,
     subject_sort_reading_key,
     syllabus_department_key,
 )
@@ -474,11 +476,14 @@ async def _determine_new_subject_sort_order(session, classification: str | None)
 async def _find_duplicate_subject(session, course_id: int, name: str, faculty: str, department: str) -> Subject | None:
     """(name, faculty, department)が完全に一致する他のSubjectを探す。classification違いのみの
     「全く同じ科目名」を検出するための判定（2026-09-05、UNIQUE制約からclassificationを
-    除いた3列で一致する行がこれに当たる）。"""
+    除いた3列で一致する行がこれに当たる）。
+    nameはカッコ・ダッシュの全角/半角表記ゆれを総当たり(subject_name_width_variants)して
+    照合する。完全一致だけだと手入力時の表記ゆれで重複検知をすり抜け、別レコードとして
+    サイレントに登録されてしまうため（2026-09-22、表記ゆれ対処の抜け漏れ監査で発見）。"""
     return (await session.execute(
         select(Subject).where(
             Subject.id != course_id,
-            Subject.name == name,
+            Subject.name.in_(subject_name_width_variants(name)),
             Subject.faculty == faculty,
             Subject.department == department,
         )
@@ -561,7 +566,7 @@ async def admin_courses_create(
     インポート経由でしか科目を追加できなかった）。重複チェック・レビューコピーの挙動は
     admin_courses_update()の別分類への変更時と同じロジックを流用する。"""
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-    new_name = normalize_subject_name(name.strip())
+    new_name = normalize_subject_name(normalize_alnum(name.strip()))
     new_faculty = faculty.strip()
     new_department = department.strip()
     new_classification = classification.strip() or None
@@ -622,8 +627,9 @@ async def admin_courses_update(
         course = (await session.execute(select(Subject).where(Subject.id == course_id))).scalar_one_or_none()
         if course:
             # normalize_subject_name()はSubject.nameのvalidatorと同じ正規化（ローマ数字の半角→全角）。
+            # normalize_alnum()は全角英数字の半角化（import_syllabus.py側の科目名正規化と揃える）。
             # 重複判定はDB保存後の正規化済み値どうしで比較する必要があるため事前に揃えておく
-            new_name = normalize_subject_name(name.strip())
+            new_name = normalize_subject_name(normalize_alnum(name.strip()))
             # 修正理由: department列はnullable=False+空文字プレースホルダ方式なのに対し、
             # facultyだけ空欄保存でNULLになる非対称な状態だった。UNIQUE制約はNULL同士を
             # 区別しないため空文字に揃えておく(将来faculty列をNOT NULL化する際の前提)

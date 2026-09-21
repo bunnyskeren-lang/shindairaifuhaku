@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.config import is_profile_complete, latest_syllabus_url_map, make_syllabus_url, normalize_instructor_name, normalize_subject_name, stars, subject_submittable_for_profile, syllabus_department_key
+from core.config import is_profile_complete, latest_syllabus_url_map, make_syllabus_url, normalize_alnum, normalize_instructor_name, normalize_subject_name, stars, subject_name_width_variants, subject_submittable_for_profile, syllabus_department_key
 
 BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026"
 
@@ -136,6 +136,32 @@ def test_normalize_subject_name_does_not_touch_roman_letters_inside_words():
     # 単語中のI/II/V等（AI、TOEIC、IV(ローマ数字ではなく型番等)のような英数字に挟まれた文字）は変換しない
     assert normalize_subject_name("AI基礎論") == "AI基礎論"
     assert normalize_subject_name("TOEIC対策") == "TOEIC対策"
+
+
+def test_normalize_alnum_halfwidths_fullwidth_alnum_only():
+    assert normalize_alnum("生物学各論Ａ１") == "生物学各論A1"
+    assert normalize_alnum("環境基礎科学実験A1（主に地学）") == "環境基礎科学実験A1（主に地学）"  # 全角記号は不変
+
+
+def test_normalize_alnum_empty_and_none():
+    assert normalize_alnum("") == ""
+    assert normalize_alnum(None) is None
+
+
+def test_subject_name_width_variants_covers_paren_dash_alnum():
+    # 2026-09-22: 管理画面の重複科目検索(_find_duplicate_subject)がローマ数字以外の
+    # 表記ゆれ（全角/半角英数字・カッコ・ダッシュ）を一切吸収しておらず、手入力の表記ゆれで
+    # 重複登録がすり抜ける抜け穴があったため追加した関数を検証する。
+    variants = subject_name_width_variants("特別研究－Ａ（主に地学）")
+    assert "特別研究-Ａ（主に地学）" in variants   # ダッシュのみ半角化
+    assert "特別研究－A（主に地学）" in variants   # 英数字のみ半角化
+    assert "特別研究-A(主に地学)" in variants      # 全部半角化
+    assert "特別研究－Ａ（主に地学）" in variants   # 元の値自体も含む
+
+
+def test_subject_name_width_variants_empty_and_none():
+    assert subject_name_width_variants("") == {""}
+    assert subject_name_width_variants(None) == {None}
 
 
 def test_stars_clamps_to_1_to_5_range():

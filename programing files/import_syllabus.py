@@ -73,6 +73,36 @@ _HALFWIDTH_TO_FULLWIDTH_ALNUM = str.maketrans({
 
 _PAREN_F2H = str.maketrans("（）", "()")
 _PAREN_H2F = str.maketrans("()", "（）")
+_DASH_F2H = str.maketrans({"－": "-"})
+_DASH_H2F = str.maketrans({"-": "－"})
+
+_NAME_WIDTH_TRANSFORMS = [
+    lambda s: s.translate(_PAREN_F2H),
+    lambda s: s.translate(_PAREN_H2F),
+    lambda s: s.translate(_DASH_F2H),
+    lambda s: s.translate(_DASH_H2F),
+    lambda s: s.translate(_FULLWIDTH_ALNUM),
+    lambda s: s.translate(_HALFWIDTH_TO_FULLWIDTH_ALNUM),
+]
+
+
+def name_search_variants(name: str) -> set[str]:
+    """Subject検索専用。カッコ・ダッシュ・英数字の全角/半角表記ゆれを総当たりした候補集合を
+    返す（nameそのものを含む）。以前はカッコ・英数字幅のみを個別に吸収していたが、
+    ダッシュ（－/-）の表記ゆれがclassify_kyoyo()の分類判定にしか効いておらずSubject検索に
+    含まれていなかったため、同一科目が別レコードとして重複登録されうる抜け穴があった
+    （2026-09-22、表記ゆれ対処の抜け漏れ監査で発見）。"""
+    variants = {name}
+    changed = True
+    while changed:
+        changed = False
+        for v in list(variants):
+            for t in _NAME_WIDTH_TRANSFORMS:
+                nv = t(v)
+                if nv not in variants:
+                    variants.add(nv)
+                    changed = True
+    return variants
 
 _CROSSLIST_RE = re.compile(r'\((?P<kind>副|主)[：:][^)]+\)')
 # 科目名の【...】タグのうち、遠隔・再履修は同じ教員が通常クラスと同じ科目・同じ学期に
@@ -427,7 +457,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                          auto_create: bool = True):
     from sqlalchemy import select
     from database import AsyncSessionLocal, init_db
-    from models import Subject, Instructor, CourseSection, Syllabus, normalize_instructor_name
+    from models import Subject, Instructor, CourseSection, Syllabus, normalize_instructor_name, normalize_subject_name
 
     await init_db()
 
@@ -446,7 +476,14 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             # 教養教育院由来の行はcategory="教養"で、専門科目由来の行はfaculty/department（学部・学科）で
             # 絞り込む。これが無いと「卒業研究」「国際関係論」等の汎用的な科目名が
             # 別学部の同名科目に誤って相乗りしてしまう
-            subj_filters = [Subject.name == c["name"]]
+            #
+            # search_name はローマ数字の半角/全角を正規化した値（Subject.nameのvalidatorと同じ
+            # normalize_subject_name）で検索する。c["name"]の生値（半角ローマ数字）のまま検索すると、
+            # 既存レコードがvalidatorにより全角化済みのため一致せず、新規Subject()生成→construkto内の
+            # validatorで全角化された瞬間にUNIQUE制約と衝突しflushでIntegrityError、バッチが
+            # クラッシュしてインポート全体が停止していた（2026-09-22、表記ゆれ対処の抜け漏れ監査で発見）。
+            search_name = normalize_subject_name(c["name"])
+            subj_filters = [Subject.name == search_name]
             if is_kyoyo:
                 subj_filters.append(Subject.category == "教養")
             else:
@@ -457,18 +494,11 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
             )).scalar_one_or_none()
 
             if subj is None:
-                # 括弧・英数字の全角/半角表記ゆれを吸収して再検索（表示名は変更しない）。
+                # カッコ・ダッシュ・英数字の全角/半角表記ゆれを吸収して再検索（表示名は変更しない）。
                 # parse_file()でc["name"]は英数字が半角化済みのため、既存レコードが
                 # 全角英数字のまま登録されているケース（旧import_kyoyo_courses.py由来等）
                 # を拾えないと同一科目が別レコードとして重複登録されてしまう
-                fullwidth_alnum_name = c["name"].translate(_HALFWIDTH_TO_FULLWIDTH_ALNUM)
-                for alt_name in {
-                    c["name"].translate(_PAREN_F2H),
-                    c["name"].translate(_PAREN_H2F),
-                    fullwidth_alnum_name,
-                    fullwidth_alnum_name.translate(_PAREN_F2H),
-                    fullwidth_alnum_name.translate(_PAREN_H2F),
-                } - {c["name"]}:
+                for alt_name in name_search_variants(search_name) - {search_name}:
                     alt_filters = [Subject.name == alt_name]
                     if is_kyoyo:
                         alt_filters.append(Subject.category == "教養")
@@ -486,7 +516,7 @@ async def import_courses(courses: list[dict], also_courses: bool = False,
                 # 意図的に区別されているケースがある。その場合は既存分類を壊さず再利用する
                 # （category="教養"限定で再検索すると見つからず、重複INSERTでunique制約違反になるため）
                 subj = (await session.execute(
-                    select(Subject).where(Subject.name == c["name"])
+                    select(Subject).where(Subject.name == search_name)
                 )).scalar_one_or_none()
 
             if subj is None:

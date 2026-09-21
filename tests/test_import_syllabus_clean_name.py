@@ -46,3 +46,22 @@ def test_classify_kyoyo_strips_both_tags_before_lookup():
     assert isy.classify_kyoyo(base_name + "（遠隔）") == expected
     assert isy.classify_kyoyo(base_name + "（再履修）") == expected
     assert isy.classify_kyoyo(base_name + "（遠隔）（再履修）") == expected
+
+
+def test_name_search_variants_covers_dash_paren_and_alnum_width():
+    """2026-09-22: ダッシュ（－/-）の全角/半角ゆれはclassify_kyoyo()の分類判定にしか
+    効いておらず、Subject検索(name_search_variants)には含まれていなかった。ダッシュを
+    含む科目名で表記が食い違うと重複登録されうる抜け穴だったため、修正を確認する。"""
+    variants = isy.name_search_variants("特別研究－Ａ")
+    assert "特別研究-Ａ" in variants          # ダッシュのみ半角化
+    assert "特別研究－A" in variants          # 英数字のみ半角化
+    assert "特別研究-A" in variants           # 両方半角化
+
+
+def test_name_search_variants_covers_paren_width():
+    variants = isy.name_search_variants("環境基礎科学実験A1（主に地学）")
+    assert "環境基礎科学実験A1(主に地学)" in variants
+
+
+def test_name_search_variants_includes_original_name():
+    assert "微分積分Ⅰ" in isy.name_search_variants("微分積分Ⅰ")

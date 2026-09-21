@@ -57,6 +57,58 @@ async def _seed(test_sessionmaker):
 
 
 @pytest.mark.asyncio
+async def test_create_duplicate_name_with_fullwidth_dash_requires_confirmation(
+    http_client_factory, monkeypatch, test_sessionmaker
+):
+    """2026-09-22: 既存科目名がダッシュ・カッコを含む場合、新規作成フォームで半角/全角が
+    食い違う表記で入力しても重複として検知され、サイレントに別レコードが登録されないこと。"""
+    async with test_sessionmaker() as session:
+        session.add(Subject(name="特別研究－Ａ（主に地学）", faculty="理学部", department="", classification="旧分類", category="専門"))
+        await session.commit()
+
+    client = _admin_client(http_client_factory, monkeypatch)
+    resp = await client.post(
+        "/admin/courses/create",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={
+            "name": "特別研究-A(主に地学)",  # 全て半角で入力（既存は全角ダッシュ・全角英数字・全角カッコ）
+            "classification": "新分類", "category": "専門",
+            "faculty": "理学部", "department": "",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error"] == "duplicate_name"
+
+    async with test_sessionmaker() as session:
+        all_subjects = (await session.execute(select(Subject))).scalars().all()
+        assert len(all_subjects) == 1  # 確認前なので新規レコードは作られていない
+
+
+@pytest.mark.asyncio
+async def test_create_normalizes_fullwidth_alnum_to_halfwidth(http_client_factory, monkeypatch, test_sessionmaker):
+    """2026-09-22: 管理画面で全角英数字を含む科目名を新規作成すると、シラバスインポート
+    (import_syllabus.py)と同じ規則で半角化して保存されること（表記の揺れを将来に残さない）。"""
+    client = _admin_client(http_client_factory, monkeypatch)
+    resp = await client.post(
+        "/admin/courses/create",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={
+            "name": "生物学各論Ａ１", "classification": "新分類", "category": "専門",
+            "faculty": "理学部", "department": "",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+
+    async with test_sessionmaker() as session:
+        created = await session.get(Subject, body["id"])
+        assert created.name == "生物学各論A1"
+
+
+@pytest.mark.asyncio
 async def test_duplicate_name_requires_confirmation(http_client_factory, monkeypatch, test_sessionmaker):
     _, target_id, _ = await _seed(test_sessionmaker)
     client = _admin_client(http_client_factory, monkeypatch)
