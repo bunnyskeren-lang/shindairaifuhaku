@@ -45,6 +45,7 @@
          JSからプリフィルする。 -->
     <form id="registerForm" action="/api/register" method="post" novalidate class="space-y-4">
       <input type="hidden" name="id_token" id="idTokenHidden" value="">
+      <input type="hidden" name="register_nonce" id="registerNonceHidden" value="">
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <label class="block text-sm font-semibold text-gray-700 mb-1">
@@ -415,6 +416,14 @@
           <p class="text-sm text-gray-500">LINEログインの確認に失敗しました。LINEアプリからこのページを開き直してください。</p>`);
         return;
       }
+      // 冪等キーを送信ごとに1個発行。送信直後にLINEアプリがバックグラウンド化しOS/webviewが
+      // 同じPOSTを後で再送しても、サーバーは同じnonceの登録が既にあれば再検証せず成功扱いにする
+      // （そのときには送信直前に確認したid_tokenが期限切れになっていることが多いため）。
+      try {
+        document.getElementById('registerNonceHidden').value =
+          (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+      } catch (_) {}
       e.target.submit();
     });
   </script>

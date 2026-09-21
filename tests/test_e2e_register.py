@@ -44,9 +44,14 @@ async def test_register_new_user_grants_welcome_credits(http_client_factory, mon
     _stub_link_rich_menu(monkeypatch)
     client = http_client_factory(profile_api, monkeypatch)
 
+    # 成功時は PRG（Post/Redirect/Get）で 303 → GET /register/done
     resp = await client.post("/api/register", data=VALID_FORM)
-    assert resp.status_code == 200
-    assert f"{REGISTRATION_WELCOME_UNLOCK_CREDITS}枚プレゼント" in resp.text
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/register/done"
+
+    done = await client.get(resp.headers["location"])
+    assert done.status_code == 200
+    assert f"{REGISTRATION_WELCOME_UNLOCK_CREDITS}枚プレゼント" in done.text
 
     async with test_sessionmaker() as session:
         profile = await session.get(UserProfile, USER_ID)
@@ -61,17 +66,43 @@ async def test_register_existing_user_does_not_double_grant_credits(http_client_
     client = http_client_factory(profile_api, monkeypatch)
 
     first = await client.post("/api/register", data=VALID_FORM)
-    assert first.status_code == 200
+    assert first.status_code == 303
 
     updated_form = {**VALID_FORM, "name": "神戸次郎"}
     second = await client.post("/api/register", data=updated_form)
-    assert second.status_code == 200
+    assert second.status_code == 303
     # 完了画面の文面は初回登録と同一にする方針（2026-09-08、ユーザー指示）。
     # 二重付与しないことはDB上の unlock_credits で担保する。
 
     async with test_sessionmaker() as session:
         profile = await session.get(UserProfile, USER_ID)
         assert profile.name == "神戸次郎"
+        assert profile.unlock_credits == REGISTRATION_WELCOME_UNLOCK_CREDITS
+
+
+@pytest.mark.asyncio
+async def test_register_same_nonce_is_idempotent(http_client_factory, monkeypatch, test_sessionmaker):
+    """送信直後のアプリbg化でOS/webviewが保留POSTを再送する事象（2026-09-22、
+    liff_auth_failed:IdToken expired. として顕在化）の回帰テスト。同じ register_nonce の
+    2回目のPOSTは、1回目送信後にid_tokenが失効していても（=verify_liff_id_tokenが失敗する
+    トークンでも）LINEログイン再検証を経由せず1回目の成功ページへ直行すること。"""
+    _fake_verify(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
+    client = http_client_factory(profile_api, monkeypatch)
+
+    form = {**VALID_FORM, "register_nonce": "nonce-abc-123"}
+    first = await client.post("/api/register", data=form)
+    assert first.status_code == 303
+
+    # 2回目は期限切れ等で検証に失敗するトークンで再送されるケースを模す
+    replay = {**form, "id_token": "expired-token"}
+    second = await client.post("/api/register", data=replay)
+    assert second.status_code == 303
+    assert second.headers["location"] == "/register/done"
+
+    async with test_sessionmaker() as session:
+        profile = await session.get(UserProfile, USER_ID)
+        assert profile is not None
         assert profile.unlock_credits == REGISTRATION_WELCOME_UNLOCK_CREDITS
 
 
@@ -135,9 +166,9 @@ async def test_register_existing_user_recorded_coop_jobsite_answer(http_client_f
     client = http_client_factory(profile_api, monkeypatch)
 
     first = await client.post("/api/register", data={**VALID_FORM, "coop_jobsite_known": "いいえ"})
-    assert first.status_code == 200
+    assert first.status_code == 303
     second = await client.post("/api/register", data={**VALID_FORM, "coop_jobsite_known": "はい"})
-    assert second.status_code == 200
+    assert second.status_code == 303
 
     async with test_sessionmaker() as session:
         profile = await session.get(UserProfile, USER_ID)
@@ -153,10 +184,12 @@ async def test_register_new_user_sees_review_view_guidance(http_client_factory, 
     client = http_client_factory(profile_api, monkeypatch)
 
     resp = await client.post("/api/register", data=VALID_FORM)
-    assert resp.status_code == 200
-    assert "「レビューを閲覧」から" in resp.text
-    assert f"教養：{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚" in resp.text
-    assert f"専門：{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚" in resp.text
+    assert resp.status_code == 303
+    done = await client.get(resp.headers["location"])
+    assert done.status_code == 200
+    assert "「レビューを閲覧」から" in done.text
+    assert f"教養：{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚" in done.text
+    assert f"専門：{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚" in done.text
     # レビュー投稿フォームへの自動遷移・戻り導線は廃止済み
-    assert "course_id=" not in resp.text
-    assert "goToReviewForm" not in resp.text
+    assert "course_id=" not in done.text
+    assert "goToReviewForm" not in done.text

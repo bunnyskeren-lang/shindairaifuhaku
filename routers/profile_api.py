@@ -3,6 +3,7 @@ import json as _json
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -149,6 +150,13 @@ async def profile_prefill(request: Request):
     }
 
 
+def _register_success_redirect():
+    # PRG（Post/Redirect/Get）: 送信成功時はテンプレートを直接返さず303でGETページへ。
+    # ブラウザ履歴・タブ復元・bfcache復元で再実行されるのが無害なGETになり、
+    # フォームPOST自体の再送（二重送信の主因）が減る（routers/review_submit_api.pyと同じ方式）。
+    return RedirectResponse(url="/register/done", status_code=303)
+
+
 @router.post("/api/register")
 async def register_profile(
     request: Request,
@@ -158,12 +166,26 @@ async def register_profile(
     faculty: str = Form(""),
     department: str = Form(""),
     coop_jobsite_known: str = Form(""),
+    register_nonce: str = Form(default=""),
     _rl=Depends(_register_rate_limit),
 ):
     def _form_error(msg: str):
         return templates.TemplateResponse(
             "form_error.html", {"request": request, "message": msg}, status_code=400
         )
+
+    # 冪等キー先行チェック: 送信直後のアプリbg化でOS/webviewが保留POSTを再送する事象
+    # （2026-09-22、/api/register で liff_auth_failed:IdToken expired. として再発）に備え、
+    # 同じ register_nonce の登録が既に成功していれば、LINEログイン再検証（再送POSTは
+    # 期限切れトークンを抱えていることが多い）を経由せず成功ページへ直行する。
+    nonce = register_nonce.strip()[:64] or None
+    if nonce:
+        async with AsyncSessionLocal() as session:
+            prior = (await session.execute(
+                select(UserProfile.line_user_id).where(UserProfile.register_nonce == nonce)
+            )).scalar_one_or_none()
+            if prior is not None:
+                return _register_success_redirect()
 
     uid = await verify_liff_id_token(id_token, request)
     if not uid or not LINE_USER_ID_RE.match(uid):
@@ -218,6 +240,7 @@ async def register_profile(
             coop_jobsite_known=coop_jobsite_known,
             # 会員登録（UserProfile初回作成）した全員へ、レビュー閲覧権チケットをプレゼントする
             unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
+            register_nonce=nonce,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[UserProfile.line_user_id],
@@ -229,6 +252,8 @@ async def register_profile(
                 # 既存の登録済みユーザーが必須化後に再登録した場合、この回答を保存する
                 # （この列がNULLだったユーザーを埋めることが再登録の主目的）
                 "coop_jobsite_known": stmt.excluded.coop_jobsite_known,
+                # 冪等キーも毎回更新。これで直後の再送POST（同じnonce）が先行チェックで拾える
+                "register_nonce": stmt.excluded.register_nonce,
             },
         )
 
@@ -266,6 +291,13 @@ async def register_profile(
 
     asyncio.create_task(_notify())
 
+    return _register_success_redirect()
+
+
+@router.get("/register/done")
+async def register_done(request: Request):
+    # PRG のリダイレクト先。POST /api/register が303で飛ばしてくる（直接の再送POSTが
+    # 無害なGETに置き換わる）。表示内容は全て定数のためDB再取得は不要。
     return templates.TemplateResponse(
         "form_register_success.html", {
             "request": request,

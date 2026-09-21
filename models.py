@@ -36,6 +36,18 @@ class DisplayOrder(Base):
 
 class UserProfile(TimestampMixin, Base):
     __tablename__ = "user_profiles"
+    # register_nonce（二重送信対策の冪等キー）は NULL 複数可・非NULLは一意の部分UNIQUE。
+    # reviews.submit_nonce / payment_requests.submit_nonce と同じ仕組み
+    # （送信直後にLINEアプリがバックグラウンドへ回るとモバイルOS/webviewが保留中のPOSTを
+    # 後から再送し、その間にIDトークンが期限切れになってサーバー検証で弾かれる事象への対策。
+    # 2026-09-22、/api/register で liff_auth_failed:IdToken expired. が再発したため導入）。
+    __table_args__ = (
+        Index(
+            "uq_user_profiles_register_nonce", "register_nonce", unique=True,
+            postgresql_where=text("register_nonce IS NOT NULL"),
+            sqlite_where=text("register_nonce IS NOT NULL"),
+        ),
+    )
 
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -62,6 +74,10 @@ class UserProfile(TimestampMixin, Base):
     # 既存の登録済みユーザーはこの列がNULLのままになり、次回操作時に一度だけ再登録を求められる
     # （友だち追加者を把握する目的。"いいえ" も回答済みとして扱えるよう真偽値でなく文字列で保持する）。
     coop_jobsite_known: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 二重送信対策の冪等キー。クライアントが送信ごとに crypto.randomUUID() を発行し、
+    # 同じ値の登録が既に成功していれば新規のトークン再検証を経由せず1回目の成功ページへ流す。
+    # 部分UNIQUEは上の __table_args__ で宣言。
+    register_nonce: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class ErrorLog(TimestampMixin, Base):

@@ -776,3 +776,16 @@ async def init_db():
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_reviews_submit_nonce "
             "ON reviews (submit_nonce) WHERE submit_nonce IS NOT NULL"
         ))
+
+        # ── 2026-09-22: 会員登録二重送信（同上パターン）対策の冪等キー ──
+        # /api/register で liff_auth_failed:IdToken expired. が再発。送信直後にLINEアプリが
+        # バックグラウンドへ回りOS/webviewが保留中の登録POSTを後から再送すると、1回目は成功
+        # 済みなのに2回目はキャッシュされたIDトークンが期限切れのままサーバー検証に落ちて
+        # エラー画面が出ていた。reviewsと同じ冪等キー方式（routers/profile_api.py）で対処。
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS register_nonce TEXT"
+        ))
+        await conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_profiles_register_nonce "
+            "ON user_profiles (register_nonce) WHERE register_nonce IS NOT NULL"
+        ))

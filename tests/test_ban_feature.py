@@ -379,4 +379,4 @@ async def test_non_banned_user_unaffected(http_client_factory, monkeypatch, test
         "department": "経営学科",
         "coop_jobsite_known": "はい",
     })
-    assert resp.status_code == 200
+    assert resp.status_code == 303
