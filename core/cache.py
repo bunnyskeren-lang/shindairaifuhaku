@@ -45,32 +45,65 @@ _COURSE_CACHE_TTL = _DEFAULT_CACHE_TTL
 _COURSE_FLEX_TTL = _DEFAULT_CACHE_TTL
 _COURSE_LIST_TTL = _DEFAULT_CACHE_TTL
 
+
+class _TTLCache:
+    """パラメータなし・単一値のTTLキャッシュ共通ヘルパー(2026-09-22導入)。
+
+    以前はこのファイルの大半の関数が「モジュールグローバルに値とタイムスタンプを持ち、
+    TTL内なら返す・切れていたらDBから取得してglobal再代入する」処理を手書きで
+    繰り返していた。get_*_cached()側のシグネチャ・戻り値・TTL・キャッシュ無効化条件は
+    一切変えず、その定型部分だけをここに集約する。
+
+    fetchは毎回DBから値を取得する非同期callable。validは「キャッシュ値をTTL内で
+    使い回してよいか」の判定callableで、呼び出し元ごとに2通りある:
+      - bool                    : 値が空collection(falsy)なら毎回再取得しにいく
+                                   (「空 = まだ何も取れていない」とみなす旧来の書き方)
+      - lambda v: v is not None : Noneセンチネルのみ再取得条件にする
+                                   (空collectionでも正当な取得結果として使い回す)
+    default_factoryはinvalidate()直後の初期値を作るゼロ引数callable。{}/[]/set()/Noneを
+    呼び出しごとに新しく生成するため、ミュータブルな初期値を使い回さないようcallableで受け取る。
+    """
+
+    __slots__ = ("_ttl", "_fetch", "_valid", "_default_factory", "_value", "_at")
+
+    def __init__(self, ttl, fetch, valid, default_factory):
+        self._ttl = ttl
+        self._fetch = fetch
+        self._valid = valid
+        self._default_factory = default_factory
+        self._value = default_factory()
+        self._at = 0.0
+
+    async def get(self):
+        if self._valid(self._value) and time.monotonic() - self._at < self._ttl:
+            return self._value
+        self._value = await self._fetch()
+        self._at = time.monotonic()
+        return self._value
+
+    def invalidate(self) -> None:
+        self._value = self._default_factory()
+        self._at = 0.0
+
+
 # ── classification caches ───────────────────────────────────────
-_cls_order_map_cache: dict = {}
-_cls_order_map_at: float = 0.0
-_cls_parent_map_cache: dict = {}
-_cls_parent_map_at: float = 0.0
-_cls_cache: set[str] = set()
-_cls_cache_at: float = 0.0
 
-
-async def get_cls_order_map() -> dict:
-    global _cls_order_map_cache, _cls_order_map_at
-    if _cls_order_map_cache and time.monotonic() - _cls_order_map_at < _CLS_CACHE_TTL:
-        return _cls_order_map_cache
+async def _fetch_cls_order_map() -> dict:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(DisplayOrder).where(DisplayOrder.kind == "classification").order_by(DisplayOrder.sort_order)
         )).scalars().all()
-    _cls_order_map_cache = {r.name: r.sort_order for r in rows}
-    _cls_order_map_at = time.monotonic()
-    return _cls_order_map_cache
+    return {r.name: r.sort_order for r in rows}
 
 
-async def get_cls_parent_map() -> dict[str, str]:
-    global _cls_parent_map_cache, _cls_parent_map_at
-    if _cls_parent_map_cache and time.monotonic() - _cls_parent_map_at < _CLS_CACHE_TTL:
-        return _cls_parent_map_cache
+_cls_order_map = _TTLCache(_CLS_CACHE_TTL, _fetch_cls_order_map, bool, dict)
+
+
+async def get_cls_order_map() -> dict:
+    return await _cls_order_map.get()
+
+
+async def _fetch_cls_parent_map() -> dict[str, str]:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(DisplayOrder.name, DisplayOrder.parent_group)
@@ -78,95 +111,76 @@ async def get_cls_parent_map() -> dict[str, str]:
             .where(DisplayOrder.parent_group.isnot(None))
             .where(DisplayOrder.parent_group != "")
         )).all()
-    _cls_parent_map_cache = {r.name: r.parent_group for r in rows}
-    _cls_parent_map_at = time.monotonic()
-    return _cls_parent_map_cache
+    return {r.name: r.parent_group for r in rows}
 
 
-_faculty_order_cache: list = []
-_faculty_order_at: float = 0.0
+_cls_parent_map = _TTLCache(_CLS_CACHE_TTL, _fetch_cls_parent_map, bool, dict)
 
 
-async def get_faculty_order() -> list[str]:
-    global _faculty_order_cache, _faculty_order_at
-    if _faculty_order_cache and time.monotonic() - _faculty_order_at < _CLS_CACHE_TTL:
-        return _faculty_order_cache
+async def get_cls_parent_map() -> dict[str, str]:
+    return await _cls_parent_map.get()
+
+
+async def _fetch_faculty_order() -> list[str]:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(DisplayOrder.name).where(DisplayOrder.kind == "faculty").order_by(DisplayOrder.sort_order)
         )).scalars().all()
-    _faculty_order_cache = list(rows)
-    _faculty_order_at = time.monotonic()
-    return _faculty_order_cache
+    return list(rows)
+
+
+_faculty_order = _TTLCache(_CLS_CACHE_TTL, _fetch_faculty_order, bool, list)
+
+
+async def get_faculty_order() -> list[str]:
+    return await _faculty_order.get()
 
 
 def invalidate_faculty_order_cache():
-    global _faculty_order_cache, _faculty_order_at
-    _faculty_order_cache = []
-    _faculty_order_at = 0.0
+    _faculty_order.invalidate()
+
+
+async def _fetch_cls_set() -> set[str]:
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(select(Subject.classification).distinct())).scalars().all()
+    return {r for r in rows if r}
+
+
+_cls_set = _TTLCache(_CLS_CACHE_TTL, _fetch_cls_set, bool, set)
 
 
 async def get_cls_set() -> set[str]:
-    global _cls_cache, _cls_cache_at
-    if _cls_cache and time.monotonic() - _cls_cache_at < _CLS_CACHE_TTL:
-        return _cls_cache
-    async with AsyncSessionLocal() as s:
-        rows = (await s.execute(select(Subject.classification).distinct())).scalars().all()
-    _cls_cache = {r for r in rows if r}
-    _cls_cache_at = time.monotonic()
-    return _cls_cache
+    return await _cls_set.get()
 
 
 def invalidate_cls_caches():
-    global _cls_order_map_cache, _cls_order_map_at, _cls_parent_map_cache, _cls_parent_map_at
-    global _cls_cache, _cls_cache_at
-    _cls_order_map_cache = {}
-    _cls_order_map_at = 0.0
-    _cls_parent_map_cache = {}
-    _cls_parent_map_at = 0.0
-    _cls_cache = set()
-    _cls_cache_at = 0.0
+    _cls_order_map.invalidate()
+    _cls_parent_map.invalidate()
+    _cls_set.invalidate()
 
 
 # ── course / review caches ──────────────────────────────────────
-_course_by_name: dict = {}
-_course_list_all: list = []
-_course_cache_at: float = 0.0
-
-_reviewed_cache: set[str] = set()
-_reviewed_cache_at: float = 0.0
-_reviewed_cache_init: bool = False
 
 _course_flex_cache: dict[int, tuple] = {}
 _course_list_cache: dict[str, tuple] = {}
 
-_syllabus_url_cache: dict[int, str] = {}
-_syllabus_url_cache_at: float = 0.0
 
-# (subject_id, 教員名) → 最新年度のシラバスURL。シラバスは科目名だけでなく担当教員にも
-# 依存するため subject_id 単位の _syllabus_url_cache とは別に持つ（レビュー投稿フォームの
-# 「この科目×教員のシラバスはこちら」導線用）。
-_syllabus_url_by_pair_cache: dict[tuple[int, str], str] = {}
-_syllabus_url_by_pair_cache_at: float = 0.0
-
-_all_instructors_cache: dict[int, list] = {}
-_all_instructors_cache_at: float = 0.0
-_all_review_stats_cache: dict[str, tuple] = {}
-_all_review_stats_cache_at: float = 0.0
-
-
-async def get_courses_cached():
-    global _course_by_name, _course_list_all, _course_cache_at
-    if _course_by_name and time.monotonic() - _course_cache_at < _COURSE_CACHE_TTL:
-        return _course_by_name, _course_list_all
+async def _fetch_courses() -> tuple[dict, list]:
     async with AsyncSessionLocal() as s:
         courses = (await s.execute(
             select(Subject).order_by(Subject.sort_order, Subject.name)
         )).scalars().all()
-    _course_list_all = courses
-    _course_by_name = {c.name: c for c in courses}
-    _course_cache_at = time.monotonic()
-    return _course_by_name, _course_list_all
+    return {c.name: c for c in courses}, courses
+
+
+# (courses_by_name, course_list_all) のタプルを1つの値としてキャッシュする。「空なら
+# 再取得」のtruthy判定は元コードと同じくcourses_by_name側(v[0])だけを見る（タプル自体は
+# 要素数2で常にtruthyなため、そのままboolを渡すと空collectionでも再取得されなくなる）。
+_courses = _TTLCache(_COURSE_CACHE_TTL, _fetch_courses, lambda v: bool(v[0]), lambda: ({}, []))
+
+
+async def get_courses_cached():
+    return await _courses.get()
 
 
 async def get_on_demand_subject_ids_cached() -> frozenset[int]:
@@ -180,10 +194,7 @@ async def get_on_demand_subject_ids_cached() -> frozenset[int]:
     )
 
 
-async def get_reviewed_cached() -> set[str]:
-    global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
-    if _reviewed_cache_init and time.monotonic() - _reviewed_cache_at < _COURSE_CACHE_TTL:
-        return _reviewed_cache
+async def _fetch_reviewed() -> set[str]:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(Subject.name).distinct()
@@ -191,16 +202,19 @@ async def get_reviewed_cached() -> set[str]:
             .join(Review, Review.course_section_id == CourseSection.id)
             .where(Review.status == ReviewStatus.APPROVED)
         )).scalars().all()
-    _reviewed_cache = set(rows)
-    _reviewed_cache_at = time.monotonic()
-    _reviewed_cache_init = True
-    return _reviewed_cache
+    return set(rows)
 
 
-async def get_all_instructors_cached() -> dict[int, list]:
-    global _all_instructors_cache, _all_instructors_cache_at
-    if _all_instructors_cache and time.monotonic() - _all_instructors_cache_at < _COURSE_CACHE_TTL:
-        return _all_instructors_cache
+# 空集合(=レビュー承認済み科目0件)も正当な取得結果として使い回すため、truthyではなく
+# Noneセンチネルで「未取得」を判定する(元コードの_reviewed_cache_initフラグと同義)。
+_reviewed = _TTLCache(_COURSE_CACHE_TTL, _fetch_reviewed, lambda v: v is not None, lambda: None)
+
+
+async def get_reviewed_cached() -> set[str]:
+    return await _reviewed.get()
+
+
+async def _fetch_all_instructors() -> dict[int, list]:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(CourseSection, Instructor)
@@ -210,15 +224,17 @@ async def get_all_instructors_cached() -> dict[int, list]:
     d: dict[int, list] = {}
     for cs, instr in rows:
         d.setdefault(cs.subject_id, []).append(instr)
-    _all_instructors_cache = d
-    _all_instructors_cache_at = time.monotonic()
-    return _all_instructors_cache
+    return d
 
 
-async def get_all_review_stats_cached() -> dict[str, tuple]:
-    global _all_review_stats_cache, _all_review_stats_cache_at
-    if _all_review_stats_cache and time.monotonic() - _all_review_stats_cache_at < _COURSE_CACHE_TTL:
-        return _all_review_stats_cache
+_all_instructors = _TTLCache(_COURSE_CACHE_TTL, _fetch_all_instructors, bool, dict)
+
+
+async def get_all_instructors_cached() -> dict[int, list]:
+    return await _all_instructors.get()
+
+
+async def _fetch_all_review_stats() -> dict[str, tuple]:
     async with AsyncSessionLocal() as s:
         count_rows = (await s.execute(
             select(Subject.name, func.count(Review.id).label("cnt"))
@@ -243,27 +259,17 @@ async def get_all_review_stats_cached() -> dict[str, tuple]:
         if name in ease_map:
             top_ease = sorted(ease_map[name], key=lambda r: (-r[1], EASE_ORDER.get(r[0], 99)))[0][0]
         result[name] = (cnt, top_ease)
-    _all_review_stats_cache = result
-    _all_review_stats_cache_at = time.monotonic()
-    return _all_review_stats_cache
+    return result
 
 
-_ease_extremes_cache: dict[int, tuple[str, str, str]] = {}
-_ease_extremes_cache_at: float = 0.0
+_all_review_stats = _TTLCache(_COURSE_CACHE_TTL, _fetch_all_review_stats, bool, dict)
 
 
-async def get_ease_extremes_cached() -> dict[int, tuple[str, str, str]]:
-    """楽単/鬼単ランキング(line_bot.handler._get_rakutan_ranking/_get_onitan_ranking)向け:
-    subject_id → (科目名, 最も高い楽単度, 最も低い楽単度)のマップ。
+async def get_all_review_stats_cached() -> dict[str, tuple]:
+    return await _all_review_stats.get()
 
-    修正理由(2026-09-03): 従来はランキング表示のたびにSubject×CourseSection×Reviewを
-    全件JOINしてPython側で科目ごとの最良/最悪easeを求めており、10連おみくじ(2026-08-25に
-    同種の問題を修正済み)と同じくレビュー件数が増えるほど重くなる設計だった。
-    get_all_review_stats_cachedと同じTTL・無効化契機(invalidate_review_cache)でキャッシュする。
-    """
-    global _ease_extremes_cache, _ease_extremes_cache_at
-    if _ease_extremes_cache and time.monotonic() - _ease_extremes_cache_at < _COURSE_CACHE_TTL:
-        return _ease_extremes_cache
+
+async def _fetch_ease_extremes() -> dict[int, tuple[str, str, str]]:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(Subject.id, Subject.name, Review.ease_rating)
@@ -283,29 +289,25 @@ async def get_ease_extremes_cached() -> dict[int, tuple[str, str, str]]:
         if EASE_ORDER.get(ease, -1) > EASE_ORDER.get(worst, -1):
             worst = ease
         result[sid] = (name, best, worst)
-    _ease_extremes_cache = result
-    _ease_extremes_cache_at = time.monotonic()
-    return _ease_extremes_cache
+    return result
 
 
-_full_pairs_cache: dict[tuple[int, str], int] | None = None
-_full_pairs_cache_at: float = 0.0
+_ease_extremes = _TTLCache(_COURSE_CACHE_TTL, _fetch_ease_extremes, bool, dict)
 
 
-async def get_review_remaining_cached() -> dict[tuple[int, str], int]:
-    """(subject_id, 担当教員名)の組ごとに、あと何件レビューを募集できるか
-    （MAX_REVIEWS_PER_COURSE_SECTION - 待機中+承認済み件数、0未満にはならない）を返す。
-    フォーム側で残り枠バッジ・募集締切表示に使う（実際の受付可否はsubmit時にDBで再確認する）。
-    戻り値に含まれない組は投稿0件＝上限まるごと空きとして扱う。
+async def get_ease_extremes_cached() -> dict[int, tuple[str, str, str]]:
+    """楽単/鬼単ランキング(line_bot.handler._get_rakutan_ranking/_get_onitan_ranking)向け:
+    subject_id → (科目名, 最も高い楽単度, 最も低い楽単度)のマップ。
 
-    末尾バリアントグループ（例: 線形代数1/2/3/4）に属する科目は、同じ教員が複数メンバーを
-    担当している場合、実質同じ授業のため募集枠をグループ全体で合算する（2026-09-01、
-    以前はsubject_id単位でしか見ておらず、同じ教員のバリアント違い科目それぞれに1件ずつ
-    投稿できてしまい「1科目1件まで」の上限をすり抜けられていたバグの修正）。
+    修正理由(2026-09-03): 従来はランキング表示のたびにSubject×CourseSection×Reviewを
+    全件JOINしてPython側で科目ごとの最良/最悪easeを求めており、10連おみくじ(2026-08-25に
+    同種の問題を修正済み)と同じくレビュー件数が増えるほど重くなる設計だった。
+    get_all_review_stats_cachedと同じTTL・無効化契機(invalidate_review_cache)でキャッシュする。
     """
-    global _full_pairs_cache, _full_pairs_cache_at
-    if _full_pairs_cache is not None and time.monotonic() - _full_pairs_cache_at < _COURSE_CACHE_TTL:
-        return _full_pairs_cache
+    return await _ease_extremes.get()
+
+
+async def _fetch_review_remaining() -> dict[tuple[int, str], int]:
     async with AsyncSessionLocal() as s:
         cs_rows = (await s.execute(
             select(CourseSection.subject_id, Instructor.name)
@@ -348,21 +350,31 @@ async def get_review_remaining_cached() -> dict[tuple[int, str], int]:
         gkey = group_key_by_sid.get(sid)
         total = group_totals.get((gkey, name), 0) if gkey else counts.get((sid, name), 0)
         result[(sid, name)] = max(0, MAX_REVIEWS_PER_COURSE_SECTION - total)
-    _full_pairs_cache = result
-    _full_pairs_cache_at = time.monotonic()
-    return _full_pairs_cache
+    return result
+
+
+_full_pairs = _TTLCache(_COURSE_CACHE_TTL, _fetch_review_remaining, lambda v: v is not None, lambda: None)
+
+
+async def get_review_remaining_cached() -> dict[tuple[int, str], int]:
+    """(subject_id, 担当教員名)の組ごとに、あと何件レビューを募集できるか
+    （MAX_REVIEWS_PER_COURSE_SECTION - 待機中+承認済み件数、0未満にはならない）を返す。
+    フォーム側で残り枠バッジ・募集締切表示に使う（実際の受付可否はsubmit時にDBで再確認する）。
+    戻り値に含まれない組は投稿0件＝上限まるごと空きとして扱う。
+
+    末尾バリアントグループ（例: 線形代数1/2/3/4）に属する科目は、同じ教員が複数メンバーを
+    担当している場合、実質同じ授業のため募集枠をグループ全体で合算する（2026-09-01、
+    以前はsubject_id単位でしか見ておらず、同じ教員のバリアント違い科目それぞれに1件ずつ
+    投稿できてしまい「1科目1件まで」の上限をすり抜けられていたバグの修正）。
+    """
+    return await _full_pairs.get()
 
 
 def invalidate_full_pairs_cache():
-    global _full_pairs_cache, _full_pairs_cache_at
-    _full_pairs_cache = None
-    _full_pairs_cache_at = 0.0
+    _full_pairs.invalidate()
 
 
-async def get_syllabus_urls_cached() -> dict[int, str]:
-    global _syllabus_url_cache, _syllabus_url_cache_at
-    if _syllabus_url_cache and time.monotonic() - _syllabus_url_cache_at < _COURSE_CACHE_TTL:
-        return _syllabus_url_cache
+async def _fetch_syllabus_urls() -> dict[int, str]:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(CourseSection.subject_id, Syllabus.timetable_code, Syllabus.year, Subject.faculty, Subject.department)
@@ -371,19 +383,17 @@ async def get_syllabus_urls_cached() -> dict[int, str]:
             .where(Syllabus.timetable_code.isnot(None))
         )).all()
     # 科目につき複数年度のsyllabiがありうるため、最新年度のURLを採用する（共通ヘルパー）
-    _syllabus_url_cache = latest_syllabus_url_map(rows)
-    _syllabus_url_cache_at = time.monotonic()
-    return _syllabus_url_cache
+    return latest_syllabus_url_map(rows)
 
 
-async def get_syllabus_urls_by_pair_cached() -> dict[tuple[int, str], str]:
-    """(subject_id, 教員名) → 最新年度のシラバスURL。
-    以前は routers/liff_api.py の /api/preload 内に同種のクエリが直書きされており、
-    faculty別キャッシュのミスごとに syllabi 全件スキャンが走り prewarm対象にもなっていなかった
-    （2026-09-08にここへ集約）。"""
-    global _syllabus_url_by_pair_cache, _syllabus_url_by_pair_cache_at
-    if _syllabus_url_by_pair_cache and time.monotonic() - _syllabus_url_by_pair_cache_at < _COURSE_CACHE_TTL:
-        return _syllabus_url_by_pair_cache
+_syllabus_urls = _TTLCache(_COURSE_CACHE_TTL, _fetch_syllabus_urls, bool, dict)
+
+
+async def get_syllabus_urls_cached() -> dict[int, str]:
+    return await _syllabus_urls.get()
+
+
+async def _fetch_syllabus_urls_by_pair() -> dict[tuple[int, str], str]:
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
             select(CourseSection.subject_id, Instructor.name, Syllabus.timetable_code,
@@ -394,75 +404,56 @@ async def get_syllabus_urls_by_pair_cached() -> dict[tuple[int, str], str]:
             .where(Syllabus.timetable_code.isnot(None))
         )).all()
     # (subject_id, 教員名) をキーに整形してから共通ヘルパーで最新年度URLを選ぶ
-    _syllabus_url_by_pair_cache = latest_syllabus_url_map(
+    return latest_syllabus_url_map(
         ((sid, iname), code, year, faculty, department)
         for sid, iname, code, year, faculty, department in rows
     )
-    _syllabus_url_by_pair_cache_at = time.monotonic()
-    return _syllabus_url_by_pair_cache
+
+
+_syllabus_urls_by_pair = _TTLCache(_COURSE_CACHE_TTL, _fetch_syllabus_urls_by_pair, bool, dict)
+
+
+async def get_syllabus_urls_by_pair_cached() -> dict[tuple[int, str], str]:
+    """(subject_id, 教員名) → 最新年度のシラバスURL。
+    以前は routers/liff_api.py の /api/preload 内に同種のクエリが直書きされており、
+    faculty別キャッシュのミスごとに syllabi 全件スキャンが走り prewarm対象にもなっていなかった
+    （2026-09-08にここへ集約）。"""
+    return await _syllabus_urls_by_pair.get()
 
 
 def invalidate_courses_cache():
-    global _course_by_name, _course_list_all, _course_cache_at
-    global _all_instructors_cache, _all_instructors_cache_at
     global _course_flex_cache, _course_list_cache
-    global _syllabus_url_cache, _syllabus_url_cache_at
-    global _syllabus_url_by_pair_cache, _syllabus_url_by_pair_cache_at
     global _preload_cache
-    global _variant_map_cache, _variant_map_cache_at
-    global _variant_full_label_cache, _variant_full_label_cache_at
-    global _variant_member_suffix_cache, _variant_member_suffix_cache_at
-    global _senmon_variant_group_cache, _senmon_variant_group_cache_at
-    global _letter_view_group_cache, _letter_view_group_cache_at
-    global _search_index_cache, _search_index_cache_at
-    _course_by_name = {}
-    _course_list_all = []
-    _course_cache_at = 0.0
-    _all_instructors_cache = {}
-    _all_instructors_cache_at = 0.0
+    _courses.invalidate()
+    _all_instructors.invalidate()
     _course_flex_cache = {}
     _course_list_cache = {}
     # 修正理由: シラバスURL(course_sections.syllabus_url)もcourses関連の派生データのため、
     # ここで一緒に無効化しないと管理画面での追加・変更が最大TTL(1時間)反映されなかった。
-    _syllabus_url_cache = {}
-    _syllabus_url_cache_at = 0.0
-    _syllabus_url_by_pair_cache = {}
-    _syllabus_url_by_pair_cache_at = 0.0
+    _syllabus_urls.invalidate()
+    _syllabus_urls_by_pair.invalidate()
     _preload_cache = {}
     # 語尾バリアントグループ(compute_variant_groups)も科目一覧に依存する派生データのため、
     # ここで一緒に無効化する
-    _variant_map_cache = None
-    _variant_map_cache_at = 0.0
-    _variant_full_label_cache = None
-    _variant_full_label_cache_at = 0.0
-    _variant_member_suffix_cache = None
-    _variant_member_suffix_cache_at = 0.0
+    _variant_map.invalidate()
+    _variant_full_label.invalidate()
+    _variant_member_suffix.invalidate()
     # 専門科目の管理画面互換バリアントグループ(compute_variant_display_groups)もcourses依存
-    _senmon_variant_group_cache = None
-    _senmon_variant_group_cache_at = 0.0
+    _senmon_variant_group.invalidate()
     # 教養科目A/Bのレビュー閲覧統合グループ(compute_letter_view_groups)もcourses依存の
     # 派生データのため一緒に無効化する
-    _letter_view_group_cache = None
-    _letter_view_group_cache_at = 0.0
+    _letter_view_group.invalidate()
     # 自由入力検索インデックスもcourses/variant_mapの派生データのため一緒に無効化する
-    _search_index_cache = None
-    _search_index_cache_at = 0.0
+    _search_index.invalidate()
 
 
 def invalidate_review_cache():
-    global _reviewed_cache, _reviewed_cache_at, _reviewed_cache_init
-    global _all_review_stats_cache, _all_review_stats_cache_at
     global _course_flex_cache, _course_list_cache
-    global _ease_extremes_cache, _ease_extremes_cache_at
-    _reviewed_cache = set()
-    _reviewed_cache_at = 0.0
-    _reviewed_cache_init = False
-    _all_review_stats_cache = {}
-    _all_review_stats_cache_at = 0.0
+    _reviewed.invalidate()
+    _all_review_stats.invalidate()
     _course_flex_cache = {}
     _course_list_cache = {}
-    _ease_extremes_cache = {}
-    _ease_extremes_cache_at = 0.0
+    _ease_extremes.invalidate()
     invalidate_full_pairs_cache()
 
 
@@ -538,8 +529,21 @@ def set_preload_cache(data: dict, faculty: str = "") -> None:
     _preload_cache[faculty or ""] = (data, time.monotonic())
 
 
-_variant_map_cache: dict[str, str] | None = None
-_variant_map_cache_at: float = 0.0
+async def _fetch_variant_map() -> dict[str, str]:
+    _, all_courses = await get_courses_cached()
+    _letter_split_excluded_names = frozenset(
+        c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
+    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
+        c.name for c in all_courses if c.variant_merge_excluded)
+    return compute_variant_groups(
+        [(c.name, c.faculty or "", c.department or "") for c in all_courses
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
+        letter_split_excluded_names=_letter_split_excluded_names,
+        num_excluded_names=_num_excluded_names,
+    )
+
+
+_variant_map = _TTLCache(_COURSE_CACHE_TTL, _fetch_variant_map, lambda v: v is not None, lambda: None)
 
 
 async def get_variant_map_cached() -> dict[str, str]:
@@ -549,26 +553,25 @@ async def get_variant_map_cached() -> dict[str, str]:
     リクエストの都度呼ばれるが、計算自体は全科目（数千件規模）を走査する正規表現マッチのため、
     科目一覧と同じTTLでキャッシュし毎リクエストの再計算を避ける。
     """
-    global _variant_map_cache, _variant_map_cache_at
-    if _variant_map_cache is not None and time.monotonic() - _variant_map_cache_at < _COURSE_CACHE_TTL:
-        return _variant_map_cache
+    return await _variant_map.get()
+
+
+async def _fetch_variant_member_suffix_map() -> dict[str, str]:
     _, all_courses = await get_courses_cached()
     _letter_split_excluded_names = frozenset(
         c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
     _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
         c.name for c in all_courses if c.variant_merge_excluded)
-    _variant_map_cache = compute_variant_groups(
+    return compute_variant_member_suffix_map(
         [(c.name, c.faculty or "", c.department or "") for c in all_courses
          if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
         letter_split_excluded_names=_letter_split_excluded_names,
         num_excluded_names=_num_excluded_names,
     )
-    _variant_map_cache_at = time.monotonic()
-    return _variant_map_cache
 
 
-_variant_member_suffix_cache: dict[str, str] | None = None
-_variant_member_suffix_cache_at: float = 0.0
+_variant_member_suffix = _TTLCache(
+    _COURSE_CACHE_TTL, _fetch_variant_member_suffix_map, lambda v: v is not None, lambda: None)
 
 
 async def get_variant_member_suffix_map_cached() -> dict[str, str]:
@@ -578,22 +581,7 @@ async def get_variant_member_suffix_map_cached() -> dict[str, str]:
     バッジ表示用に、グループ内メンバーそれぞれの接尾辞（ラベル全体ではなく短い接尾辞）を
     得るために使う。get_variant_map_cached()と対象・除外条件は同一。
     """
-    global _variant_member_suffix_cache, _variant_member_suffix_cache_at
-    if _variant_member_suffix_cache is not None and time.monotonic() - _variant_member_suffix_cache_at < _COURSE_CACHE_TTL:
-        return _variant_member_suffix_cache
-    _, all_courses = await get_courses_cached()
-    _letter_split_excluded_names = frozenset(
-        c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
-    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
-        c.name for c in all_courses if c.variant_merge_excluded)
-    _variant_member_suffix_cache = compute_variant_member_suffix_map(
-        [(c.name, c.faculty or "", c.department or "") for c in all_courses
-         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
-        letter_split_excluded_names=_letter_split_excluded_names,
-        num_excluded_names=_num_excluded_names,
-    )
-    _variant_member_suffix_cache_at = time.monotonic()
-    return _variant_member_suffix_cache
+    return await _variant_member_suffix.get()
 
 
 async def get_variant_group_subject_ids(subject: Subject) -> list[int]:
@@ -660,8 +648,35 @@ def _longest_common_prefix(strings: list[str]) -> str:
     return lo
 
 
-_senmon_variant_group_cache: dict[int, tuple[str, str, list[int]]] | None = None
-_senmon_variant_group_cache_at: float = 0.0
+async def _fetch_senmon_variant_group() -> dict[int, tuple[str, str, list[int]]]:
+    _, all_courses = await get_courses_cached()
+    _excluded_names = frozenset(c.name for c in all_courses if c.variant_merge_excluded)
+    label_by_name = compute_variant_display_groups(
+        [(c.name, c.classification or "") for c in all_courses
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
+        extra_excluded_names=_excluded_names,
+    )
+    members_by_label: dict[tuple[str, str], list] = defaultdict(list)
+    for c in all_courses:
+        label = label_by_name.get((c.name, c.classification or ""))
+        if label:
+            members_by_label[(label, c.classification or "")].append(c)
+
+    result: dict[int, tuple[str, str, list[int]]] = {}
+    for (label, _cls), members in members_by_label.items():
+        if len(members) < 2:
+            continue
+        if not any((m.category or "") == REVIEW_SUBMISSION_SENMON_CATEGORY for m in members):
+            continue
+        ids = sorted(m.id for m in members)
+        base = _longest_common_prefix([m.name for m in members]) or label
+        for m in members:
+            result[m.id] = (base, label, ids)
+    return result
+
+
+_senmon_variant_group = _TTLCache(
+    _COURSE_CACHE_TTL, _fetch_senmon_variant_group, lambda v: v is not None, lambda: None)
 
 
 async def get_senmon_variant_group_cached() -> dict[int, tuple[str, str, list[int]]]:
@@ -686,40 +701,23 @@ async def get_senmon_variant_group_cached() -> dict[int, tuple[str, str, list[in
     routers/admin/courses.py と同一の入力（全科目・CLASSIFICATION_MERGE_EXCLUDED 除外・
     variant_merge_excluded の動的除外）を渡し、結果を (label, classification) 単位で束ねてから
     専門科目メンバーを含むグループだけを残す。"""
-    global _senmon_variant_group_cache, _senmon_variant_group_cache_at
-    if (_senmon_variant_group_cache is not None
-            and time.monotonic() - _senmon_variant_group_cache_at < _COURSE_CACHE_TTL):
-        return _senmon_variant_group_cache
+    return await _senmon_variant_group.get()
+
+
+async def _fetch_letter_view_group() -> dict[str, tuple[str, list[str], dict[str, str]]]:
     _, all_courses = await get_courses_cached()
-    _excluded_names = frozenset(c.name for c in all_courses if c.variant_merge_excluded)
-    label_by_name = compute_variant_display_groups(
-        [(c.name, c.classification or "") for c in all_courses
-         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
-        extra_excluded_names=_excluded_names,
-    )
-    members_by_label: dict[tuple[str, str], list] = defaultdict(list)
+    by_cls: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
     for c in all_courses:
-        label = label_by_name.get((c.name, c.classification or ""))
-        if label:
-            members_by_label[(label, c.classification or "")].append(c)
-
-    result: dict[int, tuple[str, str, list[int]]] = {}
-    for (label, _cls), members in members_by_label.items():
-        if len(members) < 2:
-            continue
-        if not any((m.category or "") == REVIEW_SUBMISSION_SENMON_CATEGORY for m in members):
-            continue
-        ids = sorted(m.id for m in members)
-        base = _longest_common_prefix([m.name for m in members]) or label
-        for m in members:
-            result[m.id] = (base, label, ids)
-    _senmon_variant_group_cache = result
-    _senmon_variant_group_cache_at = time.monotonic()
-    return _senmon_variant_group_cache
+        if (c.classification or "") in LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS:
+            by_cls[c.classification].append((c.name, c.faculty or "", c.department or ""))
+    result: dict[str, tuple[str, list[str], dict[str, str]]] = {}
+    for names_fd in by_cls.values():
+        result.update(compute_letter_view_groups(names_fd))
+    return result
 
 
-_letter_view_group_cache: dict[str, tuple[str, list[str], dict[str, str]]] | None = None
-_letter_view_group_cache_at: float = 0.0
+_letter_view_group = _TTLCache(
+    _COURSE_CACHE_TTL, _fetch_letter_view_group, lambda v: v is not None, lambda: None)
 
 
 async def get_letter_view_group_cached() -> dict[str, tuple[str, list[str], dict[str, str]]]:
@@ -731,24 +729,25 @@ async def get_letter_view_group_cached() -> dict[str, tuple[str, list[str], dict
     routers/liff_api.py `_group_subject_ids()`がレビュー"閲覧"のみをA/B全体でまとめるために使う
     （core.subject_variants.LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS docstring参照）。
     """
-    global _letter_view_group_cache, _letter_view_group_cache_at
-    if _letter_view_group_cache is not None and time.monotonic() - _letter_view_group_cache_at < _COURSE_CACHE_TTL:
-        return _letter_view_group_cache
+    return await _letter_view_group.get()
+
+
+async def _fetch_variant_full_label_map() -> dict[str, str]:
     _, all_courses = await get_courses_cached()
-    by_cls: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
-    for c in all_courses:
-        if (c.classification or "") in LETTER_ONLY_VIEW_MERGE_CLASSIFICATIONS:
-            by_cls[c.classification].append((c.name, c.faculty or "", c.department or ""))
-    result: dict[str, tuple[str, list[str], dict[str, str]]] = {}
-    for names_fd in by_cls.values():
-        result.update(compute_letter_view_groups(names_fd))
-    _letter_view_group_cache = result
-    _letter_view_group_cache_at = time.monotonic()
-    return _letter_view_group_cache
+    _letter_split_excluded_names = frozenset(
+        c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
+    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
+        c.name for c in all_courses if c.variant_merge_excluded)
+    return compute_variant_full_labels(
+        [(c.name, c.faculty or "", c.department or "") for c in all_courses
+         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
+        letter_split_excluded_names=_letter_split_excluded_names,
+        num_excluded_names=_num_excluded_names,
+    )
 
 
-_variant_full_label_cache: dict[str, str] | None = None
-_variant_full_label_cache_at: float = 0.0
+_variant_full_label = _TTLCache(
+    _COURSE_CACHE_TTL, _fetch_variant_full_label_map, lambda v: v is not None, lambda: None)
 
 
 async def get_variant_full_label_map_cached() -> dict[str, str]:
@@ -758,41 +757,10 @@ async def get_variant_full_label_map_cached() -> dict[str, str]:
     （力学基礎1/力学基礎2等）を「力学基礎(1/2)」のようにまとめて表示するために使う。
     get_variant_map_cached()と同様、全科目走査のコストを避けるためTTLキャッシュする。
     """
-    global _variant_full_label_cache, _variant_full_label_cache_at
-    if _variant_full_label_cache is not None and time.monotonic() - _variant_full_label_cache_at < _COURSE_CACHE_TTL:
-        return _variant_full_label_cache
-    _, all_courses = await get_courses_cached()
-    _letter_split_excluded_names = frozenset(
-        c.name for c in all_courses if (c.classification or "") in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS)
-    _num_excluded_names = NUM_MERGE_EXCLUDED_NAMES | frozenset(
-        c.name for c in all_courses if c.variant_merge_excluded)
-    _variant_full_label_cache = compute_variant_full_labels(
-        [(c.name, c.faculty or "", c.department or "") for c in all_courses
-         if (c.classification or "") not in CLASSIFICATION_MERGE_EXCLUDED],
-        letter_split_excluded_names=_letter_split_excluded_names,
-        num_excluded_names=_num_excluded_names,
-    )
-    _variant_full_label_cache_at = time.monotonic()
-    return _variant_full_label_cache
+    return await _variant_full_label.get()
 
 
-_search_index_cache: list[dict] | None = None
-_search_index_cache_at: float = 0.0
-
-
-async def get_search_index_cached() -> list[dict]:
-    """LINE bot自由入力検索(line_bot.handler._handle_course_search)向けの検索行インデックス。
-
-    バリアントグループ化（同一グループの代表科目への集約）・同名科目の学部名による表示名の
-    曖昧さ解消は検索語に依存しない前処理だが、従来は自由入力メッセージが来るたびに
-    course_sections全件（5000件超）に対しこの前処理を毎回再計算しており、1メッセージあたり
-    数十msの同期CPU処理としてイベントループを塞いでいた（2026-09-03、レイテンシ改善で導入）。
-    get_variant_map_cached()と同じ理由で、科目一覧と同じTTLでキャッシュする。
-    """
-    global _search_index_cache, _search_index_cache_at
-    if _search_index_cache is not None and time.monotonic() - _search_index_cache_at < _COURSE_CACHE_TTL:
-        return _search_index_cache
-
+async def _fetch_search_index() -> list[dict]:
     _, all_courses = await get_courses_cached()
     variant_map = await get_variant_map_cached()
 
@@ -842,9 +810,22 @@ async def get_search_index_cached() -> list[dict]:
             if fac_label:
                 r["display"] = f"{r['display']}（{fac_label}）"
 
-    _search_index_cache = search_rows
-    _search_index_cache_at = time.monotonic()
-    return _search_index_cache
+    return search_rows
+
+
+_search_index = _TTLCache(_COURSE_CACHE_TTL, _fetch_search_index, lambda v: v is not None, lambda: None)
+
+
+async def get_search_index_cached() -> list[dict]:
+    """LINE bot自由入力検索(line_bot.handler._handle_course_search)向けの検索行インデックス。
+
+    バリアントグループ化（同一グループの代表科目への集約）・同名科目の学部名による表示名の
+    曖昧さ解消は検索語に依存しない前処理だが、従来は自由入力メッセージが来るたびに
+    course_sections全件（5000件超）に対しこの前処理を毎回再計算しており、1メッセージあたり
+    数十msの同期CPU処理としてイベントループを塞いでいた（2026-09-03、レイテンシ改善で導入）。
+    get_variant_map_cached()と同じ理由で、科目一覧と同じTTLでキャッシュする。
+    """
+    return await _search_index.get()
 
 
 # ── admin session revocation（core/security.pyのcheck_admin用） ──────────────
