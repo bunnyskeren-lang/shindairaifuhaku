@@ -505,6 +505,30 @@ async function main() {
     console.warn("LIFF getProfile/getIDToken failed", e);
   }
 
+  // 科目詳細を「開いた時刻」はサーバー側の /api/course/{id} 呼び出し時点で
+  // メッセージログに記録済み（[科目閲覧]）。ここでは「閉じた時刻」と滞在時間を
+  // ページ離脱時にビーコン送信して補う。visibilitychangeのhidden化を主軸にし、
+  // （タブ切替・アプリ非アクティブ化でも確実に発火する）pagehideを保険として併用。
+  // 1回送ったら以後は送らない（タブ切替を繰り返しても多重送信しない）
+  const openedAt = Date.now();
+  let closeLogSent = false;
+  function sendCourseCloseLog() {
+    if (closeLogSent || !userId) return;
+    closeLogSent = true;
+    const durationSec = Math.round((Date.now() - openedAt) / 1000);
+    try {
+      const payload = JSON.stringify({ user_id: userId, duration_sec: durationSec });
+      navigator.sendBeacon(
+        `${BASE_URL}/api/course/${courseId}/close`,
+        new Blob([payload], { type: "application/json" })
+      );
+    } catch(e) {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") sendCourseCloseLog();
+  });
+  window.addEventListener("pagehide", sendCourseCloseLog);
+
   const coursePromise = fetch(`${BASE_URL}/api/course/${courseId}?id_token=${encodeURIComponent(idToken)}`)
     .then(async res => {
       if (!res.ok) {

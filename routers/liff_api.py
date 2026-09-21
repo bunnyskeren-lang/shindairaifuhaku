@@ -11,6 +11,7 @@ from core import cache, moderation
 from core.activity_log import save_error_log, save_log_bg
 from core.config import (
     BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, KYOTSU_SENMON_KISO_FACULTY,
+    LINE_USER_ID_RE,
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_VIEW_CATEGORY,
@@ -44,6 +45,9 @@ _SEARCH_RESULT_LIMIT = 50
 _register_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
 # レビュー閲覧権の解除（チケット消費）はDB書き込みを伴うため、他の書き込み系と同水準に制限する
 _unlock_rate_limit = rate_limiter(max_requests=10, window_seconds=60)
+# 科目詳細LIFFを閉じた際のビーコン送信。navigator.sendBeaconはページ離脱時に発火するため
+# 通常は1回だが、タブ切替の繰り返し等での連打に備え緩めの上限を設ける
+_close_rate_limit = rate_limiter(max_requests=20, window_seconds=60)
 
 
 def _normalize_form_q(s: str) -> str:
@@ -746,3 +750,34 @@ async def unlock_course(course_id: int, request: Request, _rl=Depends(_unlock_ra
         cache.invalidate_linebot_user_state(uid)
         asyncio.create_task(save_log_bg(uid, "in", f"[チケット消費] {subject.name}"))
         return {"ok": True, "already": False, "unlock_credits": new_balance}
+
+
+@router.post("/api/course/{course_id}/close")
+async def course_close_beacon(course_id: int, request: Request, _rl=Depends(_close_rate_limit)):
+    """科目詳細LIFFページを閉じた（バックグラウンド化・タブ離脱）タイミングのテレメトリ。
+    templates/liff/course.html が navigator.sendBeacon で送信する。
+
+    ビーコン送信はページ離脱と同時に発火するため、その時点でID tokenを再検証する
+    （liff.getIDToken()を呼ぶ）猶予が無く、また長時間閲覧後は開いた時点で取得した
+    id_tokenが既に期限切れのことも多い。そのためここでは開いた時点で確定済みの
+    LINE user_idをクライアントからそのまま受け取る（core.activity_log.liff_auth_event
+    と同様、ログ用の参考値としての利用でなりすまし耐性は求めない）。
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False}
+    uid = str((body or {}).get("user_id") or "")
+    if not LINE_USER_ID_RE.match(uid):
+        return {"ok": False}
+    try:
+        duration_sec = max(0, int((body or {}).get("duration_sec") or 0))
+    except (TypeError, ValueError):
+        duration_sec = 0
+
+    async with AsyncSessionLocal() as session:
+        subject = await session.get(Subject, course_id)
+    name = subject.name if subject else f"id={course_id}"
+    minutes, seconds = divmod(duration_sec, 60)
+    asyncio.create_task(save_log_bg(uid, "in", f"[科目詳細を閉じる] {name}（滞在{minutes}分{seconds}秒）"))
+    return {"ok": True}
