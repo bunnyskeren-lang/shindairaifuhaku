@@ -1,11 +1,12 @@
 from datetime import datetime, UTC
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 
 from core import cache
-from core.config import credit_tickets_granted_clause, review_approval_unlock_credits
+from core.config import credit_tickets_granted_clause, escape_like, review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -17,7 +18,15 @@ router = APIRouter()
 
 
 @router.get("/admin/users", response_class=HTMLResponse)
-async def admin_users(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
+async def admin_users(
+    request: Request,
+    _: str = Depends(check_admin),
+    page: int = Query(default=1, ge=1),
+    q: str = Query(default=""),
+    view: str = Query(default=""),
+):
+    q = q.strip()
+    is_banned_view = view == "banned"
     per_page = 50
     async with AsyncSessionLocal() as session:
         # 修正理由: 以前はmessage_logs（LINEからの受信ログ）を主語にしてuser_profilesを
@@ -32,7 +41,22 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
             .group_by(MessageLog.user_id)
             .subquery()
         )
-        total = (await session.execute(select(func.count(UserProfile.line_user_id)))).scalar_one()
+        filters = []
+        if q:
+            q_safe = escape_like(q)
+            filters.append(or_(
+                UserProfile.name.ilike(f"%{q_safe}%", escape="\\"),
+                UserProfile.student_id.ilike(f"%{q_safe}%", escape="\\"),
+            ))
+        if is_banned_view:
+            filters.append(UserProfile.banned_at.isnot(None))
+
+        total = (await session.execute(
+            select(func.count(UserProfile.line_user_id)).where(*filters)
+        )).scalar_one()
+        banned_total = (await session.execute(
+            select(func.count(UserProfile.line_user_id)).where(UserProfile.banned_at.isnot(None))
+        )).scalar_one()
         users = (await session.execute(
             select(
                 UserProfile.line_user_id.label("user_id"),
@@ -49,6 +73,7 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
                 UserProfile.ban_reason,
             )
             .outerjoin(last_seen_subq, last_seen_subq.c.user_id == UserProfile.line_user_id)
+            .where(*filters)
             .order_by(UserProfile.created_at.desc())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()
@@ -138,6 +163,13 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
 
     total_pages = max(1, (total + per_page - 1) // per_page)
 
+    url_params = []
+    if q:
+        url_params.append(f"q={quote(q)}")
+    if is_banned_view:
+        url_params.append("view=banned")
+    url_prefix = "/admin/users?" + "&".join([*url_params, "page="]) if url_params else "/admin/users?page="
+
     return templates.TemplateResponse("admin/users.html", {
         "request": request,
         "nav_counts": await cache.get_admin_nav_counts_cached(),
@@ -147,7 +179,10 @@ async def admin_users(request: Request, _: str = Depends(check_admin), page: int
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "url_prefix": "/admin/users?page=",
+        "q": q,
+        "is_banned_view": is_banned_view,
+        "banned_total": banned_total,
+        "url_prefix": url_prefix,
     })
 
 
