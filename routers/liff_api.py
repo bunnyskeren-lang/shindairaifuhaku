@@ -744,4 +744,5 @@ async def unlock_course(course_id: int, request: Request, _rl=Depends(_unlock_ra
         # LINE bot 側の科目一覧が「解除済み」バッジを即時反映できるよう、
         # ユーザー状態スナップショット（banned/登録状態/解除済み科目をまとめてキャッシュ）を落とす
         cache.invalidate_linebot_user_state(uid)
+        asyncio.create_task(save_log_bg(uid, "in", f"[チケット消費] {subject.name}"))
         return {"ok": True, "already": False, "unlock_credits": new_balance}
