@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import secrets as py_secrets
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from fastapi import HTTPException, Request
 
@@ -13,7 +13,7 @@ _HMAC_KEY = hashlib.sha256((CHANNEL_SECRET + ADMIN_PASSWORD).encode()).digest()
 
 
 def make_admin_token() -> str:
-    ts = int(datetime.now(timezone.utc).timestamp())
+    ts = int(datetime.now(UTC).timestamp())
     nonce = py_secrets.token_hex(8)
     sig = hmac.new(_HMAC_KEY, f"admin:{ts}:{nonce}".encode(), hashlib.sha256).hexdigest()
     return f"{ts}:{nonce}:{sig}"
@@ -26,7 +26,7 @@ def verify_admin_token(token: str) -> bool:
             return False
         ts_str, nonce, sig = parts
         ts = int(ts_str)
-        if datetime.now(timezone.utc).timestamp() - ts > ADMIN_TOKEN_TTL:
+        if datetime.now(UTC).timestamp() - ts > ADMIN_TOKEN_TTL:
             return False
         expected = hmac.new(_HMAC_KEY, f"admin:{ts_str}:{nonce}".encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(sig, expected)

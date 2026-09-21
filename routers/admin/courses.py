@@ -547,7 +547,7 @@ async def admin_courses_panel_reviews(ids: str = Query(...), _: str = Depends(ch
                     Review.created_at.desc(),
                 )
             )).all()
-        for rev, subj_id, subj_name in rows:
+        for rev, _subj_id, subj_name in rows:
             reviews.append(SimpleNamespace(
                 id=rev.id, course_name=subj_name, comment=rev.content, content=rev.content,
                 rating=rev.rating, ease_rating=rev.ease_rating, grading_method=rev.grading_method,

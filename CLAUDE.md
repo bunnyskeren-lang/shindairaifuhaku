@@ -301,7 +301,8 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── subject_variants.py             ← 科目名の末尾バリアント統合ロジック（レビュー投稿フォーム・LINE bot・管理画面共通）
 │   ├── grading_method.py                ← Review.grading_method（成績評価方法）の構造化パース
 │   ├── undo.py                           ← 管理画面「元に戻す」用の直前削除内容の一時保持（プロセスメモリ、TTL10分）
-│   └── db_ssl.py                          ← Supabase(Supavisor pooler)向けSSLコンテキスト生成
+│   ├── db_ssl.py                          ← Supabase(Supavisor pooler)向けSSLコンテキスト生成
+│   └── background_tasks.py                 ← 「発火して忘れる」バックグラウンドタスクの共通ヘルパー`fire_and_forget()`（asyncio.create_task()の戻り値未保持によるタスクGC消失を防ぐ）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
 │   └── handler.py             ← handle_message・handle_course_list・process_events（Webhookイベント処理）
@@ -440,6 +441,11 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 
 - 同一 `AsyncSession` では `asyncio.gather` による並行クエリ禁止（InterfaceError）
 - 並行したい場合は各コルーチン内で `async with AsyncSessionLocal() as s:` を個別に開く
+
+**バックグラウンドタスクのルール**
+
+- レスポンスを待たせずログ保存・Push通知等を投げる「発火して忘れる」タスクは、素の `asyncio.create_task()` ではなく必ず `core.background_tasks.fire_and_forget()` を使うこと（戻り値を誰も保持しないとタスクがGCされ実行途中で消えるリスクがあるため、ruffの`RUF006`ルールでも検出される。2026-09-22導入）
+- `main.py`の`lifespan`で管理するループタスク（`ping_task`/`backup_task`等）のように、明示的に変数へ保持してcancel/awaitする場合はこの限りではない
 
 **DB自動バックアップ（`core/backup.py`）**
 

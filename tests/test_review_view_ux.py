@@ -4,7 +4,7 @@
 閲覧者本人の投稿を示すis_mineフラグ、並び替え(新しい順=受講年度→投稿日時)用の
 created_at返却が正しいことを検証する。
 """
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 from sqlalchemy import select
@@ -108,7 +108,7 @@ async def test_course_api_reviews_include_created_at_for_client_side_sort(http_c
             course_section_id=cs_id, student_id="7777777X",
             status=ReviewStatus.APPROVED, rating=4, ease_rating="B",
             selected_instructor="鈴木一郎", academic_year=2025,
-            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
         ))
         await session.commit()
 

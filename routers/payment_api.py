@@ -1,4 +1,3 @@
-import asyncio
 import re as _re
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -7,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from core.activity_log import save_error_log
+from core.background_tasks import fire_and_forget
 from core.config import BAN_MESSAGE_TEXT, IS_DEV, STUDENT_ID_RE, normalize_student_id
 from core.push import send_payment_request_push_notification
 from core.rate_limit import rate_limiter
@@ -215,6 +215,6 @@ async def payment_apply_submit(
         except Exception as exc:
             await save_error_log(exc, action="payment_push_notification")
 
-    asyncio.create_task(_notify())
+    fire_and_forget(_notify())
 
     return _done_redirect(amount_val)

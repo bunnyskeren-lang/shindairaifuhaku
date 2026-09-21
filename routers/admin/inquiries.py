@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -53,7 +53,7 @@ async def admin_inquiry_handle(inquiry_id: int, _: str = Depends(check_admin)):
         inquiry = await session.get(Inquiry, inquiry_id)
         if inquiry and inquiry.status == InquiryStatus.PENDING:
             inquiry.status = InquiryStatus.HANDLED
-            inquiry.handled_at = datetime.now(timezone.utc)
+            inquiry.handled_at = datetime.now(UTC)
             await session.commit()
     return RedirectResponse("/admin/inquiries", status_code=303)
 

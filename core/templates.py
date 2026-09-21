@@ -8,14 +8,14 @@ from core.grading_method import (
     format_grading_method_summary,
     parse_grading_method,
 )
+from datetime import UTC
 
 
 def _to_jst(dt) -> str:
     if dt is None:
         return ""
     if dt.tzinfo is None:
-        from datetime import timezone
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.astimezone(JST).strftime("%m/%d %H:%M")
 
 

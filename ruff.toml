@@ -1,9 +1,19 @@
 target-version = "py312"
 
 [lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "UP", "B", "SIM", "RUF", "ASYNC"]
+ignore = [
+    # FastAPIの`Depends(...)`は引数デフォルトで呼び出すのが公式パターンのため対象外
+    "B008",
+    # 日本語の全角括弧・記号を「曖昧な文字」として大量検出してしまうため対象外
+    # （このプロジェクトのコメント・docstring・文字列は日本語前提）
+    "RUF001", "RUF002", "RUF003",
+]
 
 [lint.per-file-ignores]
 # 運用スクリプトはencoding設定やargparse処理を先に実行してから
 # importする構成が意図的なため、E402(import順)は対象外とする
-"programing files/*.py" = ["E402"]
+# 同期的なCLIスクリプトのため、asyncブロッキング呼び出し検出(ASYNC)も対象外とする
+# RUF005: 静的な科目名リストを`[...] + _ab([...])`の形で可読性優先で並べている
+# 箇所があり、`[*a, *b]`化しても実益がないため対象外とする
+"programing files/*.py" = ["E402", "ASYNC", "RUF005"]

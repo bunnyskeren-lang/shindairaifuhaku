@@ -1,5 +1,5 @@
 import secrets as py_secrets
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -42,7 +42,7 @@ async def admin_login(
 async def admin_logout():
     # Cookie削除だけでは署名的に有効な旧トークンがコピーされていた場合TTL(4時間)いっぱい
     # 使えてしまうため、サーバー側でもこの時刻以前に発行された全トークンを一括失効させる
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     async with AsyncSessionLocal() as session:
         row = await session.get(AdminSession, 1)
         if row:

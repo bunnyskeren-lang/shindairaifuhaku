@@ -1,6 +1,5 @@
-import asyncio
 import re as _re
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -9,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, moderation
 from core.activity_log import save_error_log, save_log_bg
+from core.background_tasks import fire_and_forget
 from core.config import (
     BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, KYOTSU_SENMON_KISO_FACULTY,
     LINE_USER_ID_RE,
@@ -439,7 +439,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             # 1回だけ呼ばれる。リッチメニューやFlexのボタンからLIFFを直接開く導線は
             # postback/messageを伴わないため、従来この操作はログに一切現れなかった。
             if uid:
-                asyncio.create_task(save_log_bg(uid, "in", f"[科目閲覧] {subject.name}"))
+                fire_and_forget(save_log_bg(uid, "in", f"[科目閲覧] {subject.name}"))
             # 語尾バリアントグループに属する科目は、レビュー閲覧も1つの科目として扱い、
             # グループ内の全科目のレビュー・評価をまとめて表示する（レビュー投稿フォームの
             # 科目検索での統合表示と対にするため）
@@ -466,7 +466,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             cs_id_to_letter: dict[int, str] = {}
             if _letter_entry:
                 _, _letter_names, name_to_letter = _letter_entry
-                id_to_name = dict(zip(group_subject_ids, group_names))
+                id_to_name = dict(zip(group_subject_ids, group_names, strict=True))
                 cs_id_to_letter = {
                     cs.id: name_to_letter.get(id_to_name.get(cs.subject_id, ""), "")
                     for cs, _instr in cs_instr_rows
@@ -581,7 +581,7 @@ async def api_course(course_id: int, request: Request, id_token: str = ""):
             own_cs_ids = [cs.id for cs, _ in cs_instr_rows if cs.subject_id == course_id]
             if cs_ids:
                 main_cs_id = own_cs_ids[0] if own_cs_ids else cs_ids[0]
-                _now = datetime.now(timezone.utc)
+                _now = datetime.now(UTC)
                 _ins = pg_insert(CourseSectionView).values(
                     course_section_id=main_cs_id,
                     view_count=1,
@@ -748,7 +748,7 @@ async def unlock_course(course_id: int, request: Request, _rl=Depends(_unlock_ra
         # LINE bot 側の科目一覧が「解除済み」バッジを即時反映できるよう、
         # ユーザー状態スナップショット（banned/登録状態/解除済み科目をまとめてキャッシュ）を落とす
         cache.invalidate_linebot_user_state(uid)
-        asyncio.create_task(save_log_bg(uid, "in", f"[チケット消費] {subject.name}"))
+        fire_and_forget(save_log_bg(uid, "in", f"[チケット消費] {subject.name}"))
         return {"ok": True, "already": False, "unlock_credits": new_balance}
 
 
@@ -779,5 +779,5 @@ async def course_close_beacon(course_id: int, request: Request, _rl=Depends(_clo
         subject = await session.get(Subject, course_id)
     name = subject.name if subject else f"id={course_id}"
     minutes, seconds = divmod(duration_sec, 60)
-    asyncio.create_task(save_log_bg(uid, "in", f"[科目詳細を閉じる] {name}（滞在{minutes}分{seconds}秒）"))
+    fire_and_forget(save_log_bg(uid, "in", f"[科目詳細を閉じる] {name}（滞在{minutes}分{seconds}秒）"))
     return {"ok": True}

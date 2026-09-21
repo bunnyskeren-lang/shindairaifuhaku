@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -56,7 +56,7 @@ async def admin_payment_pay(request_id: int, _: str = Depends(check_admin)):
         payment_request = await session.get(PaymentRequest, request_id)
         if payment_request and payment_request.status == PaymentRequestStatus.PENDING:
             payment_request.status = PaymentRequestStatus.PAID
-            payment_request.paid_at = datetime.now(timezone.utc)
+            payment_request.paid_at = datetime.now(UTC)
 
             # PayPayで現金化した分だけ、レビュー承認時に付与済みの閲覧チケットを使用済みにする
             # （現金と閲覧権チケットの二重取得を防ぐため）。付与枚数は科目カテゴリで異なる

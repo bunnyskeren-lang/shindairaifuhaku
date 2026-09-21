@@ -64,7 +64,7 @@ class _TTLCache:
     呼び出しごとに新しく生成するため、ミュータブルな初期値を使い回さないようcallableで受け取る。
     """
 
-    __slots__ = ("_ttl", "_fetch", "_valid", "_default_factory", "_value", "_at")
+    __slots__ = ("_at", "_default_factory", "_fetch", "_ttl", "_valid", "_value")
 
     def __init__(self, ttl, fetch, valid, default_factory):
         self._ttl = ttl

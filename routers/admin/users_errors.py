@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -268,7 +268,7 @@ async def admin_user_ban(
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, line_user_id)
         if profile and profile.banned_at is None:
-            profile.banned_at = datetime.now(timezone.utc)
+            profile.banned_at = datetime.now(UTC)
             profile.ban_reason = reason.strip()[:500] or None
             await session.commit()
     cache.invalidate_ban_cache(line_user_id)

@@ -20,6 +20,7 @@ from linebot.v3.webhooks import FollowEvent, MessageEvent, PostbackEvent, TextMe
 
 from core import cache, line_client
 from core.activity_log import save_error_log, save_log_bg
+from core.background_tasks import fire_and_forget
 from core.config import (
     APP_URL,
     BAN_MESSAGE_TEXT,
@@ -1278,7 +1279,7 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
     label はログ・action文字列のプレフィックス("postback"/"message")、
     log_text は受信ログに残す生テキスト。"""
     try:
-        asyncio.create_task(save_log_bg(user_id, "in", log_text))
+        fire_and_forget(save_log_bg(user_id, "in", log_text))
         if await _user_banned(user_id):
             await line_client.reply(event.reply_token, [TextMessage(text=BAN_MESSAGE_TEXT)])
             _log_reply_timing(f"{label}:banned", t0)
@@ -1291,9 +1292,9 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
         messages = await asyncio.wait_for(handle_message(input_text, user_id), timeout=25.0)
         t_compute = time.perf_counter()
         await line_client.reply(event.reply_token, messages[:5])
-        asyncio.create_task(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
+        fire_and_forget(save_log_bg(user_id, "out", f"[{len(messages)} msg(s)]"))
         _log_reply_timing(f"{label}:{input_text[:30]}", t0, compute_ms=(t_compute - t0) * 1000)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         await save_error_log(Exception("handle_message timeout"), user_id=user_id, action=f"{label}:{input_text}")
         try:
             await line_client.reply(event.reply_token, [TextMessage(text="処理に時間がかかりすぎました。もう一度お試しください。")])
@@ -1319,7 +1320,7 @@ async def process_events(events) -> None:
                 if await _user_banned(user_id):
                     try:
                         await line_client.reply(event.reply_token, [TextMessage(text=BAN_MESSAGE_TEXT)])
-                        asyncio.create_task(save_log_bg(user_id, "in", "[follow:banned]"))
+                        fire_and_forget(save_log_bg(user_id, "in", "[follow:banned]"))
                     except Exception as exc:
                         await save_error_log(exc, user_id=user_id, action="follow_banned")
                     _log_reply_timing("follow:banned", _t0)
@@ -1331,7 +1332,7 @@ async def process_events(events) -> None:
                 try:
                     register_url = make_register_url(user_id)
                     await line_client.reply(event.reply_token, [make_registration_flex(register_url)])
-                    asyncio.create_task(save_log_bg(user_id, "in", "[follow]"))
+                    fire_and_forget(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
                     await save_error_log(exc, action="follow")
                 try:

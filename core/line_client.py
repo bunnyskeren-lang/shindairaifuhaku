@@ -38,7 +38,7 @@ async def _with_retry(coro_fn, *, retries: int = 2, base_delay: float = 0.5):
                 raise
             if attempt == retries:
                 raise
-        except (asyncio.TimeoutError, OSError):
+        except (TimeoutError, OSError):
             if attempt == retries:
                 raise
         await asyncio.sleep(base_delay * (2 ** attempt))

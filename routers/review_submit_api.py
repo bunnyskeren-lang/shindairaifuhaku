@@ -1,4 +1,3 @@
-import asyncio
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -8,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from core import cache, moderation
 from core.activity_log import save_error_log, save_log_bg
+from core.background_tasks import fire_and_forget
 from core.config import (
     BAN_MESSAGE_TEXT,
     MIN_COMMENT_LEN,
@@ -97,7 +97,7 @@ async def submit(
         #    クールダウン枠を本物のエラーと別キーにして、二重送信のバーストが障害Pushを
         #    マスクしないようにする
         prefix = "submit_duplicate" if telemetry else "submit_rejected"
-        asyncio.create_task(save_error_log(
+        fire_and_forget(save_error_log(
             RuntimeError(msg),
             user_id=uid,
             action=f"{prefix}:{course_name.strip()[:150]}",
@@ -313,7 +313,7 @@ async def submit(
 
         review_count = await _review_count(session, sid)
 
-    asyncio.create_task(save_log_bg(uid, "in", f"[レビュー投稿] {course_name.strip()}"))
+    fire_and_forget(save_log_bg(uid, "in", f"[レビュー投稿] {course_name.strip()}"))
 
     # レビューは既にcommit済みのため、push通知はレスポンスを待たせず
     # バックグラウンドで送る（購読者数が増えても投稿完了レスポンスの速度に影響しないように）。
@@ -328,7 +328,7 @@ async def submit(
         except Exception as exc:
             await save_error_log(exc, user_id=uid, action="submit_push_notification")
 
-    asyncio.create_task(_notify())
+    fire_and_forget(_notify())
 
     return _success_redirect(display_name, review_count)
 

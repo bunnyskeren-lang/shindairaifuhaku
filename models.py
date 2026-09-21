@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
@@ -30,7 +29,7 @@ class DisplayOrder(Base):
     kind: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    parent_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
+    parent_group: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="", default="")
 
 
@@ -52,9 +51,9 @@ class UserProfile(TimestampMixin, Base):
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     student_id: Mapped[str] = mapped_column(String(20), nullable=False)
-    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    faculty: Mapped[str | None] = mapped_column(Text, nullable=True)
+    department: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # レビュー閲覧権チケットの残数。承認された自分のレビュー1件につき
     # core.config.review_approval_unlock_credits(科目category) 枚（教養5枚・専門3枚）が付与され、
     # 任意の科目のレビュー閲覧解除（SubjectUnlock作成）に1枚ずつ消費する
@@ -65,27 +64,27 @@ class UserProfile(TimestampMixin, Base):
     payment_limit: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     # 虚偽投稿等を理由にLINE bot利用を永久停止した日時。NULL＝有効、値あり＝停止中。
     # 解除時はNULLに戻す（core/moderation.py・routers/admin/users_errors.py参照）
-    banned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # BAN時の管理者向け内部メモ。ユーザーには開示しない
-    ban_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ban_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 会員登録フォームの必須質問「神大生協が運営するアルバイト求人サイトはご存じですか」への回答
     # （"はい" / "いいえ" のいずれか）。2026-09-07追加。
     # is_profile_complete() の判定対象に含めているため、この列がNULL/空のユーザーは未完了扱いになる。
     # 既存の登録済みユーザーはこの列がNULLのままになり、次回操作時に一度だけ再登録を求められる
     # （友だち追加者を把握する目的。"いいえ" も回答済みとして扱えるよう真偽値でなく文字列で保持する）。
-    coop_jobsite_known: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    coop_jobsite_known: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 二重送信対策の冪等キー。クライアントが送信ごとに crypto.randomUUID() を発行し、
     # 同じ値の登録が既に成功していれば新規のトークン再検証を経由せず1回目の成功ページへ流す。
     # 部分UNIQUEは上の __table_args__ で宣言。
-    register_nonce: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    register_nonce: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ErrorLog(TimestampMixin, Base):
     __tablename__ = "error_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    action: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action: Mapped[str | None] = mapped_column(String(200), nullable=True)
     error_type: Mapped[str] = mapped_column(String(100), nullable=False)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
     traceback: Mapped[str] = mapped_column(Text, nullable=False)
@@ -106,7 +105,7 @@ class LiffAuthEvent(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     # 未検証トークン由来の sub。信頼できる識別子ではない（上記docstring参照）
-    user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     form: Mapped[str] = mapped_column(String(20), nullable=False, default="")       # course / review / register / contact
     stage: Mapped[str] = mapped_column(String(20), nullable=False, default="")      # page_load / submit / recovered
     reason: Mapped[str] = mapped_column(String(40), nullable=False, default="")     # expired / auth_failed / recovered
@@ -183,18 +182,18 @@ class Subject(Base):
     # ix_subjects_faculty_classification（facultyが先頭列）が既にある以上、単独indexは
     # 先頭列プレフィックスとして完全に重複し検索速度に寄与せず書き込みコストだけ増やす
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reading: Mapped[str | None] = mapped_column(Text, nullable=True)
     faculty: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
     # 学部内で学科・専攻ごとに卒業要件が異なる場合の学科名（工学部5学科・理学部5学科・
     # 医学部保健学科4専攻等）。user_profilesと同じ「faculty列+department列」のペア形式。
     # 学科の区別が無い学部では空文字（subjects.readingと同じプレースホルダ方式、UNIQUE制約で
     # NULL同士を区別しないPostgresの挙動を避けるためNOT NULL）。
     department: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
-    classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    classification: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
-    term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
+    term_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    credits: Mapped[float | None] = mapped_column(Numeric(3, 1), nullable=True)
     # 管理画面の「統合解除」「元に戻す」ボタン（routers/admin/courses.py）向け。
     # 末尾バリアント統合（core/subject_variants.py compute_variant_bases等）の判定は
     # 通常「科目名の文字列」だけを見て機械的に行われるが、実際には並行クラス（統合してよい）
@@ -245,7 +244,7 @@ class Syllabus(TimestampMixin, Base):
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     academic_term: Mapped[str] = mapped_column(Text, nullable=False)
-    timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    timetable_code: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
 
 
 class ReviewStatus:
@@ -290,8 +289,8 @@ class PaymentRequest(TimestampMixin, Base):
     email: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     # 'pending'(支払い待ち) / 'paid'(支払い済み) / 'rejected'(却下、予約したreviewsは解放)
     status: Mapped[str] = mapped_column(Text, nullable=False, default=PaymentRequestStatus.PENDING)
-    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    submit_nonce: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submit_nonce: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Review(TimestampMixin, Base):
@@ -312,33 +311,33 @@ class Review(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="RESTRICT"), nullable=False, index=True)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 1〜5の5段階評価。CHECK制約はdatabase.py init_db()側で管理。
-    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 'SS'/'S'/'A'/'B'/'C'の5段階（楽単度）。CHECK制約はdatabase.py init_db()側で管理。
-    ease_rating: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ease_rating: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 成績評価方法。2026-08-25以降はJSON配列文字列 [{"label","text"}, ...] で保存する
     # （core/grading_method.py参照）。それ以前に投稿された行は独自区切り文字列
     # （' / '・':'区切り）のまま残っており、表示側はparse_grading_method()で両対応する
-    grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    submitter_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    nickname: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    student_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    selected_instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    grading_method: Mapped[str | None] = mapped_column(Text, nullable=True)
+    submitter_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    nickname: Mapped[str | None] = mapped_column(Text, nullable=True)
+    student_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    academic_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    selected_instructor: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 'pending'(待機中) / 'approved'(承認) / 'rejected'(却下)。CHECK制約はdatabase.py init_db()側で管理。
     # 却下は物理削除ではなくstatus='rejected'として保持する（投稿レビューは削除しない方針）
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     # 支払い報酬の予約/支払い済み紐付け。NULL＝未払い（database.py init_db()でFK列を追加）
-    payment_request_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("payment_requests.id", ondelete="SET NULL"), nullable=True, index=True)
+    payment_request_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("payment_requests.id", ondelete="SET NULL"), nullable=True, index=True)
     # レビュー閲覧権チケットを付与済みかどうか（承認時に1度だけ付与するための冪等性チェック用）。
     # 却下・待機中への差し戻し後に再承認しても二重付与しないよう、一度付与したら値は変更しない
-    credit_granted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    credit_granted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 全く同じ科目名を別分類にも登録する際、既存科目のレビューをそのまま複製して見せるための
     # コピー元レビューid（NULL＝通常の投稿）。買取（支払い）対象クエリはpayment_request_id IS NULLで
     # 判定するため、そのまま複製すると1件の投稿が二重に支払い対象としてカウントされてしまう。
     # このコピー印を持つレビューは常に買取対象クエリから除外する（routers/payment_api.py参照）
-    copied_from_review_id: Mapped[Optional[int]] = mapped_column(
+    copied_from_review_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("reviews.id", ondelete="SET NULL"), nullable=True
     )
     # 二重送信対策の冪等キー。送信直後にLINEアプリがバックグラウンドへ回るとモバイルOS/
@@ -347,7 +346,7 @@ class Review(TimestampMixin, Base):
     # crypto.randomUUID() を発行し、同じ値のレビューが既にあればサーバーは新規作成せず
     # 1回目の成功ページへリダイレクトする。部分UNIQUEは上の __table_args__ で宣言
     # （既存DB向けに database.py init_db() 側にも同名の CREATE INDEX IF NOT EXISTS を残す）。
-    submit_nonce: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    submit_nonce: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class CourseSectionView(Base):
@@ -389,4 +388,4 @@ class Inquiry(TimestampMixin, Base):
     student_id: Mapped[str] = mapped_column(String(20), nullable=False, default="")
     # 'pending'(未対応) / 'handled'(対応済み)。CHECK制約はdatabase.py init_db()側で管理。
     status: Mapped[str] = mapped_column(Text, nullable=False, default=InquiryStatus.PENDING)
-    handled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

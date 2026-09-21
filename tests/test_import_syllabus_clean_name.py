@@ -18,7 +18,7 @@ _inserted = _SCRIPTS_DIR not in sys.path
 if _inserted:
     sys.path.insert(0, _SCRIPTS_DIR)
 try:
-    import import_syllabus as isy  # noqa: E402
+    import import_syllabus as isy
 finally:
     if _inserted:
         sys.path.remove(_SCRIPTS_DIR)

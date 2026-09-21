@@ -44,7 +44,7 @@ def test_client_ip_falls_back_to_request_client_host():
 async def test_rate_limiter_allows_exactly_max_requests():
     dep = rate_limiter(max_requests=3, window_seconds=60)
     req = _make_request(client_host="192.0.2.1")
-    for i in range(3):
+    for _ in range(3):
         await dep(req)  # 1〜3回目は許可される
 
 

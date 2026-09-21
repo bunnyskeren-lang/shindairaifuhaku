@@ -5,7 +5,7 @@ BAN中のユーザーが各書き込み系エンドポイント(レビュー投�
 プロフィール編集)で拒否されることを実HTTPリクエスト経由で検証する
 (2026-08-29技術的負債監査で「テストが皆無」と指摘され追加)。
 """
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 from sqlalchemy import func, select
@@ -52,7 +52,7 @@ async def _seed_profile(
             department="経営学科" if complete else None,
             coop_jobsite_known="はい" if complete else None,
             payment_limit=payment_limit,
-            banned_at=datetime.now(timezone.utc) if banned else None,
+            banned_at=datetime.now(UTC) if banned else None,
             ban_reason="虚偽投稿" if banned else None,
         ))
         await session.commit()

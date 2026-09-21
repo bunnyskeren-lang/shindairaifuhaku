@@ -5,11 +5,11 @@ os.environ.setdefault("LINE_CHANNEL_SECRET", "test_channel_secret")
 os.environ.setdefault("LINE_CHANNEL_ACCESS_TOKEN", "test_channel_access_token")
 os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 
-import pytest  # noqa: E402
-import pytest_asyncio  # noqa: E402
-from sqlalchemy import BigInteger  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
-from sqlalchemy.ext.compiler import compiles  # noqa: E402
+import pytest
+import pytest_asyncio
+from sqlalchemy import BigInteger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
 
 # 修正理由: 結合テストではdev DB(Supabase/PostgreSQL)に接続できない実行環境が
 # あるため、SQLiteインメモリDBで代替する。

@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from core.config import ADMIN_TOKEN_TTL, CHANNEL_SECRET
 from core.security import (
@@ -26,14 +26,14 @@ def test_admin_token_rejects_tampered_signature():
 
 
 def test_admin_token_rejects_expired():
-    ts = int(datetime.now(timezone.utc).timestamp()) - ADMIN_TOKEN_TTL - 1
+    ts = int(datetime.now(UTC).timestamp()) - ADMIN_TOKEN_TTL - 1
     nonce = "deadbeefdeadbeef"
     sig = hmac.new(_HMAC_KEY, f"admin:{ts}:{nonce}".encode(), hashlib.sha256).hexdigest()
     assert not verify_admin_token(f"{ts}:{nonce}:{sig}")
 
 
 def test_admin_token_accepts_just_within_ttl():
-    ts = int(datetime.now(timezone.utc).timestamp()) - ADMIN_TOKEN_TTL + 5
+    ts = int(datetime.now(UTC).timestamp()) - ADMIN_TOKEN_TTL + 5
     nonce = "deadbeefdeadbeef"
     sig = hmac.new(_HMAC_KEY, f"admin:{ts}:{nonce}".encode(), hashlib.sha256).hexdigest()
     assert verify_admin_token(f"{ts}:{nonce}:{sig}")

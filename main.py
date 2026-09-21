@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import time
 import traceback as _traceback
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from core import backup, liff_auth, line_client, prewarm, rate_limit
 from core.activity_log import log_cleanup_loop, save_error_log
+from core.background_tasks import fire_and_forget
 from database import engine, init_db
 from routers import (
     contact_api, health, liff_api, pages, payment_api, profile_api,
@@ -37,7 +39,7 @@ async def lifespan(app: FastAPI):
     try:
         await init_db()
         print("DB OK", flush=True)
-        asyncio.create_task(prewarm.prewarm_caches())
+        fire_and_forget(prewarm.prewarm_caches())
     except Exception as e:
         _traceback.print_exc()
         print(f"DB ERROR: {e}", flush=True)
@@ -56,10 +58,8 @@ async def lifespan(app: FastAPI):
     cleanup_task.cancel()
     rate_limit_cleanup_task.cancel()
     for task in (ping_task, backup_task, cleanup_task, rate_limit_cleanup_task):
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
     await line_client.shutdown()
     await liff_auth.shutdown()
 

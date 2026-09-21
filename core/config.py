@@ -1,6 +1,6 @@
 import os
 import re as _re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from urllib.parse import quote as _urllib_quote
 
 from dotenv import load_dotenv
@@ -104,7 +104,7 @@ REVIEW_APPROVAL_UNLOCK_CREDITS = 1
 # 判定は必ず下の credit_grant_pending() / credit_tickets_were_granted() /
 # credit_tickets_granted_clause() を経由する（生の IS NULL / isnot(None) を新規に書かない。
 # 番兵レビューを誤って「付与済み」に数えるバグの温床になる）。
-CREDIT_GRANTED_SENTINEL = datetime(1970, 1, 1, tzinfo=timezone.utc)
+CREDIT_GRANTED_SENTINEL = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 def credit_grant_pending(credit_granted_at) -> bool:

@@ -87,8 +87,8 @@ async def push_subscribe(request: Request, token: str = ""):
         endpoint = data["endpoint"]
         p256dh = data["keys"]["p256dh"]
         auth = data["keys"]["auth"]
-    except (KeyError, TypeError):
-        raise HTTPException(status_code=400, detail="invalid subscription payload")
+    except (KeyError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="invalid subscription payload") from exc
     async with AsyncSessionLocal() as session:
         stmt = pg_insert(PushSubscription).values(
             endpoint=endpoint,

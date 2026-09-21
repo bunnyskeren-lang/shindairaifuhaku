@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from core import line_client
 from core.activity_log import save_error_log
+from core.background_tasks import fire_and_forget
 from core.security import verify_line_signature
 from line_bot.handler import process_events
 
@@ -20,8 +21,8 @@ async def callback(request: Request):
 
     try:
         events = line_client.parser.parse(body.decode("utf-8"), signature)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
 
     task = asyncio.create_task(process_events(events))
 
@@ -30,7 +31,7 @@ async def callback(request: Request):
             return
         exc = t.exception()
         if exc:
-            asyncio.create_task(save_error_log(exc, action="process_events_bg"))
+            fire_and_forget(save_error_log(exc, action="process_events_bg"))
 
     task.add_done_callback(_on_process_done)
     return {"status": "ok"}

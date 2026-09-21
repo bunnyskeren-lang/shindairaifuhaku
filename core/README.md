@@ -14,6 +14,7 @@
 | `cache.py` | 全インメモリキャッシュ（TTL 3600秒）を集約。他モジュールは必ず`get_*`/`set_*`/`invalidate_*`関数経由でアクセスすること（rawなdictを直import禁止。invalidate時に`global`で再代入されるため） |
 | `prewarm.py` | 起動0.5秒後にキャッシュを一括ウォームアップ（`cache.warm_query_caches()` → `line_bot.flex_builders.prewarm_flex_cache()`の順） |
 | `activity_log.py` | サーバーエラーログ（`error_logs`）・LINEメッセージ送受信ログ（`message_logs`）の保存 |
+| `background_tasks.py` | 「発火して忘れる」バックグラウンドタスクの共通ヘルパー`fire_and_forget()`。素の`asyncio.create_task()`は戻り値を誰も保持しないとタスクがGCされ実行途中で消えうるため、レスポンスを待たせずログ保存・Push通知等を投げる箇所は必ずこちら経由にすること |
 | `line_client.py` | LINE Messaging APIクライアント。`reply()`経由の返信送信、自己ping（`self_ping()`）。生の`_line_api`を各所で直接触らないこと |
 | `push.py` | Web Push（VAPID）通知の送信 |
 | `templates.py` | `Jinja2Templates`インスタンスと`jst`（JST変換）カスタムフィルタ |

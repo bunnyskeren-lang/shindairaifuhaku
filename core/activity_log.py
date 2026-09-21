@@ -1,11 +1,12 @@
 import asyncio
 import time
 import traceback as _traceback
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from core.background_tasks import fire_and_forget
 from database import AsyncSessionLocal
 from models import ErrorLog, LiffAuthEvent, MessageLog, UserActivity, UserProfile
 
@@ -69,7 +70,7 @@ async def save_error_log(
             # ここでsave_error_logを呼ぶと無限ループになるためprintのみに留める
             print(f"[error_push_notify_failed] {type(push_exc).__name__}: {push_exc}", flush=True)
 
-    asyncio.create_task(_notify())
+    fire_and_forget(_notify())
 
 
 async def save_log_bg(user_id: str, direction: str, message: str) -> None:
@@ -77,7 +78,7 @@ async def save_log_bg(user_id: str, direction: str, message: str) -> None:
         async with AsyncSessionLocal() as session:
             session.add(MessageLog(user_id=user_id, direction=direction, message=message))
             if direction == "in":
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 stmt = (
                     pg_insert(UserActivity)
                     .values(user_id=user_id, action=message[:200], count=1, last_at=now)
@@ -91,7 +92,7 @@ async def save_log_bg(user_id: str, direction: str, message: str) -> None:
                 profile = await session.get(UserProfile, user_id)
                 other_user_name = profile.name if profile else None
                 if other_user_name != _OWNER_NAME:
-                    asyncio.create_task(_notify_other_user_activity(other_user_name, message))
+                    fire_and_forget(_notify_other_user_activity(other_user_name, message))
             await session.commit()
     except Exception as exc:
         await save_error_log(exc, user_id=user_id, action=f"save_log_{direction}")
@@ -111,7 +112,7 @@ async def cleanup_old_logs():
     """message_logs / error_logs / liff_auth_eventsの古い行を削除する（Supabase Freeプランの
     ストレージ上限対策。いずれもreviews等と異なり永続保存が前提のデータではない）。"""
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=_LOG_RETENTION_DAYS)
+        cutoff = datetime.now(UTC) - timedelta(days=_LOG_RETENTION_DAYS)
         async with AsyncSessionLocal() as session:
             await session.execute(delete(MessageLog).where(MessageLog.created_at < cutoff))
             await session.execute(delete(ErrorLog).where(ErrorLog.created_at < cutoff))

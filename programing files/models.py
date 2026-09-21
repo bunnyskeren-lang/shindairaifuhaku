@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 import re as _re
 from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, validates
@@ -43,7 +42,7 @@ class DisplayOrder(Base):
     kind: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    parent_group: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    parent_group: Mapped[str | None] = mapped_column(String(100), nullable=True)
     faculty: Mapped[str] = mapped_column(String(100), nullable=False, server_default="", default="")
 
 
@@ -52,10 +51,10 @@ class UserProfile(Base):
     line_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     student_id: Mapped[str] = mapped_column(String(20), nullable=False)
-    faculty: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    department: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    faculty: Mapped[str | None] = mapped_column(Text, nullable=True)
+    department: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Subject(Base):
@@ -68,14 +67,14 @@ class Subject(Base):
     )
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    reading: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reading: Mapped[str | None] = mapped_column(Text, nullable=True)
     faculty: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="", index=True)
     department: Mapped[str] = mapped_column(Text, nullable=False, server_default="", default="")
-    classification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    classification: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
-    term_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    credits: Mapped[Optional[float]] = mapped_column(Numeric(3, 1), nullable=True)
+    term_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    credits: Mapped[float | None] = mapped_column(Numeric(3, 1), nullable=True)
     variant_merge_excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
     @validates("name")
@@ -110,7 +109,7 @@ class Syllabus(Base):
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), nullable=False, index=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     academic_term: Mapped[str] = mapped_column(Text, nullable=False)
-    timetable_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    timetable_code: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -119,14 +118,14 @@ class Review(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     # ルートmodels.pyと同じくRESTRICT。レビューは科目削除の巻き添えで消してはならない（データ保護ルール）
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="RESTRICT"), nullable=False, index=True)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    ease_rating: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    grading_method: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    submitter_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    nickname: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    student_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    academic_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    selected_instructor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ease_rating: Mapped[str | None] = mapped_column(Text, nullable=True)
+    grading_method: Mapped[str | None] = mapped_column(Text, nullable=True)
+    submitter_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    nickname: Mapped[str | None] = mapped_column(Text, nullable=True)
+    student_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    academic_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    selected_instructor: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

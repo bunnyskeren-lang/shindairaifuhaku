@@ -1,6 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from types import SimpleNamespace
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -42,12 +41,12 @@ async def admin_reviews_cleanup(_: str = Depends(check_admin)):
 
 def _apply_review_edits(
     review: Review,
-    content: Optional[str],
-    rating: Optional[int],
-    ease_rating: Optional[str],
-    grading_method: Optional[str],
-    selected_instructor: Optional[str],
-    nickname: Optional[str],
+    content: str | None,
+    rating: int | None,
+    ease_rating: str | None,
+    grading_method: str | None,
+    selected_instructor: str | None,
+    nickname: str | None,
 ) -> None:
     # 各フィールドはフォームから送られてきた場合のみ上書きする
     # （courses.html の簡易承認ボタンはこれらを送らないため、その場合は既存の内容のまま状態だけ変える）
@@ -93,7 +92,7 @@ async def admin_reviews(
     _: str = Depends(check_admin),
     apage: int = Query(default=1, ge=1),
     rpage: int = Query(default=1, ge=1),
-    msg: Optional[str] = Query(default=None),
+    msg: str | None = Query(default=None),
 ):
     variant_labels = await cache.get_variant_full_label_map_cached()
 
@@ -159,12 +158,12 @@ async def admin_reviews(
 @router.post("/admin/reviews/approve/{review_id}")
 async def admin_review_approve(
     review_id: int,
-    content: Optional[str] = Form(None),
-    rating: Optional[int] = Form(None),
-    ease_rating: Optional[str] = Form(None),
-    grading_method: Optional[str] = Form(None),
-    selected_instructor: Optional[str] = Form(None),
-    nickname: Optional[str] = Form(None),
+    content: str | None = Form(None),
+    rating: int | None = Form(None),
+    ease_rating: str | None = Form(None),
+    grading_method: str | None = Form(None),
+    selected_instructor: str | None = Form(None),
+    nickname: str | None = Form(None),
     _: str = Depends(check_admin),
 ):
     async with AsyncSessionLocal() as session:
@@ -187,7 +186,7 @@ async def admin_review_approve(
                         .where(CourseSection.id == review.course_section_id)
                     )).scalar_one_or_none()
                     profile.unlock_credits += review_approval_unlock_credits(category)
-                review.credit_granted_at = datetime.now(timezone.utc)
+                review.credit_granted_at = datetime.now(UTC)
             await session.commit()
     cache.invalidate_review_cache()
     return RedirectResponse("/admin/reviews", status_code=303)
@@ -196,12 +195,12 @@ async def admin_review_approve(
 @router.post("/admin/reviews/update/{review_id}")
 async def admin_review_update(
     review_id: int,
-    content: Optional[str] = Form(None),
-    rating: Optional[int] = Form(None),
-    ease_rating: Optional[str] = Form(None),
-    grading_method: Optional[str] = Form(None),
-    selected_instructor: Optional[str] = Form(None),
-    nickname: Optional[str] = Form(None),
+    content: str | None = Form(None),
+    rating: int | None = Form(None),
+    ease_rating: str | None = Form(None),
+    grading_method: str | None = Form(None),
+    selected_instructor: str | None = Form(None),
+    nickname: str | None = Form(None),
     _: str = Depends(check_admin),
 ):
     # 承認済み・却下済みレビューの内容を編集する（statusは変更しない）

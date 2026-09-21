@@ -1,4 +1,3 @@
-import asyncio
 import json as _json
 import re as _re
 
@@ -9,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, line_client, moderation
 from core.activity_log import save_error_log
+from core.background_tasks import fire_and_forget
 from core.push import send_registration_push_notification
 from core.config import (
     BAN_MESSAGE_TEXT,
@@ -289,7 +289,7 @@ async def register_profile(
         except Exception as exc:
             await save_error_log(exc, user_id=uid, action="register_push_notification")
 
-    asyncio.create_task(_notify())
+    fire_and_forget(_notify())
 
     return _register_success_redirect()
 
