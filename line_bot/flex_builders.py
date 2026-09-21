@@ -203,7 +203,7 @@ def make_help_flex() -> FlexMessage:
         return FlexText(text=text, size="xxs", weight="bold", color="#6366f1",
                         margin="lg")
 
-    def card(icon: str, title: str, desc: str, bg: str = "#f5f3ff", icon_color: str = "#6366f1") -> FlexBox:
+    def card(icon: str, title: str, desc: str, bg: str = "#f5f3ff") -> FlexBox:
         return FlexBox(
             layout="horizontal",
             background_color=bg,
@@ -274,12 +274,12 @@ def make_help_flex() -> FlexMessage:
                     section_label("🎫  レビュー閲覧チケット"),
                     card("🎫", "チケットとは",
                          "他の人のレビューを見るには科目ごとに🎫チケットを1枚使います",
-                         bg="#fffbeb", icon_color="#d97706"),
+                         bg="#fffbeb"),
                     card("🎁", "もらい方",
                          f"会員登録で{REGISTRATION_WELCOME_UNLOCK_CREDITS}枚、"
                          f"自分のレビューが承認されるたびに教養は{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚・"
                          f"専門は{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚もらえます",
-                         bg="#fffbeb", icon_color="#d97706"),
+                         bg="#fffbeb"),
                     section_label("💬  チャット"),
                     card("🔍", "科目名を送る",
                          "授業情報・レビューを表示\n例：「英語」「データサイエンス」",
