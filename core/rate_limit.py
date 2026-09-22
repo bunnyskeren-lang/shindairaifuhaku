@@ -62,9 +62,21 @@ def client_ip(request: Request) -> str:
     return trusted_peer
 
 
+def _route_path(request: Request) -> str:
+    # 修正理由: request.url.pathはパスパラメータが解決済みの実パス（例: /api/course/123/close）
+    # になるため、これをそのままバケットキーに使うと{course_id}のようなパスパラメータを持つ
+    # エンドポイントではIP単位ではなく実質「IP×パラメータ値単位」の制限になり、パラメータを
+    # 変えるだけで上限を回避できてしまっていた(2026-09-22発覚)。ルーティング解決後は
+    # scope["route"]に一致したAPIRouteが入っており、その.pathはパラメータ未解決のテンプレート
+    # （例: /api/course/{course_id}/close）なのでこちらを使う。ルーティング前（テスト等で
+    # scope["route"]が無い場合）はurl.pathにフォールバックする。
+    route = request.scope.get("route")
+    return route.path if route is not None else request.url.path
+
+
 def rate_limiter(max_requests: int, window_seconds: float):
     async def _dep(request: Request):
-        key = f"{request.url.path}:{client_ip(request)}"
+        key = f"{_route_path(request)}:{client_ip(request)}"
         now = time.monotonic()
         cutoff = now - window_seconds
         bucket = _buckets[key]

@@ -1,5 +1,6 @@
 import pytest
-from fastapi import HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from core.rate_limit import _buckets, _sweep_stale_buckets, client_ip, rate_limiter
@@ -102,6 +103,27 @@ async def test_rate_limiter_buckets_are_independent_per_path():
         await dep(req_p1)
     # 同一IPでもエンドポイント(path)が違えばバケットは独立している
     await dep(req_p2)
+
+
+def test_rate_limiter_shares_bucket_across_path_params():
+    # 修正理由(2026-09-22): request.url.path（パスパラメータ解決後の実パス）をバケットキーに
+    # 使うと、/api/course/{course_id}のようなパスパラメータ付きエンドポイントで
+    # course_idを変えるだけで同一IPからの制限を無限に回避できていた。ルーティング解決後の
+    # scope["route"].path（テンプレート文字列）を使うことで、パラメータ値によらず
+    # 同一エンドポイント・同一IPなら同じバケットを共有することを確認する。
+    _buckets.clear()
+    app = FastAPI()
+    dep = rate_limiter(max_requests=1, window_seconds=60)
+
+    @app.get("/item/{item_id}")
+    async def _item(item_id: int, _rl=Depends(dep)):
+        return {"id": item_id}
+
+    client = TestClient(app)
+    headers = {"X-Forwarded-For": "192.0.2.200"}
+    assert client.get("/item/1", headers=headers).status_code == 200
+    # item_idを変えても同じエンドポイントとみなされ、2回目は制限される
+    assert client.get("/item/2", headers=headers).status_code == 429
 
 
 # ── 境界値: _sweep_stale_buckets() ──────────────────────────────────────────

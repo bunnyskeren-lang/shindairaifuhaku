@@ -1,14 +1,20 @@
 import secrets as py_secrets
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.config import PUSH_ENABLE_TOKEN, VAPID_PUBLIC_KEY
+from core.rate_limit import rate_limiter
 from database import AsyncSessionLocal
 from models import PushSubscription
 
 router = APIRouter()
+
+# 修正理由: PUSH_ENABLE_TOKENという秘密トークンをcompare_digestで照合しているが、
+# /admin/login（パスワード照合）と違いレート制限が一切無く総当たりが無制限だった。
+# 同水準の上限を設ける
+_push_rate_limit = rate_limiter(max_requests=5, window_seconds=60)
 
 
 def _valid_token(token: str) -> bool:
@@ -20,7 +26,7 @@ def _valid_token(token: str) -> bool:
 
 
 @router.get("/push/enable", response_class=HTMLResponse)
-async def push_enable_page(token: str = ""):
+async def push_enable_page(token: str = "", _rl: None = Depends(_push_rate_limit)):
     if not _valid_token(token):
         raise HTTPException(status_code=404)
     html = f"""<!doctype html>
@@ -79,7 +85,7 @@ async def push_enable_page(token: str = ""):
 
 
 @router.post("/push/subscribe")
-async def push_subscribe(request: Request, token: str = ""):
+async def push_subscribe(request: Request, token: str = "", _rl: None = Depends(_push_rate_limit)):
     if not _valid_token(token):
         raise HTTPException(status_code=404)
     data = await request.json()

@@ -48,6 +48,10 @@ _unlock_rate_limit = rate_limiter(max_requests=10, window_seconds=60)
 # 科目詳細LIFFを閉じた際のビーコン送信。navigator.sendBeaconはページ離脱時に発火するため
 # 通常は1回だが、タブ切替の繰り返し等での連打に備え緩めの上限を設ける
 _close_rate_limit = rate_limiter(max_requests=20, window_seconds=60)
+# 修正理由: 科目詳細の取得は未認証で呼べる上、複数クエリ＋閲覧数UPSERTを伴う本APIで
+# 最も重い部類のエンドポイントにもかかわらずレート制限が一つも付いていなかった。
+# 検索(/api/courses、30回/分)と同水準にする
+_course_detail_rate_limit = rate_limiter(max_requests=30, window_seconds=60)
 
 
 def _normalize_form_q(s: str) -> str:
@@ -417,7 +421,10 @@ async def _group_subject_ids(subject: Subject) -> tuple[str, list[int], list[str
 
 
 @router.get("/api/course/{course_id}")
-async def api_course(course_id: int, request: Request, id_token: str = ""):
+async def api_course(
+    course_id: int, request: Request, id_token: str = "",
+    _rl: None = Depends(_course_detail_rate_limit),
+):
     try:
         uid = await verify_liff_id_token(id_token, request) if id_token else None
         # BANされたユーザーは書き込み系(unlock/submit)だけでなく、リッチメニュー経由の
