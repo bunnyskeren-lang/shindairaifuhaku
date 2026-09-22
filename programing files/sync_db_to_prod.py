@@ -156,6 +156,10 @@ async def main():
         # subjects: 本番のみに存在する科目を削除。ただし course_sections 経由で
         # syllabi（時間割データ）や reviews が紐づく場合は、CASCADE/RESTRICTで
         # ユーザーデータを巻き込む恐れがあるため削除せず一覧表示のみに留める。
+        # subject_unlocks（レビュー閲覧チケット消費で解除済みの記録、subjects.idへの
+        # 直接FK・ON DELETE CASCADE）はcourse_sectionsを経由しないため、上記2テーブルだけの
+        # チェックだと素通りして無警告でCASCADE削除されうる（2026-09-22発覚）。
+        # ユーザーが消費したチケットの解除記録を巻き添えで消さないよう、こちらも必ず確認する。
         dev_subj_keys = {(r["name"], r["faculty"], r["department"], r["classification"]) for r in subj_rows}
         orphan_subjects = [
             (key, pid) for key, pid in prod_subj_map.items()
@@ -173,15 +177,17 @@ async def main():
                     "SELECT COUNT(*) FROM reviews WHERE course_section_id = ANY($1::int[])", cs_ids)
             else:
                 syllabi_count = reviews_count = 0
-            if syllabi_count or reviews_count:
-                kept_subj.append((name, faculty, department, classification, syllabi_count, reviews_count))
+            unlocks_count = await prod.fetchval(
+                "SELECT COUNT(*) FROM subject_unlocks WHERE subject_id=$1", pid)
+            if syllabi_count or reviews_count or unlocks_count:
+                kept_subj.append((name, faculty, department, classification, syllabi_count, reviews_count, unlocks_count))
                 continue
             await prod.execute("DELETE FROM subjects WHERE id=$1", pid)
             deleted_subj += 1
         print(f"subjects: 本番のみの{len(orphan_subjects)}件中 {deleted_subj}件削除、"
-              f"{len(kept_subj)}件は時間割登録/レビューが紐づくため保持")
-        for name, faculty, department, classification, sc, rc in kept_subj:
-            print(f"  KEEP(要確認): {name} ({faculty}{department}/{classification or '未分類'}) syllabi={sc} reviews={rc}")
+              f"{len(kept_subj)}件は時間割登録/レビュー/閲覧チケットが紐づくため保持")
+        for name, faculty, department, classification, sc, rc, uc in kept_subj:
+            print(f"  KEEP(要確認): {name} ({faculty}{department}/{classification or '未分類'}) syllabi={sc} reviews={rc} unlocks={uc}")
 
         # ── 3. instructors: UPSERT by name ────────────────────────────────────
         instr_rows = await dev.fetch("SELECT id, name, sort_order FROM instructors ORDER BY id")
@@ -265,7 +271,9 @@ async def main():
         # course_sections: 本番のみに存在する組み合わせを削除
         # （subjects/instructors削除で対応済みのものはCASCADEで既に消えているため、
         #  ここに残るのは「科目・教員は両方存在するが組み合わせだけがdevに無い」ケース）。
-        # syllabi/reviewsが紐づく場合は保持する。
+        # syllabi/reviewsに加え、course_section_views（閲覧数統計、course_section_idへの
+        # 直接FK・ON DELETE CASCADE）が紐づく場合も無警告での統計消失を避けるため保持する
+        # （2026-09-22発覚。実害はレビュー/チケットより軽微だが同じ穴なので合わせて塞ぐ）。
         desired_cs_keys = {(s, i) for s, i in cs_params}
         prod_cs_rows = await prod.fetch("SELECT id, subject_id, instructor_id FROM course_sections")
         orphan_cs = [r for r in prod_cs_rows if (r["subject_id"], r["instructor_id"]) not in desired_cs_keys]
@@ -276,7 +284,9 @@ async def main():
                 "SELECT COUNT(*) FROM syllabi WHERE course_section_id=$1", r["id"])
             reviews_count = await prod.fetchval(
                 "SELECT COUNT(*) FROM reviews WHERE course_section_id=$1", r["id"])
-            if syllabi_count or reviews_count:
+            views_count = await prod.fetchval(
+                "SELECT COUNT(*) FROM course_section_views WHERE course_section_id=$1", r["id"])
+            if syllabi_count or reviews_count or views_count:
                 kept_cs += 1
                 continue
             await prod.execute("DELETE FROM course_sections WHERE id=$1", r["id"])

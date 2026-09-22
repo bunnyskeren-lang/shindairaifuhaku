@@ -25,9 +25,20 @@ parser.add_argument("image", nargs="?", default=None,
 args = parser.parse_args()
 
 # ── 環境変数読み込み ─────────────────────────────────────────────────────────
+# 相対パスのままだとCWD次第で.envが見つからず、load_dotenv()は例外を出さず
+# Falseを返すだけでサイレントに失敗する。その場合シェルに残っていた別環境の
+# 環境変数（本番/dev確認作業でexportしたトークン等）がそのまま使われ、
+# 誤った環境のLINEチャンネルを操作してしまう恐れがあるため、スクリプト自身の
+# ディレクトリ基準の絶対パスで解決し、見つからなければ即座に停止する
+# （_env.py の load_env() と同じ方針）。
 from dotenv import load_dotenv
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 env_file = ".env.dev" if args.env == "dev" else ".env"
-load_dotenv(env_file, override=True)
+env_path = os.path.join(_SCRIPT_DIR, env_file)
+if not os.path.exists(env_path):
+    print(f"ERROR: {env_path} が見つかりません", file=sys.stderr)
+    sys.exit(1)
+load_dotenv(env_path, override=True)
 
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 REVIEW_FORM_URL = os.environ.get(
