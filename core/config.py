@@ -87,6 +87,16 @@ ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信であり、他教員�
 # （テンプレートへは routers/pages.py が min_comment_len として渡す）。
 MIN_COMMENT_LEN = 30
 
+# コメントの文字数に数えない「見出し」（フォームのチップが挿入する `【テスト形式・難易度】` 等）。
+# 見出しだけで11字前後あり、素のままカウントすると中身19字程度で最低文字数を満たせてしまうため、
+# 見出しを除いた本文で数える。フォームJSの commentLen() と同じ正規表現を使うこと。
+_COMMENT_HEADING_RE = _re.compile(r"【[^】]*】")
+
+
+def count_comment_chars(comment: str) -> int:
+    """MIN_COMMENT_LEN 判定に使うコメントの文字数（`【…】` 見出しと前後の空白を除く）。"""
+    return len(_COMMENT_HEADING_RE.sub("", comment).strip())
+
 # レビューが承認されるごとに付与される、任意の科目のレビュー閲覧権チケット枚数。
 # 2026-09-07より、レビュー投稿先の科目カテゴリで枚数を分ける（教養5枚・専門3枚）。
 # 実際の付与・消費判定は review_approval_unlock_credits() に集約する。

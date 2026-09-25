@@ -290,6 +290,22 @@ async def test_submit_short_comment_returns_400(http_client_factory, monkeypatch
     assert "30文字以上" in resp.text
 
 
+@pytest.mark.asyncio
+async def test_submit_heading_only_padded_comment_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
+    """`【…】` の見出しは文字数に数えない。見出しで水増しして30字を超えても、本文が30字未満なら400。"""
+    _fake_verify(monkeypatch)
+    _stub_push_notification(monkeypatch)
+    await _seed_course(test_sessionmaker)
+    await _seed_profile(test_sessionmaker)
+    client = http_client_factory(review_submit_api, monkeypatch)
+
+    # 見出し込みでは30字を超えるが、本文は「簡単」「なし」の4字だけ
+    form = dict(VALID_FORM, comment="【テスト形式・難易度】\n簡単\n【要した手間】\nなし")
+    resp = await client.post("/submit", data=form)
+    assert resp.status_code == 400
+    assert "30文字以上" in resp.text
+
+
 # ── 境界値 ──────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

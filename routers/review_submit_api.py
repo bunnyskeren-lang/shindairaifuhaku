@@ -14,8 +14,8 @@ from core.config import (
     OMNIBUS_INSTRUCTOR_LABEL,
     REVIEW_SUBMISSION_FACULTY_MISMATCH_MESSAGE,
     REVIEW_SUBMISSION_SENMON_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
-    STUDENT_ID_RE, LINE_USER_ID_RE, is_profile_complete, normalize_student_id,
-    subject_submittable_for_profile,
+    STUDENT_ID_RE, LINE_USER_ID_RE, count_comment_chars, is_profile_complete,
+    normalize_student_id, subject_submittable_for_profile,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -115,10 +115,10 @@ async def submit(
         return _form_error("受講年度を選択してください")
     if not comment.strip():
         return _form_error("コメントを入力してください")
-    if len(comment.strip()) < MIN_COMMENT_LEN:
+    if count_comment_chars(comment) < MIN_COMMENT_LEN:
         return _form_error(
             f"コメントは{MIN_COMMENT_LEN}文字以上で入力してください"
-            f"（現在 {len(comment.strip())} 文字）"
+            f"（現在 {count_comment_chars(comment)} 文字。【…】の見出しは文字数に含みません）"
         )
 
     sid = normalize_student_id(student_id)

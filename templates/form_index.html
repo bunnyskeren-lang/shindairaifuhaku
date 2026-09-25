@@ -404,13 +404,21 @@
         </div>
 
         <!-- プロンプトチップ -->
+        <!-- 見出しチップ。タップすると `【見出し】` を新しい行に挿入し、書く内容の例（data-hint）を下に出す。
+             見出し（【…】）は最低文字数にカウントされない（core/config.py count_comment_chars）。
+             ラベルの選定根拠: 2026-09の承認済みレビュー136件で実際に多く書かれていた話題
+             （出席の実態27%・テスト形式20%・注意点16%・要した手間11%・おすすめ11%・先生9%・成績申告7%） -->
         <div class="flex flex-wrap items-center gap-2 mb-2">
-          <span class="text-xs text-gray-400 shrink-0">タップで挿入👇</span>
-          <button type="button" class="prompt-chip" data-prompt="【テスト形式・難易度】">テスト形式や難易度</button>
-          <button type="button" class="prompt-chip" data-prompt="持ち込み可">持ち込み可</button>
-          <button type="button" class="prompt-chip" data-prompt="【要した手間】">要した手間</button>
-          <button type="button" class="prompt-chip" data-prompt="内職可">内職可</button>
+          <span class="text-xs text-gray-400 shrink-0">タップで見出しを挿入👇</span>
+          <button type="button" class="prompt-chip" data-prompt="【テスト形式・難易度】" data-hint="論述2問・持ち込み不可・試験範囲は事前に発表、など">テスト形式・難易度</button>
+          <button type="button" class="prompt-chip" data-prompt="【要した手間】" data-hint="毎週1000字のレポート、授業外で約2時間、など">要した手間</button>
+          <button type="button" class="prompt-chip" data-prompt="【出席・単位の取り方】" data-hint="出席は毎回コメントシートで確認。実質は出席＋期末レポートで単位が取れる、など（内職できるかもここへ）">出席・単位の取り方</button>
+          <button type="button" class="prompt-chip" data-prompt="【注意点】" data-hint="AI使用は禁止、抽選あり、グループ活動で授業外の時間が必要、シラバスと内容が違った、など">注意点</button>
+          <button type="button" class="prompt-chip" data-prompt="【こんな人におすすめ】" data-hint="文系でも問題なし、高校で数IIIをやっていないと少し大変、など">こんな人におすすめ</button>
+          <button type="button" class="prompt-chip" data-prompt="【先生・授業の雰囲気】" data-hint="優しくて質問しやすい、話が面白い、板書が少ない、など">先生・授業の雰囲気</button>
+          <button type="button" class="prompt-chip" data-prompt="【取れた成績】" data-hint="毎回出席して期末レポートを出し、優でした、など（任意）">取れた成績</button>
         </div>
+        <p id="promptHint" class="hidden mb-2 text-xs text-indigo-500 bg-indigo-50 rounded-lg px-3 py-1.5"></p>
 
         <!-- お知らせ: 2026-09-21 文字数上限（旧500文字）撤廃 -->
         <div class="mb-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2.5">
@@ -451,7 +459,7 @@
             <span>✍️</span><span>もう少しコメントを書こう</span>
           </p>
           <p class="text-xs text-amber-700 mt-1">
-            後輩の参考になるよう、<b>{{ min_comment_len }}文字以上</b>で具体的に書いてみてください。
+            後輩の参考になるよう、<b>{{ min_comment_len }}文字以上</b>で具体的に書いてみてください（【…】の見出しは文字数に含みません）。
           </p>
           <p class="text-xs text-amber-700 mt-1.5">
             現在 <b id="commentHintCur">0</b> 文字（あと <b id="commentHintRemain">{{ min_comment_len }}</b> 文字）
@@ -1839,8 +1847,10 @@
     // 到達すると自動で消える。サーバー側 /submit の同チェックはバックストップとして残す。
     // 閾値は core/config.py MIN_COMMENT_LEN が正。
     const MIN_COMMENT_LEN = {{ min_comment_len }};
+    // 文字数は `【…】` の見出し（チップが挿入するもの）を除いて数える。
+    // サーバー側 core/config.py count_comment_chars と同じ規則。
     function commentLen() {
-      return document.getElementById('comment').value.trim().length;
+      return document.getElementById('comment').value.replace(/【[^】]*】/g, '').trim().length;
     }
     function updateCommentHint() {
       const hint = document.getElementById('commentMinLenHint');
@@ -1877,11 +1887,17 @@
         const el = document.getElementById('comment');
         const prompt = chip.dataset.prompt;
         const cur = el.value;
-        if (cur && !cur.endsWith('、') && !cur.endsWith(' ') && !cur.endsWith('\n')) el.value = cur + '、';
-        el.value += prompt;
+        // 見出しは新しい行の頭に置き、直後に改行して本文をその下から書かせる
+        if (cur && !cur.endsWith('\n')) el.value = cur + '\n';
+        el.value += prompt + '\n';
         el.focus();
         el.setSelectionRange(el.value.length, el.value.length);
-        updateCommentFeedback(el.value.length);
+        const hintEl = document.getElementById('promptHint');
+        if (hintEl && chip.dataset.hint) {
+          hintEl.textContent = '💡 例：' + chip.dataset.hint;
+          hintEl.classList.remove('hidden');
+        }
+        updateCommentFeedback(commentLen());
         updateCommentHint();
         autoGrowComment();
         saveData();
@@ -1890,7 +1906,7 @@
 
     document.getElementById('comment').addEventListener('input', () => {
       const el = document.getElementById('comment');
-      updateCommentFeedback(el.value.length);
+      updateCommentFeedback(commentLen());
       if (el.value.trim()) el.classList.remove('ring-2', 'ring-red-400', 'border-red-400');
       updateCommentHint();
       autoGrowComment();
@@ -2183,7 +2199,7 @@
         }
         if (d.comment) {
           document.getElementById('comment').value = d.comment;
-          updateCommentFeedback(d.comment.length);
+          updateCommentFeedback(commentLen());
           autoGrowComment();
         }
         if (d.classFormatExtra) document.getElementById('classFormatExtraInput').value = d.classFormatExtra;
@@ -2442,6 +2458,8 @@
         el.value = '';
         updateCommentFeedback(0);
         updateCommentHint();
+        const ph = document.getElementById('promptHint');
+        if (ph) ph.classList.add('hidden');
         updateProgressUI();
       }
       // フラグの消費は pageshow 側だけで行う。インライン実行時点ではブラウザの

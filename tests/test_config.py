@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from core.config import is_profile_complete, latest_syllabus_url_map, make_syllabus_url, normalize_alnum, normalize_instructor_name, normalize_subject_name, stars, subject_name_width_variants, subject_submittable_for_profile, syllabus_department_key
+from core.config import count_comment_chars, is_profile_complete, latest_syllabus_url_map, make_syllabus_url, normalize_alnum, normalize_instructor_name, normalize_subject_name, stars, subject_name_width_variants, subject_submittable_for_profile, syllabus_department_key
 
 BASE = "https://kym22-web.ofc.kobe-u.ac.jp/kobe_syllabus/2026"
 
@@ -251,3 +251,14 @@ def test_latest_syllabus_url_map_supports_tuple_keys():
         (1, "田中"): f"{BASE}/20/data/2026_3U020.html",
         (1, "佐藤"): f"{BASE}/20/data/2026_3U021.html",
     }
+
+
+def test_count_comment_chars_excludes_headings_and_whitespace():
+    assert count_comment_chars("") == 0
+    assert count_comment_chars("【テスト形式・難易度】") == 0
+    assert count_comment_chars("【テスト形式・難易度】\n簡単") == 2
+    # 複数の見出し・前後空白。見出しを除いた本文（間の改行を含む）で数える
+    assert count_comment_chars("  【注意点】\nAI禁止\n【要した手間】\n少ない  ") == len("AI禁止\n\n少ない")
+    assert count_comment_chars("見出しなしの文章") == 8
+    # 閉じ括弧が無い場合は見出しとみなさず全体を数える
+    assert count_comment_chars("【途中") == 3
