@@ -389,16 +389,9 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         color="#f97316",
                         height="md",
                     ),
-                    FlexText(
-                        text="登録することで利用規約およびプライバシーポリシーに同意したものとします",
-                        size="xxs",
-                        color="#9ca3af",
-                        wrap=True,
-                        margin="md",
-                    ),
                     FlexBox(
                         layout="horizontal",
-                        margin="sm",
+                        margin="md",
                         contents=[
                             FlexButton(
                                 action=URIAction(label="利用規約", uri=TERMS_URL),
