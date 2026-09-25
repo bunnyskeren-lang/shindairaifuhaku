@@ -750,6 +750,8 @@
       el.classList.toggle('hidden', !text);
       el.classList.remove('text-green-600', 'text-red-500', 'text-gray-400');
       el.classList.add(state === 'ok' || state === 'fixed' ? 'text-green-600' : state === 'invalid' ? 'text-red-500' : 'text-gray-400');
+      // 無効な番号のまま送れないよう、送信ボタンの表示も更新する
+      if (typeof updateProgressUI === 'function' && typeof PROGRESS_ITEMS !== 'undefined') updateProgressUI();
     }
     async function checkGroupCode() {
       const input = document.getElementById('group_code');
@@ -2124,7 +2126,11 @@
       if (!btn || btn.disabled) return; // 送信処理中はラベルを上書きしない
       const activeClasses = ('w-full {% if IS_DEV %}bg-orange-500 hover:bg-orange-600{% else %}bg-indigo-600 hover:bg-indigo-700{% endif %} text-white font-bold py-4 rounded-2xl active:scale-95 transition text-base shadow-md').split(' ');
       const inactiveClasses = 'w-full bg-gray-300 text-white font-bold py-4 rounded-2xl transition text-base shadow-md cursor-not-allowed'.split(' ');
-      if (missing.length === 0) {
+      if (_groupState === 'invalid' || _groupState === 'checking') {
+        // 団体番号が無効（または確認中）の間は送信できない。番号を直すか、欄を空にすると送信できる
+        btn.textContent = _groupState === 'invalid' ? '団体番号が無効です（直すか空にしてください）' : '団体番号を確認中…';
+        btn.className = inactiveClasses.join(' ');
+      } else if (missing.length === 0) {
         btn.textContent = 'レビューを投稿する';
         btn.className = activeClasses.join(' ');
       } else {

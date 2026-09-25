@@ -26,8 +26,8 @@ CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8  # 31^8 ≒ 8.5e11。総当たりはレート制限と合わせて実質不可能
 _MAX_INPUT_LEN = 32
 
-GROUP_CODE_NOT_FOUND_MESSAGE = "この団体番号は見つかりません。番号をお確かめください"
-GROUP_CODE_INACTIVE_MESSAGE = "この団体番号は現在ご利用いただけません（受付を終了しています）"
+GROUP_CODE_NOT_FOUND_MESSAGE = "団体番号が無効です（該当する団体がありません。番号をお確かめください）"
+GROUP_CODE_INACTIVE_MESSAGE = "団体番号が無効です（この団体は現在停止中です）"
 
 
 def generate_group_code() -> str:

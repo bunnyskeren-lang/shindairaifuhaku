@@ -238,7 +238,7 @@ async def test_submit_with_inactive_code_is_rejected(http_client_factory, monkey
     client, _ = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker, group_active=False)
     resp = await client.post("/submit", data={**VALID_FORM, "group_code": GROUP_CODE})
     assert resp.status_code == 400
-    assert "ご利用いただけません" in resp.text
+    assert "停止中" in resp.text
     reviews, _ = await _only_review_and_profile(test_sessionmaker)
     assert reviews == []
 
