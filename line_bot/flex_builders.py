@@ -338,8 +338,15 @@ def make_registration_flex(register_url: str) -> FlexMessage:
             body=FlexBox(
                 layout="vertical",
                 contents=[
+                    FlexText(
+                        text="先輩のリアルなレビューで\n授業選びをサポートします📖",
+                        wrap=True,
+                        size="sm",
+                        color="#374151",
+                    ),
                     FlexBox(
                         layout="vertical",
+                        margin="lg",
                         padding_all="lg",
                         background_color="#eef2ff",
                         border_color="#6366f1",
@@ -370,13 +377,6 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                                 wrap=True,
                             ),
                         ],
-                    ),
-                    FlexText(
-                        text="先輩のリアルなレビューで\n授業選びをサポートします📖",
-                        wrap=True,
-                        size="sm",
-                        color="#374151",
-                        margin="lg",
                     ),
                     FlexText(
                         text="🚧 本サービスは現在β版として提供しており、予告なく仕様変更・停止等を行う場合があります",
