@@ -323,7 +323,7 @@ def make_registration_flex(register_url: str) -> FlexMessage:
             wrap=True,
         ),
         FlexText(
-            text="お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）",
+            text="お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）。学籍番号は神戸大学の学生であることの確認のためだけに使い、ほかの目的には使いません",
             size="xs",
             color="#9a3412",
             wrap=True,
@@ -350,6 +350,17 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         wrap=True,
                         size="sm",
                         color="#374151",
+                    ),
+                    FlexText(
+                        text=(
+                            "神大ライフハックは、神戸大学起業部に所属する工学部の学生が運営しています。"
+                            "起業家支援制度「関西テック・クリエイターチャレンジ」に採択され、"
+                            "情報工学科の准教授の支援のもとで開発しています。"
+                        ),
+                        size="xxs",
+                        color="#6b7280",
+                        wrap=True,
+                        margin="md",
                     ),
                     FlexText(
                         text="🚧 本サービスは現在β版として提供しており、予告なく仕様変更・停止等を行う場合があります",
