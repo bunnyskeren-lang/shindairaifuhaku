@@ -57,7 +57,9 @@ async def test_register_new_user_grants_welcome_credits(http_client_factory, mon
 
     done = await client.get(resp.headers["location"])
     assert done.status_code == 200
-    assert f"{REGISTRATION_WELCOME_UNLOCK_CREDITS}枚プレゼント" in done.text
+    # チケット型カード: 枚数は大きな数字だけの<span>で、続く「枚」「プレゼント！」は別要素
+    assert f'>{REGISTRATION_WELCOME_UNLOCK_CREDITS}</span><span class="text-3xl font-bold">枚</span>' in done.text
+    assert "プレゼント！" in done.text
 
     async with test_sessionmaker() as session:
         profile = await session.get(UserProfile, USER_ID)
@@ -194,8 +196,9 @@ async def test_register_new_user_sees_review_view_guidance(http_client_factory, 
     done = await client.get(resp.headers["location"])
     assert done.status_code == 200
     assert "「レビューを閲覧」から" in done.text
-    assert f"教養：{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚" in done.text
-    assert f"専門：{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚" in done.text
+    # 「レビュー投稿でチケット獲得」ブロック: 教養+5枚・専門+3枚（科目名と枚数は別要素）
+    assert "教養科目" in done.text and f"+{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}<span" in done.text
+    assert "専門科目" in done.text and f"+{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}<span" in done.text
     # レビュー投稿フォームへの自動遷移・戻り導線は廃止済み
     assert "course_id=" not in done.text
     assert "goToReviewForm" not in done.text
