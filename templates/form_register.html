@@ -37,6 +37,16 @@
       <span>登録が完了するまで、Botの機能はご利用いただけません。</span>
     </div>
 
+    <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 mb-5 text-xs text-indigo-900 leading-relaxed">
+      <p class="font-bold text-sm mb-1">🔒 ご登録いただく情報の使いみち</p>
+      <ul class="space-y-1">
+        <li>・<span class="font-semibold">お名前・学籍番号</span>：神戸大学の学生であることの確認と、不正利用の防止のために使います</li>
+        <li>・<span class="font-semibold">学部・学科</span>：あなたに合った科目を表示するためと、利用状況の統計分析のために使います</li>
+        <li>・上記の目的以外には使用しません。法令に基づく場合を除き、第三者に提供することもありません</li>
+        <li>・お名前・学籍番号がほかのユーザーに公開されることはありません</li>
+      </ul>
+    </div>
+
     <!-- 修正理由: 以前はサーバー側で ?uid= から直接DBを引いて氏名・学籍番号・
          学部・学年・学科をテンプレートに埋め込んでいたため、任意のuidを指定
          するだけで他人の個人情報が閲覧できるIDOR/PII漏洩になっていた。現在は
@@ -61,7 +71,6 @@
           🪪 学籍番号 <span class="text-red-500">*</span>
         </label>
         <p class="text-xs text-gray-400 mb-1">数字7桁＋学部コード（医学部のみ2文字: MM・ME・MH）</p>
-        <p class="text-xs text-gray-400 mb-1">学籍番号は、神戸大学の学生であることの確認のためだけに使い、ほかの目的には使いません。</p>
         <input type="text" name="student_id" id="student_id"
           class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
           placeholder="例：2345678S（医学部：2345678MM）" required maxlength="9"
