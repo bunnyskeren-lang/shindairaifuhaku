@@ -5,6 +5,9 @@ from fastapi.responses import HTMLResponse, Response
 
 from core import cache
 from core.activity_log import save_error_log
+from core.funnel import (
+    EVENT_JOIN_VIEW, EVENT_LIFF_REVIEW_VIEW, EVENT_REGISTER_VIEW, EVENT_REVIEW_FORM_VIEW, track,
+)
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, KAIYO_SEISAKU_FACULTY,
     KYOTSU_SENMON_KISO_FACULTY,
@@ -51,6 +54,7 @@ async def index(request: Request, uid: str = Query(default="")):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+    track(request, response, EVENT_REVIEW_FORM_VIEW)
     return response
 
 
@@ -72,12 +76,13 @@ async def register_page(request: Request, uid: str = Query(default="")):
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    track(request, response, EVENT_REGISTER_VIEW)
     return response
 
 
 @router.get("/liff/review", response_class=HTMLResponse)
 async def liff_review(request: Request):
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         "liff/review_redirect.html",
         {
             "request": request,
@@ -86,6 +91,8 @@ async def liff_review(request: Request):
             "redirect_path": "/",
         },
     )
+    track(request, response, EVENT_LIFF_REVIEW_VIEW)
+    return response
 
 
 @router.get("/coop", response_class=HTMLResponse)
@@ -117,6 +124,8 @@ async def join_line(request: Request):
     )
     # OGP画像を差し替えたときにLINE/Discordのキャッシュ更新を妨げないよう短めに
     response.headers["Cache-Control"] = "public, max-age=300"
+    # 共有キャッシュされうる応答なので visitor Cookie は発行しない（到達数だけ数える）
+    track(request, response, EVENT_JOIN_VIEW, set_cookie=False)
     return response
 
 

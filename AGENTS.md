@@ -94,6 +94,7 @@ cd "programing files" && python -X utf8 setup_richmenu.py --env prod
 - `liff_auth_events`
 - `push_subscriptions`
 - `richmenu_taps`
+- `funnel_events`
 
 同期方法：
 ```bash
@@ -302,6 +303,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── grading_method.py                ← Review.grading_method（成績評価方法）の構造化パース
 │   ├── undo.py                           ← 管理画面「元に戻す」用の直前削除内容の一時保持（プロセスメモリ、TTL10分）
 │   ├── db_ssl.py                          ← Supabase(Supavisor pooler)向けSSLコンテキスト生成
+│   ├── funnel.py                            ← 会員登録までの漏斗の計測`track()`（Discord等の呼びかけ→友だち追加ページ/投稿フォーム/登録画面の表示・新規登録完了を`funnel_events`へ記録。ボット・連打は除外、`?src=`で流入元を区別。`/admin/usage-stats`の先頭で集計表示、2026-09-25）
 │   └── background_tasks.py                 ← 「発火して忘れる」バックグラウンドタスクの共通ヘルパー`fire_and_forget()`（asyncio.create_task()の戻り値未保持によるタスクGC消失を防ぐ）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
@@ -385,6 +387,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `liff_auth_events` | LIFF IDトークン期限切れ→強制再ログインのテレメトリ（`POST /api/liff-auth-event`が記録、`_partials/liff_auth.html`が送信）。**サーバーエラーではないので`error_logs`とは別テーブル・Push通知なし**。`payload`にクライアント送信の全JSON、`guard_tripped=true`＝再ログインしても復帰不能＝詰み。`stage='recovered'`＝再ログイン後に復帰成功。`user_id`は署名未検証トークンのsub由来で信頼できない（なりすまし可）。管理画面は`/admin/liff-reauth`。message_logs/error_logsと同じく30日で自動削除 |
 | `push_subscriptions` | Web Push VAPID 購読情報 |
 | `richmenu_taps` | リッチメニュークリックログ |
+| `funnel_events` | 会員登録までの漏斗の計測（`core/funnel.py`。`event`=join_view/liff_review_view/review_form_view/register_view/register_done、`source`=リンクの`?src=`、`visitor_id`=ブラウザごとのランダムCookie`lh_vid`でLINEユーザーIDとは紐付けない）。ユーザーデータ扱いで本番へ同期しない |
 
 ## アーキテクチャ概要
 

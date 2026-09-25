@@ -91,6 +91,24 @@ def rate_limiter(max_requests: int, window_seconds: float):
     return _dep
 
 
+def rate_limit_allows(request: Request, name: str, max_requests: int, window_seconds: float) -> bool:
+    """rate_limiter と同じバケットを使うが、超過時に429を投げず False を返す版。
+
+    ページ表示に付随する計測の書き込み（core/funnel.py）用。上限を超えたらページ自体は
+    通常どおり返し、計測だけ黙って捨てる（連打によるDB書き込みの増幅を防ぐ）。
+    """
+    key = f"{name}:{client_ip(request)}"
+    now = time.monotonic()
+    cutoff = now - window_seconds
+    bucket = _buckets[key]
+    while bucket and bucket[0] < cutoff:
+        bucket.pop(0)
+    if len(bucket) >= max_requests:
+        return False
+    bucket.append(now)
+    return True
+
+
 def _sweep_stale_buckets() -> int:
     """アクセスの絶えたpath:ipキーを_bucketsから間引く。戻り値は削除件数(テスト用)。"""
     cutoff = time.monotonic() - _CLEANUP_INTERVAL_SECONDS

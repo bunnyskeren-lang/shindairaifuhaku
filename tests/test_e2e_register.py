@@ -3,15 +3,21 @@
 初回登録時のレビュー閲覧権チケット付与（ウェルカムボーナス）と、既存プロフィールの
 更新（再登録）時に二重付与しないことを実HTTPリクエスト経由で検証する。
 """
-import pytest
+import asyncio
 
+import pytest
+from sqlalchemy import select
+
+import core.funnel as funnel
 import routers.profile_api as profile_api
+from core.background_tasks import _background_tasks
 from core.config import (
     REGISTRATION_WELCOME_UNLOCK_CREDITS,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO,
     REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
 )
-from models import UserProfile
+from models import FunnelEvent, UserProfile
+from tests.conftest import patch_async_session_local
 
 USER_ID = "U11111111111111111111111111111111"
 
@@ -193,3 +199,35 @@ async def test_register_new_user_sees_review_view_guidance(http_client_factory, 
     # レビュー投稿フォームへの自動遷移・戻り導線は廃止済み
     assert "course_id=" not in done.text
     assert "goToReviewForm" not in done.text
+
+
+BROWSER_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Line/14.0.0"
+
+
+async def _funnel_events(test_sessionmaker):
+    while _background_tasks:
+        await asyncio.gather(*list(_background_tasks))
+    await asyncio.sleep(0)
+    async with test_sessionmaker() as session:
+        return [e.event for e in (await session.execute(select(FunnelEvent).order_by(FunnelEvent.id))).scalars()]
+
+
+@pytest.mark.asyncio
+async def test_register_new_user_records_funnel_event_but_reregistration_does_not(
+    http_client_factory, monkeypatch, test_sessionmaker
+):
+    """新規の会員登録完了だけ funnel_events(register_done) に記録し、既存ユーザーの再登録
+    （生協求人質問の埋め直し）は数えない。"""
+    _fake_verify(monkeypatch)
+    _stub_link_rich_menu(monkeypatch)
+    client = http_client_factory(profile_api, monkeypatch)
+    patch_async_session_local(monkeypatch, funnel, test_sessionmaker)
+    headers = {"user-agent": BROWSER_UA}
+
+    first = await client.post("/api/register", data=VALID_FORM, headers=headers)
+    assert first.status_code == 303
+    assert await _funnel_events(test_sessionmaker) == ["register_done"]
+
+    second = await client.post("/api/register", data={**VALID_FORM, "name": "神戸次郎"}, headers=headers)
+    assert second.status_code == 303
+    assert await _funnel_events(test_sessionmaker) == ["register_done"]

@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache, line_client, moderation
 from core.activity_log import save_error_log
 from core.background_tasks import fire_and_forget
+from core.funnel import EVENT_REGISTER_DONE, track
 from core.push import send_registration_push_notification
 from core.config import (
     BAN_MESSAGE_TEXT,
@@ -290,6 +291,10 @@ async def register_profile(
             await save_error_log(exc, user_id=uid, action="register_push_notification")
 
     fire_and_forget(_notify())
+
+    # 漏斗の計測（core/funnel.py）。既存ユーザーの再登録（生協求人質問の埋め直し）は数えず、新規のみ。
+    if is_new_registration:
+        track(request, None, EVENT_REGISTER_DONE)
 
     return _register_success_redirect()
 

@@ -5,6 +5,64 @@
 {% from "admin/base.html" import pager %}
 {% block content %}
 
+<!-- ⓪ 登録までの漏斗（core/funnel.py。ボット・連打は除外。人数はブラウザ単位の目安） -->
+<div class="card">
+  <div class="section-title">🚪 登録までの漏斗（直近{{ funnel.total_days }}日）</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>段階</th><th style="text-align:right">表示回数</th><th style="text-align:right">ブラウザ数</th></tr></thead>
+      <tbody>
+      {% for t in funnel.totals %}
+        <tr><td>{{ t.label }}</td><td style="text-align:right">{{ t.views }}</td><td style="text-align:right">{{ t.uniques }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;margin-top:8px">
+    「ブラウザ数」は端末ごとのランダムなCookieで数えた目安です（LINEアプリ内と外部ブラウザを行き来すると別々に数えられます）。
+    友だち追加ページはCookieを発行しないので0になります。リンクに <code>?src=discord_0925</code> のように付けると、下に流入元別の表示回数が出ます。
+    この計測は2026-09-25以降の分のみです。
+  </p>
+
+  {% if funnel.sources %}
+  <div class="section-title" style="margin-top:16px">🏷 流入元（?src=）別の表示回数</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>src</th><th>段階</th><th style="text-align:right">表示回数</th></tr></thead>
+      <tbody>
+      {% for s in funnel.sources %}
+        <tr><td>{{ s.source }}</td><td>{{ s.label }}</td><td style="text-align:right">{{ s.views }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="section-title" style="margin-top:16px">📅 日別（JST・直近14日）</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>日付</th>
+          {% for e in funnel.events_in_order %}<th style="text-align:right">{{ e.label }}</th>{% endfor %}
+          <th style="text-align:right">新規会員(DB)</th>
+          <th style="text-align:right">レビュー投稿(DB)</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in funnel.daily_rows %}
+        <tr>
+          <td>{{ r.day }}</td>
+          {% for e in funnel.events_in_order %}<td style="text-align:right">{{ r[e.event] }}</td>{% endfor %}
+          <td style="text-align:right">{{ r.profiles }}</td>
+          <td style="text-align:right">{{ r.reviews }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- ① 科目詳細 閲覧数 -->
 <div class="card">
   <div class="section-title">👁 科目詳細画面 閲覧数（累計）</div>

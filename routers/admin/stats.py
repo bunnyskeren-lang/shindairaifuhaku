@@ -1,16 +1,111 @@
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 
 from core import cache
-from core.config import IS_DEV, VAPID_PUBLIC_KEY
+from core.config import IS_DEV, JST, VAPID_PUBLIC_KEY
+from core.funnel import FUNNEL_EVENTS_IN_ORDER
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, CourseSectionView, RichMenuTap, Subject, UserActivity, UserProfile
+from models import (
+    CourseSection, CourseSectionView, FunnelEvent, RichMenuTap, Review, Subject, UserActivity, UserProfile,
+)
 
 router = APIRouter()
+
+# 漏斗の表示名（core/funnel.py の EVENT_* と対応）
+FUNNEL_LABELS = {
+    "join_view": "友だち追加ページ",
+    "liff_review_view": "投稿フォーム(LIFF中継)",
+    "review_form_view": "投稿フォーム",
+    "register_view": "登録画面",
+    "register_done": "登録完了(新規)",
+}
+FUNNEL_TOTAL_DAYS = 30
+FUNNEL_DAILY_DAYS = 14
+
+
+async def _funnel_stats(session) -> dict:
+    """funnel_events（core/funnel.py）と会員登録・レビュー投稿から、段階ごとの到達数を集計する。
+
+    日別はSQL側でJST日付に丸めず、直近14日分の行をPythonで丸める（SQLiteのテストでも動かすため。
+    行数は画面表示1回につき高々数万行で、ページ表示ごとの記録なので十分小さい）。
+    """
+    now = datetime.now(JST)
+    since_total = now - timedelta(days=FUNNEL_TOTAL_DAYS)
+    since_daily = (now - timedelta(days=FUNNEL_DAILY_DAYS - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    total_rows = (await session.execute(
+        select(
+            FunnelEvent.event,
+            func.count(FunnelEvent.id).label("views"),
+            func.count(func.distinct(FunnelEvent.visitor_id)).label("uniques"),
+        )
+        .where(FunnelEvent.created_at >= since_total)
+        .group_by(FunnelEvent.event)
+    )).all()
+    by_event = {r.event: r for r in total_rows}
+    totals = [
+        {
+            "event": e, "label": FUNNEL_LABELS.get(e, e),
+            "views": int(by_event[e].views) if e in by_event else 0,
+            "uniques": int(by_event[e].uniques) if e in by_event else 0,
+        }
+        for e in FUNNEL_EVENTS_IN_ORDER
+    ]
+
+    source_rows = (await session.execute(
+        select(FunnelEvent.source, FunnelEvent.event, func.count(FunnelEvent.id).label("views"))
+        .where(FunnelEvent.created_at >= since_total, FunnelEvent.source != "")
+        .group_by(FunnelEvent.source, FunnelEvent.event)
+        .order_by(FunnelEvent.source, FunnelEvent.event)
+    )).all()
+    sources = [
+        {"source": r.source, "label": FUNNEL_LABELS.get(r.event, r.event), "views": int(r.views)}
+        for r in source_rows
+    ]
+
+    event_times = (await session.execute(
+        select(FunnelEvent.event, FunnelEvent.created_at).where(FunnelEvent.created_at >= since_daily)
+    )).all()
+    profile_times = (await session.execute(
+        select(UserProfile.created_at).where(UserProfile.created_at >= since_daily)
+    )).scalars().all()
+    review_times = (await session.execute(
+        select(Review.created_at).where(Review.created_at >= since_daily)
+    )).scalars().all()
+
+    def _day(dt) -> str:
+        # SQLiteは日時をtz無しで返すのでUTCとみなす（本番のPostgreSQLはtz付き）
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(JST).strftime("%m/%d")
+
+    days = [(now - timedelta(days=i)).strftime("%m/%d") for i in range(FUNNEL_DAILY_DAYS)]
+    daily = {d: {e: 0 for e in FUNNEL_EVENTS_IN_ORDER} | {"profiles": 0, "reviews": 0} for d in days}
+    for event, created in event_times:
+        d = _day(created)
+        if d in daily and event in daily[d]:
+            daily[d][event] += 1
+    for created in profile_times:
+        d = _day(created)
+        if d in daily:
+            daily[d]["profiles"] += 1
+    for created in review_times:
+        d = _day(created)
+        if d in daily:
+            daily[d]["reviews"] += 1
+
+    return {
+        "totals": totals,
+        "sources": sources,
+        "daily_rows": [{"day": d, **daily[d]} for d in days],
+        "events_in_order": [{"event": e, "label": FUNNEL_LABELS.get(e, e)} for e in FUNNEL_EVENTS_IN_ORDER],
+        "total_days": FUNNEL_TOTAL_DAYS,
+    }
 
 
 @router.get("/admin/usage-stats")
@@ -72,6 +167,7 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin), page: int 
             .where(UserActivity.user_id.in_(page_user_ids))
             .order_by(UserActivity.user_id, UserActivity.count.desc())
         )).all() if page_user_ids else []
+        funnel = await _funnel_stats(session)
         csv_rows = (await session.execute(
             select(CourseSectionView, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == CourseSectionView.course_section_id)
@@ -108,6 +204,7 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin), page: int 
         "uri_stats": uri_stats,
         "msg_btn_stats": msg_btn_stats,
         "msg_ranking": msg_ranking,
+        "funnel": funnel,
         "activity_rows": activity_joined,
         "course_view_rows": course_view_rows,
         "max_bar": max_bar,

@@ -166,6 +166,25 @@ class RichMenuTap(Base):
     )
 
 
+class FunnelEvent(Base):
+    """友だち追加〜会員登録〜レビュー投稿の入口の計測（2026-09-25、`core/funnel.py`）。
+
+    Discordの呼びかけリンク→登録画面→登録完了の各段階の到達数を後から数えるための記録。
+    `visitor_id`は端末（ブラウザ）ごとにサーバーが発行するランダムなCookie値で、個人情報は含まない
+    （LINEユーザーIDとも紐付けない）。`source`はリンクに付けた`?src=`（例: discord_0925）。
+    """
+    __tablename__ = "funnel_events"
+    __table_args__ = (Index("ix_funnel_events_event_created", "event", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    event: Mapped[str] = mapped_column(String(30), nullable=False)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, default="", server_default="")
+    visitor_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class PushSubscription(TimestampMixin, Base):
     __tablename__ = "push_subscriptions"
 
