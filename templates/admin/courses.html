@@ -749,6 +749,15 @@ function addInstructor(courseId) {
       nameSpan.addEventListener('click', function() { openSyllabusModal(courseId, data.id, nameSpan); });
       chip.appendChild(nameSpan);
       chip.appendChild(document.createTextNode(' '));
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'review-closed-btn';
+      closeBtn.title = 'レビュー募集の終了/再開を切り替え';
+      closeBtn.style.cssText = 'border:1px solid var(--accent-light);border-radius:8px;cursor:pointer;font-size:11px;padding:0 6px;line-height:1.6';
+      applyReviewClosedStyle(closeBtn, false);
+      closeBtn.addEventListener('click', function() { toggleReviewClosed(courseId, data.id, closeBtn); });
+      chip.appendChild(closeBtn);
+      chip.appendChild(document.createTextNode(' '));
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.title = '削除';
@@ -770,6 +779,25 @@ function addInstructor(courseId) {
     } else if (data.error === 'duplicate') {
       errEl.style.display = 'inline';
     }
+  }).catch(function() { showErrorToast(); });
+}
+
+function applyReviewClosedStyle(btn, closed) {
+  btn.dataset.closed = closed ? '1' : '0';
+  btn.textContent = closed ? '募集終了' : '募集中';
+  btn.style.background = closed ? '#fee2e2' : 'transparent';
+  btn.style.color = closed ? '#b91c1c' : 'var(--accent-light)';
+}
+
+function toggleReviewClosed(courseId, instId, btn) {
+  const next = btn.dataset.closed === '1' ? 0 : 1;
+  fetchJson('/admin/courses/' + courseId + '/instructors/' + instId + '/review-closed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+    body: 'closed=' + next
+  }).then(function(data) {
+    if (data.ok) applyReviewClosedStyle(btn, data.closed);
+    else showErrorToast(data.error || '切り替えできませんでした');
   }).catch(function() { showErrorToast(); });
 }
 

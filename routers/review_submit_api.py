@@ -206,6 +206,9 @@ async def submit(
             )).scalars().first()
         if cs_obj is None:
             return _form_error("この科目の担当教員情報が見つかりません")
+        # 管理画面から手動で募集終了にされた科目×教員（オムニバス擬似候補は対象外）
+        if cs_obj.review_closed and not is_omnibus:
+            return _form_error("この科目・担当教員のレビュー募集は終了しました")
 
         # 学部をまたぐ同名科目は担当教員で subject を確定させたあとに判定する。
         # 教養科目は全員、専門科目は投稿者本人の学部（会員登録情報）のぶんのみ受け付ける。

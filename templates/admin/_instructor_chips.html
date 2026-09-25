@@ -11,6 +11,11 @@
   {{ inst.name }}
   {% endif %}
   {% if editable %}
+  <button type="button" onclick="toggleReviewClosed({{ course_id }}, {{ inst.id }}, this)"
+          data-closed="{{ 1 if inst.review_closed else 0 }}"
+          class="review-closed-btn"
+          style="border:1px solid var(--accent-light);border-radius:8px;cursor:pointer;font-size:11px;padding:0 6px;line-height:1.6;background:{{ '#fee2e2' if inst.review_closed else 'transparent' }};color:{{ '#b91c1c' if inst.review_closed else 'var(--accent-light)' }}"
+          title="レビュー募集の終了/再開を切り替え">{{ '募集終了' if inst.review_closed else '募集中' }}</button>
   <button type="button" onclick="deleteInstructor({{ course_id }}, {{ inst.id }}, this)"
           style="background:none;border:none;cursor:pointer;color:var(--accent-light);font-size:12px;padding:0;line-height:1" title="削除">✕</button>
   {% endif %}

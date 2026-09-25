@@ -391,7 +391,8 @@ async def admin_courses_panel_instructors(
         if inst.id in seen_inst_ids:
             continue
         seen_inst_ids.add(inst.id)
-        instructors.append(SimpleNamespace(id=inst.id, name=inst.name, url=cs_url_map.get(cs.id, "")))
+        instructors.append(SimpleNamespace(id=inst.id, name=inst.name, url=cs_url_map.get(cs.id, ""),
+                                          review_closed=bool(cs.review_closed)))
 
     html = templates.env.get_template("admin/_instructor_chips.html").render(
         instructors=instructors,

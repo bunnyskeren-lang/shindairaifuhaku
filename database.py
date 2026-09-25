@@ -139,6 +139,10 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
         ))
+        # 管理画面から科目×教員単位でレビュー募集を手動終了する機能用（2026-09-25）
+        await conn.execute(text(
+            "ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS review_closed BOOLEAN NOT NULL DEFAULT false"
+        ))
         # 虚偽投稿等を理由にLINE bot利用を永久停止する機能用（banned_at:NULL=有効、値あり=停止中）
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ"

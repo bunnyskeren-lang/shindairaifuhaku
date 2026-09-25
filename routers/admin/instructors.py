@@ -95,6 +95,24 @@ async def delete_instructor(course_id: int, instructor_id: int, request: Request
     return RedirectResponse(request.headers.get("Referer", "/admin/courses"), status_code=303)
 
 
+@router.post("/admin/courses/{course_id}/instructors/{instructor_id}/review-closed")
+async def set_review_closed(course_id: int, instructor_id: int, closed: int = Form(...), _: str = Depends(check_admin)):
+    """科目×教員（course_section）のレビュー募集を手動で終了/再開する。既存レビューには一切触れない。"""
+    async with AsyncSessionLocal() as session:
+        cs = (await session.execute(
+            select(CourseSection).where(
+                CourseSection.subject_id == course_id,
+                CourseSection.instructor_id == instructor_id,
+            )
+        )).scalar_one_or_none()
+        if not cs:
+            return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
+        cs.review_closed = bool(closed)
+        await session.commit()
+    cache.invalidate_full_pairs_cache()
+    return JSONResponse({"ok": True, "closed": bool(closed)})
+
+
 @router.post("/admin/courses/instructor/move")
 async def admin_instructor_move(request: Request, _=Depends(check_admin)):
     data = await request.json()

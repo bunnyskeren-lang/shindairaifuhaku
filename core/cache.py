@@ -317,7 +317,7 @@ async def get_ease_extremes_cached() -> dict[int, tuple[str, str, str]]:
 async def _fetch_review_remaining() -> dict[tuple[int, str], int]:
     async with AsyncSessionLocal() as s:
         cs_rows = (await s.execute(
-            select(CourseSection.subject_id, Instructor.name)
+            select(CourseSection.subject_id, Instructor.name, CourseSection.review_closed)
             .join(Instructor, Instructor.id == CourseSection.instructor_id)
         )).all()
         review_rows = (await s.execute(
@@ -353,7 +353,11 @@ async def _fetch_review_remaining() -> dict[tuple[int, str], int]:
             group_totals[key] = group_totals.get(key, 0) + cnt
 
     result: dict[tuple[int, str], int] = {}
-    for sid, name in cs_rows:
+    for sid, name, closed in cs_rows:
+        if closed:
+            # 管理画面から手動で募集終了にした科目×教員は残り0（＝募集終了表示）
+            result[(sid, name)] = 0
+            continue
         gkey = group_key_by_sid.get(sid)
         total = group_totals.get((gkey, name), 0) if gkey else counts.get((sid, name), 0)
         result[(sid, name)] = max(0, MAX_REVIEWS_PER_COURSE_SECTION - total)

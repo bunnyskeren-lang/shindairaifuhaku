@@ -99,6 +99,7 @@ class CourseSection(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
     instructor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False, index=True)
+    review_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")  # 管理画面から手動でレビュー募集終了
 
 
 class Syllabus(Base):

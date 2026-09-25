@@ -272,6 +272,10 @@ class CourseSection(Base):
     # 先頭列としてsubject_id単体の検索もカバーするため（instructor_idは先頭列ではないので単独indexが必要）
     subject_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
     instructor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False, index=True)
+    # 管理画面（科目管理の担当教員チップ）から手動で「この科目×教員のレビュー募集を終了」した印。
+    # True だとレビュー投稿フォームで募集終了表示になり、submit も拒否する（閲覧・既存レビューは無影響）。
+    # 環境ごとの運用状態なので sync_db_to_prod.py の同期対象には含めない。
+    review_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class Syllabus(TimestampMixin, Base):
