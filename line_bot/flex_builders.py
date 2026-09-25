@@ -344,16 +344,37 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         size="sm",
                         color="#374151",
                     ),
-                    FlexText(
-                        text=(
-                            "神大ライフハックは、神戸大学起業部に所属する工学部の学生が運営しています。"
-                            "起業家支援制度「関西テック・クリエイターチャレンジ」に採択され、"
-                            "情報工学科の准教授の支援のもとで開発しています。"
-                        ),
-                        size="xxs",
-                        color="#6b7280",
-                        wrap=True,
+                    FlexBox(
+                        layout="vertical",
                         margin="md",
+                        padding_all="md",
+                        background_color="#eef2ff",
+                        corner_radius="md",
+                        spacing="xs",
+                        contents=[
+                            FlexText(text="🎓 運営者について", weight="bold", size="sm", color="#4338ca"),
+                            FlexText(
+                                text="・神戸大学起業部に所属する工学部の学生が運営",
+                                size="xs",
+                                color="#312e81",
+                                weight="bold",
+                                wrap=True,
+                            ),
+                            FlexText(
+                                text="・起業家支援制度「関西テック・クリエイターチャレンジ」に採択",
+                                size="xs",
+                                color="#312e81",
+                                weight="bold",
+                                wrap=True,
+                            ),
+                            FlexText(
+                                text="・情報工学科の准教授の支援のもとで開発",
+                                size="xs",
+                                color="#312e81",
+                                weight="bold",
+                                wrap=True,
+                            ),
+                        ],
                     ),
                     FlexText(
                         text="🚧 本サービスは現在β版として提供しており、予告なく仕様変更・停止等を行う場合があります",
