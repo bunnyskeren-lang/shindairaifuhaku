@@ -34,8 +34,13 @@ async def _send_to_subscribers(title: str, body: str, url: str = "/admin/courses
                 ttl=86400,
             )
         except WebPushException as e:
-            if e.response is not None and e.response.status_code == 410:
-                return sub.id
+            if e.response is not None:
+                if e.response.status_code == 410:
+                    return sub.id
+                # VAPID鍵を差し替えた後に残った旧鍵での購読は永久に送信不能(400)。
+                # 放置すると送信のたびにエラーログが出るので購読を削除する(再購読で復帰)
+                if e.response.status_code == 400 and "VapidPkHashMismatch" in (e.response.text or ""):
+                    return sub.id
             # notify=False: push通知の送信失敗自体をpush通知しようとすると無限ループになるため
             await save_error_log(e, action="push_notification", notify=False)
         except Exception as e:
