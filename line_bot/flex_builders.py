@@ -316,7 +316,7 @@ def make_help_flex() -> FlexMessage:
 def make_registration_flex(register_url: str) -> FlexMessage:
     _notice_contents = [
         FlexText(
-            text="⏱ 登録はたったの30秒で完了します",
+            text="⏱ 登録は30秒で完了します",
             weight="bold",
             size="md",
             color="#c2410c",
