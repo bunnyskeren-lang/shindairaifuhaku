@@ -93,6 +93,20 @@
         <p class="text-xs text-gray-400 mt-1">未入力の場合は「匿名」で表示されます</p>
       </div>
 
+      <!-- 1c. 団体番号（任意）。サークル等の団体から番号を案内された人だけが入力する。
+           入力すると /api/group/lookup で団体名を表示して確認させる。すでに団体に所属している人は
+           prefill の group で固定表示にし、再入力させない（core/groups.py） -->
+      <div id="groupCard" class="bg-white rounded-2xl shadow-sm p-5">
+        <label for="group_code" class="block text-sm font-semibold text-gray-700 mb-2">
+          🤝 団体番号 <span class="text-gray-400 font-normal text-xs">（任意・サークル等から案内された方のみ）</span>
+        </label>
+        <input type="text" name="group_code" id="group_code"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+          placeholder="例：K7M2P9QX" maxlength="32"
+          autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        <p id="groupStatus" class="hidden mt-1 text-xs"></p>
+      </div>
+
       <!-- 2. 科目名 + 担当教員 -->
       <div id="courseCard" class="bg-white rounded-2xl shadow-sm p-5">
 
@@ -724,6 +738,60 @@
     // 会員登録情報（学部・学科）。プリフィルで解決する。専門科目の候補絞り込みに使う。
     let _profile = null;
     // ?course= の自動選択・プリロード取得はプリフィル（学部の確定）を待ってから行う。
+    // 団体番号欄の状態: 'empty'（未入力）/ 'checking' / 'ok' / 'invalid' / 'fixed'（所属済みで固定）
+    let _groupState = 'empty';
+    let _groupCheckSeq = 0;
+    let _groupTimer;
+    function setGroupStatus(state, text) {
+      _groupState = state;
+      const el = document.getElementById('groupStatus');
+      if (!el) return;
+      el.textContent = text || '';
+      el.classList.toggle('hidden', !text);
+      el.classList.remove('text-green-600', 'text-red-500', 'text-gray-400');
+      el.classList.add(state === 'ok' || state === 'fixed' ? 'text-green-600' : state === 'invalid' ? 'text-red-500' : 'text-gray-400');
+    }
+    async function checkGroupCode() {
+      const input = document.getElementById('group_code');
+      const code = input.value.trim();
+      if (!code) { setGroupStatus('empty', ''); return true; }
+      const seq = ++_groupCheckSeq;
+      setGroupStatus('checking', '確認中…');
+      try {
+        const res = await fetch('/api/group/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        if (res.status === 429) {
+          if (seq === _groupCheckSeq) setGroupStatus('invalid', '確認の回数が多すぎます。少し待ってからもう一度お試しください');
+          return false;
+        }
+        const d = await res.json();
+        if (seq !== _groupCheckSeq) return false; // 入力が変わった後の古い応答は捨てる
+        if (d.ok) { setGroupStatus('ok', `✅ ${d.name} として投稿します`); return true; }
+        setGroupStatus('invalid', d.message || '団体番号を確認できませんでした');
+        return false;
+      } catch (_) {
+        if (seq === _groupCheckSeq) setGroupStatus('invalid', '通信に失敗しました。もう一度お試しください');
+        return false;
+      }
+    }
+    document.getElementById('group_code').addEventListener('input', () => {
+      clearTimeout(_groupTimer);
+      _groupCheckSeq++;
+      const v = document.getElementById('group_code').value.trim();
+      if (!v) { setGroupStatus('empty', ''); return; }
+      setGroupStatus('checking', '');
+      _groupTimer = setTimeout(checkGroupCode, 600);
+    });
+    document.getElementById('group_code').addEventListener('blur', () => {
+      if (_groupState === 'checking' && document.getElementById('group_code').value.trim()) {
+        clearTimeout(_groupTimer);
+        checkGroupCode();
+      }
+    });
+
     let _prefillResolve;
     const _prefillDone = new Promise(r => { _prefillResolve = r; });
 
@@ -853,6 +921,17 @@
         sidInput.value = d.student_id;
         sidInput.readOnly = true;
         sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+      }
+      if (d.group) {
+        // すでに団体に所属している人は固定表示にして再入力させない（同じ学籍番号の二重計上防止）
+        const gInput = document.getElementById('group_code');
+        gInput.value = '';
+        gInput.disabled = true; // disabled はフォーム送信に含まれない。サーバー側が所属を固定して使う
+        gInput.placeholder = d.group.name;
+        gInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
+        setGroupStatus('fixed', d.group.active
+          ? `🤝 ${d.group.name} に所属しています（変更できません）`
+          : `🤝 ${d.group.name}（現在は受付を終了しています）`);
       }
       if (Array.isArray(d.reviewed_pairs)) {
         _reviewedSet = new Set(d.reviewed_pairs.map(([cid, name]) => cid + '::' + name));
@@ -2265,6 +2344,15 @@
       CARD_IDS.forEach(clearCardError);
 
       let valid = true;
+
+      // 団体番号: 入力があるのに確認できていない（無効・確認中）ときは、黙って無視せず送信を止める
+      if (_groupState !== 'fixed' && document.getElementById('group_code').value.trim()) {
+        clearTimeout(_groupTimer);
+        if (!(await checkGroupCode())) {
+          document.getElementById('groupCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+      }
 
       if (studentIdInput) {
         studentIdInput.value = studentIdInput.value.replace(/[\s　]+/g, '').toUpperCase();

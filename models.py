@@ -77,6 +77,9 @@ class UserProfile(TimestampMixin, Base):
     # 同じ値の登録が既に成功していれば新規のトークン再検証を経由せず1回目の成功ページへ流す。
     # 部分UNIQUEは上の __table_args__ で宣言。
     register_nonce: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 所属団体（サークル等。`groups`）。レビュー投稿フォームで有効な団体番号を最初に入力した時点で
+    # 固定し、以後は別の番号を入力しても変わらない（同じ学籍番号の二重計上防止、2026-09-26）。NULL＝無所属
+    group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("groups.id", ondelete="RESTRICT"), nullable=True)
 
 
 class ErrorLog(TimestampMixin, Base):
@@ -386,6 +389,9 @@ class Review(TimestampMixin, Base):
     copied_from_review_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("reviews.id", ondelete="SET NULL"), nullable=True
     )
+    # 投稿時点の所属団体（`groups`）。団体への支払い額の集計元。後から団体の所属が変わっても
+    # 過去の精算額が動かないよう、user_profiles.group_id ではなくレビューごとに保存する。NULL＝団体経由でない
+    group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("groups.id", ondelete="RESTRICT"), nullable=True, index=True)
     # 二重送信対策の冪等キー。送信直後にLINEアプリがバックグラウンドへ回るとモバイルOS/
     # webviewが保留中の送信POSTを後から再送し、1回目は保存済みのため2回目が重複防止で弾かれて
     # ユーザーに「既に投稿済み」エラーが出ていた（本人は送信1回）。クライアントが送信ごとに
@@ -401,6 +407,33 @@ class CourseSectionView(Base):
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), primary_key=True)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class Group(TimestampMixin, Base):
+    """レビュー収集で契約した団体（サークル等。2026-09-26、docs/BUSINESS_STRATEGY.md 3.3）。
+
+    会員がレビュー投稿フォームで`code`（団体番号）を入力すると`user_profiles.group_id`/`reviews.group_id`に
+    紐づき、団体への支払い額の集計に使われる（core/groups.py）。`code`は常に大文字で保存する。
+    無効化は`is_active=False`で行い、物理削除しない（紐づくレビュー・精算履歴を消さないため）。
+    """
+    __tablename__ = "groups"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class GroupPayout(TimestampMixin, Base):
+    """団体への精算（入金）記録。発生額（レビュー件数・人数から計算）との差が未精算残高になる。"""
+    __tablename__ = "group_payouts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    group_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("groups.id", ondelete="RESTRICT"), nullable=False, index=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class SubjectUnlock(Base):

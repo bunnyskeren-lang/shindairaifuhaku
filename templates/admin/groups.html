@@ -1,0 +1,100 @@
+{% extends "admin/base.html" %}
+{% block title %}団体管理{% endblock %}
+{% block heading %}🤝 団体管理{% endblock %}
+
+{% block extra_style %}
+.group-card { background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 12px; overflow: hidden; }
+.group-card.inactive { opacity: .7; }
+.group-head { padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--accent); color: #fff; }
+.group-head.inactive { background: #9ca3af; }
+.group-name { font-size: 15px; font-weight: 700; }
+.group-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; letter-spacing: .12em; background: rgba(255,255,255,.2); padding: 2px 10px; border-radius: 6px; user-select: all; }
+.group-body { padding: 10px 14px; font-size: 13px; color: #374151; }
+.group-body table { margin: 8px 0; }
+.group-body td.num, .group-body th.num { text-align: right; white-space: nowrap; }
+.balance { font-weight: 700; }
+.group-foot { padding: 10px 14px; border-top: 1px solid #f1f5f9; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.group-foot input[type=text], .group-foot input[type=number] { border: 1px solid #d1d5db; border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+.rule-note { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <details class="section-details" open>
+    <summary>➕ 団体を追加</summary>
+    <div class="section-body">
+      <form method="post" action="/admin/groups/create" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0">
+        <input type="text" name="name" placeholder="団体名（例：起業部）" maxlength="100" required style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;min-width:200px">
+        <input type="text" name="note" placeholder="メモ（任意・窓口の連絡先など）" maxlength="500" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;flex:1;min-width:200px">
+        <button class="btn btn-primary">団体番号を発行して追加</button>
+      </form>
+      <p class="rule-note" style="margin-top:8px">
+        支払いルール：承認済みレビュー1件につき 教養{{ rules.kyoyo }}円・専門{{ rules.senmon }}円、
+        承認済みレビューのある学籍番号が{{ rules.bonus_unit }}人に達するごとに+{{ rules.bonus_amount }}円（上限なし）。
+        承認後に却下・差し戻しされたレビューは自動で集計から外れます。個人名・学籍番号はこの画面に表示しません。
+      </p>
+    </div>
+  </details>
+</div>
+
+{% if not groups %}
+<div class="card"><div class="section-body"><p style="color:#9ca3af;font-size:13px">団体はまだありません</p></div></div>
+{% endif %}
+
+{% for g in groups %}
+{% set s = stats[g.id] %}
+<div class="group-card{{ ' inactive' if not g.is_active }}">
+  <div class="group-head{{ ' inactive' if not g.is_active }}">
+    <span class="group-name">{{ g.name }}{% if not g.is_active %}（無効）{% endif %}</span>
+    <span class="group-code">{{ g.code }}</span>
+  </div>
+  <div class="group-body">
+    {% if g.note %}<div class="rule-note">📝 {{ g.note }}</div>{% endif %}
+    <div>所属会員 {{ s.member_count }}人 ／ 投稿人数（承認済みが1件以上） <b>{{ s.contributor_count }}人</b></div>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>内訳</th><th class="num">件数・人数</th><th class="num">金額</th></tr></thead>
+      <tbody>
+        <tr><td>教養レビュー（承認済み）×{{ rules.kyoyo }}円</td><td class="num">{{ s.kyoyo_count }}件</td><td class="num">{{ s.kyoyo_amount }}円</td></tr>
+        <tr><td>専門レビュー（承認済み）×{{ rules.senmon }}円</td><td class="num">{{ s.senmon_count }}件</td><td class="num">{{ s.senmon_amount }}円</td></tr>
+        <tr><td>人数ボーナス（{{ rules.bonus_unit }}人ごと+{{ rules.bonus_amount }}円）</td><td class="num">{{ s.bonus_blocks }}回</td><td class="num">{{ s.bonus_amount }}円</td></tr>
+        <tr><td><b>発生額 合計</b></td><td></td><td class="num"><b>{{ s.accrued }}円</b></td></tr>
+        <tr><td>精算済み</td><td></td><td class="num">{{ s.paid }}円</td></tr>
+        <tr><td><b>未精算残高</b></td><td></td><td class="num balance">{{ s.balance }}円</td></tr>
+      </tbody>
+    </table>
+    </div>
+    {% set ps = payouts_by_group.get(g.id, []) %}
+    {% if ps %}
+    <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:#6b7280">精算履歴（{{ ps|length }}件）</summary>
+      <div class="table-wrap"><table>
+        {% for p in ps %}
+        <tr>
+          <td>{{ p.paid_at | jst }}</td><td class="num">{{ p.amount }}円</td><td>{{ p.note or '' }}</td>
+          <td><form method="post" action="/admin/groups/payout/{{ p.id }}/delete" style="margin:0" onsubmit="return confirm('この精算記録を取り消しますか？（入力ミスの訂正用）')"><button class="btn btn-xs btn-danger">取消</button></form></td>
+        </tr>
+        {% endfor %}
+      </table></div>
+    </details>
+    {% endif %}
+  </div>
+  <div class="group-foot">
+    <form method="post" action="/admin/groups/{{ g.id }}/payout" style="display:flex;gap:6px;flex-wrap:wrap;margin:0">
+      <input type="number" name="amount" min="1" placeholder="精算額（円）" required style="width:120px">
+      <input type="text" name="note" placeholder="メモ（振込日など）" maxlength="500">
+      <button class="btn btn-primary btn-xs">精算を記録</button>
+    </form>
+    <form method="post" action="/admin/groups/{{ g.id }}/update" style="display:flex;gap:6px;flex-wrap:wrap;margin:0">
+      <input type="text" name="name" value="{{ g.name }}" maxlength="100" required>
+      <input type="text" name="note" value="{{ g.note or '' }}" placeholder="メモ" maxlength="500">
+      <button class="btn btn-icon">名称・メモを保存</button>
+    </form>
+    <form method="post" action="/admin/groups/{{ g.id }}/toggle" style="margin:0">
+      <button class="btn btn-icon">{{ '無効にする' if g.is_active else '有効に戻す' }}</button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

@@ -143,6 +143,14 @@ def review_approval_unlock_credits(category) -> int:
         return REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON
     return REVIEW_APPROVAL_UNLOCK_CREDITS
 
+# 団体（サークル等）経由のレビュー収集で団体へ支払う額（2026-09-26、docs/BUSINESS_STRATEGY.md 3.3）。
+# 承認済みレビュー1件ごとの単価（科目categoryで分岐）と、承認済みレビューが1件以上ある学籍番号の
+# 人数がGROUP_CONTRIBUTOR_BONUS_UNITに達するごとの加算。団体ごとの上限は設けない。
+GROUP_REVIEW_PAYOUT_KYOYO = 50
+GROUP_REVIEW_PAYOUT_SENMON = 30
+GROUP_CONTRIBUTOR_BONUS_UNIT = 10
+GROUP_CONTRIBUTOR_BONUS_AMOUNT = 500
+
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
 

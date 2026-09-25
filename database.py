@@ -61,7 +61,7 @@ async def init_db():
         PushSubscription, DisplayOrder, RichMenuTap, FunnelEvent,
         Subject, Instructor, CourseSection, Syllabus, Review,
         CourseSectionView, PaymentRequest,
-        Inquiry, SubjectUnlock, AdminSession,
+        Inquiry, SubjectUnlock, AdminSession, Group, GroupPayout,
     )
     from sqlalchemy import text
     # 修正理由: 複数ワーカー・再デプロイ時の新旧プロセス並行起動等でinit_db()が
@@ -138,6 +138,17 @@ async def init_db():
         ))
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
+        ))
+        # 団体（サークル等）経由のレビュー収集用（2026-09-26）。groups/group_payoutsはcreate_allで作られ、
+        # 既存のuser_profiles/reviewsには冪等に列を足す
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES groups(id) ON DELETE RESTRICT"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES groups(id) ON DELETE RESTRICT"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_reviews_group_id ON reviews (group_id)"
         ))
         # 管理画面から科目×教員単位でレビュー募集を手動終了する機能用（2026-09-25）
         await conn.execute(text(

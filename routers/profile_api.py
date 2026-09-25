@@ -10,6 +10,7 @@ from core import cache, line_client, moderation
 from core.activity_log import save_error_log
 from core.background_tasks import fire_and_forget
 from core.funnel import EVENT_REGISTER_DONE, track
+from core.groups import locked_group_id
 from core.push import send_registration_push_notification
 from core.config import (
     BAN_MESSAGE_TEXT,
@@ -25,7 +26,7 @@ from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, LiffAuthEvent, Review, ReviewStatus, UserProfile
+from models import CourseSection, Group, Instructor, LiffAuthEvent, Review, ReviewStatus, UserProfile
 
 router = APIRouter()
 
@@ -126,6 +127,9 @@ async def profile_prefill(request: Request):
             # uid は検証済みの本人自身のLINEユーザーID。投稿フォームが登録画面へのリンクに ?uid= として
             # 付け、未登録者のうち誰が登録画面を開いたかを数えられるようにする（core/funnel.py）
             return {"found": False, "uid": uid}
+        # 所属団体（団体番号を最初に入力した時点で固定）。フォームは団体番号欄を固定表示にする
+        group_id = await locked_group_id(session, profile)
+        group = await session.get(Group, group_id) if group_id is not None else None
         # 同一学籍番号での「科目×担当教員」重複投稿をフォーム側でグレーアウト表示するため、
         # 既に投稿済み（待機中+承認済み）の組み合わせを合わせて返す。実際の受付可否は/submit側で再確認する。
         reviewed_rows = (await session.execute(
@@ -150,6 +154,8 @@ async def profile_prefill(request: Request):
         # お問い合わせフォーム(contact.html)は意図的にこのフラグを見ず、BAN中でも
         # 学籍番号等プリフィルは通常通り行う(BANされたユーザーの異議申立て手段のため)
         "banned": profile.banned_at is not None,
+        # 所属団体（無ければnull）。active=falseは契約終了・停止中で、投稿しても団体には計上されない
+        "group": {"name": group.name, "active": group.is_active} if group else None,
     }
 
 
