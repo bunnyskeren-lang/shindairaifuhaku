@@ -21,6 +21,7 @@ import secrets
 from fastapi import Request, Response
 
 from core.background_tasks import fire_and_forget
+from core.config import LINE_USER_ID_RE
 from core.rate_limit import rate_limit_allows
 from database import AsyncSessionLocal
 from models import FunnelEvent
@@ -72,10 +73,12 @@ def _visitor_id_from_cookie(request: Request) -> str | None:
     return vid if _VISITOR_ID_RE.match(vid) else None
 
 
-async def _insert(event: str, source: str, visitor_id: str | None) -> None:
+async def _insert(event: str, source: str, visitor_id: str | None, line_user_id: str | None) -> None:
     try:
         async with AsyncSessionLocal() as session:
-            session.add(FunnelEvent(event=event, source=source, visitor_id=visitor_id))
+            session.add(FunnelEvent(
+                event=event, source=source, visitor_id=visitor_id, line_user_id=line_user_id,
+            ))
             await session.commit()
     except Exception:  # 計測の失敗でページを壊さない
         logger.warning("funnel event insert failed: %s", event, exc_info=True)
@@ -87,11 +90,13 @@ def track(
     event: str,
     *,
     set_cookie: bool = True,
+    line_user_id: str | None = None,
 ) -> None:
     """ページ表示・登録完了を1件記録する。ページの応答は絶対に妨げない。
 
     response を渡し、かつ set_cookie=True なら、未発行のブラウザには visitor_id を発行して
     Set-Cookie する。共有キャッシュされうる応答（Cache-Control: public）では set_cookie=False にする。
+    line_user_id は登録画面のみ、botの案内リンクの ?uid= を渡す（形式が不正なら捨てる）。
     """
     if request.method == "HEAD" or is_bot_user_agent(request.headers.get("user-agent")):
         return
@@ -106,4 +111,5 @@ def track(
             secure=request.url.scheme == "https",
         )
     source = sanitize_source(request.query_params.get("src"))
-    fire_and_forget(_insert(event, source, visitor_id))
+    line_user_id = line_user_id if line_user_id and LINE_USER_ID_RE.match(line_user_id) else None
+    fire_and_forget(_insert(event, source, visitor_id, line_user_id))

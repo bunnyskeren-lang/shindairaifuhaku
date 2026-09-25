@@ -76,7 +76,9 @@ async def register_page(request: Request, uid: str = Query(default="")):
         },
     )
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    track(request, response, EVENT_REGISTER_VIEW)
+    # uid はbotの会員登録案内リンク(?uid=)で付く。未登録の友だち追加者のうち誰が登録画面を開いたかを
+    # 数えるためだけに記録する（署名未検証なので人数の目安専用）
+    track(request, response, EVENT_REGISTER_VIEW, line_user_id=uid)
     return response
 
 

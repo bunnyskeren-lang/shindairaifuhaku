@@ -231,3 +231,15 @@ async def test_register_new_user_records_funnel_event_but_reregistration_does_no
     second = await client.post("/api/register", data={**VALID_FORM, "name": "神戸次郎"}, headers=headers)
     assert second.status_code == 303
     assert await _funnel_events(test_sessionmaker) == ["register_done"]
+
+
+@pytest.mark.asyncio
+async def test_prefill_for_unregistered_user_returns_own_uid_for_register_link(
+    http_client_factory, monkeypatch
+):
+    """未登録なら検証済みの本人のuidを返す（投稿フォームが登録画面リンクの?uid=に使う）。"""
+    _fake_verify(monkeypatch)
+    client = http_client_factory(profile_api, monkeypatch)
+
+    resp = await client.post("/api/profile/prefill", json={"id_token": "valid-token"})
+    assert resp.json() == {"found": False, "uid": USER_ID}

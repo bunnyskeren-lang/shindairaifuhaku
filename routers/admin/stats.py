@@ -28,6 +28,80 @@ FUNNEL_TOTAL_DAYS = 30
 FUNNEL_DAILY_DAYS = 14
 
 
+def _aware(dt: datetime) -> datetime:
+    # SQLiteは日時をtz無しで返すのでUTCとみなす（本番のPostgreSQLはtz付き）
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+async def _friend_breakdown(session) -> dict:
+    """LINE友だち追加者を「登録画面を開いたか」「登録したか」で3グループに分ける。
+
+    - 友だち追加者: user_activity の `[follow]`（ブロック解除の再追加も同じ行）
+    - 登録済み: user_profiles
+    - 登録画面を開いた: funnel_events の register_view のうち、botの案内リンクの ?uid= が付いていたもの
+      （署名未検証のURLパラメータ由来なので人数の目安。core/funnel.py）
+    登録画面の記録は計測開始（funnel_events の最初の行）以降のものしか無い。それより前に友だち追加して
+    未登録のまま、かつ記録も無い人は「開いたかどうか不明」として別枠にする（開いていない人に数えない）。
+    """
+    follow_at = {
+        uid: last_at for uid, last_at in (await session.execute(
+            select(UserActivity.user_id, UserActivity.last_at).where(UserActivity.action == "[follow]")
+        )).all()
+    }
+    registered = set((await session.execute(select(UserProfile.line_user_id))).scalars().all())
+    opened = {
+        uid: (first_at, cnt) for uid, first_at, cnt in (await session.execute(
+            select(FunnelEvent.line_user_id, func.min(FunnelEvent.created_at), func.count(FunnelEvent.id))
+            .where(FunnelEvent.event == "register_view", FunnelEvent.line_user_id.is_not(None))
+            .group_by(FunnelEvent.line_user_id)
+        )).all()
+    }
+    measure_start = (await session.execute(select(func.min(FunnelEvent.created_at)))).scalar_one_or_none()
+    measure_start = _aware(measure_start) if measure_start else None
+
+    def _fmt(dt) -> str:
+        return _aware(dt).astimezone(JST).strftime("%m/%d %H:%M")
+
+    def _short(uid: str) -> str:
+        return uid[:7] + "…"
+
+    never_opened, opened_unregistered, unknown = [], [], []
+    registered_friends = 0
+    for uid, followed in follow_at.items():
+        if uid in registered:
+            registered_friends += 1
+        elif uid in opened:
+            first_at, cnt = opened[uid]
+            opened_unregistered.append({
+                "id": _short(uid), "followed_at": _fmt(followed), "opened_at": _fmt(first_at),
+                "opens": int(cnt), "_sort": _aware(followed),
+            })
+        elif measure_start is not None and _aware(followed) >= measure_start:
+            never_opened.append({"id": _short(uid), "followed_at": _fmt(followed), "_sort": _aware(followed)})
+        else:
+            unknown.append(uid)
+
+    newest_first = lambda r: r["_sort"]  # noqa: E731
+    never_opened.sort(key=newest_first, reverse=True)
+    opened_unregistered.sort(key=newest_first, reverse=True)
+    for r in never_opened + opened_unregistered:
+        del r["_sort"]
+
+    return {
+        "followers": len(follow_at),
+        "never_opened": len(never_opened),
+        "opened_unregistered": len(opened_unregistered),
+        "registered_friends": registered_friends,
+        "unknown": len(unknown),
+        "registered_total": len(registered),
+        "registered_without_follow": len(registered - set(follow_at)),
+        "opened_not_friend_unregistered": len(set(opened) - set(follow_at) - registered),
+        "measure_start": _fmt(measure_start) if measure_start else None,
+        "never_opened_rows": never_opened[:50],
+        "opened_unregistered_rows": opened_unregistered[:50],
+    }
+
+
 async def _funnel_stats(session) -> dict:
     """funnel_events（core/funnel.py）と会員登録・レビュー投稿から、段階ごとの到達数を集計する。
 
@@ -100,6 +174,7 @@ async def _funnel_stats(session) -> dict:
             daily[d]["reviews"] += 1
 
     return {
+        "friends": await _friend_breakdown(session),
         "totals": totals,
         "sources": sources,
         "daily_rows": [{"day": d, **daily[d]} for d in days],

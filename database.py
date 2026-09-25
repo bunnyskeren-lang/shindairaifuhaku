@@ -131,6 +131,11 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS ix_error_logs_created_at ON error_logs (created_at)"
         ))
         # 新規カラム追加
+        # funnel_events は2026-09-25に新設（create_allで作られる）。同日中にline_user_id列を追加したため、
+        # 既に旧定義で作成済みのdev DB向けに冪等に追加する
+        await conn.execute(text(
+            "ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS line_user_id VARCHAR(33)"
+        ))
         await conn.execute(text(
             "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
         ))

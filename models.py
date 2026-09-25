@@ -180,6 +180,10 @@ class FunnelEvent(Base):
     event: Mapped[str] = mapped_column(String(30), nullable=False)
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="", server_default="")
     visitor_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # 登録画面(register_view)のみ: botの会員登録案内リンク(?uid=)から分かったLINEユーザーID。
+    # 署名検証していないURLパラメータ由来なので、なりすましうる（人数の目安専用。
+    # 認可や個人の特定には使わない）。/admin/usage-stats の「友だち追加者の内訳」が使う
+    line_user_id: Mapped[str | None] = mapped_column(String(33), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

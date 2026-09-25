@@ -1,5 +1,6 @@
 """登録までの漏斗の計測（core/funnel.py）と、管理画面の漏斗集計の回帰テスト。"""
 import asyncio
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -12,7 +13,7 @@ import routers.admin.stats as admin_stats
 import routers.pages as pages
 from core import cache
 from core.background_tasks import _background_tasks
-from models import FunnelEvent, UserProfile
+from models import FunnelEvent, UserActivity, UserProfile
 from tests.conftest import patch_async_session_local
 
 BROWSER_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Line/14.0.0"
@@ -211,3 +212,70 @@ async def test_admin_usage_stats_page_renders_funnel_section(http_client_factory
     assert "登録までの漏斗" in resp.text
     assert "登録画面" in resp.text
     assert "discord_0925" in resp.text  # 流入元別の表
+    assert "LINE友だち追加者の内訳" in resp.text
+
+
+# ── LINE友だち追加者の3グループ ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_register_page_records_line_user_id_from_uid_param(client, test_sessionmaker):
+    uid = "U" + "a" * 32
+    await client.get(f"/register?uid={uid}")
+    await client.get("/register?uid=not-a-line-id")
+    await _flush_background()
+    events = await _events(test_sessionmaker)
+    assert [e.line_user_id for e in events] == [uid, None]
+
+
+def _at(hour: int) -> datetime:
+    return datetime(2026, 9, 25, hour, 0, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_friend_breakdown_splits_followers_into_three_groups(test_sessionmaker):
+    u_registered = "U" + "1" * 32       # 友だち追加 → 登録画面を開いた → 登録した
+    u_opened = "U" + "2" * 32           # 友だち追加 → 登録画面を開いた → 未登録
+    u_never = "U" + "3" * 32            # 友だち追加（計測開始後）→ 開いていない
+    u_unknown = "U" + "4" * 32          # 計測開始前に友だち追加、未登録、記録なし
+    u_direct = "U" + "5" * 32           # 友だち追加の記録なしで直接登録
+    u_stranger = "U" + "6" * 32         # 友だち追加の記録なし、開いたが未登録
+    async with test_sessionmaker() as s:
+        s.add_all([
+            UserActivity(user_id=u_registered, action="[follow]", count=1, last_at=_at(10)),
+            UserActivity(user_id=u_opened, action="[follow]", count=1, last_at=_at(10)),
+            UserActivity(user_id=u_never, action="[follow]", count=1, last_at=_at(12)),
+            UserActivity(user_id=u_unknown, action="[follow]", count=1, last_at=_at(8)),
+            UserActivity(user_id=u_registered, action="教養", count=3, last_at=_at(11)),  # follow以外は無視される
+            # 計測開始 = 最初のfunnel_events(10時)
+            FunnelEvent(event="register_view", line_user_id=u_registered, created_at=_at(10)),
+            FunnelEvent(event="register_view", line_user_id=u_opened, created_at=_at(11)),
+            FunnelEvent(event="register_view", line_user_id=u_opened, created_at=_at(12)),
+            FunnelEvent(event="register_view", line_user_id=u_stranger, created_at=_at(12)),
+            UserProfile(line_user_id=u_registered, name="登録済み太郎", student_id="1234567S"),
+            UserProfile(line_user_id=u_direct, name="直接登録花子", student_id="7654321S"),
+        ])
+        await s.commit()
+
+    async with test_sessionmaker() as s:
+        f = (await admin_stats._funnel_stats(s))["friends"]
+
+    assert f["followers"] == 4
+    assert (f["never_opened"], f["opened_unregistered"], f["registered_friends"]) == (1, 1, 1)
+    assert f["unknown"] == 1
+    assert f["registered_total"] == 2
+    assert f["registered_without_follow"] == 1
+    assert f["opened_not_friend_unregistered"] == 1
+    assert [r["id"] for r in f["never_opened_rows"]] == [u_never[:7] + "…"]
+    assert [(r["id"], r["opens"]) for r in f["opened_unregistered_rows"]] == [(u_opened[:7] + "…", 2)]
+
+
+@pytest.mark.asyncio
+async def test_friend_breakdown_without_any_funnel_events_marks_unregistered_as_unknown(test_sessionmaker):
+    """計測開始前（funnel_eventsが空）に友だち追加して未登録の人は、「開いていない」と断定せず不明にする。"""
+    async with test_sessionmaker() as s:
+        s.add(UserActivity(user_id="U" + "7" * 32, action="[follow]", count=1, last_at=_at(9)))
+        await s.commit()
+    async with test_sessionmaker() as s:
+        f = (await admin_stats._funnel_stats(s))["friends"]
+    assert (f["never_opened"], f["opened_unregistered"], f["unknown"]) == (0, 0, 1)
+    assert f["measure_start"] is None

@@ -123,7 +123,9 @@ async def profile_prefill(request: Request):
     async with AsyncSessionLocal() as session:
         profile = await session.get(UserProfile, uid)
         if not profile:
-            return {"found": False}
+            # uid は検証済みの本人自身のLINEユーザーID。投稿フォームが登録画面へのリンクに ?uid= として
+            # 付け、未登録者のうち誰が登録画面を開いたかを数えられるようにする（core/funnel.py）
+            return {"found": False, "uid": uid}
         # 同一学籍番号での「科目×担当教員」重複投稿をフォーム側でグレーアウト表示するため、
         # 既に投稿済み（待機中+承認済み）の組み合わせを合わせて返す。実際の受付可否は/submit側で再確認する。
         reviewed_rows = (await session.execute(

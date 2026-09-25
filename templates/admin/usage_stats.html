@@ -24,6 +24,42 @@
     この計測は2026-09-25以降の分のみです。
   </p>
 
+  {% set f = funnel.friends %}
+  <div class="section-title" style="margin-top:16px">👥 LINE友だち追加者の内訳（{{ f.followers }}人）</div>
+  <div class="table-wrap">
+    <table>
+      <tbody>
+        <tr><td>① 友だち追加したが、登録画面を<b>開いていない</b></td><td style="text-align:right;font-weight:700">{{ f.never_opened }}人</td></tr>
+        <tr><td>② 登録画面を<b>開いたが</b>、登録していない</td><td style="text-align:right;font-weight:700">{{ f.opened_unregistered }}人</td></tr>
+        <tr><td>③ <b>登録した</b></td><td style="text-align:right;font-weight:700">{{ f.registered_friends }}人</td></tr>
+        {% if f.unknown %}
+        <tr><td style="color:#9ca3af">（参考）計測開始前に友だち追加して未登録＝開いたか不明</td><td style="text-align:right;color:#9ca3af">{{ f.unknown }}人</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <p style="color:#9ca3af;font-size:12px;margin-top:8px">
+    ①②は{% if f.measure_start %}計測開始（{{ f.measure_start }}）{% else %}計測開始{% endif %}以降のデータです。「登録画面を開いた」は、botの登録案内リンクの<code>?uid=</code>で付いたLINEユーザーIDで数えています（署名を検証していないため人数の目安）。
+    登録済みの合計は{{ f.registered_total }}人（うち友だち追加の記録が無い人は{{ f.registered_without_follow }}人。Discordのリンクから直接登録した人など）。
+    {% if f.opened_not_friend_unregistered %}友だち追加の記録は無いが登録画面を開いて未登録の人が{{ f.opened_not_friend_unregistered }}人います。{% endif %}
+  </p>
+  {% if f.never_opened_rows %}
+  <details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">① 開いていない人の一覧（新しい順・最大50件）</summary>
+    <div class="table-wrap"><table>
+      <thead><tr><th>ユーザーID（先頭）</th><th>友だち追加</th></tr></thead>
+      <tbody>{% for r in f.never_opened_rows %}<tr><td>{{ r.id }}</td><td>{{ r.followed_at }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+  {% if f.opened_unregistered_rows %}
+  <details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">② 開いたが未登録の人の一覧（新しい順・最大50件）</summary>
+    <div class="table-wrap"><table>
+      <thead><tr><th>ユーザーID（先頭）</th><th>友だち追加</th><th>初めて開いた</th><th style="text-align:right">開いた回数</th></tr></thead>
+      <tbody>{% for r in f.opened_unregistered_rows %}<tr><td>{{ r.id }}</td><td>{{ r.followed_at }}</td><td>{{ r.opened_at }}</td><td style="text-align:right">{{ r.opens }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+
   {% if funnel.sources %}
   <div class="section-title" style="margin-top:16px">🏷 流入元（?src=）別の表示回数</div>
   <div class="table-wrap">

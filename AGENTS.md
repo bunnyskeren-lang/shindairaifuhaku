@@ -387,7 +387,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `liff_auth_events` | LIFF IDトークン期限切れ→強制再ログインのテレメトリ（`POST /api/liff-auth-event`が記録、`_partials/liff_auth.html`が送信）。**サーバーエラーではないので`error_logs`とは別テーブル・Push通知なし**。`payload`にクライアント送信の全JSON、`guard_tripped=true`＝再ログインしても復帰不能＝詰み。`stage='recovered'`＝再ログイン後に復帰成功。`user_id`は署名未検証トークンのsub由来で信頼できない（なりすまし可）。管理画面は`/admin/liff-reauth`。message_logs/error_logsと同じく30日で自動削除 |
 | `push_subscriptions` | Web Push VAPID 購読情報 |
 | `richmenu_taps` | リッチメニュークリックログ |
-| `funnel_events` | 会員登録までの漏斗の計測（`core/funnel.py`。`event`=join_view/liff_review_view/review_form_view/register_view/register_done、`source`=リンクの`?src=`、`visitor_id`=ブラウザごとのランダムCookie`lh_vid`でLINEユーザーIDとは紐付けない）。ユーザーデータ扱いで本番へ同期しない |
+| `funnel_events` | 会員登録までの漏斗の計測（`core/funnel.py`。`event`=join_view/liff_review_view/review_form_view/register_view/register_done、`source`=リンクの`?src=`、`visitor_id`=ブラウザごとのランダムCookie`lh_vid`、`line_user_id`=登録画面(register_view)のみ、botの案内リンクの`?uid=`から。署名未検証なので人数の目安専用。`/admin/usage-stats`の「友だち追加者の内訳」が使う）。ユーザーデータ扱いで本番へ同期しない |
 
 ## アーキテクチャ概要
 
