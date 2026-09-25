@@ -316,18 +316,11 @@ def make_help_flex() -> FlexMessage:
 def make_registration_flex(register_url: str) -> FlexMessage:
     _notice_contents = [
         FlexText(
-            text="⚠️ ご利用には会員登録が必要です",
+            text="⏱ 登録はたったの30秒で完了します",
             weight="bold",
-            size="sm",
+            size="md",
             color="#c2410c",
             wrap=True,
-        ),
-        FlexText(
-            text="お名前・学籍番号・学部・学科を入力するだけ（30秒で完了）。学籍番号は神戸大学の学生であることの確認のためだけに使い、ほかの目的には使いません",
-            size="xs",
-            color="#9a3412",
-            wrap=True,
-            margin="sm",
         ),
     ]
     return FlexMessage(
