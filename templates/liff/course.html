@@ -436,8 +436,10 @@ function buildLockCardHtml(data, userId, isInClient, profileFetchFailed) {
           + `ログイン状態を確認できませんでした。お手数ですが、リッチメニューや科目一覧からこのページをもう一度開き直してください。</div>`
           + `<button id="btn-retry-login" class="btn btn-secondary">🔄 もう一度ログインする</button>`;
   } else {
-    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6;margin-top:14px">`
-          + `解除するにはLINEアプリ内からこのページを開いてください。</div>`;
+    // PC等の外部ブラウザ。LINEログイン（btn-retry-loginのハンドラがliff.login()を呼ぶ）で解除できるようにする
+    html += `<div style="font-size:12px;background:#fff7ed;color:#9a3412;border-radius:8px;padding:10px 12px;line-height:1.6;margin:14px 0 10px">`
+          + `チケットで解除するにはLINEログインが必要です。下のボタンからログインしてください（PCではメールアドレスまたはQRコードでログインできます）。</div>`
+          + `<button id="btn-retry-login" class="btn btn-primary">LINEでログインする</button>`;
   }
   html += `</div>`;
   return html;
