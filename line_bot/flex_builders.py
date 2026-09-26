@@ -376,7 +376,7 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         contents=[
                             FlexText(text="🎓 運営者について", weight="bold", size="md", color="#4338ca"),
                             FlexText(
-                                text="・神戸大学起業部に所属する工学部の学生が運営",
+                                text="・神戸大学工学部に所属する起業部の学生が運営",
                                 size="sm",
                                 color="#312e81",
                                 weight="bold",
