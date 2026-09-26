@@ -97,8 +97,9 @@
   .hero-grid{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center;}
   .hero-text{text-align:left;}
   .hero p.lede{ margin-left:0; }
-  .hero-shot{display:block; margin:0; width:clamp(92px,26vw,150px);}
-  .hero-shot img{display:block; width:100%; height:auto; border-radius:20px; border:1px solid var(--border); box-shadow:0 18px 34px -20px rgba(0,0,0,.35);}
+  /* スマホ端末の枠（.shotと同じ黒い枠）。小さい画面では枠も細く・角も小さくする */
+  .hero-shot{display:block; margin:0; width:clamp(92px,26vw,150px); position:relative; background:#0d0f0b; padding:clamp(4px,1.2vw,10px); border-radius:clamp(14px,4.4vw,30px); box-shadow:var(--shadow);}
+  .hero-shot img{display:block; width:100%; height:auto; border-radius:clamp(10px,3.2vw,21px);}
   @media (min-width:861px){
     .hero-grid{grid-template-columns:1fr 250px; gap:48px;}
     .hero-shot{width:auto;}
