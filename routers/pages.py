@@ -1,7 +1,8 @@
 import json
+from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, Response
 
 from core import cache
 from core.activity_log import save_error_log
@@ -97,14 +98,14 @@ async def liff_review(request: Request):
     return response
 
 
-# ホームページ（Claude Artifactで公開）への短縮URL。ArtifactのURLは自分で変えられないため、
-# 配布用にはこの /hp を使う。/hp#group のようなフラグメントはリダイレクト先にも引き継がれる。
-HOMEPAGE_URL = "https://claude.ai/artifact/3nwq4F48WFM6ExDyTsD1fq"
+# ホームページ。templates/hp.html は自己完結した静的HTMLなのでJinja2を通さず、そのまま返す
+# （2026-09-26にClaude Artifactへのリダイレクトから自前配信へ変更）。
+_HOMEPAGE_HTML = (Path(__file__).resolve().parent.parent / "templates" / "hp.html").read_text(encoding="utf-8")
 
 
-@router.get("/hp")
+@router.get("/hp", response_class=HTMLResponse)
 async def homepage():
-    return RedirectResponse(HOMEPAGE_URL, status_code=302)
+    return HTMLResponse(_HOMEPAGE_HTML, headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/coop", response_class=HTMLResponse)
