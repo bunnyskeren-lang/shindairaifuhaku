@@ -93,14 +93,15 @@
   .hero h1 .hl{ color:var(--line-deep); }
   .ph{display:inline-block;}
   .hero p.lede{ margin:14px auto 0; max-width:56ch; text-wrap:balance; color:var(--muted); font-size:15px; }
-  /* PCのみ：ヒーローを左テキスト・右スクショの2列にする（狭い画面では下に小さく表示） */
-  .hero-shot{display:block; margin:18px auto 0; width:min(230px,62vw);}
+  /* PCのみ：ヒーローを左テキスト・右スクショの2列にする（狭い画面ではテキストの右に小さく表示） */
+  .hero-grid{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center;}
+  .hero-text{text-align:left;}
+  .hero p.lede{ margin-left:0; }
+  .hero-shot{display:block; margin:0; width:clamp(92px,26vw,150px);}
   .hero-shot img{display:block; width:100%; height:auto; border-radius:20px; border:1px solid var(--border); box-shadow:0 18px 34px -20px rgba(0,0,0,.35);}
   @media (min-width:861px){
-    .hero-grid{display:grid; grid-template-columns:1fr 250px; gap:48px; align-items:center;}
-    .hero-text{text-align:left;}
-    .hero p.lede{ margin-left:0; }
-    .hero-shot{margin:0; width:auto;}
+    .hero-grid{grid-template-columns:1fr 250px; gap:48px;}
+    .hero-shot{width:auto;}
   }
   .hero-ctas{display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-top:22px;}
   .btn-primary{
@@ -540,7 +541,10 @@
     body{ line-height:1.65; }
     .hero{ padding-block:20px 16px; }
     .hero .eyebrow{ margin-bottom:10px; font-size:11.5px; padding:5px 12px; }
-    .hero h1{ font-size:24px; }    .hero p.lede{ margin-top:8px; }
+    .hero h1{ font-size:20px; }    .hero p.lede{ margin-top:8px; }
+    /* 画像を右に置くため、ヒーローのテキストは左ぞろえ */
+    .hero .eyebrow{ font-size:10.5px; padding:4px 10px; }
+    .hero p.lede{ text-align:left; text-align-last:left; font-size:13px; line-height:1.7; }
     .hero-ctas{ margin-top:14px; }
     .btn-primary{ padding:11px 20px; font-size:14.5px; }
     .hero-badge{ margin-top:12px; padding:8px 12px; }
