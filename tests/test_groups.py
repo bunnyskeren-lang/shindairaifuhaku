@@ -259,7 +259,7 @@ async def test_submit_fixed_group_ignores_other_code(http_client_factory, monkey
 
 @pytest.mark.asyncio
 async def test_submit_member_without_code_is_not_counted(http_client_factory, monkeypatch, test_sessionmaker):
-    """所属済みでも、団体番号を入力せずに投稿したレビューは団体に数えない（入力した投稿だけ数える）。"""
+    """所属済みでも、団体番号を消した（空の）状態で投稿したレビューは団体に数えない。"""
     client, gid = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker)
     async with test_sessionmaker() as s:
         (await s.get(UserProfile, UID)).group_id = gid
@@ -323,7 +323,7 @@ async def test_prefill_returns_group_when_member_belongs_to_one(http_client_fact
         await s.commit()
     client = http_client_factory(profile_api, monkeypatch)
     d = (await client.post("/api/profile/prefill", json={"id_token": "valid-token"})).json()
-    assert d["group"] == {"name": "起業部", "active": True}
+    assert d["group"] == {"name": "起業部", "active": True, "code": GROUP_CODE}  # 番号を入力済みにするため返す
 
 
 @pytest.mark.asyncio

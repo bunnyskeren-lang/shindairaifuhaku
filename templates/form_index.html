@@ -939,11 +939,11 @@
         sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
       }
       if (d.group) {
-        // 所属済みでも、団体に計上されるのは団体番号を入力して投稿したレビューだけ。欄は入力できる
-        // ままにし、番号を入れた投稿だけが所属団体に数えられることを案内する（毎回入力が必要）
+        // 所属団体の番号を入力済みにする（毎回入力しなくてよい）。団体に数えるのは番号が入った状態で
+        // 投稿したレビューだけなので、本人が欄を消して投稿すればそのレビューは団体に数えない
         if (d.group.active) {
-          document.getElementById('group_code').placeholder = '団体に数えるときだけ入力';
-          setGroupStatus('member', `🤝 ${d.group.name} に所属しています。この投稿を団体に数えるには、団体番号を入力してください`);
+          document.getElementById('group_code').value = d.group.code || '';
+          setGroupStatus('ok', `✅ ${d.group.name} として投稿します（団体に数えたくない場合は番号を消してください）`);
         } else {
           setGroupStatus('member', `🤝 ${d.group.name}（現在は受付を終了しています）`);
         }
