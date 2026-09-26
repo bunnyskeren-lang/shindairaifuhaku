@@ -368,12 +368,16 @@ async def test_admin_create_update_toggle_and_payout(http_client_factory, monkey
         gid = g.id
 
     # 団体番号を手入力（全角・小文字は正規化）。重複はエラー表示で追加されない
-    r = await client.post("/admin/groups/create", data={"name": "書道部", "code": "ｓｈｏ２０２６"})
+    r = await client.post("/admin/groups/create", data={"name": "書道部", "code": "ｓｈ２０２６ab"})
     assert r.status_code == 303
-    r = await client.post("/admin/groups/create", data={"name": "別団体", "code": "SHO2026"})
+    r = await client.post("/admin/groups/create", data={"name": "別団体", "code": "SH2026AB"})
     assert "error=" in r.headers["location"]
+    for bad in ("SHO2026", "SH2026ABC", "SHO-2026"):  # 8文字未満・超過・記号は追加されない
+        r = await client.post("/admin/groups/create", data={"name": "不正", "code": bad})
+        assert "error=" in r.headers["location"]
     async with test_sessionmaker() as s:
-        assert [g.name for g in (await s.execute(select(Group).where(Group.code == "SHO2026"))).scalars()] == ["書道部"]
+        assert (await s.execute(select(Group).where(Group.name == "不正"))).first() is None
+        assert [g.name for g in (await s.execute(select(Group).where(Group.code == "SH2026AB"))).scalars()] == ["書道部"]
         assert (await s.execute(select(Group).where(Group.name == "別団体"))).first() is None
 
     await client.post(f"/admin/groups/{gid}/update", data={"name": "硬式テニス部", "note": ""})
