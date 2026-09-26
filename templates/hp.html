@@ -658,7 +658,9 @@
     <button class="tab" role="tab" id="tabbtn-stats" aria-selected="false" aria-controls="panel-stats" data-tab="stats">実績</button>
     <button class="tab" role="tab" id="tabbtn-review" aria-selected="false" aria-controls="panel-review" data-tab="review">レビュー投稿・閲覧</button>
     <button class="tab" role="tab" id="tabbtn-group" aria-selected="false" aria-controls="panel-group" data-tab="group">団体の方へ</button>
+    <!-- 企業の方へ：一旦伏せる（再開時はコメントを外し、下のJS panelsにもbizを戻す）
     <button class="tab" role="tab" id="tabbtn-biz" aria-selected="false" aria-controls="panel-biz" data-tab="biz">企業の方へ</button>
+    -->
   </div>
 </div>
 
@@ -994,7 +996,7 @@
 <script>
   // タブ切り替え
   var tabButtons = Array.prototype.slice.call(document.querySelectorAll('.tab'));
-  var panels = { belief:'panel-belief', stats:'panel-stats', review:'panel-review', group:'panel-group', biz:'panel-biz' };
+  var panels = { belief:'panel-belief', stats:'panel-stats', review:'panel-review', group:'panel-group' };
 
   function activateTab(name){
     if(!panels[name]) return;
