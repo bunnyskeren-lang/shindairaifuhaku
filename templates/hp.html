@@ -372,6 +372,8 @@
   .calc-item{flex:1; background:var(--surface-alt); border-radius:16px; padding:16px 18px;}
   .calc-item b{display:block; font-size:18px; font-weight:900; color:var(--line-deep);}
   .calc-item span{display:block; margin-top:4px; font-size:12.5px; color:var(--muted);}
+  /* 団体の方へ：説明文を濃く（--muted→--ink） */
+  #panel-group .panel-head p, #panel-group .calc-item span{color:var(--ink);}
   .calc-plus{align-self:center; font-weight:900; color:var(--muted-2); font-size:20px;}
   @media (max-width:600px){ .calc{flex-direction:column;} .calc-plus{align-self:center;} }
   .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:28px;}
