@@ -13,7 +13,6 @@ from linebot.v3.messaging import (
 from core import cache
 from core.config import (
     CONTACT_URL, EASE_COLOR, EASE_LABEL, EASE_STARS, PRIVACY_URL, TERMS_URL,
-    REGISTRATION_WELCOME_UNLOCK_CREDITS,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
@@ -199,115 +198,91 @@ def make_no_review_flex(course: Subject, user_id: str = "") -> FlexMessage:
 
 
 def make_help_flex() -> FlexMessage:
-    def section_label(text: str) -> FlexText:
-        return FlexText(text=text, size="xxs", weight="bold", color="#6366f1",
-                        margin="lg")
-
-    def card(icon: str, title: str, desc: str, bg: str = "#f5f3ff") -> FlexBox:
+    # 使い方はレビューの「投稿」と「閲覧」の2つだけに絞ったポップな構成（2026-09-26）。
+    # 手順文は1行に収まる短さにしている。
+    def step(n: int, text: str, color: str) -> FlexBox:
         return FlexBox(
             layout="horizontal",
-            background_color=bg,
-            corner_radius="10px",
-            padding_all="md",
+            background_color="#ffffff",
+            corner_radius="12px",
+            padding_all="sm",
             margin="sm",
+            align_items="center",
             contents=[
                 FlexBox(
                     layout="vertical",
-                    contents=[FlexText(text=icon, size="lg", align="center", gravity="center")],
-                    width="36px",
-                    height="36px",
-                    background_color="#ffffff",
-                    corner_radius="8px",
-                    flex=0,
-                    justify_content="center",
-                    align_items="center",
+                    width="26px", height="26px", corner_radius="13px",
+                    background_color=color, flex=0,
+                    justify_content="center", align_items="center",
+                    contents=[FlexText(text=str(n), color="#ffffff", weight="bold", size="sm", align="center")],
                 ),
+                FlexText(text=text, weight="bold", size="sm", color="#1e293b", wrap=True, flex=1, margin="md"),
+            ],
+        )
+
+    def section(emoji: str, title: str, steps: list[str], main: str, bg: str) -> FlexBox:
+        return FlexBox(
+            layout="vertical",
+            background_color=bg,
+            corner_radius="18px",
+            padding_all="sm",
+            margin="md",
+            contents=[
                 FlexBox(
-                    layout="vertical",
-                    flex=1,
-                    margin="md",
+                    layout="horizontal",
+                    background_color=main,
+                    corner_radius="12px",
+                    padding_all="md",
+                    align_items="center",
                     contents=[
-                        FlexText(text=title, weight="bold", size="sm", color="#1e1b4b"),
-                        FlexText(text=desc, size="xs", color="#6b7280", wrap=True, margin="xs"),
+                        FlexText(text=emoji, size="xl", flex=0),
+                        FlexText(text=title, weight="bold", size="lg", color="#ffffff", margin="md", flex=1),
                     ],
                 ),
+                *[step(i + 1, t, main) for i, t in enumerate(steps)],
             ],
         )
 
     return FlexMessage(
-        alt_text="神大ライフハック 使い方ガイド",
+        alt_text="神大ライフハック 使い方",
         contents=FlexBubble(
             header=FlexBox(
-                layout="vertical",
+                layout="horizontal",
+                background_color="#f59e0b",
+                padding_all="lg",
+                align_items="center",
                 contents=[
-                    FlexBox(
-                        layout="horizontal",
-                        contents=[
-                            FlexText(text="🎓", size="xxl", flex=0),
-                            FlexBox(
-                                layout="vertical",
-                                flex=1,
-                                margin="md",
-                                contents=[
-                                    FlexText(text="神大ライフハック", weight="bold",
-                                             color="#ffffff", size="lg"),
-                                    FlexText(text="使い方ガイド", color="#c7d2fe", size="xs"),
-                                ],
-                            ),
-                        ],
-                    ),
+                    FlexText(text="🎓", size="xl", flex=0),
+                    FlexText(text="使い方", weight="bold", size="lg", color="#ffffff", margin="md", flex=1),
                 ],
-                background_color="#4f46e5",
-                padding_all="xl",
             ),
             body=FlexBox(
                 layout="vertical",
+                padding_all="md",
                 contents=[
-                    section_label("📱  リッチメニュー"),
-                    card("✏️", "レビュー投稿", "レビュー投稿フォームを開く", bg="#f5f3ff"),
-                    card("📖", "レビュー閲覧", "科目一覧からレビューをチェック（🎫チケットが必要）", bg="#f5f3ff"),
-                    card("🏆", "楽単5選 / 鬼単5選", "楽単・鬼単科目ランキングTOP5を表示", bg="#f5f3ff"),
-                    card("🎴", "10連おみくじ", "ランダムに10科目をおみくじ形式で紹介", bg="#f5f3ff"),
-                    card("🔗", "外部サービス",
-                         "うりぼーポータル・BEEF+・食堂メニュー・\n生協アプリ・市バス・図書館へ移動",
-                         bg="#f5f3ff"),
-                    section_label("🎫  レビュー閲覧チケット"),
-                    card("🎫", "チケットとは",
-                         "他の人のレビューを見るには科目ごとに🎫チケットを1枚使います",
-                         bg="#fffbeb"),
-                    card("🎁", "もらい方",
-                         f"会員登録で{REGISTRATION_WELCOME_UNLOCK_CREDITS}枚、"
-                         f"自分のレビューが承認されるたびに教養は{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚・"
-                         f"専門は{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚もらえます",
-                         bg="#fffbeb"),
-                    section_label("💬  チャット"),
-                    card("🔍", "科目名を送る",
-                         "授業情報・レビューを表示\n例：「英語」「データサイエンス」",
-                         bg="#eff6ff"),
-                    card("🏆", "楽単 / 鬼単",
-                         "「楽単」→ 楽単ランキング\n「鬼単」→ 鬼単ランキング",
-                         bg="#eff6ff"),
+                    section(
+                        "✏️", "レビューを投稿する",
+                        [
+                            "「レビューを投稿」をタップ",
+                            "科目と教員を選んで入力",
+                            f"承認でチケット教養{REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO}枚・専門{REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON}枚",
+                        ],
+                        "#f59e0b", "#fffbeb",
+                    ),
+                    section(
+                        "👀", "レビューを閲覧する",
+                        ["「レビューを閲覧」をタップ", "読みたい科目を選ぶ", "チケット1枚で解除して読む"],
+                        "#0ea5e9", "#f0f9ff",
+                    ),
                 ],
-                padding_all="lg",
-                background_color="#fafafa",
             ),
             footer=FlexBox(
-                layout="vertical",
+                layout="horizontal",
+                padding_all="sm",
                 contents=[
-                    FlexButton(
-                        action=URIAction(label="📬 お問い合わせ", uri=CONTACT_URL),
-                        style="primary",
-                        color="#6366f1",
-                        height="sm",
-                    ),
-                    FlexButton(
-                        action=URIAction(label="プライバシーポリシー", uri=PRIVACY_URL),
-                        style="link",
-                        height="sm",
-                    ),
+                    FlexButton(action=URIAction(label="お問い合わせ", uri=CONTACT_URL), style="link", height="sm", color="#f59e0b"),
+                    FlexButton(action=URIAction(label="プライバシーポリシー", uri=PRIVACY_URL), style="link", height="sm", color="#6b7280"),
                 ],
-                padding_all="md",
-                spacing="sm",
             ),
         ),
     )
