@@ -93,14 +93,14 @@
   .hero h1 .hl{ color:var(--line-deep); }
   .ph{display:inline-block;}
   .hero p.lede{ margin:14px auto 0; max-width:56ch; text-wrap:balance; color:var(--muted); font-size:15px; }
-  /* PCのみ：ヒーローを左テキスト・右スクショの2列にする（狭い画面ではスクショを隠して縦長を抑える） */
-  .hero-shot{display:none;}
+  /* PCのみ：ヒーローを左テキスト・右スクショの2列にする（狭い画面では下に小さく表示） */
+  .hero-shot{display:block; margin:18px auto 0; width:min(230px,62vw);}
+  .hero-shot img{display:block; width:100%; height:auto; border-radius:20px; border:1px solid var(--border); box-shadow:0 18px 34px -20px rgba(0,0,0,.35);}
   @media (min-width:861px){
     .hero-grid{display:grid; grid-template-columns:1fr 250px; gap:48px; align-items:center;}
     .hero-text{text-align:left;}
     .hero p.lede{ margin-left:0; }
-    .hero-shot{display:block;}
-    .hero-shot img{display:block; width:100%; height:auto; border-radius:22px; border:1px solid var(--border); box-shadow:0 22px 40px -22px rgba(0,0,0,.35);}
+    .hero-shot{margin:0; width:auto;}
   }
   .hero-ctas{display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-top:22px;}
   .btn-primary{
