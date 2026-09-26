@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 
 from core import cache
 from core.config import CHANNEL_GUEST, CHANNEL_MAIN, credit_tickets_granted_clause, escape_like, review_approval_unlock_credits
@@ -84,7 +84,13 @@ async def admin_users(
         users = (await session.execute(
             select(
                 UserProfile.line_user_id.label("user_id"),
-                last_seen_subq.c.last_seen,
+                # 最終アクセス=最後のLINE受信メッセージ。ただし会員登録はLIFFフォームのPOSTでメッセージ
+                # ログに残らず、登録後に何も送らないと登録日時より古い値になり矛盾するため、
+                # 登録日時を下限にする(登録自体もアクセス)
+                case(
+                    (last_seen_subq.c.last_seen > UserProfile.created_at, last_seen_subq.c.last_seen),
+                    else_=UserProfile.created_at,
+                ).label("last_seen"),
                 UserProfile.created_at.label("registered_at"),
                 UserProfile.name,
                 UserProfile.student_id,
