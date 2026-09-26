@@ -188,7 +188,9 @@ async def admin_review_approve(
             if credit_grant_pending(review.credit_granted_at) and review.student_id:
                 profile = (await session.execute(
                     select(UserProfile).where(UserProfile.student_id == review.student_id)
-                )).scalar_one_or_none()
+                    # 学籍番号は重複登録を許すため複数行あり得る。本番会員(is_guest=false)を優先
+                    .order_by(UserProfile.is_guest).limit(1)
+                )).scalars().first()
                 if profile:
                     # 付与枚数はレビュー投稿先の科目カテゴリで分岐（教養5枚・専門3枚）
                     category = (await session.execute(

@@ -221,16 +221,8 @@ async def register_profile(
         return _form_error(f"「{COOP_JOBSITE_KNOWN_QUESTION}」にお答えください")
 
     async with AsyncSessionLocal() as session:
-        # ゲスト用botは同じ学籍番号・学部学科で何人でも試せるよう重複チェックしない。
-        # 本番側もゲスト登録行(is_guest=true)は重複判定の対象外（DBの部分UNIQUEと同条件）
-        if not IS_GUEST:
-            taken = (await session.execute(
-                select(UserProfile.line_user_id).where(
-                    UserProfile.student_id == sid, UserProfile.is_guest.is_(False)
-                )
-            )).scalars().first()
-            if taken is not None and taken != uid:
-                return _form_error("この学籍番号はすでに別のアカウントで登録されています")
+        # 学籍番号の重複チェックはしない（本番・ゲストとも。2026-09-27、ユーザー指示）。
+        # DB側のUNIQUE制約も外している（database.py init_db参照）
 
         # 修正理由: 従来はSELECTで存在確認してからINSERT/UPDATEを分岐していたため、
         # 同一ユーザーからのほぼ同時の二重送信（ボタン連打・LIFF多重初期化等）で
