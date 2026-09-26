@@ -173,16 +173,18 @@ async def submit(
             return _form_error("学籍番号が登録情報と一致しません")
         submitter_name = existing.name
 
-        # 団体経由の投稿（2026-09-26、core/groups.py）。同じ学籍番号は最初に有効な番号を入力した団体へ
-        # 固定し、以後の別番号の入力は無視する。固定前に入力された番号が無効・停止中のときは
-        # 黙って無視せずエラーにする（本人は団体に計上されると思って投稿しているため）。
+        # 団体経由の投稿（2026-09-26、core/groups.py）。団体に計上するのは「団体番号を入力して投稿した
+        # レビュー」だけで、所属済みでも番号を入力しなかった投稿は数えない。同じ学籍番号は最初に有効な
+        # 番号を入力した団体へ固定し、以後の別番号の入力は固定先の団体として扱う。固定前に入力された
+        # 番号が無効・停止中のときは黙って無視せずエラーにする（本人は団体に計上されると思って投稿している）。
         review_group_id: int | None = None
+        entered_code = bool(group_code.strip())
         fixed_group_id = await locked_group_id(session, existing)
         if fixed_group_id is not None:
             fixed_group = await session.get(Group, fixed_group_id)
-            if fixed_group is not None and fixed_group.is_active:
+            if entered_code and fixed_group is not None and fixed_group.is_active:
                 review_group_id = fixed_group.id
-        elif group_code.strip():
+        elif entered_code:
             entered_group = await find_group_by_code(session, group_code)
             if entered_group is None:
                 return _form_error(GROUP_CODE_NOT_FOUND_MESSAGE)

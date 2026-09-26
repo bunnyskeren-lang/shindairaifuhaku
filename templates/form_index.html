@@ -94,8 +94,8 @@
       </div>
 
       <!-- 1c. 団体番号（任意）。サークル等の団体から番号を案内された人だけが入力する。
-           入力すると /api/group/lookup で団体名を表示して確認させる。すでに団体に所属している人は
-           prefill の group で固定表示にし、再入力させない（core/groups.py） -->
+           入力すると /api/group/lookup で団体名を表示して確認させる。所属済みの人にも欄は出し、
+           番号を入力した投稿だけが団体に数えられる（core/groups.py） -->
       <div id="groupCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label for="group_code" class="block text-sm font-semibold text-gray-700 mb-2">
           🤝 団体番号 <span class="text-gray-400 font-normal text-xs">（任意・サークル等から案内された方のみ）</span>
@@ -738,7 +738,7 @@
     // 会員登録情報（学部・学科）。プリフィルで解決する。専門科目の候補絞り込みに使う。
     let _profile = null;
     // ?course= の自動選択・プリロード取得はプリフィル（学部の確定）を待ってから行う。
-    // 団体番号欄の状態: 'empty'（未入力）/ 'checking' / 'ok' / 'invalid' / 'fixed'（所属済みで固定）
+    // 団体番号欄の状態: 'empty'（未入力）/ 'checking' / 'ok' / 'invalid' / 'member'（所属済みの案内表示）
     let _groupState = 'empty';
     let _groupCheckSeq = 0;
     let _groupTimer;
@@ -749,7 +749,7 @@
       el.textContent = text || '';
       el.classList.toggle('hidden', !text);
       el.classList.remove('text-green-600', 'text-red-500', 'text-gray-400');
-      el.classList.add(state === 'ok' || state === 'fixed' ? 'text-green-600' : state === 'invalid' ? 'text-red-500' : 'text-gray-400');
+      el.classList.add(state === 'ok' ? 'text-green-600' : state === 'invalid' ? 'text-red-500' : 'text-gray-400');
       // 無効な番号のまま送れないよう、送信ボタンの表示も更新する
       if (typeof updateProgressUI === 'function' && typeof PROGRESS_ITEMS !== 'undefined') updateProgressUI();
     }
@@ -925,15 +925,14 @@
         sidInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
       }
       if (d.group) {
-        // すでに団体に所属している人は固定表示にして再入力させない（同じ学籍番号の二重計上防止）
-        const gInput = document.getElementById('group_code');
-        gInput.value = '';
-        gInput.disabled = true; // disabled はフォーム送信に含まれない。サーバー側が所属を固定して使う
-        gInput.placeholder = d.group.name;
-        gInput.classList.add('bg-gray-50', 'text-gray-500', 'cursor-not-allowed');
-        setGroupStatus('fixed', d.group.active
-          ? `🤝 ${d.group.name} に所属しています（変更できません）`
-          : `🤝 ${d.group.name}（現在は受付を終了しています）`);
+        // 所属済みでも、団体に計上されるのは団体番号を入力して投稿したレビューだけ。欄は入力できる
+        // ままにし、番号を入れた投稿だけが所属団体に数えられることを案内する（毎回入力が必要）
+        if (d.group.active) {
+          document.getElementById('group_code').placeholder = '団体に数えるときだけ入力';
+          setGroupStatus('member', `🤝 ${d.group.name} に所属しています。この投稿を団体に数えるには、団体番号を入力してください`);
+        } else {
+          setGroupStatus('member', `🤝 ${d.group.name}（現在は受付を終了しています）`);
+        }
       }
       if (Array.isArray(d.reviewed_pairs)) {
         _reviewedSet = new Set(d.reviewed_pairs.map(([cid, name]) => cid + '::' + name));
@@ -2352,7 +2351,7 @@
       let valid = true;
 
       // 団体番号: 入力があるのに確認できていない（無効・確認中）ときは、黙って無視せず送信を止める
-      if (_groupState !== 'fixed' && document.getElementById('group_code').value.trim()) {
+      if (document.getElementById('group_code').value.trim()) {
         clearTimeout(_groupTimer);
         if (!(await checkGroupCode())) {
           document.getElementById('groupCard').scrollIntoView({ behavior: 'smooth', block: 'center' });

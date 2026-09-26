@@ -258,6 +258,19 @@ async def test_submit_fixed_group_ignores_other_code(http_client_factory, monkey
 
 
 @pytest.mark.asyncio
+async def test_submit_member_without_code_is_not_counted(http_client_factory, monkeypatch, test_sessionmaker):
+    """所属済みでも、団体番号を入力せずに投稿したレビューは団体に数えない（入力した投稿だけ数える）。"""
+    client, gid = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker)
+    async with test_sessionmaker() as s:
+        (await s.get(UserProfile, UID)).group_id = gid
+        await s.commit()
+    assert (await client.post("/submit", data=VALID_FORM)).status_code == 303
+    reviews, profile = await _only_review_and_profile(test_sessionmaker)
+    assert reviews[0].group_id is None
+    assert profile.group_id == gid  # 所属自体は保持
+
+
+@pytest.mark.asyncio
 async def test_submit_fixed_to_inactive_group_is_not_counted(http_client_factory, monkeypatch, test_sessionmaker):
     client, gid = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker, group_active=False)
     async with test_sessionmaker() as s:
