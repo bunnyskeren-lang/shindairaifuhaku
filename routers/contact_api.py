@@ -19,7 +19,7 @@ router = APIRouter()
 _submit_rate_limit = rate_limiter(max_requests=3, window_seconds=60)
 
 _EMAIL_RE = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_CATEGORIES = ("質問", "情報の誤りのご指摘", "新しい情報の追加提案", "情報のアップデート", "誤字脱字のご指摘", "その他")
+_CATEGORIES = ("質問", "情報の誤りのご指摘", "新しい情報の追加提案", "情報のアップデート", "誤字脱字のご指摘", "団体の制度について", "その他")
 
 
 @router.get("/contact", response_class=HTMLResponse)
