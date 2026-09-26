@@ -29,7 +29,8 @@ from models import FunnelEvent
 
 logger = logging.getLogger(__name__)
 
-EVENT_JOIN_VIEW = "join_view"                    # /join（友だち追加のOGPランディング）
+EVENT_HP_VIEW = "hp_view"                        # /hp（ホームページ）
+EVENT_JOIN_VIEW = "join_view"                   # /join（友だち追加のOGPランディング）
 EVENT_LIFF_REVIEW_VIEW = "liff_review_view"      # /liff/review（レビュー投稿フォームのLIFF中継）
 EVENT_REVIEW_FORM_VIEW = "review_form_view"      # /（レビュー投稿フォーム。リッチメニュー経由の既存ユーザーも含む）
 EVENT_REGISTER_VIEW = "register_view"            # /register（会員登録画面。未登録者にだけ出る）
@@ -37,6 +38,7 @@ EVENT_REGISTER_DONE = "register_done"            # 会員登録の新規完了�
 
 # 漏斗として画面に出す順序（管理画面もこの順で並べる）
 FUNNEL_EVENTS_IN_ORDER = (
+    EVENT_HP_VIEW,
     EVENT_JOIN_VIEW,
     EVENT_LIFF_REVIEW_VIEW,
     EVENT_REVIEW_FORM_VIEW,

@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, Response
 from core import cache
 from core.activity_log import save_error_log
 from core.funnel import (
-    EVENT_JOIN_VIEW, EVENT_LIFF_REVIEW_VIEW, EVENT_REGISTER_VIEW, EVENT_REVIEW_FORM_VIEW, track,
+    EVENT_HP_VIEW, EVENT_JOIN_VIEW, EVENT_LIFF_REVIEW_VIEW, EVENT_REGISTER_VIEW, EVENT_REVIEW_FORM_VIEW, track,
 )
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, IS_GUEST, KAIYO_SEISAKU_FACULTY,
@@ -115,8 +115,10 @@ _HOMEPAGE_PATH = Path(__file__).resolve().parent.parent / "templates" / "hp.html
 
 
 @router.get("/hp", response_class=HTMLResponse)
-async def homepage():
-    return HTMLResponse(_HOMEPAGE_PATH.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+async def homepage(request: Request):
+    response = HTMLResponse(_HOMEPAGE_PATH.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+    track(request, response, EVENT_HP_VIEW)
+    return response
 
 
 @router.get("/coop", response_class=HTMLResponse)

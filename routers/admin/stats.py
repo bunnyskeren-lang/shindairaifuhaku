@@ -19,6 +19,7 @@ router = APIRouter()
 
 # 漏斗の表示名（core/funnel.py の EVENT_* と対応）
 FUNNEL_LABELS = {
+    "hp_view": "ホームページ",
     "join_view": "友だち追加ページ",
     "liff_review_view": "投稿フォーム(LIFF中継)",
     "review_form_view": "投稿フォーム",
