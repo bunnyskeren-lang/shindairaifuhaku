@@ -93,6 +93,15 @@
   .hero h1 .hl{ color:var(--line-deep); }
   .ph{display:inline-block;}
   .hero p.lede{ margin:14px auto 0; max-width:56ch; text-wrap:balance; color:var(--muted); font-size:15px; }
+  /* PCのみ：ヒーローを左テキスト・右スクショの2列にする（狭い画面ではスクショを隠して縦長を抑える） */
+  .hero-shot{display:none;}
+  @media (min-width:861px){
+    .hero-grid{display:grid; grid-template-columns:1fr 250px; gap:48px; align-items:center;}
+    .hero-text{text-align:left;}
+    .hero p.lede{ margin-left:0; }
+    .hero-shot{display:block;}
+    .hero-shot img{display:block; width:100%; height:auto; border-radius:22px; border:1px solid var(--border); box-shadow:0 22px 40px -22px rgba(0,0,0,.35);}
+  }
   .hero-ctas{display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-top:22px;}
   .btn-primary{
     display:inline-flex; align-items:center; gap:9px; background:var(--line); color:#fff;
@@ -644,10 +653,13 @@
 
 <!-- ============ COMPACT HERO ============ -->
 <header class="hero">
-  <div class="wrap">
+  <div class="wrap hero-grid">
+    <div class="hero-text">
     <span class="eyebrow">神戸大学 起業部発 ／ LINE公式アカウント(β版)</span>
     <h1><span class="ph">履修選びを、</span><span class="hl"><span class="ph">もっと賢く、</span><span class="ph">もっとラクに。</span></span></h1>
     <p class="lede"><span class="ph">神大生のリアルな授業レビューや、</span><span class="ph">履修に役立つ情報をLINEに集約。</span></p>
+    </div>
+    <div class="hero-shot"><img src="/static/hp/line-screen.jpg" alt="神大ライフハックのLINEトーク画面。楽単5選のランキングとリッチメニュー"></div>
   </div>
 </header>
 
