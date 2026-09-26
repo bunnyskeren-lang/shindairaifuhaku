@@ -316,7 +316,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 ├── routers/                 ← FastAPI APIRouter（URLプレフィックス単位）
 │   ├── webhook.py             ← POST /callback（LINE Webhook）
 │   ├── health.py               ← /health
-│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /liff/review, /coop, /join（LINE友だち追加OGPランディング）, /privacy, /terms, /sw.js, /liff/course
+│   ├── pages.py                  ← /, /register（会員登録必須ページ）, /liff/review, /coop, /join（LINE友だち追加OGPランディング）, /hp（ホームページ。templates/hp.htmlを毎回読んで返す自己完結HTML、Jinja2非経由）, /privacy, /terms, /sw.js, /liff/course
 │   ├── richmenu.py                ← /r/{name}（クリック計測付きリダイレクト）
 │   ├── liff_api.py                 ← /api/courses, /api/preload, /api/instructors, /api/course/{id}, /api/course/{id}/unlock（閲覧権チケット消費）
 │   ├── profile_api.py               ← /api/liff-auth-event, /api/profile/status, /api/profile/prefill, /api/register（会員登録）
@@ -345,10 +345,11 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   │                          activity / usage_stats / richmenu / login / base 等
 │   ├── liff/
 │   │   └── course.html    ← 科目詳細・レビュー閲覧（LIFFページ）
-│   ├── form_index.html    ← レビュー投稿フォーム
+│   ├── form_index.html    ← レビュー投稿フォーム（HTML+Jinja2由来の定数だけ。JS本体は static/form_index.js、2026-09-26分離。?v=はcore/templates.pyの`static_version()`）
 │   ├── form_success.html
 │   ├── form_error.html
 │   └── privacy.html
+├── static/                ← 静的ファイル（/static配信。join-ogp.png、form_index.js）
 ├── data/                  ← シラバス取り込み用テキストファイル（曜日別）
 ├── supabase/migrations/   ← 新スキーマ移行SQL
 ├── docs/                  ← ドキュメント類（2026-07-17に全体をgit管理化・デプロイ対象）
