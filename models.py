@@ -472,7 +472,7 @@ class InquiryStatus:
 
 
 class Inquiry(TimestampMixin, Base):
-    """お問い合わせ（質問・情報の誤りの指摘・新情報の追加提案・誤送信
+    """お問い合わせ（質問・情報の誤りの指摘・新情報の追加提案・誤送信の報告
     ・団体の制度について等）。フォーム送信時にそのまま作成する（メールアドレス認証は行わない）。"""
     __tablename__ = "inquiries"
 
