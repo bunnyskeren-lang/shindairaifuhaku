@@ -84,7 +84,8 @@ from linebot.v3.messaging import (
 W, H = 1624, 969
 
 # ── レイアウト座標（assets/richmenu.png ピクセル実測値、境界は隣接領域の中間点）──
-# 画像上部（y:0〜TOP_Y）はタイトルバナー「神大ライフハック」→ HP(/hp)へのリンクボタン
+# 画像上部（y:0〜TOP_Y）はタイトルバナー「神大ライフハック」でボタンなし
+# → クリック領域未定義（タップしても何も起きない）
 TOP_Y   = 210    # タイトルバナー下端 / Row1 上端
 ROW2_Y  = 534    # Row1(投稿/閲覧) / Row2(楽単/おみくじ/鬼単) 境界
 REV_W   = 676    # レビュー投稿 / レビュー閲覧 境界（Row1）
@@ -106,12 +107,6 @@ def _review_action():
 
 
 AREAS = [
-    # ── タイトルバナー「神大ライフハック」→ HP（LINE内ブラウザで開く。openExternalBrowserは付けない）──
-    {
-        "label": "神大ライフハック(HP)",
-        "x": 0, "y": 0, "w": W, "h": TOP_Y,
-        "action": URIAction(label="神大ライフハック", uri=f"{REVIEW_FORM_URL}/hp"),
-    },
     # ── Row 1（レビュー投稿・レビュー閲覧）─────────────────────────
     {
         "label": "レビュー投稿",
