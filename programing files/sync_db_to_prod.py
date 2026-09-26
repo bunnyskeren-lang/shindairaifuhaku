@@ -5,7 +5,9 @@ dev → 本番 DB の同期スクリプト
 
 絶対に同期しないテーブル:
   reviews, message_logs, user_profiles, user_activity, error_logs,
-  push_subscriptions, richmenu_taps 等
+  push_subscriptions, richmenu_taps, funnel_events,
+  groups, group_payouts（団体管理。団体番号・団体名・精算記録は本番へ絶対に反映しない。
+  tests/test_sync_never_touches_groups.py がこのスクリプトへの混入を検知する）等
 
 UPSERTに加えて、本番のみに存在する行（devで削除・変更済みの行）も削除する。
 ただし display_orders 以外（subjects/instructors/course_sections）は、
