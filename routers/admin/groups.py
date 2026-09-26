@@ -64,11 +64,11 @@ async def admin_group_create(
     name = name.strip()[:100]
     if not name:
         return RedirectResponse("/admin/groups", status_code=303)
-    # 団体番号を指定した場合はそのまま登録（照合と同じ正規化：全角→半角・大文字化）。空欄なら自動発行
+    # 団体コードを指定した場合はそのまま登録（照合と同じ正規化：全角→半角・大文字化）。空欄なら自動発行
     manual_code = normalize_group_code(code)
     if manual_code and not re.fullmatch(rf"[A-Z0-9]{{{CODE_LENGTH}}}", manual_code):
         return RedirectResponse(
-            "/admin/groups?error=" + quote(f"団体番号は英数字{CODE_LENGTH}文字で入力してください"), status_code=303,
+            "/admin/groups?error=" + quote(f"団体コードは英数字{CODE_LENGTH}文字で入力してください"), status_code=303,
         )
     async with AsyncSessionLocal() as session:
         if manual_code:
@@ -78,10 +78,10 @@ async def admin_group_create(
             except IntegrityError:
                 await session.rollback()
                 return RedirectResponse(
-                    "/admin/groups?error=" + quote(f"団体番号「{manual_code}」は既に使われています"), status_code=303,
+                    "/admin/groups?error=" + quote(f"団体コード「{manual_code}」は既に使われています"), status_code=303,
                 )
             return RedirectResponse("/admin/groups", status_code=303)
-        # 団体番号は自動発行。衝突（31^8通りなのでほぼ無い）は発行し直す
+        # 団体コードは自動発行。衝突（31^8通りなのでほぼ無い）は発行し直す
         for _attempt in range(5):
             session.add(Group(name=name, code=generate_group_code(), note=note.strip()[:500] or None))
             try:

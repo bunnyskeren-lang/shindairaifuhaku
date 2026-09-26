@@ -12,7 +12,7 @@ from core.security import check_admin
 from core.subject_variants import is_hoken_gakka_senko
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
+from models import CourseSection, Group, Instructor, Review, ReviewStatus, Subject, UserProfile
 
 router = APIRouter()
 
@@ -83,6 +83,8 @@ def _make_review_ns(rev: Review, course_name: str) -> SimpleNamespace:
         academic_year=rev.academic_year,
         student_id=rev.student_id,
         paid=rev.payment_request_id is not None,
+        group_id=rev.group_id,
+        group_code=None,
     )
 
 
@@ -141,6 +143,13 @@ async def admin_reviews(
     pending = [_make_review_ns(r, variant_labels.get(n, n)) for r, n in pending_rows]
     approved = [_make_review_ns(r, variant_labels.get(n, n)) for r, n in approved_rows]
     rejected = [_make_review_ns(r, variant_labels.get(n, n)) for r, n in rejected_rows]
+    # 団体コード経由で投稿されたレビューには、その団体コードを表示する（団体への支払い対象の確認用）
+    group_ids = {r.group_id for r in pending + approved + rejected if r.group_id is not None}
+    if group_ids:
+        async with AsyncSessionLocal() as session:
+            codes = dict((await session.execute(select(Group.id, Group.code).where(Group.id.in_(group_ids)))).all())
+        for r in pending + approved + rejected:
+            r.group_code = codes.get(r.group_id)
     return templates.TemplateResponse("admin/reviews.html", {
         "request": request,
         "nav_counts": nav_counts,

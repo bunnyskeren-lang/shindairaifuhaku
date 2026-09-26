@@ -1,4 +1,4 @@
-"""団体（サークル等）経由のレビュー収集（core/groups.py・団体番号欄・/admin/groups）のテスト。"""
+"""団体（サークル等）経由のレビュー収集（core/groups.py・団体コード欄・/admin/groups）のテスト。"""
 import pytest
 from sqlalchemy import select
 
@@ -228,7 +228,7 @@ async def test_submit_with_unknown_code_is_rejected_not_ignored(http_client_fact
     client, _ = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker)
     resp = await client.post("/submit", data={**VALID_FORM, "group_code": "NOPE2345"})
     assert resp.status_code == 400
-    assert "団体番号" in resp.text
+    assert "団体コード" in resp.text
     reviews, profile = await _only_review_and_profile(test_sessionmaker)
     assert reviews == [] and profile.group_id is None
 
@@ -259,7 +259,7 @@ async def test_submit_fixed_group_ignores_other_code(http_client_factory, monkey
 
 @pytest.mark.asyncio
 async def test_submit_member_without_code_is_not_counted(http_client_factory, monkeypatch, test_sessionmaker):
-    """所属済みでも、団体番号を消した（空の）状態で投稿したレビューは団体に数えない。"""
+    """所属済みでも、団体コードを消した（空の）状態で投稿したレビューは団体に数えない。"""
     client, gid = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker)
     async with test_sessionmaker() as s:
         (await s.get(UserProfile, UID)).group_id = gid
@@ -380,7 +380,7 @@ async def test_admin_create_update_toggle_and_payout(http_client_factory, monkey
         assert g.name == "テニス部" and g.is_active and len(g.code) == CODE_LENGTH
         gid = g.id
 
-    # 団体番号を手入力（全角・小文字は正規化）。重複はエラー表示で追加されない
+    # 団体コードを手入力（全角・小文字は正規化）。重複はエラー表示で追加されない
     r = await client.post("/admin/groups/create", data={"name": "書道部", "code": "ｓｈ２０２６ab"})
     assert r.status_code == 303
     r = await client.post("/admin/groups/create", data={"name": "別団体", "code": "SH2026AB"})
@@ -430,3 +430,22 @@ async def test_review_form_has_optional_group_code_field():
     assert resp.status_code == 200
     assert 'name="group_code"' in resp.text
     assert "文字数制限をなくしました" in resp.text  # 青いお知らせ枠には触れていない
+
+
+@pytest.mark.asyncio
+async def test_admin_reviews_page_shows_group_code(http_client_factory, monkeypatch, test_sessionmaker):
+    """レビュー承認画面に、団体コード経由で投稿されたレビューの団体コードが表示される。"""
+    import routers.admin.reviews as admin_reviews
+    async with test_sessionmaker() as s:
+        g = Group(name="起業部", code=GROUP_CODE)
+        s.add(g)
+        await s.flush()
+        kyoyo_cs, _ = await _seed_two_courses(s)
+        await _add_review(s, kyoyo_cs, "1000001A", g.id, status=ReviewStatus.PENDING)
+        await _add_review(s, kyoyo_cs, "1000002B", None, status=ReviewStatus.PENDING)
+        await s.commit()
+    client = http_client_factory(admin_reviews, monkeypatch)
+    client.cookies.set(ADMIN_COOKIE, make_admin_token())
+    resp = await client.get("/admin/reviews")
+    assert resp.status_code == 200
+    assert resp.text.count(f"団体コード {GROUP_CODE}") >= 1

@@ -8,6 +8,8 @@
 
 **このCLAUDE.mdを更新したら、必ず `AGENTS.md`（他AIツール用の同内容ファイル）にも同じ内容を反映すること。** AGENTS.mdはCLAUDE.mdの完全なコピーとして維持する（`cp CLAUDE.md AGENTS.md` でよい）。
 
+**モック（HTML/デザイン確認用ファイル等）・画像生成を依頼されたときは、必ずリポジトリ直下の `mockups/` フォルダに出力すること。** 個別に別の場所（`.design-tmp/`直下やその場しのぎのパス等）へ出さない。`mockups/`は`.gitignore`対象（コミットしない使い捨て置き場）。
+
 ---
 
 # デプロイルール
@@ -306,7 +308,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── undo.py                           ← 管理画面「元に戻す」用の直前削除内容の一時保持（プロセスメモリ、TTL10分）
 │   ├── db_ssl.py                          ← Supabase(Supavisor pooler)向けSSLコンテキスト生成
 │   ├── funnel.py                            ← 会員登録までの漏斗の計測`track()`（Discord等の呼びかけ→友だち追加ページ/投稿フォーム/登録画面の表示・新規登録完了を`funnel_events`へ記録。ボット・連打は除外、`?src=`で流入元を区別。`/admin/usage-stats`の先頭で集計表示、2026-09-25）
-│   ├── groups.py                            ← 団体（サークル等）経由のレビュー収集：団体番号の生成・正規化・照合、所属固定ルール、団体への支払額の集計（`group_payout_breakdown`/`group_stats`。単価・ボーナスは`core/config.py`の`GROUP_*`定数。2026-09-26）
+│   ├── groups.py                            ← 団体（サークル等）経由のレビュー収集：団体コードの生成・正規化・照合、所属固定ルール、団体への支払額の集計（`group_payout_breakdown`/`group_stats`。単価・ボーナスは`core/config.py`の`GROUP_*`定数。2026-09-26）
 │   └── background_tasks.py                 ← 「発火して忘れる」バックグラウンドタスクの共通ヘルパー`fire_and_forget()`（asyncio.create_task()の戻り値未保持によるタスクGC消失を防ぐ）
 ├── line_bot/                ← LINE Bot応答ロジック
 │   ├── flex_builders.py      ← FlexMessage/Bubble生成関数群
@@ -321,7 +323,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 │   ├── review_submit_api.py          ← /submit, /submit/done（レビュー投稿・PRGパターン）
 │   ├── payment_api.py                 ← /payment/apply, /payment/apply/done, /api/payment/eligible, /payment/apply/submit（レビュー報酬支払い申請フォーム）
 │   ├── contact_api.py                  ← /contact, /contact/submit（お問い合わせフォーム）
-│   ├── group_api.py                    ← /api/group/lookup（レビュー投稿フォームの団体番号欄が呼ぶ照合API。レート制限あり）
+│   ├── group_api.py                    ← /api/group/lookup（レビュー投稿フォームの団体コード欄が呼ぶ照合API。レート制限あり）
 │   ├── push_api.py                      ← /push/enable, /push/subscribe（管理画面ログインCookieに依存しない通知購読専用。秘密トークン`PUSH_ENABLE_TOKEN`で認可）
 │   └── admin/                            ← /admin/* をURLプレフィックス単位でさらに分割
 │       ├── _common.py                     ← 並び替え共通ヘルパー（reorder_sort_order等、各admin routerが共有）
@@ -375,7 +377,7 @@ shindairaifuhaku/          ← Renderがデプロイするルート
 | `syllabi` | シラバス（年度・クォーター・時間割コード。シラバスURLはtimetable_code + course_sections経由のsubjects.faculty/departmentから動的生成。department列は2026-07-18に廃止済み、target_grades/subject_category列は2026-07-30に廃止済み） |
 | `reviews` | 投稿レビュー（`status`で承認管理。`payment_request_id`で支払い申請済みかどうかを紐付け、NULL＝未払い。`credit_granted_at`は閲覧権チケット付与済みフラグ、承認時に一度だけ付与するための冪等性チェック用） |
 | `payment_requests` | レビュー報酬（1件100円、100円単位＝1件単位）の支払い申請。承認済み（未払い）レビューを古い順にamount/100件だけ`payment_request_id`で予約し、二重申請・二重支払いを防ぐ。`status`は'pending'/'paid'/'rejected'、却下時は予約解除して未払いプールに戻す（`routers/payment_api.py`・`routers/admin/payments.py`） |
-| `groups` | レビュー収集で契約した団体（サークル等）。`code`は団体番号（大文字・一意）、`is_active`で無効化（物理削除しない）、`note`は任意メモ。会員がレビュー投稿フォームで番号を入力すると`user_profiles.group_id`（学籍番号ごとに最初の団体へ固定）と`reviews.group_id`（投稿時点の団体）に紐づく（`core/groups.py`・`routers/group_api.py`。2026-09-26）。**本番へ同期しない** |
+| `groups` | レビュー収集で契約した団体（サークル等）。`code`は団体コード（大文字・一意）、`is_active`で無効化（物理削除しない）、`note`は任意メモ。会員がレビュー投稿フォームで番号を入力すると`user_profiles.group_id`（学籍番号ごとに最初の団体へ固定）と`reviews.group_id`（投稿時点の団体）に紐づく（`core/groups.py`・`routers/group_api.py`。2026-09-26）。**本番へ同期しない** |
 | `group_payouts` | 団体への精算（入金）記録（group_id・amount・paid_at・memo）。団体の発生額（承認済みレビューの件数×単価＋人数ボーナス、`core.groups.group_stats`）との差が未精算残高。**本番へ同期しない** |
 | `course_section_views` | 科目セクションの閲覧数 |
 | `subject_unlocks` | レビュー閲覧権の解除記録（line_user_id, subject_id）。デフォルトでは他人のレビューは閲覧できず、会員登録（初回）で`REGISTRATION_WELCOME_UNLOCK_CREDITS`（1枚）、自分のレビューが1件承認されるたびに`core.config.review_approval_unlock_credits(科目category)`（教養`REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO`=5枚・専門`REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON`=3枚、それ以外は`REVIEW_APPROVAL_UNLOCK_CREDITS`=1枚のフォールバック。2026-09-07にカテゴリ別へ分岐、コメント文字数連動は2026-09-08に導入後まもなく撤回し固定枚数へ戻した）が`user_profiles.unlock_credits`に加算され、任意の科目でチケットを1枚消費して解除する（`routers/liff_api.py` `/api/course/{id}/unlock`）。語尾バリアントグループはグループ内の全subject_idをまとめて解除する。支払い済み化時のチケット消費（`routers/admin/payments.py`）もレビューごとにカテゴリ別枚数を合算する |

@@ -1,10 +1,10 @@
 """団体（サークル等）経由のレビュー収集（2026-09-26、docs/BUSINESS_STRATEGY.md 3.3）。
 
-契約した団体に「団体番号」を渡し、会員がレビュー投稿フォームで入力する。団体には
+契約した団体に「団体コード」を渡し、会員がレビュー投稿フォームで入力する。団体には
 - 承認済みレビュー1件ごとに教養50円・専門30円
 - 承認済みレビューが1件以上ある学籍番号の人数が10人に達するごとに+500円
 を支払う（単価は core/config.py の GROUP_* 定数）。個人へは従来どおりチケットのみ。
-数えるのは「団体番号を入力して投稿したレビュー」だけ（`reviews.group_id`は投稿時に番号を入力した場合のみ入る。
+数えるのは「団体コードを入力して投稿したレビュー」だけ（`reviews.group_id`は投稿時に番号を入力した場合のみ入る。
 所属済みでも番号を入力しなかった投稿は数えない）。
 
 このモジュールは「番号の生成・正規化・照合」「所属の固定ルール」「支払額の集計」だけを持つ。
@@ -28,22 +28,22 @@ CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8  # 31^8 ≒ 8.5e11。総当たりはレート制限と合わせて実質不可能
 _MAX_INPUT_LEN = 32
 
-GROUP_CODE_NOT_FOUND_MESSAGE = "団体番号が無効です（該当する団体がありません。番号をお確かめください）"
-GROUP_CODE_INACTIVE_MESSAGE = "団体番号が無効です（この団体は現在停止中です）"
+GROUP_CODE_NOT_FOUND_MESSAGE = "団体コードが無効です（該当する団体がありません。コードをお確かめください）"
+GROUP_CODE_INACTIVE_MESSAGE = "団体コードが無効です（この団体は現在停止中です）"
 
 
 def generate_group_code() -> str:
-    """団体番号を1つ発行する（暗号論的乱数）。重複チェックは呼び出し側で行う。"""
+    """団体コードを1つ発行する（暗号論的乱数）。重複チェックは呼び出し側で行う。"""
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
 
 
 def normalize_group_code(raw: str | None) -> str:
-    """入力された団体番号を照合用に整える（全角→半角・大文字化・前後の空白除去）。"""
+    """入力された団体コードを照合用に整える（全角→半角・大文字化・前後の空白除去）。"""
     return unicodedata.normalize("NFKC", raw or "").strip().upper()[:_MAX_INPUT_LEN]
 
 
 async def find_group_by_code(session, raw_code: str | None) -> Group | None:
-    """団体番号から団体を探す（有効・無効を問わない）。空・見つからなければNone。"""
+    """団体コードから団体を探す（有効・無効を問わない）。空・見つからなければNone。"""
     code = normalize_group_code(raw_code)
     if not code:
         return None

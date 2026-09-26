@@ -157,6 +157,7 @@
   <div class="admin-row">
     <span>👤 {{ r.submitter_name }}</span>
     <span>🎓 {{ r.student_id or '—' }}</span>
+    {% if r.group_code %}<span>🤝 団体コード {{ r.group_code }}</span>{% endif %}
     {% if r.academic_year %}<span>📅 {{ r.academic_year }}年度</span>{% endif %}
   </div>
 

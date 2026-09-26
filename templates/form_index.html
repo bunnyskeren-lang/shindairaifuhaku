@@ -93,19 +93,19 @@
         <p class="text-xs text-gray-400 mt-1">未入力の場合は「匿名」で表示されます</p>
       </div>
 
-      <!-- 1c. 団体番号（任意）。サークル等の団体から番号を案内された人だけが入力する。
+      <!-- 1c. 団体コード（任意）。サークル等の団体から番号を案内された人だけが入力する。
            入力すると /api/group/lookup で団体名を表示して確認させる。所属済みの人にも欄は出し、
            番号を入力した投稿だけが団体に数えられる（core/groups.py） -->
       <div id="groupCard" class="bg-white rounded-2xl shadow-sm p-5">
         <label for="group_code" class="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
-          <span>🤝 団体番号 <span class="text-gray-400 font-normal text-xs">（任意・サークル等から案内された方のみ）</span></span>
-          <button type="button" id="groupHelpBtn" aria-expanded="false" aria-controls="groupHelp" aria-label="団体番号とは"
+          <span>🤝 団体コード <span class="text-gray-400 font-normal text-xs">（任意・サークル等から案内された方のみ）</span></span>
+          <button type="button" id="groupHelpBtn" aria-expanded="false" aria-controls="groupHelp" aria-label="団体コードとは"
             class="shrink-0 w-5 h-5 rounded-full border border-gray-300 text-gray-500 text-xs font-bold leading-none flex items-center justify-center active:scale-95 transition">?</button>
         </label>
         <div id="groupHelp" class="hidden mb-3 rounded-xl bg-blue-50 border border-blue-100 p-3 text-xs text-gray-600 leading-relaxed">
-          <p>サークル・部活などの団体を通じてレビュー収集にご協力いただく仕組みです。団体から案内された「団体番号」を入力して投稿したレビューは、その団体の協力実績として集計されます。</p>
+          <p>サークル・部活などの団体を通じてレビュー収集にご協力いただく仕組みです。団体から案内された「団体コード」を入力して投稿したレビューは、その団体の協力実績として集計されます。</p>
           <p class="mt-1.5">協力した団体には、投稿されたレビューの件数と、投稿した人数に応じて報酬が支払われます。</p>
-          <p class="mt-1.5">団体番号がない方は空欄のまま投稿できます（通常どおり投稿・承認されます）。</p>
+          <p class="mt-1.5">団体コードがない方は空欄のまま投稿できます（通常どおり投稿・承認されます）。</p>
           <p class="mt-1.5">詳しい仕組みや報酬は<a href="/hp#group" target="_blank" rel="noopener" class="underline text-blue-600 hover:text-blue-800">ホームページ</a>をご覧ください。</p>
         </div>
         <input type="text" name="group_code" id="group_code"
@@ -753,7 +753,7 @@
       e.currentTarget.setAttribute('aria-expanded', String(open));
     });
 
-    // 団体番号欄の状態: 'empty'（未入力）/ 'checking' / 'ok' / 'invalid' / 'member'（所属済みの案内表示）
+    // 団体コード欄の状態: 'empty'（未入力）/ 'checking' / 'ok' / 'invalid' / 'member'（所属済みの案内表示）
     let _groupState = 'empty';
     let _groupCheckSeq = 0;
     let _groupTimer;
@@ -787,7 +787,7 @@
         const d = await res.json();
         if (seq !== _groupCheckSeq) return false; // 入力が変わった後の古い応答は捨てる
         if (d.ok) { setGroupStatus('ok', `✅ ${d.name} として投稿します`); return true; }
-        setGroupStatus('invalid', d.message || '団体番号を確認できませんでした');
+        setGroupStatus('invalid', d.message || '団体コードを確認できませんでした');
         return false;
       } catch (_) {
         if (seq === _groupCheckSeq) setGroupStatus('invalid', '通信に失敗しました。もう一度お試しください');
@@ -2141,8 +2141,8 @@
       const activeClasses = ('w-full {% if IS_DEV %}bg-orange-500 hover:bg-orange-600{% else %}bg-indigo-600 hover:bg-indigo-700{% endif %} text-white font-bold py-4 rounded-2xl active:scale-95 transition text-base shadow-md').split(' ');
       const inactiveClasses = 'w-full bg-gray-300 text-white font-bold py-4 rounded-2xl transition text-base shadow-md cursor-not-allowed'.split(' ');
       if (_groupState === 'invalid' || _groupState === 'checking') {
-        // 団体番号が無効（または確認中）の間は送信できない。番号を直すか、欄を空にすると送信できる
-        btn.textContent = _groupState === 'invalid' ? '団体番号が無効です（直すか空にしてください）' : '団体番号を確認中…';
+        // 団体コードが無効（または確認中）の間は送信できない。番号を直すか、欄を空にすると送信できる
+        btn.textContent = _groupState === 'invalid' ? '団体コードが無効です（直すか空にしてください）' : '団体コードを確認中…';
         btn.className = inactiveClasses.join(' ');
       } else if (missing.length === 0) {
         btn.textContent = 'レビューを投稿する';
@@ -2365,7 +2365,7 @@
 
       let valid = true;
 
-      // 団体番号: 入力があるのに確認できていない（無効・確認中）ときは、黙って無視せず送信を止める
+      // 団体コード: 入力があるのに確認できていない（無効・確認中）ときは、黙って無視せず送信を止める
       if (document.getElementById('group_code').value.trim()) {
         clearTimeout(_groupTimer);
         if (!(await checkGroupCode())) {

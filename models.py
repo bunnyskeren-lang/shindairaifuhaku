@@ -77,7 +77,7 @@ class UserProfile(TimestampMixin, Base):
     # 同じ値の登録が既に成功していれば新規のトークン再検証を経由せず1回目の成功ページへ流す。
     # 部分UNIQUEは上の __table_args__ で宣言。
     register_nonce: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 所属団体（サークル等。`groups`）。レビュー投稿フォームで有効な団体番号を最初に入力した時点で
+    # 所属団体（サークル等。`groups`）。レビュー投稿フォームで有効な団体コードを最初に入力した時点で
     # 固定し、以後は別の番号を入力しても変わらない（同じ学籍番号の二重計上防止、2026-09-26）。NULL＝無所属
     group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("groups.id", ondelete="RESTRICT"), nullable=True)
 
@@ -412,7 +412,7 @@ class CourseSectionView(Base):
 class Group(TimestampMixin, Base):
     """レビュー収集で契約した団体（サークル等。2026-09-26、docs/BUSINESS_STRATEGY.md 3.3）。
 
-    会員がレビュー投稿フォームで`code`（団体番号）を入力すると`user_profiles.group_id`/`reviews.group_id`に
+    会員がレビュー投稿フォームで`code`（団体コード）を入力すると`user_profiles.group_id`/`reviews.group_id`に
     紐づき、団体への支払い額の集計に使われる（core/groups.py）。`code`は常に大文字で保存する。
     無効化は`is_active=False`で行い、物理削除しない（紐づくレビュー・精算履歴を消さないため）。
     """
