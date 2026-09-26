@@ -344,6 +344,33 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         size="sm",
                         color="#374151",
                     ),
+                    FlexText(
+                        text="🚧 本サービスは現在β版として提供しており、予告なく仕様変更・停止等を行う場合があります",
+                        size="xxs",
+                        color="#9ca3af",
+                        wrap=True,
+                        margin="md",
+                    ),
+                    FlexBox(
+                        layout="vertical",
+                        margin="lg",
+                        padding_all="md",
+                        background_color="#fff7ed",
+                        corner_radius="md",
+                        contents=_notice_contents,
+                    ),
+                ],
+                padding_all="lg",
+            ),
+            footer=FlexBox(
+                layout="vertical",
+                contents=[
+                    FlexButton(
+                        action=URIAction(label="📝 今すぐ登録する（30秒）", uri=register_url),
+                        style="primary",
+                        color="#f97316",
+                        height="md",
+                    ),
                     FlexBox(
                         layout="vertical",
                         margin="lg",
@@ -377,33 +404,6 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                                 wrap=True,
                             ),
                         ],
-                    ),
-                    FlexText(
-                        text="🚧 本サービスは現在β版として提供しており、予告なく仕様変更・停止等を行う場合があります",
-                        size="xxs",
-                        color="#9ca3af",
-                        wrap=True,
-                        margin="md",
-                    ),
-                    FlexBox(
-                        layout="vertical",
-                        margin="lg",
-                        padding_all="md",
-                        background_color="#fff7ed",
-                        corner_radius="md",
-                        contents=_notice_contents,
-                    ),
-                ],
-                padding_all="lg",
-            ),
-            footer=FlexBox(
-                layout="vertical",
-                contents=[
-                    FlexButton(
-                        action=URIAction(label="📝 今すぐ登録する（30秒）", uri=register_url),
-                        style="primary",
-                        color="#f97316",
-                        height="md",
                     ),
                     FlexBox(
                         layout="horizontal",
