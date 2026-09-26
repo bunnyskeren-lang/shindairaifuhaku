@@ -2,7 +2,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from core import cache, moderation
@@ -19,7 +19,7 @@ from core.config import (
     normalize_student_id, subject_submittable_for_profile,
 )
 from core.groups import (
-    GROUP_CODE_INACTIVE_MESSAGE, GROUP_CODE_NOT_FOUND_MESSAGE, find_group_by_code, locked_group_id,
+    GROUP_CODE_INACTIVE_MESSAGE, GROUP_CODE_NOT_FOUND_MESSAGE, find_group_by_code,
 )
 from core.liff_auth import verify_liff_id_token
 from core.push import send_push_notification
@@ -27,7 +27,7 @@ from core.rate_limit import rate_limiter
 from core.subject_variants import is_hoken_gakka_senko
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Group, Instructor, Review, ReviewStatus, Subject, UserProfile
+from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
 
 router = APIRouter()
 
@@ -175,23 +175,19 @@ async def submit(
         submitter_name = existing.name
 
         # 団体経由の投稿（2026-09-26、core/groups.py）。団体に計上するのは「団体コードを入力して投稿した
-        # レビュー」だけで、所属済みでも番号を入力しなかった投稿は数えない。同じ学籍番号は最初に有効な
-        # 番号を入力した団体へ固定し、以後の別番号の入力は固定先の団体として扱う。固定前に入力された
-        # 番号が無効・停止中のときは黙って無視せずエラーにする（本人は団体に計上されると思って投稿している）。
+        # レビュー」だけで、所属済みでも番号を入力しなかった投稿は数えない。所属団体は入力された番号で
+        # いつでも書き換えられる（フォームは所属団体の番号を入力済みにする）。書き換え前に投稿した
+        # レビューは投稿時点の団体（reviews.group_id）のまま動かさない。無効・停止中の番号は黙って
+        # 無視せずエラーにする（本人は団体に計上されると思って投稿している）。
         review_group_id: int | None = None
-        entered_code = bool(group_code.strip())
-        fixed_group_id = await locked_group_id(session, existing)
-        if fixed_group_id is not None:
-            fixed_group = await session.get(Group, fixed_group_id)
-            if entered_code and fixed_group is not None and fixed_group.is_active:
-                review_group_id = fixed_group.id
-        elif entered_code:
+        new_group_id: int | None = None
+        if group_code.strip():
             entered_group = await find_group_by_code(session, group_code)
             if entered_group is None:
                 return _form_error(GROUP_CODE_NOT_FOUND_MESSAGE)
             if not entered_group.is_active:
                 return _form_error(GROUP_CODE_INACTIVE_MESSAGE)
-            fixed_group_id = review_group_id = entered_group.id
+            review_group_id = new_group_id = entered_group.id
 
         # 担当教員に対応する course_section を探す
         instr_name = selected_instructor.strip()[:100] or None
@@ -325,10 +321,13 @@ async def submit(
             group_id=review_group_id,
         )
         session.add(review)
-        if fixed_group_id is not None and existing.group_id is None:
-            # 初回入力、または同じ学籍番号の別アカウントで固定済みの団体をこのプロフィールにも反映する
-            # （レビューと同じトランザクションで確定させるため、追加の直前に代入する）
-            existing.group_id = fixed_group_id
+        if new_group_id is not None:
+            # 同じ学籍番号の別アカウントのプロフィールも同じ団体へ揃える（所属は学籍番号単位）。
+            # レビューと同じトランザクションで確定させるため、追加の直前に更新する
+            await session.execute(
+                update(UserProfile).where(UserProfile.student_id == existing.student_id)
+                .values(group_id=new_group_id)
+            )
         try:
             await session.commit()
         except IntegrityError:

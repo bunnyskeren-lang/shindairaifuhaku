@@ -51,10 +51,10 @@ async def find_group_by_code(session, raw_code: str | None) -> Group | None:
 
 
 async def locked_group_id(session, profile: UserProfile) -> int | None:
-    """この会員が既に固定されている団体id（無ければNone）。
+    """この会員の現在の所属団体id（無ければNone）。フォームの団体コード欄の入力済み表示に使う。
 
     自分のプロフィールに加え、同じ学籍番号の別プロフィール（別のLINEアカウントで登録した場合）も見る。
-    学籍番号ごとに1団体へ固定しないと、複数の団体から同じ人が二重に数えられるため。
+    所属は投稿時に別の団体コードを入力すれば書き換わる（書き換え前のレビューは投稿時点の団体のまま）。
     """
     if profile.group_id is not None:
         return profile.group_id

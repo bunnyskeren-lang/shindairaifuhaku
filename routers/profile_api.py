@@ -127,7 +127,7 @@ async def profile_prefill(request: Request):
             # uid は検証済みの本人自身のLINEユーザーID。投稿フォームが登録画面へのリンクに ?uid= として
             # 付け、未登録者のうち誰が登録画面を開いたかを数えられるようにする（core/funnel.py）
             return {"found": False, "uid": uid}
-        # 所属団体（団体コードを最初に入力した時点で固定）。フォームは所属団体の番号を入力済みにする（消した状態で投稿したレビューは団体に数えない）
+        # 所属団体（最後に入力した団体コードの団体。投稿時に別の番号を入力すれば書き換わる）。フォームは所属団体の番号を入力済みにする（消した状態で投稿したレビューは団体に数えない）
         group_id = await locked_group_id(session, profile)
         group = await session.get(Group, group_id) if group_id is not None else None
         # 同一学籍番号での「科目×担当教員」重複投稿をフォーム側でグレーアウト表示するため、

@@ -244,17 +244,17 @@ async def test_submit_with_inactive_code_is_rejected(http_client_factory, monkey
 
 
 @pytest.mark.asyncio
-async def test_submit_fixed_group_ignores_other_code(http_client_factory, monkeypatch, test_sessionmaker):
+async def test_submit_other_code_switches_group(http_client_factory, monkeypatch, test_sessionmaker):
     client, gid = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker)
-    await _seed_group(test_sessionmaker, code="OTHR2345", name="別の団体")
+    other_gid = await _seed_group(test_sessionmaker, code="OTHR2345", name="別の団体")
     async with test_sessionmaker() as s:
         (await s.get(UserProfile, UID)).group_id = gid
         await s.commit()
-    # 別の有効な番号を入力しても、最初の団体に固定されたまま（エラーにもならない）
+    # 別の有効な番号を入力すると所属団体が書き換わり、そのレビューも新しい団体に計上される
     resp = await client.post("/submit", data={**VALID_FORM, "group_code": "OTHR2345"})
     assert resp.status_code == 303
     reviews, profile = await _only_review_and_profile(test_sessionmaker)
-    assert reviews[0].group_id == gid and profile.group_id == gid
+    assert reviews[0].group_id == other_gid != gid and profile.group_id == other_gid
 
 
 @pytest.mark.asyncio
@@ -284,10 +284,10 @@ async def test_submit_fixed_to_inactive_group_is_not_counted(http_client_factory
 
 
 @pytest.mark.asyncio
-async def test_submit_same_student_id_on_other_account_is_locked_to_first_group(
+async def test_submit_other_code_switches_group_for_all_accounts_of_same_student_id(
     http_client_factory, monkeypatch, test_sessionmaker
 ):
-    """同じ学籍番号で別のLINEアカウントに登録済みの所属団体があれば、そちらに固定される。"""
+    """同じ学籍番号の別LINEアカウントのプロフィールも、新しい団体へ揃って書き換わる。"""
     client, gid = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker)
     other_gid = await _seed_group(test_sessionmaker, code="OTHR2345", name="別の団体")
     async with test_sessionmaker() as s:
@@ -299,8 +299,11 @@ async def test_submit_same_student_id_on_other_account_is_locked_to_first_group(
     resp = await client.post("/submit", data={**VALID_FORM, "group_code": "OTHR2345"})
     assert resp.status_code == 303
     reviews, profile = await _only_review_and_profile(test_sessionmaker)
-    assert reviews[0].group_id == gid != other_gid
-    assert profile.group_id == gid
+    assert reviews[0].group_id == other_gid != gid
+    assert profile.group_id == other_gid
+    async with test_sessionmaker() as s:
+        other = (await s.execute(select(UserProfile).where(UserProfile.line_user_id == "U99999999999999999999999999999999"))).scalar_one()
+        assert other.group_id == other_gid
 
 
 # ── prefill ─────────────────────────────────────────────────────────────────
