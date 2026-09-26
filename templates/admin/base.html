@@ -96,6 +96,13 @@ label{font-size:13px;font-weight:600;color:var(--ink-soft)}
 .nav-item:hover{background:var(--surface-alt)}
 .nav-item.active{background:var(--accent-soft);color:var(--accent-text);border-left-color:var(--accent);font-weight:700}
 .nav-item.active svg{opacity:1}
+.ch-badge{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:4px;vertical-align:middle}
+.ch-badge.guest{background:var(--accent-soft);color:var(--accent-text)}
+.ch-badge.both{background:var(--warning-soft);color:var(--warning);border:1px solid var(--warning)}
+.ch-badge.main{background:var(--surface-alt);color:var(--ink-soft)}
+.ch-toggle{display:flex;gap:2px;margin-left:auto;background:var(--surface-alt);border:1px solid var(--border-strong);border-radius:999px;padding:2px}
+.ch-btn{border:0;background:transparent;color:var(--ink-soft);font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;cursor:pointer}
+.ch-btn.active{background:var(--ink);color:#fff}
 .nav-badge{font-family:var(--font-mono);font-size:10.5px;font-weight:700;background:var(--warning-soft);color:var(--warning);padding:1px 6px;border-radius:999px}
 .nav-item.active .nav-badge{background:var(--accent);color:#fff}
 .nav-badge.danger{background:var(--danger-soft);color:var(--danger)}
@@ -182,6 +189,14 @@ main.content{flex:1;padding:22px 26px 36px}
     <header class="topbar">
       <button type="button" class="icon-btn hamburger-btn" onclick="openSideNav()" aria-label="メニューを開く">{{ icon('menu', 18) }}</button>
       <div class="page-title">{% block heading %}{% endblock %}</div>
+      {% if request is defined and request.state.channel %}
+      {# ログ系ページ用のチャンネル切替（本番bot / ゲスト用bot / 両方）。選択はCookieに保存 #}
+      <div class="ch-toggle" role="group" aria-label="表示するLINEチャンネル">
+        {% for key, label in (('main', '本番'), ('guest', 'ゲスト'), ('all', '両方')) %}
+        <button type="button" class="ch-btn{{ ' active' if request.state.channel == key }}" onclick="setAdminChannel('{{ key }}')">{{ label }}</button>
+        {% endfor %}
+      </div>
+      {% endif %}
     </header>
     <main class="content">
       {% block content %}{% endblock %}
@@ -321,6 +336,15 @@ document.addEventListener('submit', function(e) {
 })();
 </script>
 {% endif %}
+<script>
+function setAdminChannel(v) {
+  document.cookie = 'admin_channel=' + v + '; path=/admin; max-age=31536000; samesite=lax';
+  const u = new URL(location.href);
+  u.searchParams.delete('channel');
+  u.searchParams.delete('page');
+  location.href = u.toString();
+}
+</script>
 </body>
 </html>
 

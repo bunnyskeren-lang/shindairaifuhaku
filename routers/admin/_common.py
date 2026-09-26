@@ -4,9 +4,35 @@ instructor/faculty/course/classification の各「上へ/下へ」エンドポ�
 対象を1つ隣にスワップして並び順を振り直すという同一パターンをそれぞれ
 個別実装していたため、ここに集約する。
 """
+from fastapi import Request
 from sqlalchemy import select
 
+from core.config import CHANNEL, CHANNEL_GUEST, CHANNEL_MAIN
 from models import DisplayOrder
+
+# 管理画面のチャンネル切替（ゲスト用bot / 本番bot / 両方）。ログ系の source 列で絞り込む。
+# 選択はブラウザのCookie（templates/admin/base.html のトグルがJSで設定）に保持し、
+# 未選択のときは「このサービス自身のチャンネル」（本番の管理画面なら main、ゲスト用なら guest）。
+CHANNEL_ALL = "all"
+ADMIN_CHANNEL_COOKIE = "admin_channel"
+_CHANNEL_CHOICES = (CHANNEL_MAIN, CHANNEL_GUEST, CHANNEL_ALL)
+
+
+async def admin_channel(request: Request) -> str:
+    """表示対象チャンネル（main / guest / all）を決めて返すDepends用関数。
+    `?channel=` クエリ > Cookie > このサービスのCHANNEL の優先順。
+    テンプレートのトグル表示用に request.state.channel にも入れる。"""
+    value = request.query_params.get("channel") or request.cookies.get(ADMIN_CHANNEL_COOKIE)
+    if value not in _CHANNEL_CHOICES:
+        value = CHANNEL
+    request.state.channel = value
+    request.state.default_channel = CHANNEL
+    return value
+
+
+def channel_conds(column, channel: str) -> list:
+    """`.where(*channel_conds(Model.source, ch))` 用。allなら絞り込まない。"""
+    return [] if channel == CHANNEL_ALL else [column == channel]
 
 
 def reorder_sort_order(items: list, item_id, direction: str) -> bool:

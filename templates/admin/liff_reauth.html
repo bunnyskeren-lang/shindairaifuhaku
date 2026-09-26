@@ -33,7 +33,7 @@ pre { background:#f3f4f6; padding:10px; border-radius:6px; font-size:11px; overf
     </tr>
     {% for r in rows %}
     <tr style="vertical-align:top">
-      <td style="white-space:nowrap;font-size:11px">{{ r.created_at | jst }}</td>
+      <td style="white-space:nowrap;font-size:11px">{{ r.created_at | jst }}{% if request.state.channel == 'all' %}<br><span class="ch-badge {{ 'guest' if r.source == 'guest' else 'main' }}">{{ 'ゲスト' if r.source == 'guest' else '本番' }}</span>{% endif %}</td>
       <td style="font-size:12px">
         {{ r.name or "―" }}
         {% if r.student_id %}<br><span style="color:#9ca3af;font-size:11px">{{ r.student_id }}</span>{% endif %}

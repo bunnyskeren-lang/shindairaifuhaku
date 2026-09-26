@@ -9,6 +9,7 @@ from core.config import IS_DEV, JST, VAPID_PUBLIC_KEY
 from core.funnel import FUNNEL_EVENTS_IN_ORDER
 from core.security import check_admin
 from core.templates import templates
+from routers.admin._common import admin_channel, channel_conds
 from database import AsyncSessionLocal
 from models import (
     CourseSection, CourseSectionView, FunnelEvent, RichMenuTap, Review, Subject, UserActivity, UserProfile,
@@ -33,7 +34,7 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
-async def _friend_breakdown(session) -> dict:
+async def _friend_breakdown(session, ch: str = "all") -> dict:
     """LINE友だち追加者を「登録画面を開いたか」「登録したか」で3グループに分ける。
 
     - 友だち追加者: user_activity の `[follow]`（ブロック解除の再追加も同じ行）
@@ -45,7 +46,9 @@ async def _friend_breakdown(session) -> dict:
     """
     follow_at = {
         uid: last_at for uid, last_at in (await session.execute(
-            select(UserActivity.user_id, UserActivity.last_at).where(UserActivity.action == "[follow]")
+            select(UserActivity.user_id, UserActivity.last_at).where(
+                UserActivity.action == "[follow]", *channel_conds(UserActivity.source, ch)
+            )
         )).all()
     }
     registered = set((await session.execute(select(UserProfile.line_user_id))).scalars().all())
@@ -102,7 +105,7 @@ async def _friend_breakdown(session) -> dict:
     }
 
 
-async def _funnel_stats(session) -> dict:
+async def _funnel_stats(session, ch: str = "all") -> dict:
     """funnel_events（core/funnel.py）と会員登録・レビュー投稿から、段階ごとの到達数を集計する。
 
     日別はSQL側でJST日付に丸めず、直近14日分の行をPythonで丸める（SQLiteのテストでも動かすため。
@@ -174,7 +177,7 @@ async def _funnel_stats(session) -> dict:
             daily[d]["reviews"] += 1
 
     return {
-        "friends": await _friend_breakdown(session),
+        "friends": await _friend_breakdown(session, ch),
         "totals": totals,
         "sources": sources,
         "daily_rows": [{"day": d, **daily[d]} for d in days],
@@ -184,7 +187,10 @@ async def _funnel_stats(session) -> dict:
 
 
 @router.get("/admin/usage-stats")
-async def admin_usage_stats(request: Request, _=Depends(check_admin), page: int = Query(default=1, ge=1)):
+async def admin_usage_stats(
+    request: Request, _=Depends(check_admin), page: int = Query(default=1, ge=1),
+    ch: str = Depends(admin_channel),
+):
     per_page = 30  # ユーザー単位でのページング件数
     RICHMENU_LABELS = {
         "review":   "レビューを投稿",
@@ -208,13 +214,14 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin), page: int 
         )).all()
         msg_btn_rows = (await session.execute(
             select(UserActivity.action, func.sum(UserActivity.count).label("cnt"))
-            .where(UserActivity.action.in_(list(MSG_BTN_LABELS.keys())))
+            .where(UserActivity.action.in_(list(MSG_BTN_LABELS.keys())), *channel_conds(UserActivity.source, ch))
             .group_by(UserActivity.action)
             .order_by(func.sum(UserActivity.count).desc())
         )).all()
         # 全体ランキング（上位20件）はSQL側で集計する（行を全件Pythonに引き上げない）
         ranking_rows = (await session.execute(
             select(UserActivity.action, func.sum(UserActivity.count).label("total"))
+            .where(*channel_conds(UserActivity.source, ch))
             .group_by(UserActivity.action)
             .order_by(func.sum(UserActivity.count).desc())
             .limit(20)
@@ -222,10 +229,10 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin), page: int 
 
         # ユーザー別利用履歴はユーザー単位でページングする（1ユーザーの行が
         # ページをまたいで分断されないよう、先に対象ユーザーをLIMIT/OFFSETで確定する）
-        user_ids_subq = select(UserActivity.user_id).distinct().subquery()
+        user_ids_subq = select(UserActivity.user_id).where(*channel_conds(UserActivity.source, ch)).distinct().subquery()
         total_users = (await session.execute(select(func.count()).select_from(user_ids_subq))).scalar_one()
         page_user_ids = (await session.execute(
-            select(UserActivity.user_id).distinct()
+            select(UserActivity.user_id).where(*channel_conds(UserActivity.source, ch)).distinct()
             .order_by(UserActivity.user_id)
             .offset((page - 1) * per_page).limit(per_page)
         )).scalars().all()
@@ -239,10 +246,10 @@ async def admin_usage_stats(request: Request, _=Depends(check_admin), page: int 
                 UserActivity.last_at,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == UserActivity.user_id)
-            .where(UserActivity.user_id.in_(page_user_ids))
+            .where(UserActivity.user_id.in_(page_user_ids), *channel_conds(UserActivity.source, ch))
             .order_by(UserActivity.user_id, UserActivity.count.desc())
         )).all() if page_user_ids else []
-        funnel = await _funnel_stats(session)
+        funnel = await _funnel_stats(session, ch)
         csv_rows = (await session.execute(
             select(CourseSectionView, Subject.name.label("subj_name"))
             .join(CourseSection, CourseSection.id == CourseSectionView.course_section_id)

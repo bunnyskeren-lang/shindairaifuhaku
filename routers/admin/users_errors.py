@@ -3,15 +3,16 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 
 from core import cache
-from core.config import credit_tickets_granted_clause, escape_like, review_approval_unlock_credits
+from core.config import CHANNEL_GUEST, CHANNEL_MAIN, credit_tickets_granted_clause, escape_like, review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
+from routers.admin._common import CHANNEL_ALL, admin_channel, channel_conds
 from database import AsyncSessionLocal
 from models import (
-    CourseSection, DebugLog, ErrorLog, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserProfile,
+    CourseSection, DebugLog, ErrorLog, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserActivity, UserProfile,
 )
 
 router = APIRouter()
@@ -24,9 +25,11 @@ async def admin_users(
     page: int = Query(default=1, ge=1),
     q: str = Query(default=""),
     view: str = Query(default=""),
+    ch: str = Depends(admin_channel),
 ):
     q = q.strip()
     is_banned_view = view == "banned"
+    is_both_view = view == "both"
     per_page = 50
     async with AsyncSessionLocal() as session:
         # 修正理由: 以前はmessage_logs（LINEからの受信ログ）を主語にしてuser_profilesを
@@ -41,7 +44,24 @@ async def admin_users(
             .group_by(MessageLog.user_id)
             .subquery()
         )
+        # 「どのチャンネルを使っているか」の判定（ゲスト用botと本番botは同じLINEプロバイダー配下で
+        # 同一人物が同じユーザーIDになり user_profiles も共有するため、ユーザーIDでは区別できない）。
+        #  - ゲスト: is_guest（ゲスト用botで会員登録）または user_activity に source=guest の行がある
+        #  - 本番  : ゲスト登録でない、または user_activity に source=main の行がある
+        # user_activity は message_logs と違い自動削除されないので恒久的な判定に使える。
+        def _used(source: str):
+            return exists().where(
+                UserActivity.user_id == UserProfile.line_user_id, UserActivity.source == source,
+            )
+        in_guest = or_(UserProfile.is_guest.is_(True), _used(CHANNEL_GUEST))
+        in_main = or_(UserProfile.is_guest.is_(False), _used(CHANNEL_MAIN))
         filters = []
+        if is_both_view:
+            filters.append(and_(in_guest, in_main))
+        elif ch == CHANNEL_GUEST:
+            filters.append(in_guest)
+        elif ch == CHANNEL_MAIN:
+            filters.append(in_main)
         if q:
             q_safe = escape_like(q)
             filters.append(or_(
@@ -57,6 +77,10 @@ async def admin_users(
         banned_total = (await session.execute(
             select(func.count(UserProfile.line_user_id)).where(UserProfile.banned_at.isnot(None))
         )).scalar_one()
+        # ゲスト用と本番の両方を使っている人数（本番の管理画面に目立つ形で出す。ユーザー指示 2026-09-26）
+        both_total = (await session.execute(
+            select(func.count(UserProfile.line_user_id)).where(and_(in_guest, in_main))
+        )).scalar_one()
         users = (await session.execute(
             select(
                 UserProfile.line_user_id.label("user_id"),
@@ -71,6 +95,8 @@ async def admin_users(
                 UserProfile.payment_limit,
                 UserProfile.banned_at,
                 UserProfile.ban_reason,
+                in_guest.label("in_guest"),
+                in_main.label("in_main"),
             )
             .outerjoin(last_seen_subq, last_seen_subq.c.user_id == UserProfile.line_user_id)
             .where(*filters)
@@ -168,6 +194,8 @@ async def admin_users(
         url_params.append(f"q={quote(q)}")
     if is_banned_view:
         url_params.append("view=banned")
+    if is_both_view:
+        url_params.append("view=both")
     url_prefix = "/admin/users?" + "&".join([*url_params, "page="]) if url_params else "/admin/users?page="
 
     return templates.TemplateResponse("admin/users.html", {
@@ -182,6 +210,8 @@ async def admin_users(
         "q": q,
         "is_banned_view": is_banned_view,
         "banned_total": banned_total,
+        "is_both_view": is_both_view,
+        "both_total": both_total,
         "url_prefix": url_prefix,
     })
 
@@ -200,6 +230,7 @@ async def admin_errors(
     _: str = Depends(check_admin),
     page: int = Query(default=1, ge=1),
     view: str = Query(default=""),
+    ch: str = Depends(admin_channel),
 ):
     per_page = 50
     is_dup_view = view == "submit_duplicate"
@@ -208,12 +239,13 @@ async def admin_errors(
     # action IS NULL の行（大半の本物のエラー）は NOT LIKE が SQL上 NULL になり除外されて
     # しまうため、明示的に is_(None) を OR しておく
     view_filter = dup_like if is_dup_view else or_(ErrorLog.action.is_(None), ~dup_like)
+    ch_conds = channel_conds(ErrorLog.source, ch)
     async with AsyncSessionLocal() as session:
         total = (await session.execute(
-            select(func.count(ErrorLog.id)).where(view_filter)
+            select(func.count(ErrorLog.id)).where(view_filter, *ch_conds)
         )).scalar_one()
         dup_total = (await session.execute(
-            select(func.count(ErrorLog.id)).where(dup_like)
+            select(func.count(ErrorLog.id)).where(dup_like, *ch_conds)
         )).scalar_one()
         rows_stmt = (
             select(
@@ -226,9 +258,10 @@ async def admin_errors(
                 ErrorLog.error_type,
                 ErrorLog.error_message,
                 ErrorLog.traceback,
+                ErrorLog.source,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == ErrorLog.user_id)
-            .where(view_filter)
+            .where(view_filter, *ch_conds)
             .order_by(ErrorLog.created_at.desc())
         )
         errors = (await session.execute(
@@ -253,14 +286,16 @@ async def admin_liff_reauth(
     request: Request,
     _: str = Depends(check_admin),
     page: int = Query(default=1, ge=1),
+    ch: str = Depends(admin_channel),
 ):
     """LIFF IDトークン期限切れ→強制再ログインのテレメトリ（liff_auth_events）。
     サーバーエラーではないため /admin/errors とは別ページにしている。"""
     per_page = 50
     async with AsyncSessionLocal() as session:
-        total = (await session.execute(select(func.count(LiffAuthEvent.id)))).scalar_one()
+        liff_conds = channel_conds(LiffAuthEvent.source, ch)
+        total = (await session.execute(select(func.count(LiffAuthEvent.id)).where(*liff_conds))).scalar_one()
         stuck_total = (await session.execute(
-            select(func.count(LiffAuthEvent.id)).where(LiffAuthEvent.guard_tripped.is_(True))
+            select(func.count(LiffAuthEvent.id)).where(LiffAuthEvent.guard_tripped.is_(True), *liff_conds)
         )).scalar_one()
         rows = (await session.execute(
             select(
@@ -273,8 +308,10 @@ async def admin_liff_reauth(
                 LiffAuthEvent.reason,
                 LiffAuthEvent.guard_tripped,
                 LiffAuthEvent.payload,
+                LiffAuthEvent.source,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == LiffAuthEvent.user_id)
+            .where(*liff_conds)
             .order_by(LiffAuthEvent.created_at.desc())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()
@@ -300,19 +337,20 @@ async def admin_debug_logs(
     _: str = Depends(check_admin),
     page: int = Query(default=1, ge=1),
     status: str = Query(default=""),
+    ch: str = Depends(admin_channel),
 ):
     """バグ調査用の動作ログ（debug_logs）。LINE botの応答1件ごとに、正常終了・タイムアウト・
     エラーいずれのケースも操作名(action)と所要時間を記録している（line_bot/handler.py
     `_log_reply_timing()`参照）。message_logs（ユーザーの関心が分かる生メッセージ）とは別画面。"""
     per_page = 50
     status = status if status in _DEBUG_LOG_STATUSES else ""
-    where_clause = [DebugLog.status == status] if status else []
+    where_clause = ([DebugLog.status == status] if status else []) + channel_conds(DebugLog.source, ch)
     async with AsyncSessionLocal() as session:
         total = (await session.execute(
             select(func.count(DebugLog.id)).where(*where_clause)
         )).scalar_one()
         status_counts_rows = (await session.execute(
-            select(DebugLog.status, func.count(DebugLog.id)).group_by(DebugLog.status)
+            select(DebugLog.status, func.count(DebugLog.id)).where(*channel_conds(DebugLog.source, ch)).group_by(DebugLog.status)
         )).all()
         rows = (await session.execute(
             select(
@@ -324,6 +362,7 @@ async def admin_debug_logs(
                 DebugLog.status,
                 DebugLog.duration_ms,
                 DebugLog.detail,
+                DebugLog.source,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == DebugLog.user_id)
             .where(*where_clause)

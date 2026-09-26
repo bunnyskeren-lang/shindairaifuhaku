@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import func, or_, select
 
 from core.config import (
+    CHANNEL,
     EASE_ORDER,
     JST,
     MAX_REVIEWS_PER_COURSE_SECTION,
@@ -1039,6 +1040,9 @@ async def _fetch_admin_nav_counts() -> dict:
             select(func.count(ErrorLog.id)).where(
                 ErrorLog.created_at >= today_start,
                 or_(ErrorLog.action.is_(None), ~dup_like),
+                # このサービス自身のチャンネルのエラーだけ数える（ゲスト用botのエラーで本番の警告バッジが
+                # 点かないようにするため。全チャンネル分は各画面のチャンネル切替で見る）
+                ErrorLog.source == CHANNEL,
             )
         )).scalar_one()
     return {

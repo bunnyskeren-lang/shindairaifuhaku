@@ -34,7 +34,7 @@ pre { background:#fef2f2; padding:10px; border-radius:6px; font-size:11px; overf
     </tr>
     {% for e in errors %}
     <tr style="vertical-align:top">
-      <td style="white-space:nowrap;font-size:11px">{{ e.created_at | jst }}</td>
+      <td style="white-space:nowrap;font-size:11px">{{ e.created_at | jst }}{% if request.state.channel == 'all' %}<br><span class="ch-badge {{ 'guest' if e.source == 'guest' else 'main' }}">{{ 'ゲスト' if e.source == 'guest' else '本番' }}</span>{% endif %}</td>
       <td style="font-size:12px">
         {{ e.name or "―" }}
         {% if e.student_id %}<br><span style="color:#9ca3af;font-size:11px">{{ e.student_id }}</span>{% endif %}

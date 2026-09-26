@@ -28,7 +28,7 @@
     </tr>
     {% for l in logs %}
     <tr>
-      <td class="log-time">{{ l.created_at | jst }}</td>
+      <td class="log-time">{{ l.created_at | jst }}{% if request.state.channel == 'all' %}<br><span class="ch-badge {{ 'guest' if l.source == 'guest' else 'main' }}">{{ 'ゲスト' if l.source == 'guest' else '本番' }}</span>{% endif %}</td>
       <td>
         {% if l.name %}<span class="log-user-name">{{ l.name }}</span>{% else %}<span class="log-user-sub">未登録ユーザー</span>{% endif %}
         {% if l.student_id %}<br><span class="log-user-sub">{{ l.student_id }}</span>{% endif %}

@@ -465,6 +465,13 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 - レスポンスを待たせずログ保存・Push通知等を投げる「発火して忘れる」タスクは、素の `asyncio.create_task()` ではなく必ず `core.background_tasks.fire_and_forget()` を使うこと（戻り値を誰も保持しないとタスクがGCされ実行途中で消えるリスクがあるため、ruffの`RUF006`ルールでも検出される。2026-09-22導入）
 - `main.py`の`lifespan`で管理するループタスク（`ping_task`/`backup_task`等）のように、明示的に変数へ保持してcancel/awaitする場合はこの限りではない
 
+**ゲスト用bot / 本番botのチャンネル区別（2026-09-26）**
+
+- ゲスト用bot（`ENV=guest`のRenderサービス）と本番botは同じLINEプロバイダー配下でDBも共有するため、同一人物は同じユーザーIDになりユーザーIDでは区別できない。代わりに`message_logs`/`error_logs`/`debug_logs`/`liff_auth_events`/`user_activity`の`source`列（`main`/`guest`、書き込み時に`core.config.CHANNEL`＝`IS_GUEST`由来を自動設定）で「どのサービスが記録したか」を区別する。`user_activity`のUNIQUEは`(user_id, action, source)`
+- 管理画面のログ系ページ（メッセージログ・概要・エラー・デバッグログ・再ログイン・統計・ユーザー設定）は`routers/admin/_common.py`の`admin_channel`（Cookie`admin_channel`、未選択時はそのサービス自身のチャンネル）で絞り込み、`templates/admin/base.html`のトグル（本番/ゲスト/両方）で切替える。新しいログ系ページを作るときは`Depends(admin_channel)`＋`channel_conds()`を使うこと
+- ユーザー設定は`is_guest`と`user_activity.source`から「両チャンネル利用者」を判定し、本番の管理画面に警告と専用フィルタ（`?view=both`）で表示する
+- ナビのエラーバッジ（`errors_today`）はそのサービス自身のチャンネルのエラーだけ数える
+
 **DB自動バックアップ（`core/backup.py`）**
 
 - Supabase Freeプランには自動バックアップが無く、ローカル開発環境はNetwork Restrictionsにより本番DBへ直接接続できない。そのため「本番DBに到達できる本番アプリ自身」が定期バックアップを生成する設計にした

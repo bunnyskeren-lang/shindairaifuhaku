@@ -7,6 +7,7 @@ from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.background_tasks import fire_and_forget
+from core.config import CHANNEL
 from database import AsyncSessionLocal
 from models import DebugLog, ErrorLog, LiffAuthEvent, MessageLog, UserActivity, UserProfile
 
@@ -45,6 +46,7 @@ async def save_error_log(
                 error_type=type(exc).__name__,
                 error_message=str(exc)[:500],
                 traceback=tb[:4000],
+                source=CHANNEL,
             ))
             await session.commit()
     except Exception as log_exc:
@@ -91,6 +93,7 @@ async def save_debug_log(
                 status=status,
                 duration_ms=int(duration_ms) if duration_ms is not None else None,
                 detail=detail[:500] if detail else None,
+                source=CHANNEL,
             ))
             await session.commit()
     except Exception as log_exc:
@@ -100,14 +103,14 @@ async def save_debug_log(
 async def save_log_bg(user_id: str, direction: str, message: str) -> None:
     try:
         async with AsyncSessionLocal() as session:
-            session.add(MessageLog(user_id=user_id, direction=direction, message=message))
+            session.add(MessageLog(user_id=user_id, direction=direction, message=message, source=CHANNEL))
             if direction == "in":
                 now = datetime.now(UTC)
                 stmt = (
                     pg_insert(UserActivity)
-                    .values(user_id=user_id, action=message[:200], count=1, last_at=now)
+                    .values(user_id=user_id, action=message[:200], count=1, last_at=now, source=CHANNEL)
                     .on_conflict_do_update(
-                        index_elements=["user_id", "action"],
+                        index_elements=["user_id", "action", "source"],
                         set_={"count": UserActivity.count + 1, "last_at": now},
                     )
                 )

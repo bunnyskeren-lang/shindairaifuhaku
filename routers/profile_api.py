@@ -16,7 +16,7 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     COOP_JOBSITE_KNOWN_CHOICES, COOP_JOBSITE_KNOWN_QUESTION,
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE,
-    FACULTIES, FACULTY_DEPARTMENTS, IS_GUEST,
+    CHANNEL, FACULTIES, FACULTY_DEPARTMENTS, IS_GUEST,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, RICHMENU_ID_MAIN,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     STUDENT_ID_RE, LINE_USER_ID_RE,
@@ -82,6 +82,7 @@ async def liff_auth_event(request: Request, _rl=Depends(_liff_auth_event_rate_li
                 reason=ctx["reason"][:40],
                 guard_tripped=bool(ctx["guard_tripped"]),
                 payload=_json.dumps(ctx, ensure_ascii=False)[:2000],
+                source=CHANNEL,
             ))
             await session.commit()
     except Exception as exc:

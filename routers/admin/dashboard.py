@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from core import cache
 from core.security import check_admin
 from core.templates import templates
+from routers.admin._common import admin_channel, channel_conds
 from database import AsyncSessionLocal
 from models import (
     ErrorLog,
@@ -28,7 +29,7 @@ _SUBMIT_DUPLICATE_ACTION_PREFIX = "submit_duplicate:"
 
 
 @router.get("/admin", response_class=HTMLResponse)
-async def admin_overview(request: Request, _: str = Depends(check_admin)):
+async def admin_overview(request: Request, _: str = Depends(check_admin), ch: str = Depends(admin_channel)):
     nav_counts = await cache.get_admin_nav_counts_cached()
     async with AsyncSessionLocal() as session:
         # 「対応が必要な項目」の各行に添える補足情報（最も古い未対応の発生日時・直近のエラー内容）
@@ -51,7 +52,7 @@ async def admin_overview(request: Request, _: str = Depends(check_admin)):
         dup_like = ErrorLog.action.like(_SUBMIT_DUPLICATE_ACTION_PREFIX + "%")
         latest_error = (await session.execute(
             select(ErrorLog.action, ErrorLog.error_type, ErrorLog.created_at)
-            .where(or_(ErrorLog.action.is_(None), ~dup_like))
+            .where(or_(ErrorLog.action.is_(None), ~dup_like), *channel_conds(ErrorLog.source, ch))
             .order_by(ErrorLog.created_at.desc())
             .limit(1)
         )).first()
@@ -65,7 +66,7 @@ async def admin_overview(request: Request, _: str = Depends(check_admin)):
                 UserProfile.name.label("name"),
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == MessageLog.user_id)
-            .where(MessageLog.direction == "in")
+            .where(MessageLog.direction == "in", *channel_conds(MessageLog.source, ch))
             .order_by(MessageLog.created_at.desc())
             .limit(8)
         )).all()
@@ -82,7 +83,10 @@ async def admin_overview(request: Request, _: str = Depends(check_admin)):
 
 
 @router.get("/admin/logs", response_class=HTMLResponse)
-async def admin_logs_page(request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1)):
+async def admin_logs_page(
+    request: Request, _: str = Depends(check_admin), page: int = Query(default=1, ge=1),
+    ch: str = Depends(admin_channel),
+):
     per_page = 50
     nav_counts = await cache.get_admin_nav_counts_cached()
     async with AsyncSessionLocal() as session:
@@ -92,7 +96,7 @@ async def admin_logs_page(request: Request, _: str = Depends(check_admin), page:
         # （line_bot/handler.py _handle_reply_event参照）。応答の成否・所要時間は
         # 別画面「デバッグログ」（/admin/debug-logs、DebugLog）で追える。
         total = (await session.execute(
-            select(func.count(MessageLog.id)).where(MessageLog.direction == "in")
+            select(func.count(MessageLog.id)).where(MessageLog.direction == "in", *channel_conds(MessageLog.source, ch))
         )).scalar_one()
         # 送信者を LINE user_id ではなく会員登録時の氏名・学籍番号で表示するため
         # user_profiles を left join する（未登録ユーザーの行も残すので outerjoin）。
@@ -104,9 +108,10 @@ async def admin_logs_page(request: Request, _: str = Depends(check_admin), page:
                 MessageLog.created_at,
                 UserProfile.name.label("name"),
                 UserProfile.student_id.label("student_id"),
+                MessageLog.source,
             )
             .outerjoin(UserProfile, UserProfile.line_user_id == MessageLog.user_id)
-            .where(MessageLog.direction == "in")
+            .where(MessageLog.direction == "in", *channel_conds(MessageLog.source, ch))
             .order_by(MessageLog.created_at.desc())
             .offset((page - 1) * per_page).limit(per_page)
         )).all()

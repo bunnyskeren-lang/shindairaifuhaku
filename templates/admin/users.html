@@ -30,13 +30,20 @@
 {% set current_url = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
 <div class="card">
   <h2 style="margin-top:0">ユーザー設定（全{{ total }}件）</h2>
+  {% if both_total and not is_both_view %}
+  <div style="background:var(--warning-soft);border:1px solid var(--warning);color:var(--warning);border-radius:var(--radius-s);padding:9px 12px;font-size:13px;font-weight:700;margin-bottom:10px">
+    🔀 ゲスト用botと本番botの<u>両方</u>を使っているユーザーが {{ both_total }} 人います
+    <a href="/admin/users?view=both" style="margin-left:8px">一覧を見る →</a>
+  </div>
+  {% endif %}
   <form method="get" action="/admin/users" class="u-search">
     <input type="text" name="q" value="{{ q }}" placeholder="名前・学籍番号で検索">
-    {% if is_banned_view %}<input type="hidden" name="view" value="banned">{% endif %}
+    {% if is_banned_view %}<input type="hidden" name="view" value="banned">{% elif is_both_view %}<input type="hidden" name="view" value="both">{% endif %}
     <button type="submit" class="btn btn-primary">検索</button>
-    {% if q %}<a href="/admin/users{{ '?view=banned' if is_banned_view }}" class="btn" style="background:var(--surface-alt);color:var(--ink-soft);text-decoration:none;display:inline-flex;align-items:center">✕ クリア</a>{% endif %}
-    <a href="/admin/users{{ '?q=' ~ q if q }}" class="u-filter-pill{{ ' active' if not is_banned_view }}">すべて</a>
+    {% if q %}<a href="/admin/users{{ '?view=banned' if is_banned_view }}{{ '?view=both' if is_both_view }}" class="btn" style="background:var(--surface-alt);color:var(--ink-soft);text-decoration:none;display:inline-flex;align-items:center">✕ クリア</a>{% endif %}
+    <a href="/admin/users{{ '?q=' ~ q if q }}" class="u-filter-pill{{ ' active' if not is_banned_view and not is_both_view }}">すべて</a>
     <a href="/admin/users?view=banned{{ '&q=' ~ q if q }}" class="u-filter-pill{{ ' active' if is_banned_view }}">🚫 利用停止中（{{ banned_total }}）</a>
+    <a href="/admin/users?view=both{{ '&q=' ~ q if q }}" class="u-filter-pill{{ ' active' if is_both_view }}">🔀 両チャンネル利用（{{ both_total }}）</a>
   </form>
   <div class="table-wrap">
   <table class="u-table">
@@ -45,7 +52,7 @@
     {% set rv = review_map.get(u.student_id) if u.student_id else None %}
     {% set tk = ticket_map.get(u.user_id) %}
     <tr{{ ' class="u-row-banned"' | safe if u.banned_at }}>
-      <td class="u-name">{{ u.name or "―" }}</td>
+      <td class="u-name">{{ u.name or "―" }}{% if u.in_guest and u.in_main %} <span class="ch-badge both">両方</span>{% elif u.in_guest %} <span class="ch-badge guest">ゲスト</span>{% endif %}</td>
       <td>{{ u.student_id or "―" }}</td>
       <td>{{ u.faculty or "―" }}{% if u.department %}<br><span class="u-sub">{{ u.department }}</span>{% endif %}</td>
       <td>{{ u.coop_jobsite_known or "―" }}</td>

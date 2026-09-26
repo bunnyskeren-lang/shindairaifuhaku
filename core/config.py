@@ -33,6 +33,12 @@ IS_DEV = os.environ.get("ENV", "prod") == "dev"
 # 本番DBを参照する専用Renderサービスとして動かし、稼働日の制御はコード側ではなく
 # Renderサービス自体のSuspend/Resumeで行う（ユーザー指示 2026-09-18）。
 IS_GUEST = os.environ.get("ENV", "prod") == "guest"
+# ログ系テーブル(message_logs等)の source 列に入れる、このプロセスが担当するLINEチャンネルの識別子。
+# ゲスト用と本番は同じLINEプロバイダー配下で同一人物が同じユーザーIDになり、DBも共有するため、
+# ユーザーIDではなく「どのチャンネルのサービスが記録したか」で区別する（2026-09-26）。
+CHANNEL_MAIN = "main"
+CHANNEL_GUEST = "guest"
+CHANNEL = CHANNEL_GUEST if IS_GUEST else CHANNEL_MAIN
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")

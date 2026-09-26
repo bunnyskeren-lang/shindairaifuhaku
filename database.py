@@ -826,6 +826,28 @@ async def init_db():
             "ON user_profiles (register_nonce) WHERE register_nonce IS NOT NULL"
         ))
 
+        # ── 2026-09-26: ログ系テーブルにチャンネル識別列 source を追加 ──
+        # ゲスト用botと本番botは同じLINEプロバイダー配下（同一人物は同じユーザーID）でDBも共有するため、
+        # バグ切り分け・集計のためにユーザーIDではなく記録元サービスのチャンネルで区別する。
+        # 既存行は全て本番(main)由来として扱う（ゲスト用botの運用開始前のデータのため）。
+        for _log_table in ("message_logs", "error_logs", "debug_logs", "liff_auth_events", "user_activity"):
+            await conn.execute(text(
+                f"ALTER TABLE {_log_table} ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'main'"
+            ))
+        for _log_table in ("message_logs", "error_logs", "debug_logs", "liff_auth_events"):
+            await conn.execute(text(
+                f"CREATE INDEX IF NOT EXISTS ix_{_log_table}_source ON {_log_table} (source)"
+            ))
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_user_activity_user_action_source') THEN
+                ALTER TABLE user_activity DROP CONSTRAINT IF EXISTS user_activity_user_id_action_key;
+                ALTER TABLE user_activity ADD CONSTRAINT uq_user_activity_user_action_source UNIQUE (user_id, action, source);
+              END IF;
+            END $$;
+        """))
+
         # ── 2026-09-18: ゲスト用LINEチャンネル(ENV=guest)向け ──
         # 会員登録を経ずフォロー時に自動発行するダミープロフィールを、本番DBの実データと
         # 区別するためのフラグ列。管理画面の集計・支払い対象から除外する用途のみに使う。

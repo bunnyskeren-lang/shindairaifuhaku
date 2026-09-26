@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
-from core.config import normalize_instructor_name, normalize_subject_name
+from core.config import CHANNEL, normalize_instructor_name, normalize_subject_name
 
 
 class TimestampMixin:
@@ -17,6 +17,8 @@ class MessageLog(TimestampMixin, Base):
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     direction: Mapped[str] = mapped_column(String(8), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    # 記録したLINEチャンネル（core.config.CHANNEL: main=本番/dev、guest=ゲスト用bot）
+    source: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL, index=True)
 
 
 class DisplayOrder(Base):
@@ -95,6 +97,7 @@ class ErrorLog(TimestampMixin, Base):
     error_type: Mapped[str] = mapped_column(String(100), nullable=False)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
     traceback: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL, index=True)
 
 
 class DebugLog(TimestampMixin, Base):
@@ -114,6 +117,7 @@ class DebugLog(TimestampMixin, Base):
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 計算時間/送信時間の内訳など、補足情報があれば入れる（任意）
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL, index=True)
 
 
 class LiffAuthEvent(TimestampMixin, Base):
@@ -137,6 +141,7 @@ class LiffAuthEvent(TimestampMixin, Base):
     reason: Mapped[str] = mapped_column(String(40), nullable=False, default="")     # expired / auth_failed / recovered
     guard_tripped: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # True=再ログインしても復帰不能＝詰み
     payload: Mapped[str] = mapped_column(Text, nullable=False, default="")          # クライアント送信の全コンテキスト(JSON)
+    source: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL, index=True)
 
 
 class AdminSession(Base):
@@ -153,14 +158,17 @@ class AdminSession(Base):
 
 class UserActivity(Base):
     __tablename__ = "user_activity"
-    __table_args__ = (UniqueConstraint("user_id", "action"),)
+    # sourceを含めるのは、同一人物がゲスト用・本番の両チャンネルを使ってもチャンネルごとに
+    # 別行で集計するため（2026-09-26）
+    __table_args__ = (UniqueConstraint("user_id", "action", "source", name="uq_user_activity_user_action_source"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # user_idの単独indexは張らない。UniqueConstraint(user_id, action)の先頭列プレフィックスで代替できる
+    # user_idの単独indexは張らない。UniqueConstraint(user_id, action, source)の先頭列プレフィックスで代替できる
     user_id: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(200), nullable=False)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL)
 
 
 class RichMenuTap(Base):
