@@ -535,7 +535,6 @@ def make_rakutan_card(items: list[dict]) -> FlexMessage:
         "😴 楽単5選", items, header_bg="#f59e0b", row_bg="#fffbeb", accent="#f59e0b",
         subtitle="承認済みレビューから厳選", row_bg_top="#fef3c7",
         rank_colors=_RAKUTAN_RANK_COLORS, top_emoji="👑",
-        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
     )
 
 
@@ -544,7 +543,6 @@ def make_onitan_card(items: list[dict]) -> FlexMessage:
         "👹 鬼単5選", items, header_bg="#b91c1c", row_bg="#fef2f2", accent="#b91c1c",
         subtitle="承認済みレビューから厳選", row_bg_top="#fee2e2",
         rank_colors=_ONITAN_RANK_COLORS, top_emoji="💀",
-        footer_button_label="📝 レビューを投稿", footer_button_uri=make_review_liff_url(),
     )
 
 
@@ -607,16 +605,6 @@ def make_omikuji_card(items: list[dict]) -> FlexMessage:
             ],
         ),
         body=FlexBox(layout="vertical", contents=rows, padding_all="md"),
-        footer=FlexBox(
-            layout="vertical",
-            padding_all="md",
-            contents=[
-                FlexButton(
-                    action=URIAction(label="📝 レビューを投稿", uri=make_review_liff_url()),
-                    style="primary", color=accent, height="sm",
-                ),
-            ],
-        ),
     )
     return FlexMessage(alt_text="⛩️ 10連おみくじ", contents=bubble)
 
