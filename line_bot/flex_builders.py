@@ -378,7 +378,7 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         padding_bottom="xl",
                         action=URIAction(label="今すぐ登録する", uri=register_url),
                         contents=[
-                            FlexText(text="今すぐ登録する", weight="bold", size="xxl", color="#ffffff", align="center"),
+                            FlexText(text="今すぐ登録する", weight="bold", size="xl", color="#ffffff", align="center"),
                             FlexText(text="30秒で完了", weight="bold", size="sm", color="#ffedd5", align="center", margin="xs"),
                         ],
                     ),
