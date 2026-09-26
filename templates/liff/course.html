@@ -683,6 +683,8 @@ async function main() {
 
   const ratingsEl = document.getElementById("ratings");
   if (data.locked) {
+    // 解除前は総合評価の四角ごと出さない（解除カードだけを見せる）
+    document.getElementById("summary-card").hidden = true;
     // 解除前は実際の平均星を「ぼかし」で見せるティザー（解除の動機づけ。星の値は実データ）
     let tz = "";
     if (data.top_ease) {
