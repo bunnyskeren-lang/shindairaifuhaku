@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core import cache, line_client, moderation
-from core.activity_log import save_error_log
+from core.activity_log import save_debug_log, save_error_log
 from core.background_tasks import fire_and_forget
 from core.funnel import EVENT_REGISTER_DONE, track
 from core.groups import locked_group_id
@@ -221,8 +221,18 @@ async def register_profile(
         return _form_error(f"「{COOP_JOBSITE_KNOWN_QUESTION}」にお答えください")
 
     async with AsyncSessionLocal() as session:
-        # 学籍番号の重複チェックはしない（本番・ゲストとも。2026-09-27、ユーザー指示）。
-        # DB側のUNIQUE制約も外している（database.py init_db参照）
+        # 学籍番号の重複チェックでユーザーを弾かない（本番・ゲストとも。2026-09-27、ユーザー指示）。
+        # DB側のUNIQUE制約も外している（database.py init_db参照）。重複時は管理画面の
+        # デバッグログ(/admin/debug-logs)に記録するだけで、ユーザーへの応答・Push通知には影響しない
+        duplicate_uids: list[str] = []
+        try:
+            duplicate_uids = list((await session.execute(
+                select(UserProfile.line_user_id).where(
+                    UserProfile.student_id == sid, UserProfile.line_user_id != uid
+                ).limit(5)
+            )).scalars().all())
+        except Exception:
+            duplicate_uids = []
 
         # 修正理由: 従来はSELECTで存在確認してからINSERT/UPDATEを分岐していたため、
         # 同一ユーザーからのほぼ同時の二重送信（ボタン連打・LIFF多重初期化等）で
@@ -280,6 +290,12 @@ async def register_profile(
             await session.rollback()
             await save_error_log(exc, user_id=uid, action="register_profile")
             return _form_error("登録に失敗しました。もう一度お試しください")
+
+    if duplicate_uids:
+        fire_and_forget(save_debug_log(
+            "register_duplicate_student_id", user_id=uid, status="warn",
+            detail=f"student_id={sid} 既存{len(duplicate_uids)}件以上と重複: {','.join(duplicate_uids)}",
+        ))
 
     cache.set_registration_complete(uid)
     # LINE bot 受信処理のユーザー状態スナップショット（60秒TTL）も、直前に「未登録」で
