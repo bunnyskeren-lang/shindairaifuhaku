@@ -246,7 +246,7 @@ async function initProfilePrefill() {
     // 投稿したレビューだけなので、本人が欄を消して投稿すればそのレビューは団体に数えない
     if (d.group.active) {
       document.getElementById('group_code').value = d.group.code || '';
-      setGroupStatus('ok', `✅ ${d.group.name} として投稿します（団体に数えたくない場合は番号を消してください）`);
+      setGroupStatus('ok', `✅ ${d.group.name} として投稿します`);
     } else {
       setGroupStatus('member', `🤝 ${d.group.name}（現在は受付を終了しています）`);
     }
@@ -405,7 +405,6 @@ document.querySelectorAll('.chip-btn').forEach(btn => {
 
 ['evalCustomInput', 'formatCustomInput', 'attendanceMethodCustomInput'].forEach(id => {
   document.getElementById(id).addEventListener('input', () => {
-    if (id === 'evalCustomInput') renderGroupPercents('eval');
     if (id === 'formatCustomInput') renderGroupPercents('class_format');
     updateGradingMethod();
     saveData();
@@ -451,11 +450,6 @@ document.querySelectorAll('[data-group="academic_year"]').forEach(btn => {
 });
 
 const PERCENT_GROUPS = {
-  eval: {
-    containerId: 'evalPercentContainer', barId: 'evalSliderBar', trackId: 'evalSliderTrack',
-    listId: 'evalPercentList', errorId: 'evalPercentError', customInputId: 'evalCustomInput',
-    customValue: '__custom__', dragged: false,
-  },
   class_format: {
     containerId: 'formatPercentContainer', barId: 'formatSliderBar', trackId: 'formatSliderTrack',
     listId: 'formatPercentList', errorId: 'formatPercentError', customInputId: 'formatCustomInput',
@@ -511,7 +505,12 @@ function updateGradingMethod() {
   if (hw) parts.push({ label: '課題', text: withExtraText(hw.dataset.value, 'homeworkExtraInput') });
   const hwFreq = document.querySelector('[data-group="homework_frequency"].active');
   if (hwFreq) parts.push({ label: '頻度', text: withExtraText(hwFreq.dataset.value, 'homeworkFrequencyExtraInput') });
-  const evals = partsForGroup('eval');
+  // 評価方法は割合入力なし（2026-09-26廃止）。選択されたラベルのみ
+  const evals = [...document.querySelectorAll('[data-group="eval"].active')].map(b => {
+    return b.dataset.value === '__custom__'
+      ? (document.getElementById('evalCustomInput').value.trim() || null)
+      : b.dataset.value;
+  }).filter(Boolean);
   if (evals.length) parts.push({ label: '評価', text: withExtraText(evals.join('・'), 'evalExtraInput') });
   document.getElementById('gradingMethodHidden').value = JSON.stringify(parts);
 }
@@ -1478,7 +1477,6 @@ function persistDraft() {
       homeworkFrequency: document.querySelector('[data-group="homework_frequency"].active')?.dataset.value || '',
       evals: [...document.querySelectorAll('[data-group="eval"].active')].map(b => b.dataset.value),
       evalCustom: document.getElementById('evalCustomInput').value,
-      evalPercents: Object.fromEntries([...document.querySelectorAll('.percent-input[data-slider-group="eval"]')].map(i => [i.dataset.percentFor, i.value])),
       comment: document.getElementById('comment').value,
       classFormatExtra: document.getElementById('classFormatExtraInput').value,
       attendanceMethodExtra: document.getElementById('attendanceMethodExtraInput').value,
@@ -1597,7 +1595,6 @@ function loadData() {
         customInput.classList.remove('hidden');
         if (d.evalCustom) customInput.value = d.evalCustom;
       }
-      renderGroupPercents('eval', d.evalPercents);
     }
     if (d.comment) {
       document.getElementById('comment').value = d.comment;
@@ -1658,7 +1655,7 @@ document.getElementById('reviewForm').addEventListener('submit', async e => {
   ['studentIdError','academicYearError',
    'courseError','instructorError','ratingError','easeError',
    'classFormatError','formatCustomError','attendanceError','attendanceSurpriseError','attendanceMethodError','attendanceMethodCustomError','homeworkError',
-   'homeworkFrequencyError','evalCustomError','evalPercentError','formatPercentError'].forEach(id => {
+   'homeworkFrequencyError','evalCustomError','formatPercentError'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
@@ -1736,22 +1733,13 @@ document.getElementById('reviewForm').addEventListener('submit', async e => {
     document.getElementById('homeworkError').classList.remove('hidden');
     valid = false;
   }
-  // 評価方法（任意入力。選択されたときのみ「その他」の記述・割合をチェックする）
+  // 評価方法（任意入力。選択されたときのみ「その他」の記述をチェックする）
   const evalActives = [...document.querySelectorAll('[data-group="eval"].active')];
   if (evalActives.some(b => b.dataset.value === '__custom__') &&
       !document.getElementById('evalCustomInput').value.trim()) {
     document.getElementById('evalCustomError').classList.remove('hidden');
     document.getElementById('evalCustomInput').classList.add('border-red-400');
     valid = false;
-  } else if (evalActives.length >= 2) {
-    const percentInputs = [...document.querySelectorAll('.percent-input[data-slider-group="eval"]')];
-    const total = percentInputs.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0);
-    const allFilled = percentInputs.length === evalActives.length &&
-      percentInputs.every(i => i.value.trim() !== '' && parseFloat(i.value) > 0);
-    if (!allFilled || total !== 100) {
-      document.getElementById('evalPercentError').classList.remove('hidden');
-      valid = false;
-    }
   }
   // 授業形式
   const fmtActives = [...document.querySelectorAll('[data-group="class_format"].active')];

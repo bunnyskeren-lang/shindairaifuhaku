@@ -397,17 +397,6 @@
             placeholder="例：口頭試問、実技など" maxlength="50">
           <p id="evalCustomError" class="hidden mt-1.5 text-red-500 text-xs">入力してください</p>
 
-          <!-- 評価方法の割合（2つ以上選択時のみ表示） -->
-          <div id="evalPercentContainer" class="hidden mt-3 pt-3 border-t border-indigo-200">
-            <p class="text-xs font-bold text-indigo-700 mb-2">📊 それぞれの割合</p>
-            <p class="text-xs text-indigo-400 mb-2">👆 ⇔ の付いたつまみを左右にドラッグして割合を調整できます（値はだいたいで大丈夫です）</p>
-            <div id="evalSliderBar" class="eval-slider-bar">
-              <div id="evalSliderTrack" class="eval-slider-track"></div>
-            </div>
-            <div id="evalPercentList" class="mt-2 space-y-1"></div>
-            <p id="evalPercentError" class="hidden mt-1.5 text-red-500 text-xs">割合を入力してください（合計100%になるように）</p>
-          </div>
-
           <input type="text" id="evalExtraInput" class="extra-input mt-2"
             placeholder="💬 補足（任意）例：持ち込み可" maxlength="100">
         </div>
