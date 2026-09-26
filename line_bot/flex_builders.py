@@ -297,13 +297,18 @@ _OPERATOR_POINTS = [
 ]
 
 
-def _hp_button() -> FlexButton:
-    return FlexButton(
-        action=URIAction(label="神大ライフハックHPを見る", uri=HP_URL),
-        style="primary",
-        color="#6366f1",
-        height="md",
+def _text_link(label: str, action) -> FlexBox:
+    """カード内の副次導線（運営者について／HP）。文字サイズ・太さ・色を1か所に揃えるための共通部品。"""
+    return FlexBox(
+        layout="vertical",
+        padding_all="md",
+        action=action,
+        contents=[FlexText(text=label, size="sm", weight="bold", color="#4338ca", align="center")],
     )
+
+
+def _hp_link() -> FlexBox:
+    return _text_link("神大ライフハックHPを見る", URIAction(label="神大ライフハックHPを見る", uri=HP_URL))
 
 
 def make_operator_info_flex() -> FlexMessage:
@@ -327,7 +332,7 @@ def make_operator_info_flex() -> FlexMessage:
                     for point in _OPERATOR_POINTS
                 ],
             ),
-            footer=FlexBox(layout="vertical", padding_all="md", contents=[_hp_button()]),
+            footer=FlexBox(layout="vertical", padding_all="md", contents=[_hp_link()]),
         ),
     )
 
@@ -349,7 +354,7 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                 layout="vertical",
                 contents=[
                     FlexText(
-                        text="先輩のリアルなレビューで授業選びをサポートします📖 登録は30秒で完了します。",
+                        text="先輩のリアルなレビューで授業選びをサポートします📖",
                         wrap=True,
                         size="sm",
                         color="#374151",
@@ -361,19 +366,20 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                 layout="vertical",
                 spacing="sm",
                 contents=[
-                    FlexButton(
-                        action=URIAction(label="📝 今すぐ登録する（30秒）", uri=register_url),
-                        style="primary",
-                        color="#f97316",
-                        height="md",
+                    FlexBox(
+                        layout="vertical",
+                        background_color="#f97316",
+                        corner_radius="lg",
+                        padding_top="xl",
+                        padding_bottom="xl",
+                        action=URIAction(label="今すぐ登録する", uri=register_url),
+                        contents=[
+                            FlexText(text="今すぐ登録する", weight="bold", size="xxl", color="#ffffff", align="center"),
+                            FlexText(text="30秒で完了", weight="bold", size="sm", color="#ffedd5", align="center", margin="xs"),
+                        ],
                     ),
-                    _hp_button(),
-                    FlexButton(
-                        action=PostbackAction(label="運営者について ▼", data=OPERATOR_POSTBACK_DATA),
-                        style="link",
-                        color="#4338ca",
-                        height="sm",
-                    ),
+                    _text_link("運営者について", PostbackAction(label="運営者について", data=OPERATOR_POSTBACK_DATA)),
+                    _hp_link(),
                     FlexText(
                         text="🚧 β版のため予告なく仕様変更・停止する場合があります",
                         size="xxs",
