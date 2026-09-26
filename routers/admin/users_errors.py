@@ -9,7 +9,7 @@ from core import cache
 from core.config import CHANNEL_GUEST, CHANNEL_MAIN, credit_tickets_granted_clause, escape_like, review_approval_unlock_credits
 from core.security import check_admin
 from core.templates import templates
-from routers.admin._common import CHANNEL_ALL, admin_channel, channel_conds
+from routers.admin._common import admin_channel, channel_conds
 from database import AsyncSessionLocal
 from models import (
     CourseSection, DebugLog, ErrorLog, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserActivity, UserProfile,
