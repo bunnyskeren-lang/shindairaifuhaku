@@ -229,8 +229,6 @@
           <div class="flex flex-wrap gap-2 mt-2">
             <button type="button" class="chip-btn single" data-group="academic_year" data-value="2023">2023</button>
             <button type="button" class="chip-btn single" data-group="academic_year" data-value="2022">2022</button>
-            <button type="button" class="chip-btn single" data-group="academic_year" data-value="2021">2021</button>
-            <button type="button" class="chip-btn single" data-group="academic_year" data-value="2020">2020</button>
           </div>
         </details>
         <p id="academicYearError" class="hidden mt-1 text-red-500 text-xs">受講年度を選択してください</p>
@@ -2202,12 +2200,12 @@
       try {
         const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
         if (!d) return;
-        if (d.academic_year) {
+        if (d.academic_year && Number(d.academic_year) >= 2022) {
           document.getElementById('academic_year').value = d.academic_year;
           document.querySelectorAll('[data-group="academic_year"]').forEach(b => {
             b.classList.toggle('active', b.dataset.value === String(d.academic_year));
           });
-          if (['2023', '2022', '2021', '2020'].includes(String(d.academic_year))) {
+          if (['2023', '2022'].includes(String(d.academic_year))) {
             document.getElementById('academicYearOld').open = true;
           }
         }

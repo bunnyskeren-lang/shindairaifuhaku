@@ -115,8 +115,8 @@ async def submit(
         return _form_error("評価が不正です")
     if ease_rating not in ("SS", "S", "A", "B", "C"):
         return _form_error("楽単度が不正です")
-    if not (2000 <= academic_year <= 2100):
-        return _form_error("受講年度を選択してください")
+    if not (2022 <= academic_year <= 2100):
+        return _form_error("受講年度は2022年度以降のみ投稿できます")
     if not comment.strip():
         return _form_error("コメントを入力してください")
     if count_comment_chars(comment) < MIN_COMMENT_LEN:

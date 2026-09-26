@@ -443,7 +443,7 @@ async def test_submit_academic_year_out_of_range_returns_400(http_client_factory
     await _seed_course(test_sessionmaker)
     client = http_client_factory(review_submit_api, monkeypatch)
 
-    form = dict(VALID_FORM, academic_year="1999")
+    form = dict(VALID_FORM, academic_year="2021")
     resp = await client.post("/submit", data=form)
     assert resp.status_code == 400
 
