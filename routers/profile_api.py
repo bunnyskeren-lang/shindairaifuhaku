@@ -272,7 +272,13 @@ async def register_profile(
                 "coop_jobsite_known": stmt.excluded.coop_jobsite_known,
                 # 冪等キーも毎回更新。これで直後の再送POST（同じnonce）が先行チェックで拾える
                 "register_nonce": stmt.excluded.register_nonce,
+                # ゲスト行が本番で本登録し直したときはis_guest=falseへ切り替わる
+                "is_guest": stmt.excluded.is_guest,
             },
+            # ゲスト用botは本番と同じ行(同一LINEユーザーID)を共有するため、既に本番で本登録済みの
+            # 会員がゲストで登録し直しても、本物の氏名・学籍番号・学部をダミー値で上書きしない
+            # （WHERE不成立=更新スキップ。登録済み扱いで先へ進める）
+            where=(UserProfile.is_guest.is_(True) if IS_GUEST else None),
         )
 
         try:
