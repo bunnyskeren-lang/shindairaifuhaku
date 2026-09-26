@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from core import cache
 from core.activity_log import save_error_log
@@ -95,6 +95,16 @@ async def liff_review(request: Request):
     )
     track(request, response, EVENT_LIFF_REVIEW_VIEW)
     return response
+
+
+# ホームページ（Claude Artifactで公開）への短縮URL。ArtifactのURLは自分で変えられないため、
+# 配布用にはこの /hp を使う。/hp#group のようなフラグメントはリダイレクト先にも引き継がれる。
+HOMEPAGE_URL = "https://claude.ai/artifact/3nwq4F48WFM6ExDyTsD1fq"
+
+
+@router.get("/hp")
+async def homepage():
+    return RedirectResponse(HOMEPAGE_URL, status_code=302)
 
 
 @router.get("/coop", response_class=HTMLResponse)
