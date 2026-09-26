@@ -34,6 +34,15 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
+def _profile_conds(ch: str) -> list:
+    """会員登録数の絞り込み。ゲスト用botで登録した人は is_guest=True（登録したチャンネル）。"""
+    if ch == "guest":
+        return [UserProfile.is_guest.is_(True)]
+    if ch == "main":
+        return [UserProfile.is_guest.is_(False)]
+    return []
+
+
 async def _friend_breakdown(session, ch: str = "all") -> dict:
     """LINE友だち追加者を「登録画面を開いたか」「登録したか」で3グループに分ける。
 
@@ -51,15 +60,19 @@ async def _friend_breakdown(session, ch: str = "all") -> dict:
             )
         )).all()
     }
-    registered = set((await session.execute(select(UserProfile.line_user_id))).scalars().all())
+    registered = set((await session.execute(select(UserProfile.line_user_id).where(*_profile_conds(ch)))).scalars().all())
     opened = {
         uid: (first_at, cnt) for uid, first_at, cnt in (await session.execute(
             select(FunnelEvent.line_user_id, func.min(FunnelEvent.created_at), func.count(FunnelEvent.id))
-            .where(FunnelEvent.event == "register_view", FunnelEvent.line_user_id.is_not(None))
+            .where(
+                FunnelEvent.event == "register_view", FunnelEvent.line_user_id.is_not(None),
+                *channel_conds(FunnelEvent.channel, ch),
+            )
             .group_by(FunnelEvent.line_user_id)
         )).all()
     }
-    measure_start = (await session.execute(select(func.min(FunnelEvent.created_at)))).scalar_one_or_none()
+    measure_start = (await session.execute(select(func.min(FunnelEvent.created_at)).where(*channel_conds(FunnelEvent.channel, ch))
+    )).scalar_one_or_none()
     measure_start = _aware(measure_start) if measure_start else None
 
     def _fmt(dt) -> str:
@@ -121,7 +134,7 @@ async def _funnel_stats(session, ch: str = "all") -> dict:
             func.count(FunnelEvent.id).label("views"),
             func.count(func.distinct(FunnelEvent.visitor_id)).label("uniques"),
         )
-        .where(FunnelEvent.created_at >= since_total)
+        .where(FunnelEvent.created_at >= since_total, *channel_conds(FunnelEvent.channel, ch))
         .group_by(FunnelEvent.event)
     )).all()
     by_event = {r.event: r for r in total_rows}
@@ -136,7 +149,7 @@ async def _funnel_stats(session, ch: str = "all") -> dict:
 
     source_rows = (await session.execute(
         select(FunnelEvent.source, FunnelEvent.event, func.count(FunnelEvent.id).label("views"))
-        .where(FunnelEvent.created_at >= since_total, FunnelEvent.source != "")
+        .where(FunnelEvent.created_at >= since_total, FunnelEvent.source != "", *channel_conds(FunnelEvent.channel, ch))
         .group_by(FunnelEvent.source, FunnelEvent.event)
         .order_by(FunnelEvent.source, FunnelEvent.event)
     )).all()
@@ -146,12 +159,15 @@ async def _funnel_stats(session, ch: str = "all") -> dict:
     ]
 
     event_times = (await session.execute(
-        select(FunnelEvent.event, FunnelEvent.created_at).where(FunnelEvent.created_at >= since_daily)
+        select(FunnelEvent.event, FunnelEvent.created_at).where(
+            FunnelEvent.created_at >= since_daily, *channel_conds(FunnelEvent.channel, ch)
+        )
     )).all()
     profile_times = (await session.execute(
-        select(UserProfile.created_at).where(UserProfile.created_at >= since_daily)
+        select(UserProfile.created_at).where(UserProfile.created_at >= since_daily, *_profile_conds(ch))
     )).scalars().all()
-    review_times = (await session.execute(
+    # レビュー投稿はゲスト用botでは不可（reviewsにチャンネル列は無い）ため、ゲスト表示では0件にする
+    review_times = [] if ch == "guest" else (await session.execute(
         select(Review.created_at).where(Review.created_at >= since_daily)
     )).scalars().all()
 
@@ -209,6 +225,7 @@ async def admin_usage_stats(
     async with AsyncSessionLocal() as session:
         uri_rows = (await session.execute(
             select(RichMenuTap.button, func.count(RichMenuTap.id).label("cnt"))
+            .where(*channel_conds(RichMenuTap.source, ch))
             .group_by(RichMenuTap.button)
             .order_by(func.count(RichMenuTap.id).desc())
         )).all()
@@ -251,18 +268,24 @@ async def admin_usage_stats(
         )).all() if page_user_ids else []
         funnel = await _funnel_stats(session, ch)
         csv_rows = (await session.execute(
-            select(CourseSectionView, Subject.name.label("subj_name"))
+            select(
+                func.sum(CourseSectionView.view_count).label("view_count"),
+                func.max(CourseSectionView.last_viewed_at).label("last_viewed_at"),
+                Subject.name.label("subj_name"),
+            )
             .join(CourseSection, CourseSection.id == CourseSectionView.course_section_id)
             .join(Subject, Subject.id == CourseSection.subject_id)
-            .order_by(CourseSectionView.view_count.desc())
+            .where(*channel_conds(CourseSectionView.source, ch))
+            .group_by(CourseSection.id, Subject.name)
+            .order_by(func.sum(CourseSectionView.view_count).desc())
         )).all()
         course_view_rows = [
             SimpleNamespace(
                 course_name=subj_name,
-                view_count=csv_row.view_count,
-                last_viewed_at=csv_row.last_viewed_at,
+                view_count=int(view_count or 0),
+                last_viewed_at=last_viewed_at,
             )
-            for csv_row, subj_name in csv_rows
+            for view_count, last_viewed_at, subj_name in csv_rows
         ]
 
     uri_stats = [

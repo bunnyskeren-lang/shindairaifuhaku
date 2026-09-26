@@ -10,7 +10,7 @@ from core import cache, moderation
 from core.activity_log import save_error_log, save_log_bg
 from core.background_tasks import fire_and_forget
 from core.config import (
-    BAN_MESSAGE_TEXT, EASE_ORDER, FACULTIES, KYOTSU_SENMON_KISO_FACULTY,
+    BAN_MESSAGE_TEXT, CHANNEL, EASE_ORDER, FACULTIES, KYOTSU_SENMON_KISO_FACULTY,
     LINE_USER_ID_RE,
     MAX_REVIEWS_PER_COURSE_SECTION,
     ON_DEMAND_SAME_CONTENT_NOTE,
@@ -591,12 +591,13 @@ async def api_course(
                 _now = datetime.now(UTC)
                 _ins = pg_insert(CourseSectionView).values(
                     course_section_id=main_cs_id,
+                    source=CHANNEL,
                     view_count=1,
                     last_viewed_at=_now,
                 )
                 await session.execute(
                     _ins.on_conflict_do_update(
-                        index_elements=["course_section_id"],
+                        index_elements=["course_section_id", "source"],
                         set_={
                             "view_count": CourseSectionView.view_count + 1,
                             "last_viewed_at": _now,

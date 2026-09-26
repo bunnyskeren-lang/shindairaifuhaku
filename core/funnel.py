@@ -24,6 +24,7 @@ from core.background_tasks import fire_and_forget
 from core.config import LINE_USER_ID_RE
 from core.rate_limit import rate_limit_allows
 from database import AsyncSessionLocal
+from core.config import CHANNEL
 from models import FunnelEvent
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ async def _insert(event: str, source: str, visitor_id: str | None, line_user_id:
     try:
         async with AsyncSessionLocal() as session:
             session.add(FunnelEvent(
-                event=event, source=source, visitor_id=visitor_id, line_user_id=line_user_id,
+                event=event, source=source, visitor_id=visitor_id, line_user_id=line_user_id, channel=CHANNEL,
             ))
             await session.commit()
     except Exception:  # 計測の失敗でページを壊さない

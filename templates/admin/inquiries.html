@@ -40,7 +40,7 @@
       <div class="inquiry-card">
         <div class="inquiry-header">
           <span class="inquiry-category">📋 {{ i.category }}</span>
-          <span class="inquiry-date">{{ i.created_at | jst }}</span>
+          <span class="inquiry-date">{{ i.created_at | jst }}</span>{% if i.source == 'guest' %} <span class="ch-badge guest">ゲスト</span>{% endif %}
         </div>
         <div class="inquiry-body">
           <div class="inquiry-content">{{ i.content }}</div>

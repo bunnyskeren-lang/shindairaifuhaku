@@ -179,6 +179,7 @@ class RichMenuTap(Base):
     tapped_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    source: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL)
 
 
 class FunnelEvent(Base):
@@ -202,6 +203,8 @@ class FunnelEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # 記録したLINEチャンネル（core.config.CHANNEL）。`source`は?src=のリンク流入元で別物のため列名を分けた
+    channel: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL)
 
 
 class PushSubscription(TimestampMixin, Base):
@@ -417,6 +420,8 @@ class CourseSectionView(Base):
     __tablename__ = "course_section_views"
 
     course_section_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("course_sections.id", ondelete="CASCADE"), primary_key=True)
+    # チャンネル別に閲覧数を持つ（PKは(course_section_id, source)。core.config.CHANNEL）
+    source: Mapped[str] = mapped_column(String(10), primary_key=True, server_default="main", default=CHANNEL)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -480,3 +485,5 @@ class Inquiry(TimestampMixin, Base):
     # 'pending'(未対応) / 'handled'(対応済み)。CHECK制約はdatabase.py init_db()側で管理。
     status: Mapped[str] = mapped_column(Text, nullable=False, default=InquiryStatus.PENDING)
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 送信元のLINEチャンネル（core.config.CHANNEL）。対応漏れを防ぐため管理画面では絞り込まず全件出し、バッジで示す
+    source: Mapped[str] = mapped_column(String(10), nullable=False, server_default="main", default=CHANNEL)

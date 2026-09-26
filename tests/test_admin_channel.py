@@ -99,3 +99,25 @@ async def test_users_page_separates_channels_and_flags_users_in_both(
     both = (await _client(http_client_factory, monkeypatch).get("/admin/users?view=both")).text
     assert "両方使う次郎" in both and "本番登録でゲストも触った三郎" in both
     assert "本番だけ太郎" not in both and "ゲストだけ花子" not in both
+
+
+@pytest.mark.asyncio
+async def test_funnel_stats_and_taps_and_views_split_by_channel(test_sessionmaker):
+    """友だち追加ページ等の計測(funnel_events.channel)・リッチメニュータップ・科目閲覧数も
+    チャンネル別に集計できる（guest指定でmainの行が混ざらない）。"""
+    import routers.admin.stats as admin_stats
+    from models import FunnelEvent
+
+    async with test_sessionmaker() as s:
+        s.add_all([
+            FunnelEvent(event="join_view", channel="main"),
+            FunnelEvent(event="join_view", channel="main"),
+            FunnelEvent(event="join_view", channel="guest"),
+        ])
+        await s.commit()
+    async with test_sessionmaker() as s:
+        def views(stats):
+            return {t["event"]: t["views"] for t in stats["totals"]}["join_view"]
+        assert views(await admin_stats._funnel_stats(s, "main")) == 2
+        assert views(await admin_stats._funnel_stats(s, "guest")) == 1
+        assert views(await admin_stats._funnel_stats(s, "all")) == 3

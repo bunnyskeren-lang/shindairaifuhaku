@@ -467,7 +467,7 @@ POST /callback（routers/webhook.py） → core.security.verify_line_signature
 
 **ゲスト用bot / 本番botのチャンネル区別（2026-09-26）**
 
-- ゲスト用bot（`ENV=guest`のRenderサービス）と本番botは同じLINEプロバイダー配下でDBも共有するため、同一人物は同じユーザーIDになりユーザーIDでは区別できない。代わりに`message_logs`/`error_logs`/`debug_logs`/`liff_auth_events`/`user_activity`の`source`列（`main`/`guest`、書き込み時に`core.config.CHANNEL`＝`IS_GUEST`由来を自動設定）で「どのサービスが記録したか」を区別する。`user_activity`のUNIQUEは`(user_id, action, source)`
+- ゲスト用bot（`ENV=guest`のRenderサービス）と本番botは同じLINEプロバイダー配下でDBも共有するため、同一人物は同じユーザーIDになりユーザーIDでは区別できない。代わりに`message_logs`/`error_logs`/`debug_logs`/`liff_auth_events`/`user_activity`/`richmenu_taps`/`course_section_views`（PKは`(course_section_id, source)`）/`inquiries`の`source`列（`funnel_events`のみ`?src=`流入元の`source`と別物のため`channel`列）（`main`/`guest`、書き込み時に`core.config.CHANNEL`＝`IS_GUEST`由来を自動設定）で「どのサービスが記録したか」を区別する。`user_activity`のUNIQUEは`(user_id, action, source)`
 - 管理画面のログ系ページ（メッセージログ・概要・エラー・デバッグログ・再ログイン・統計・ユーザー設定）は`routers/admin/_common.py`の`admin_channel`（Cookie`admin_channel`、未選択時はそのサービス自身のチャンネル）で絞り込み、`templates/admin/base.html`のトグル（本番/ゲスト/両方）で切替える。新しいログ系ページを作るときは`Depends(admin_channel)`＋`channel_conds()`を使うこと
 - ユーザー設定は`is_guest`と`user_activity.source`から「両チャンネル利用者」を判定し、本番の管理画面に警告と専用フィルタ（`?view=both`）で表示する
 - ナビのエラーバッジ（`errors_today`）はそのサービス自身のチャンネルのエラーだけ数える

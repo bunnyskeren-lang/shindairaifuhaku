@@ -838,6 +838,24 @@ async def init_db():
             await conn.execute(text(
                 f"CREATE INDEX IF NOT EXISTS ix_{_log_table}_source ON {_log_table} (source)"
             ))
+        # 上記に加え、計測系（友だち追加ページ等の funnel_events は ?src= の source と別に channel 列、
+        # リッチメニュータップ、科目閲覧数）もチャンネル別にする。科目閲覧数はPKを(course_section_id, source)へ変更
+        await conn.execute(text("ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS channel VARCHAR(10) NOT NULL DEFAULT 'main'"))
+        await conn.execute(text("ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'main'"))
+        await conn.execute(text("ALTER TABLE richmenu_taps ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'main'"))
+        await conn.execute(text("ALTER TABLE course_section_views ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'main'"))
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+                WHERE c.conrelid = 'course_section_views'::regclass AND c.contype = 'p' AND a.attname = 'source'
+              ) THEN
+                ALTER TABLE course_section_views DROP CONSTRAINT IF EXISTS course_section_views_pkey;
+                ALTER TABLE course_section_views ADD PRIMARY KEY (course_section_id, source);
+              END IF;
+            END $$;
+        """))
         await conn.execute(text("""
             DO $$
             BEGIN

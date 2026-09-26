@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 
 from core.activity_log import save_error_log, save_log_bg
 from core.background_tasks import fire_and_forget
-from core.config import CONTACT_LIFF_ID, IS_DEV
+from core.config import CHANNEL, CONTACT_LIFF_ID, IS_DEV
 from core.liff_auth import verify_liff_id_token
 from core.push import send_inquiry_push_notification
 from core.rate_limit import rate_limiter
@@ -79,6 +79,7 @@ async def contact_submit(
             email=to_email,
             student_id=sid,
             status=InquiryStatus.PENDING,
+            source=CHANNEL,
         ))
         await session.commit()
 

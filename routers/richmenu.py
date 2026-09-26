@@ -4,6 +4,7 @@ from fastapi.responses import RedirectResponse
 from core.config import REVIEW_FORM_URL
 from core.rate_limit import rate_limiter
 from database import AsyncSessionLocal
+from core.config import CHANNEL
 from models import RichMenuTap
 
 router = APIRouter()
@@ -28,6 +29,6 @@ async def richmenu_redirect(name: str, _rl=Depends(_tap_rate_limit)):
     if not url:
         raise HTTPException(status_code=404)
     async with AsyncSessionLocal() as session:
-        session.add(RichMenuTap(button=name))
+        session.add(RichMenuTap(button=name, source=CHANNEL))
         await session.commit()
     return RedirectResponse(url=url, status_code=302)
