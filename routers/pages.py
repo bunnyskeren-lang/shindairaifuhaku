@@ -100,12 +100,12 @@ async def liff_review(request: Request):
 
 # ホームページ。templates/hp.html は自己完結した静的HTMLなのでJinja2を通さず、そのまま返す
 # （2026-09-26にClaude Artifactへのリダイレクトから自前配信へ変更）。
-_HOMEPAGE_HTML = (Path(__file__).resolve().parent.parent / "templates" / "hp.html").read_text(encoding="utf-8")
+_HOMEPAGE_PATH = Path(__file__).resolve().parent.parent / "templates" / "hp.html"
 
 
 @router.get("/hp", response_class=HTMLResponse)
 async def homepage():
-    return HTMLResponse(_HOMEPAGE_HTML, headers={"Cache-Control": "no-cache"})
+    return HTMLResponse(_HOMEPAGE_PATH.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/coop", response_class=HTMLResponse)

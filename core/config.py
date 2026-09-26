@@ -86,6 +86,9 @@ ON_DEMAND_SAME_CONTENT_NOTE = "※オンデマンド配信であり、他教員�
 # サーバー側(routers/review_submit_api.py)の両方で弾く。数値を変えるときはここだけ直す
 # （テンプレートへは routers/pages.py が min_comment_len として渡す）。
 MIN_COMMENT_LEN = 30
+# レビュー投稿を受け付ける受講年度の下限（古い年度は情報の鮮度が低いため）。
+# templates/form_index.html の年度ボタン・復元JSの「2022」も変更時に合わせること。
+MIN_REVIEW_ACADEMIC_YEAR = 2022
 
 # コメントの文字数に数えない「見出し」（フォームのチップが挿入する `【テスト形式・難易度】` 等）。
 # 見出しだけで11字前後あり、素のままカウントすると中身19字程度で最低文字数を満たせてしまうため、

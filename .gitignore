@@ -19,8 +19,14 @@ canvas.json
 /course-list-*.html
 /course-variant-*.html
 
+# モック・画像生成の固定出力先（2026-09-22〜。いろんなフォルダに散らばるのを防ぐため統一）
+/mockups/
+
 # 運用作業で出た一時ファイル（科目統合の中間ダンプ等。リポジトリには載せない）
 /docstemporary*
 /data/test.txt
 programing files/_backup_merge_*.json
 programing files/_import_*_to_dev.py
+
+# Office の編集中ロックファイル
+~$*
