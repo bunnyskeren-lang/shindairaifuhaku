@@ -302,6 +302,10 @@ def _text_link(label: str, action) -> FlexBox:
     return FlexBox(
         layout="vertical",
         padding_all="md",
+        margin="sm",
+        border_width="normal",
+        border_color="#6366f1",
+        corner_radius="md",
         action=action,
         contents=[FlexText(text=label, size="sm", weight="bold", color="#4338ca", align="center")],
     )
