@@ -1,13 +1,20 @@
 """
 リッチメニューをセットアップするスクリプト。
 実行: python setup_richmenu.py --env dev
-      python setup_richmenu.py --env prod  (確認プロンプトあり)
+      python setup_richmenu.py --env prod   (確認プロンプトあり)
+      python setup_richmenu.py --env guest  (会員登録なしのお試し体験用チャンネル)
 
-必要な環境変数 (.env.dev / .env):
+必要な環境変数 (.env.dev / .env / .env.guest):
   LINE_CHANNEL_ACCESS_TOKEN
   REVIEW_FORM_URL
   REVIEW_LIFF_ID     (レビュー投稿ボタンのLIFF URL用)
   CONTACT_LIFF_ID    (お問い合わせボタンのLIFF URL用)
+  REGISTER_LIFF_ID   (会員登録ボタンのLIFF URL用)
+
+guestはボタン構成・リッチメニュー画像とも本番/devと完全に同一にする
+（見た目は同じ、投稿・登録の実際の可否だけIS_GUEST側のロジックで制御する。
+ユーザー指示 2026-09-18）。REVIEW_LIFF_ID/REGISTER_LIFF_IDともguestチャンネル配下で
+発行した値を設定すること。
 """
 import argparse
 import asyncio
@@ -18,8 +25,8 @@ import urllib.request
 
 # ── 引数パース ──────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
-parser.add_argument("--env", choices=["dev", "prod"], required=True,
-                    help="dev=.env.dev, prod=.env")
+parser.add_argument("--env", choices=["dev", "prod", "guest"], required=True,
+                    help="dev=.env.dev, prod=.env, guest=.env.guest")
 parser.add_argument("image", nargs="?", default=None,
                     help="カスタム画像パス (省略時: assets/richmenu.png)")
 args = parser.parse_args()
@@ -33,7 +40,8 @@ args = parser.parse_args()
 # （_env.py の load_env() と同じ方針）。
 from dotenv import load_dotenv
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-env_file = ".env.dev" if args.env == "dev" else ".env"
+_ENV_FILES = {"dev": ".env.dev", "prod": ".env", "guest": ".env.guest"}
+env_file = _ENV_FILES[args.env]
 env_path = os.path.join(_SCRIPT_DIR, env_file)
 if not os.path.exists(env_path):
     print(f"ERROR: {env_path} が見つかりません", file=sys.stderr)
@@ -41,11 +49,15 @@ if not os.path.exists(env_path):
 load_dotenv(env_path, override=True)
 
 CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
-REVIEW_FORM_URL = os.environ.get(
-    "REVIEW_FORM_URL",
-    "https://shindairaifuhaku-1.onrender.com" if args.env == "dev"
-    else "https://shindairaifuhaku.onrender.com",
-)
+_DEFAULT_REVIEW_FORM_URL = {
+    "dev": "https://shindairaifuhaku-1.onrender.com",
+    "prod": "https://shindairaifuhaku.onrender.com",
+    # guestはRenderサービスURL確定後にprograming files/.env.guestへ設定するまで既定値なし
+    "guest": "",
+}
+REVIEW_FORM_URL = os.environ.get("REVIEW_FORM_URL", _DEFAULT_REVIEW_FORM_URL[args.env])
+if not REVIEW_FORM_URL:
+    sys.exit(f"REVIEW_FORM_URL が未設定です。programing files/{env_file} に設定してください")
 REGISTER_LIFF_ID = os.environ.get("REGISTER_LIFF_ID", "")
 REVIEW_LIFF_ID = os.environ.get("REVIEW_LIFF_ID", "")
 CONTACT_LIFF_ID = os.environ.get("CONTACT_LIFF_ID", "")
@@ -242,12 +254,18 @@ def _create_and_upload(api, name: str, areas: list, image_data: bytes) -> str:
     return rich_menu_id
 
 
-async def _relink_registered_users(main_id: str) -> None:
+async def _relink_registered_users(main_id: str, is_guest: bool) -> None:
     """setup_richmenu.pyはリッチメニューを削除→再作成するため、実行のたびにLINE側で
     既存ユーザーへの個人リンクが無効化され、登録済みユーザーが「個人リンク無し」状態に
     戻ってデフォルト（登録前メニュー）へフォールバックしてしまう(2026-09-02、登録済みの
     大西さんがリッチメニューを押すと会員登録画面に遷移する不具合の原因)。
-    登録完了済みユーザー全員を新しい通常メニューへ再リンクし直す。"""
+    登録完了済みユーザー全員を新しい通常メニューへ再リンクし直す。
+
+    ゲスト用チャンネル(--env guest)は本番DBを共有するため、is_guest列で対象を
+    厳密に絞る。絞らないと、guest実行時は本番の実ユーザーID宛にguestチャンネルの
+    トークンで(必ず失敗する)再リンクを試み続け、逆にprod/dev実行時はguestの
+    ダミーユーザーID宛に無駄な再リンクを試みることになる（いずれもLINE API側で
+    弾かれるだけで実害はないが、大量の失敗ログとAPI呼び出しの無駄が出る）。"""
     import httpx
     from sqlalchemy import text
     from database import AsyncSessionLocal
@@ -259,8 +277,9 @@ async def _relink_registered_users(main_id: str) -> None:
             "AND student_id IS NOT NULL AND student_id != '' "
             "AND faculty IS NOT NULL AND faculty != '' "
             "AND department IS NOT NULL AND department != '' "
-            "AND banned_at IS NULL"
-        ))).scalars().all()
+            "AND banned_at IS NULL "
+            "AND is_guest = :is_guest"
+        ), {"is_guest": is_guest})).scalars().all()
 
     if not uids:
         print("再リンク対象の登録済みユーザーはいません")
@@ -326,7 +345,7 @@ def main():
             print("[警告] 登録前メニューが無いため、代わりに通常メニューをデフォルトに設定します")
             api.set_default_rich_menu(main_id)
 
-        asyncio.run(_relink_registered_users(main_id))
+        asyncio.run(_relink_registered_users(main_id, is_guest=(args.env == "guest")))
 
         print(f"\n環境: {args.env}  /  REVIEW_FORM_URL: {REVIEW_FORM_URL}")
         print("\nボタン配置（通常メニュー）:")
@@ -337,9 +356,12 @@ def main():
         print(f"  RICHMENU_ID_MAIN={main_id}")
         if prereg_id:
             print(f"  RICHMENU_ID_PREREGISTER={prereg_id}")
-        env_file = ".env.dev" if args.env == "dev" else ".env"
         print(f"  1. programing files/{env_file} に上記を追記")
-        svc = "shindairaifuhaku-1（dev）" if args.env == "dev" else "shindairaifuhaku（本番）"
+        svc = {
+            "dev": "shindairaifuhaku-1（dev）",
+            "prod": "shindairaifuhaku（本番）",
+            "guest": "ゲスト用Renderサービス",
+        }[args.env]
         print(f"  2. Render の {svc} サービスの Environment にも同じ値を追加してください")
 
 

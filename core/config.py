@@ -29,6 +29,10 @@ RICHMENU_ID_PREREGISTER = os.environ.get("RICHMENU_ID_PREREGISTER", "")
 RICHMENU_ID_MAIN = os.environ.get("RICHMENU_ID_MAIN", "")
 APP_URL = os.environ.get("APP_URL", "https://shindairaifuhaku.onrender.com")
 IS_DEV = os.environ.get("ENV", "prod") == "dev"
+# ゲスト用LINE bot（会員登録なしのお試し体験用の別チャンネル。ENV=guest）。
+# 本番DBを参照する専用Renderサービスとして動かし、稼働日の制御はコード側ではなく
+# Renderサービス自体のSuspend/Resumeで行う（ユーザー指示 2026-09-18）。
+IS_GUEST = os.environ.get("ENV", "prod") == "guest"
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -156,6 +160,14 @@ GROUP_CONTRIBUTOR_BONUS_AMOUNT = 500
 
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1
+
+# ゲスト用LINE bot（IS_GUEST）でも会員登録フォームの入力・送信は必須のままとし、
+# 手間を省くためフォームに最初から入れておくダミー値（ユーザー指示 2026-09-19）。
+GUEST_DEFAULT_NAME = "ななしのごんべい"
+GUEST_DEFAULT_STUDENT_ID = "9999999A"
+GUEST_DEFAULT_FACULTY = "経営学部"
+GUEST_DEFAULT_DEPARTMENT = "経営学科"
+GUEST_DEFAULT_COOP_JOBSITE_KNOWN = "いいえ"
 
 # 虚偽投稿等でLINE bot利用を永久停止（UserProfile.banned_at）されたユーザーへの定型応答
 BAN_MESSAGE_TEXT = "現在、このアカウントはご利用を停止しております。心当たりがある場合は、お問い合わせフォームよりご連絡ください。"

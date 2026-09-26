@@ -39,11 +39,13 @@
 ## push・デプロイ操作の許可範囲
 
 - **本番環境（shindairaifuhaku.onrender.com）へのデプロイは、ユーザーから明示的な指示がない限り絶対に行わないこと**
+- **guest環境（shindairaifuhaku-guest.onrender.com）へのデプロイ（`git push origin dev:guest`）も、本番と同様にユーザーから明示的な指示があるまで絶対に行わないこと**
 - dev環境（shindairaifuhaku-1.onrender.com）に関するpush・デプロイ操作は、確認を取らず自由に実行してよい
   - `git push origin dev`（devブランチへの通常push＝dev環境へのデプロイ。GitHubブランチ名は2026-09-18に`shindairaifuhaku-dev`から`dev`へリネーム済みで、ローカル作業ブランチと同名になったため、通常pushとdev環境デプロイは同一コマンドになった）
   - `python setup_richmenu.py --env dev`（devリッチメニュー更新）
   - その他 dev サービス・dev DB のみに影響する操作全般
 - `git push` の push先が `origin prod`（本番ブランチ）の場合は必ず確認を取ること。**本番は `prod` のみで、`main` ブランチは本番として使わない**
+- **本番への指示とguestへの指示は完全に別物として扱い、一度の対応で両方に同時pushすることは絶対にしないこと。** 両方の変更が必要な場合でも、それぞれ別々の明示的な指示を受けてから順番に対応する（例：「本番にデプロイして」と言われた際に、たとえguest向けの変更が別途溜まっていても、指示されていないguestへは絶対にpushしない。逆も同様）
 
 ## ブランチとRenderサービスの対応
 
@@ -53,14 +55,16 @@ GitHubブランチ名は2026-09-18に`shindairaifuhaku-dev`→`dev`、`shindaira
 |---|---|---|
 | **dev** (shindairaifuhaku-1) | `dev` | `git push origin dev` |
 | **本番** (shindairaifuhaku) | `prod` | `git push origin dev:prod` |
+| **ゲスト** (Renderサービス名 shindairaifuhaku-guest、URLも `https://shindairaifuhaku-guest.onrender.com`。旧サービス(guest-5moc.onrender.com)は一度削除し作り直したところ意図通りのURLになった。2026-09-19確定。会員登録なしのお試し体験用、本番DBを共有。2026-09-18新設) | `guest` | `git push origin dev:guest` |
 
 ## setup_richmenu.py の実行ルール
 
 - **必ず `--env` 引数を指定して実行すること**
-  - dev:  `python setup_richmenu.py --env dev`   → `programing files/.env.dev` を使用
-  - 本番: `python setup_richmenu.py --env prod`  → `programing files/.env` を使用（確認プロンプトあり）
+  - dev:    `python setup_richmenu.py --env dev`   → `programing files/.env.dev` を使用
+  - 本番:   `python setup_richmenu.py --env prod`  → `programing files/.env` を使用（確認プロンプトあり）
+  - ゲスト: `python setup_richmenu.py --env guest` → `programing files/.env.guest` を使用
 - `--env prod` は**ユーザーから明示的に「本番のリッチメニューを更新して」と言われた場合のみ**実行すること
-- `--env dev` はユーザーの許可のもとで自由に実行してよい
+- `--env dev` / `--env guest` はユーザーの許可のもとで自由に実行してよい（ゲスト用チャンネルはdevと同じく低リスクの別チャンネルのため）
 
 ## 本番デプロイ手順
 
@@ -137,6 +141,7 @@ python -X utf8 sync_db_to_prod.py
 |---|---|
 | `programing files/.env.dev` | **dev** ボット用トークン |
 | `programing files/.env` | **本番** ボット用トークン |
+| `programing files/.env.guest` | **ゲスト**（会員登録なしのお試し体験用）ボット用トークン。`DATABASE_URL`は本番と同じ値を設定する |
 
 ## データベース接続情報
 

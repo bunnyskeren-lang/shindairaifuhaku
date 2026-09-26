@@ -108,7 +108,7 @@
       </div>
 
       <button type="submit"
-        class="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition text-sm">
+        class="w-full bg-indigo-600 text-white hover:bg-indigo-700 font-bold py-3.5 rounded-2xl transition text-sm">
         登録する
       </button>
 
@@ -135,6 +135,8 @@
   <script>
     const LIFF_ID = "{{ liff_id }}";
     const FACULTY_DEPARTMENTS = {{ faculty_departments_json | safe }};
+    const IS_GUEST = {% if IS_GUEST %}true{% else %}false{% endif %};
+    const GUEST_DEFAULTS = {{ guest_defaults_json | safe }};
 
     let _liffInitPromise = null;
     function ensureLiffInit() {
@@ -354,6 +356,19 @@
         }
         const coopEl = document.getElementById('coop_jobsite_known');
         if (d.coop_jobsite_known && !coopEl.value) coopEl.value = d.coop_jobsite_known;
+      } else if (IS_GUEST) {
+        // ゲスト体験は会員登録自体は必須のままだが、入力の手間を省くため
+        // 未入力の欄だけダミー値で埋めておく（そのまま送信すれば登録できる）
+        const nameEl = document.getElementById('name');
+        if (!nameEl.value) nameEl.value = GUEST_DEFAULTS.name;
+        const sidEl = document.getElementById('student_id');
+        if (!sidEl.value) sidEl.value = GUEST_DEFAULTS.student_id;
+        if (!facultySel.value) {
+          facultySel.value = GUEST_DEFAULTS.faculty;
+          populateDepartments(GUEST_DEFAULTS.faculty, GUEST_DEFAULTS.department);
+        }
+        const coopEl = document.getElementById('coop_jobsite_known');
+        if (!coopEl.value) coopEl.value = GUEST_DEFAULTS.coop_jobsite_known;
       }
       hideOverlay();
     }

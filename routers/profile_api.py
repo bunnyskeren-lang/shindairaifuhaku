@@ -16,7 +16,7 @@ from core.config import (
     BAN_MESSAGE_TEXT,
     COOP_JOBSITE_KNOWN_CHOICES, COOP_JOBSITE_KNOWN_QUESTION,
     DEPARTMENT_UNDECIDED_FACULTIES, DEPARTMENT_UNDECIDED_VALUE,
-    FACULTIES, FACULTY_DEPARTMENTS,
+    FACULTIES, FACULTY_DEPARTMENTS, IS_GUEST,
     REGISTER_LIFF_ID, REGISTRATION_WELCOME_UNLOCK_CREDITS, RICHMENU_ID_MAIN,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     STUDENT_ID_RE, LINE_USER_ID_RE,
@@ -250,6 +250,9 @@ async def register_profile(
             # 会員登録（UserProfile初回作成）した全員へ、レビュー閲覧権チケットをプレゼントする
             unlock_credits=REGISTRATION_WELCOME_UNLOCK_CREDITS,
             register_nonce=nonce,
+            # ゲスト用チャンネル(ENV=guest)経由の登録であることを記録する
+            # (setup_richmenu.pyの再リンク対象絞り込み等で使用)
+            is_guest=IS_GUEST,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[UserProfile.line_user_id],

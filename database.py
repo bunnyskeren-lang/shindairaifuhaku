@@ -825,3 +825,10 @@ async def init_db():
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_profiles_register_nonce "
             "ON user_profiles (register_nonce) WHERE register_nonce IS NOT NULL"
         ))
+
+        # ── 2026-09-18: ゲスト用LINEチャンネル(ENV=guest)向け ──
+        # 会員登録を経ずフォロー時に自動発行するダミープロフィールを、本番DBの実データと
+        # 区別するためのフラグ列。管理画面の集計・支払い対象から除外する用途のみに使う。
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_guest BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
