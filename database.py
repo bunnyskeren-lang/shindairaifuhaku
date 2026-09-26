@@ -188,12 +188,17 @@ async def init_db():
         # UNIQUE制約は内部的に同名のインデックスも作成するため、既存の場合の
         # エラーコードは duplicate_object(42710) ではなく duplicate_table(42P07)
         # になることがある（インデックスもrelationとして扱われるため）
-        await conn.execute(text("""
-            DO $$ BEGIN
-              ALTER TABLE user_profiles ADD CONSTRAINT uq_up_student_id UNIQUE (student_id);
-            EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
-            END $$
-        """))
+        # 学籍番号の一意制約は「ゲスト登録(is_guest=true)を除く」部分UNIQUEにする(2026-09-27)。
+        # ゲスト用bot(本番DB共有)は同じ学籍番号・学部学科で何人でも試せる必要があるため。
+        # 旧の全行UNIQUE制約(uq_up_student_id)は毎回DROPして部分インデックスへ置き換える
+        await conn.execute(text(
+            "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_guest BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+        await conn.execute(text("ALTER TABLE user_profiles DROP CONSTRAINT IF EXISTS uq_up_student_id"))
+        await conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_up_student_id_nonguest "
+            "ON user_profiles (student_id) WHERE is_guest = FALSE"
+        ))
         # CHECK制約（重複時は無視）
         await conn.execute(text("""
             DO $$ BEGIN
