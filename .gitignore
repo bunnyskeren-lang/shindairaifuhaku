@@ -30,3 +30,6 @@ programing files/_import_*_to_dev.py
 
 # Office の編集中ロックファイル
 ~$*
+
+# 契約書類（Word。リポジトリには載せない）
+/docs/contract/
