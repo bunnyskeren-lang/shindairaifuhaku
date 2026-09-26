@@ -98,7 +98,14 @@
   .hero-text{text-align:left;}
   .hero p.lede{ margin-left:0; }
   /* スマホ端末の枠（.shotと同じ黒い枠）。小さい画面では枠も細く・角も小さくする */
-  .hero-shot{display:block; margin:0; width:clamp(92px,26vw,150px); position:relative; background:#0d0f0b; padding:clamp(4px,1.2vw,10px); border-radius:clamp(14px,4.4vw,30px); box-shadow:var(--shadow);}
+  .hero-shot{display:block; margin:0; width:clamp(92px,26vw,150px); position:relative;
+    padding:clamp(4px,1.2vw,9px); border-radius:clamp(15px,4.6vw,32px);
+    background:#0b0c0a; border:2px solid #9a9e97; /* 金属フレーム */
+    box-shadow:inset 0 0 0 1px #000, 0 0 0 1px rgba(0,0,0,.35), var(--shadow);}
+  /* 側面ボタン：左＝音量、右＝電源 */
+  .hero-shot::before, .hero-shot::after{content:""; position:absolute; width:3px; background:#9a9e97; border-radius:2px;}
+  .hero-shot::before{left:-5px; top:18%; height:13%;}
+  .hero-shot::after{right:-5px; top:26%; height:11%;}
   .hero-shot img{display:block; width:100%; height:auto; border-radius:clamp(10px,3.2vw,21px);}
   @media (min-width:861px){
     .hero-grid{grid-template-columns:1fr 250px; gap:48px;}
