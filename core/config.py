@@ -312,6 +312,7 @@ ADMIN_TOKEN_TTL = 4 * 3600
 
 PRIVACY_URL = APP_URL + "/privacy"
 TERMS_URL = APP_URL + "/terms"
+HP_URL = APP_URL + "/hp"  # 神大ライフハックHP（友だち追加カード等からの誘導先）
 CONTACT_URL = APP_URL + "/contact"
 
 # 本番LINE公式アカウントの友だち追加ショートリンク（LINEの「友だち追加QRコード/URL」機能で発行）。

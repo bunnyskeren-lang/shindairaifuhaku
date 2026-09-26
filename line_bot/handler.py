@@ -61,6 +61,8 @@ from line_bot.flex_builders import (
     make_omikuji_card,
     make_onitan_card,
     make_rakutan_card,
+    OPERATOR_POSTBACK_DATA,
+    make_operator_info_flex,
     make_registration_flex,
     make_review_badge_legend,
     make_search_result_card,
@@ -1333,6 +1335,12 @@ async def _handle_reply_event(event, user_id: str, input_text: str, label: str, 
         if await _user_banned(user_id):
             await line_client.reply(event.reply_token, [TextMessage(text=BAN_MESSAGE_TEXT)])
             _log_reply_timing(f"{label}:banned", t0, user_id=user_id)
+            return
+        # 友だち追加カード（未登録者に見せる）の「運営者について」ボタン。登録ゲートより前で
+        # 返さないと、未登録者には登録Flexが再送されて運営者情報を見られない
+        if input_text == OPERATOR_POSTBACK_DATA:
+            await line_client.reply(event.reply_token, [make_operator_info_flex()])
+            _log_reply_timing(f"{label}:operator", t0, user_id=user_id)
             return
         if await _registration_incomplete(user_id):
             register_url = make_register_url(user_id)

@@ -12,7 +12,7 @@ from linebot.v3.messaging import (
 
 from core import cache
 from core.config import (
-    CONTACT_URL, EASE_COLOR, EASE_LABEL, EASE_STARS, PRIVACY_URL, TERMS_URL,
+    CONTACT_URL, EASE_COLOR, EASE_LABEL, EASE_STARS, HP_URL, PRIVACY_URL, TERMS_URL,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
@@ -288,16 +288,51 @@ def make_help_flex() -> FlexMessage:
     )
 
 
-def make_registration_flex(register_url: str) -> FlexMessage:
-    _notice_contents = [
-        FlexText(
-            text="⏱ 登録は30秒で完了します",
-            weight="bold",
-            size="md",
-            color="#c2410c",
-            wrap=True,
+OPERATOR_POSTBACK_DATA = "運営者について"
+
+_OPERATOR_POINTS = [
+    "・神戸大学工学部に所属する起業部の学生が運営",
+    "・起業家支援制度「関西テック・クリエイターチャレンジ」に採択",
+    "・情報工学科の准教授の支援のもとで開発",
+]
+
+
+def _hp_button() -> FlexButton:
+    return FlexButton(
+        action=URIAction(label="神大ライフハックHPを見る", uri=HP_URL),
+        style="primary",
+        color="#6366f1",
+        height="md",
+    )
+
+
+def make_operator_info_flex() -> FlexMessage:
+    """「運営者について」タップ時の返信。友だち追加カードから運営者情報を外して短くした代わりに、
+    ここで見せる（Flexにはトグルが無いため、postbackで別メッセージとして返す方式）。"""
+    return FlexMessage(
+        alt_text="運営者について",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical",
+                background_color="#eef2ff",
+                padding_all="lg",
+                contents=[FlexText(text="運営者について", weight="bold", size="lg", color="#4338ca")],
+            ),
+            body=FlexBox(
+                layout="vertical",
+                spacing="sm",
+                padding_all="lg",
+                contents=[
+                    FlexText(text=point, size="sm", color="#312e81", weight="bold", wrap=True)
+                    for point in _OPERATOR_POINTS
+                ],
+            ),
+            footer=FlexBox(layout="vertical", padding_all="md", contents=[_hp_button()]),
         ),
-    ]
+    )
+
+
+def make_registration_flex(register_url: str) -> FlexMessage:
     return FlexMessage(
         alt_text="🎓 神大ライフハックへようこそ！会員登録をお願いします",
         contents=FlexBubble(
@@ -308,30 +343,23 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                     FlexText(text="ようこそ！", color="#c7d2fe", size="lg", weight="bold"),
                 ],
                 background_color="#6366f1",
-                padding_all="xl",
+                padding_all="lg",
             ),
             body=FlexBox(
                 layout="vertical",
                 contents=[
                     FlexText(
-                        text="先輩のリアルなレビューで\n授業選びをサポートします📖",
+                        text="先輩のリアルなレビューで授業選びをサポートします📖 登録は30秒で完了します。",
                         wrap=True,
                         size="sm",
                         color="#374151",
-                    ),
-                    FlexBox(
-                        layout="vertical",
-                        margin="lg",
-                        padding_all="md",
-                        background_color="#fff7ed",
-                        corner_radius="md",
-                        contents=_notice_contents,
                     ),
                 ],
                 padding_all="lg",
             ),
             footer=FlexBox(
                 layout="vertical",
+                spacing="sm",
                 contents=[
                     FlexButton(
                         action=URIAction(label="📝 今すぐ登録する（30秒）", uri=register_url),
@@ -339,50 +367,22 @@ def make_registration_flex(register_url: str) -> FlexMessage:
                         color="#f97316",
                         height="md",
                     ),
-                    FlexBox(
-                        layout="vertical",
-                        margin="lg",
-                        padding_all="lg",
-                        background_color="#eef2ff",
-                        border_color="#6366f1",
-                        border_width="medium",
-                        corner_radius="lg",
-                        spacing="sm",
-                        contents=[
-                            FlexText(text="🎓 運営者について", weight="bold", size="md", color="#4338ca"),
-                            FlexText(
-                                text="・神戸大学工学部に所属する起業部の学生が運営",
-                                size="sm",
-                                color="#312e81",
-                                weight="bold",
-                                wrap=True,
-                            ),
-                            FlexText(
-                                text="・起業家支援制度「関西テック・クリエイターチャレンジ」に採択",
-                                size="sm",
-                                color="#312e81",
-                                weight="bold",
-                                wrap=True,
-                            ),
-                            FlexText(
-                                text="・情報工学科の准教授の支援のもとで開発",
-                                size="sm",
-                                color="#312e81",
-                                weight="bold",
-                                wrap=True,
-                            ),
-                        ],
+                    _hp_button(),
+                    FlexButton(
+                        action=PostbackAction(label="運営者について ▼", data=OPERATOR_POSTBACK_DATA),
+                        style="link",
+                        color="#4338ca",
+                        height="sm",
                     ),
                     FlexText(
-                        text="🚧 本サービスは現在β版として提供しており、予告なく仕様変更・停止等を行う場合があります",
+                        text="🚧 β版のため予告なく仕様変更・停止する場合があります",
                         size="xxs",
                         color="#9ca3af",
                         wrap=True,
-                        margin="md",
+                        align="center",
                     ),
                     FlexBox(
                         layout="horizontal",
-                        margin="md",
                         contents=[
                             FlexButton(
                                 action=URIAction(label="利用規約", uri=TERMS_URL),
