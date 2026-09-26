@@ -432,7 +432,7 @@ async def test_review_form_has_optional_group_code_field():
         resp = await c.get("/")
     assert resp.status_code == 200
     assert 'name="group_code"' in resp.text
-    assert "文字数制限をなくしました" in resp.text  # 青いお知らせ枠には触れていない
+    assert "文字数制限をなくしました" not in resp.text  # 2026-09-26 お知らせ枠は削除済み
 
 
 @pytest.mark.asyncio
