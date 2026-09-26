@@ -58,7 +58,7 @@ async def test_register_new_user_grants_welcome_credits(http_client_factory, mon
     done = await client.get(resp.headers["location"])
     assert done.status_code == 200
     # チケット型カード: 枚数は大きな数字だけの<span>で、続く「枚」「プレゼント！」は別要素
-    assert f'>{REGISTRATION_WELCOME_UNLOCK_CREDITS}</span><span class="text-3xl font-bold">枚</span>' in done.text
+    assert f'>{REGISTRATION_WELCOME_UNLOCK_CREDITS}</span><span class="text-2xl font-bold">枚</span>' in done.text
     assert "プレゼント！" in done.text
 
     async with test_sessionmaker() as session:
