@@ -306,10 +306,6 @@
     掲載内容に問題があれば<a href="/contact" target="_blank" style="color:#6366f1;text-decoration:underline">お問い合わせフォーム</a>までご連絡ください
   </p>
 
-  <div class="actions">
-    <a id="btn-review" class="btn btn-primary" href="#">✏️ レビューを投稿</a>
-  </div>
-
   <div class="notice" id="notice">
     <div class="notice-h">⚠️ 注意・禁止事項</div>
     <ul>
@@ -970,7 +966,6 @@ async function main() {
       variantFilter = btn.dataset.vid || "";
       instructorFilter = "";
       syncInstructorChips();
-      updateSubmitButton();
       updateSyllabusButton();
       if (!data.locked) renderReviewCards();
     });
@@ -991,68 +986,6 @@ async function main() {
 
   if (!data.locked && data.reviews && data.reviews.length) {
     renderReviewCards();
-  }
-
-  // ── ボタン ──
-  // 生のREVIEW_FORM_URLで開くとLINEの通常アプリ内ブラウザ扱いになりliff.isInClient()が
-  // falseになるため、他のボタン（会員登録・科目詳細等）と同様にhttps://liff.line.me/{LIFF_ID}
-  // 形式で開かせる（[[feedback_liff_links_must_use_liffline_me]]）。
-  const reviewParams = userId
-    ? `uid=${userId}&course=${encodeURIComponent(data.name)}`
-    : `course=${encodeURIComponent(data.name)}`;
-  const reviewUrl = REVIEW_LIFF_ID
-    ? `https://liff.line.me/${REVIEW_LIFF_ID}?${reviewParams}`
-    : `${REVIEW_FORM_URL}?${reviewParams}`;
-  const btnReview = document.getElementById("btn-review");
-  // レビュー投稿は教養科目のみ受け付けている（専門科目は既存レビューの閲覧のみ）
-  if (data.category !== "教養") {
-    btnReview.style.display = "none";
-    btnReview.insertAdjacentHTML("beforebegin",
-      `<p style="font-size:11.5px;color:#94a3b8;text-align:center;margin:8px 0 0">現在、レビュー投稿は教養科目のみ受け付けています</p>`);
-  } else {
-    btnReview.href = reviewUrl;
-    // レビュー0件の科目は投稿ボタンの見た目を特別扱いし、供給が足りない科目への
-    // 投稿を後押しする（review_count===0の科目はunlocked扱いなので必ずlocked===false）
-    if (!data.locked && data.review_count === 0) {
-      btnReview.insertAdjacentHTML("beforebegin",
-        `<div style="text-align:center"><span style="font-size:11.5px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:999px;padding:5px 14px;display:inline-block">🌟 初レビューでチケット+${UNLOCK_REWARD}枚もらえます</span></div>`);
-      btnReview.textContent = "✏️ 最初のレビューを書く";
-      btnReview.style.boxShadow = "0 0 0 4px #e0e7ff, 0 6px 16px rgba(99,102,241,.35)";
-    }
-  }
-
-  // バリアント統合科目で開講科目チップを選んでいるときは、その科目の募集状況に合わせて
-  // 投稿ボタンの遷移先（course=）・文言・可否を切り替える。「すべて」選択時は既存挙動のまま。
-  function updateSubmitButton() {
-    if (data.category !== "教養" || !isVariantMode) return;
-    const v = selectedVariant();
-    const courseName = v ? v.name : data.name;
-    const rp = userId
-      ? `uid=${userId}&course=${encodeURIComponent(courseName)}`
-      : `course=${encodeURIComponent(courseName)}`;
-    const url = REVIEW_LIFF_ID
-      ? `https://liff.line.me/${REVIEW_LIFF_ID}?${rp}`
-      : `${REVIEW_FORM_URL}?${rp}`;
-    if (!v) {
-      // 「すべて」: 既存処理が設定した文言（通常 or 「最初のレビューを書く」）はそのまま活かす
-      btnReview.classList.remove("btn-disabled");
-      btnReview.style.pointerEvents = "";
-      btnReview.href = url;
-      return;
-    }
-    if (!v.open) {
-      btnReview.classList.add("btn-disabled");
-      btnReview.style.pointerEvents = "none";
-      btnReview.removeAttribute("href");
-      btnReview.style.boxShadow = "";
-      btnReview.textContent = "✋ 募集を締め切りました";
-    } else {
-      btnReview.classList.remove("btn-disabled");
-      btnReview.style.pointerEvents = "";
-      btnReview.href = url;
-      btnReview.style.boxShadow = "";
-      btnReview.textContent = `✏️ ${v.name} のレビューを投稿`;
-    }
   }
 
   function updateSyllabusButton() {
@@ -1099,7 +1032,6 @@ async function main() {
   }
   if (isVariantMode) {
     syncInstructorChips();
-    updateSubmitButton();
   }
   updateSyllabusButton();
 
