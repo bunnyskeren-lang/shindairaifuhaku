@@ -899,12 +899,12 @@ async def _handle_category_entry() -> list:
 
 async def _handle_kyoyo_menu(user_id: str = "") -> list:
     _menu_key = "menu:教養"
-    # 解除済みバッジはユーザー個別のため、解除済みが1件でもあるユーザーはこのメニューレベルの
-    # 共有キャッシュを迂回する（fallback先のhandle_course_listで個別に反映される。
-    # 2026-09-04、解除済み科目の可視化対応）
-    unlocked_ids = await _get_unlocked_subject_ids(user_id)
+    # このキャッシュに載るのは分類グリッド（解除済みバッジを含まない全ユーザー共通の画面）だけ
+    # なので、解除済み科目を持つユーザーでも参照してよい。個別化が必要なfallback先の
+    # handle_course_list側で解除済みバッジを反映する（2026-09-04、解除済み科目の可視化対応）。
+    # 以前は解除済みユーザーがここで毎回キャッシュを迂回し、全科目走査を再実行していた
     _cached = cache.get_course_list_cache(_menu_key)
-    if _cached is not None and not unlocked_ids:
+    if _cached is not None:
         return _cached
     cls_map = await cache.get_cls_order_map()
     _cls_sort = make_cls_sort(cls_map)
@@ -928,9 +928,9 @@ async def _handle_kyoyo_menu(user_id: str = "") -> list:
 
 async def _handle_senmon_menu(user_id: str = "") -> list:
     _menu_key = "menu:専門"
-    unlocked_ids = await _get_unlocked_subject_ids(user_id)
+    # キャッシュに載るのは全ユーザー共通のグリッドだけ（_handle_kyoyo_menu参照）
     _cached = cache.get_course_list_cache(_menu_key)
-    if _cached is not None and not unlocked_ids:
+    if _cached is not None:
         return _cached
     reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
         cache.get_reviewed_cached(),
@@ -975,9 +975,9 @@ async def _handle_senmon_menu(user_id: str = "") -> list:
 
 async def _handle_faculty_menu(t: str, user_id: str = "") -> list:
     _menu_key = f"menu:fac:{t}"
-    unlocked_ids = await _get_unlocked_subject_ids(user_id)
+    # キャッシュに載るのは全ユーザー共通の選択画面だけ（_handle_kyoyo_menu参照）
     _cached = cache.get_course_list_cache(_menu_key)
-    if _cached is not None and not unlocked_ids:
+    if _cached is not None:
         return _cached
     reviewed_names_sen, (_, _all_courses) = await asyncio.gather(
         cache.get_reviewed_cached(),
@@ -1052,6 +1052,21 @@ async def prewarm_menu_caches() -> None:
     await _handle_category_entry()
     await _handle_kyoyo_menu("")
     await _handle_senmon_menu("")
+    # 教養の各分類の科目一覧（件数が多い分類は、よみがな範囲ごとの一覧も）。レビュー閲覧の
+    # 教養メニューから最初にタップされる画面で、未キャッシュだと実測4秒近くかかっていた。
+    # 一度に全部作ってイベントループを塞がないよう、1件ごとに制御を返す。
+    _, all_courses = await cache.get_courses_cached()
+    kyoyo_rows: dict[str, list] = {}
+    for c in all_courses:
+        if c.category == "教養" and c.classification:
+            kyoyo_rows.setdefault(c.classification, []).append(c)
+    for cls in sorted(kyoyo_rows):
+        await handle_course_list(category="教養", classification=cls)
+        await asyncio.sleep(0)
+        if len(kyoyo_rows[cls]) > _ALPHA_SPLIT_THRESHOLD:
+            for i in range(len(_build_alpha_chunks(kyoyo_rows[cls]))):
+                await handle_course_list(category="教養", classification=cls, reading_row=str(i))
+                await asyncio.sleep(0)
 
 
 _MSG_SEARCH_LIMIT = 10
@@ -1287,6 +1302,25 @@ def _log_reply_timing(kind: str, start: float, compute_ms: float | None = None, 
     fire_and_forget(save_debug_log(kind, user_id=user_id or None, status=status, duration_ms=duration_ms, detail=detail))
 
 
+async def _link_follow_rich_menu(user_id: str, incomplete: bool) -> None:
+    """友だち追加/ブロック解除時のリッチメニュー紐付け。返信とは独立に実行し、所要時間を
+    DebugLog（action="follow:richmenu"）に別途記録する。"""
+    start = time.perf_counter()
+    status = "ok"
+    try:
+        # LINE側のデフォルトリッチメニューを登録前メニューにしてあるため
+        # (setup_richmenu.py参照)、このlink呼び出し自体が失敗してもデフォルトの
+        # フェイルセーフにより未登録ユーザーには登録前メニューが表示され続ける
+        await line_client.link_rich_menu(user_id, RICHMENU_ID_PREREGISTER if incomplete else RICHMENU_ID_MAIN)
+    except Exception as exc:
+        status = "error"
+        await save_error_log(exc, user_id=user_id, action="follow_richmenu")
+    duration_ms = (time.perf_counter() - start) * 1000
+    if status == "ok" and duration_ms >= _SLOW_REPLY_MS:
+        status = "slow"
+    await save_debug_log("follow:richmenu", user_id=user_id or None, status=status, duration_ms=duration_ms)
+
+
 async def _handle_reply_event(event, user_id: str, input_text: str, label: str, log_text: str, t0: float) -> None:
     """PostbackEvent/MessageEventで共通の応答処理。未登録なら登録誘導Flexを返し、
     それ以外はhandle_message()を呼んで返信する。タイムアウト・例外時はエラーログを
@@ -1354,17 +1388,11 @@ async def process_events(events) -> None:
                     fire_and_forget(save_log_bg(user_id, "in", "[follow]"))
                 except Exception as exc:
                     await save_error_log(exc, action="follow")
-                try:
-                    if incomplete:
-                        # LINE側のデフォルトリッチメニューを登録前メニューにしてあるため
-                        # (setup_richmenu.py参照)、このlink呼び出し自体が失敗してもデフォルトの
-                        # フェイルセーフにより未登録ユーザーには登録前メニューが表示され続ける
-                        await line_client.link_rich_menu(user_id, RICHMENU_ID_PREREGISTER)
-                    else:
-                        await line_client.link_rich_menu(user_id, RICHMENU_ID_MAIN)
-                except Exception as exc:
-                    await save_error_log(exc, user_id=user_id, action="follow_richmenu")
+                # 返信の所要時間にリッチメニュー紐付け（LINE APIの外部呼び出し、実測で18秒かかった
+                # ことがある）を含めると、どちらが遅いのか分からず、同じwebhookの後続イベントも
+                # 待たせてしまうため、返信完了時点で計測を確定し紐付けは別タスクに切り離す
                 _log_reply_timing("follow", _t0, user_id=user_id)
+                fire_and_forget(_link_follow_rich_menu(user_id, incomplete))
                 continue
 
             if isinstance(event, PostbackEvent):

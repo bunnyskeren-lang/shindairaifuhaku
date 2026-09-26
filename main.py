@@ -53,12 +53,14 @@ async def lifespan(app: FastAPI):
     backup_task = asyncio.create_task(backup.backup_loop())
     cleanup_task = asyncio.create_task(log_cleanup_loop())
     rate_limit_cleanup_task = asyncio.create_task(rate_limit.rate_limit_cleanup_loop())
+    rewarm_task = asyncio.create_task(prewarm.rewarm_loop())
     yield
+    rewarm_task.cancel()
     ping_task.cancel()
     backup_task.cancel()
     cleanup_task.cancel()
     rate_limit_cleanup_task.cancel()
-    for task in (ping_task, backup_task, cleanup_task, rate_limit_cleanup_task):
+    for task in (ping_task, backup_task, cleanup_task, rate_limit_cleanup_task, rewarm_task):
         with contextlib.suppress(asyncio.CancelledError):
             await task
     await line_client.shutdown()

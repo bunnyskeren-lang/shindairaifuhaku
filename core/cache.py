@@ -1,3 +1,5 @@
+import asyncio
+import contextvars
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -71,7 +73,7 @@ class _TTLCache:
     呼び出しごとに新しく生成するため、ミュータブルな初期値を使い回さないようcallableで受け取る。
     """
 
-    __slots__ = ("_at", "_default_factory", "_fetch", "_ttl", "_valid", "_value")
+    __slots__ = ("_at", "_default_factory", "_fetch", "_gen", "_ttl", "_valid", "_value")
 
     def __init__(self, ttl, fetch, valid, default_factory):
         self._ttl = ttl
@@ -80,6 +82,7 @@ class _TTLCache:
         self._default_factory = default_factory
         self._value = default_factory()
         self._at = 0.0
+        self._gen = 0
 
     async def get(self):
         if self._valid(self._value) and time.monotonic() - self._at < self._ttl:
@@ -88,9 +91,20 @@ class _TTLCache:
         self._at = time.monotonic()
         return self._value
 
+    async def refresh(self) -> None:
+        """TTL切れを待たずにバックグラウンドで再取得して差し替える（差し替え中も古い値を
+        返し続けるため、利用者が再取得待ちにならない）。取得中にinvalidate()された場合は、
+        取得した値が古い可能性があるので捨てる（世代番号_genで判定）。"""
+        gen = self._gen
+        value = await self._fetch()
+        if gen == self._gen:
+            self._value = value
+            self._at = time.monotonic()
+
     def invalidate(self) -> None:
         self._value = self._default_factory()
         self._at = 0.0
+        self._gen += 1
 
 
 # ── classification caches ───────────────────────────────────────
@@ -432,6 +446,45 @@ async def get_syllabus_urls_by_pair_cached() -> dict[tuple[int, str], str]:
     return await _syllabus_urls_by_pair.get()
 
 
+# ── 無効化後のバックグラウンド再ウォームアップ ──────────────────
+# 科目・レビューの更新でキャッシュを無効化すると、次にLINE botを開いた1人が全キャッシュの
+# 再構築待ち（実測2〜7秒）を負担していた。無効化の直後にバックグラウンドで作り直しておき、
+# その1人が遅くならないようにする。core.cacheはline_botをimportできないため、
+# 実際の処理は起動時にcore.prewarmがregister_rewarm_hook()で登録する。
+_REWARM_DEBOUNCE_SEC = 3.0
+_rewarm_hook = None
+_rewarm_scheduled = False
+
+
+def register_rewarm_hook(hook) -> None:
+    global _rewarm_hook
+    _rewarm_hook = hook
+
+
+def _schedule_rewarm() -> None:
+    global _rewarm_scheduled
+    if _rewarm_hook is None or _rewarm_scheduled:
+        return
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    from core.background_tasks import fire_and_forget
+    _rewarm_scheduled = True
+    fire_and_forget(_run_rewarm())
+
+
+async def _run_rewarm() -> None:
+    global _rewarm_scheduled
+    # 管理画面の一括操作などで連続して無効化されるため、少し待って1回にまとめる
+    await asyncio.sleep(_REWARM_DEBOUNCE_SEC)
+    _rewarm_scheduled = False
+    try:
+        await _rewarm_hook()
+    except Exception as e:
+        print(f"Rewarm after invalidation failed: {e}", flush=True)
+
+
 def invalidate_courses_cache():
     global _course_flex_cache, _course_list_cache
     global _preload_cache
@@ -456,6 +509,7 @@ def invalidate_courses_cache():
     _letter_view_group.invalidate()
     # 自由入力検索インデックスもcourses/variant_mapの派生データのため一緒に無効化する
     _search_index.invalidate()
+    _schedule_rewarm()
 
 
 def invalidate_review_cache():
@@ -466,6 +520,7 @@ def invalidate_review_cache():
     _course_list_cache = {}
     _ease_extremes.invalidate()
     invalidate_full_pairs_cache()
+    _schedule_rewarm()
 
 
 # ── flex / list / ranking caches (アクセスは必ずこれらの関数経由で行う) ──
@@ -481,7 +536,15 @@ def set_flex_cache(course_id: int, msg) -> None:
     _course_flex_cache[course_id] = (msg, time.monotonic())
 
 
+# バックグラウンドの再ウォームアップ（core.prewarm.rewarm_caches）だけがTrueにする。
+# ContextVarなのでそのタスク内でのみ有効で、同時に動くユーザーリクエストの
+# キャッシュ参照には影響しない（TTL切れ前でも作り直して差し替えるために使う）。
+force_list_rebuild: contextvars.ContextVar[bool] = contextvars.ContextVar("force_list_rebuild", default=False)
+
+
 def get_course_list_cache(key: str):
+    if force_list_rebuild.get():
+        return None
     entry = _course_list_cache.get(key)
     if entry and time.monotonic() - entry[1] < _COURSE_LIST_TTL:
         return entry[0]
@@ -1003,7 +1066,6 @@ def invalidate_admin_nav_counts_cache() -> None:
 
 
 async def warm_query_caches() -> None:
-    import asyncio
     # 修正理由: 全部を一度にasyncio.gatherすると起動時にDBセッションが同数同時に開き、
     # Supabase poolerの「セッションモード」（DATABASE_URLのポート5432、1クライアント接続＝
     # 1バックエンド固定）が持つ同時セッション数上限に達しEMAXCONNSESSIONで失敗する
@@ -1026,7 +1088,26 @@ async def warm_query_caches() -> None:
         get_senmon_variant_group_cached(),
         get_ease_extremes_cached(),
         get_admin_nav_counts_cached(),
+        # 自由入力検索の初回だけ約2秒かかっていた（courses/variant_mapに依存するため後ろに置く）
+        get_search_index_cached(),
     ]
     _BATCH = 3
     for i in range(0, len(_tasks), _BATCH):
         await asyncio.gather(*_tasks[i:i + _BATCH])
+
+
+async def refresh_query_caches() -> None:
+    """TTL切れ（1時間）を待たず、warm_query_caches()と同じ対象を古い値を返し続けたまま
+    再取得して差し替える。1時間ごとに最初に開いた1人が再取得待ちになるのを防ぐ。
+    派生キャッシュ（senmon_variant_group・search_index）は元のcourses/variant_mapの
+    再取得後に更新されるよう、依存元を先のバッチに置く。warm_query_caches同様、
+    同時セッション数を抑えるため3件ずつ直列に実行する。"""
+    batches = [
+        (_cls_order_map, _cls_parent_map, _cls_set),
+        (_faculty_order, _courses, _reviewed),
+        (_all_instructors, _all_review_stats, _syllabus_urls),
+        (_syllabus_urls_by_pair, _variant_map, _ease_extremes),
+        (_senmon_variant_group, _search_index),
+    ]
+    for batch in batches:
+        await asyncio.gather(*(c.refresh() for c in batch))
