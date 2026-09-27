@@ -12,7 +12,8 @@ from linebot.v3.messaging import (
 
 from core import cache
 from core.config import (
-    EASE_COLOR, EASE_LABEL, EASE_STARS, GROUP_CONTRIBUTOR_BONUS_AMOUNT, HP_URL, PRIVACY_URL, TERMS_URL,
+    EASE_COLOR, EASE_LABEL, EASE_STARS, GROUP_CONTRIBUTOR_BONUS_AMOUNT, GROUP_REVIEW_PAYOUT_KYOYO,
+    GROUP_REVIEW_PAYOUT_SENMON, HP_URL, PRIVACY_URL, TERMS_URL,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
@@ -371,7 +372,10 @@ def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
             size="xs", color="#15803d", wrap=True, margin="md",
         ),
         FlexText(
-            text=f"内訳：教養{r['kyoyo_count']}件・専門{r['senmon_count']}件",
+            text=(
+                f"内訳：教養{r['kyoyo_count']}件（1件{GROUP_REVIEW_PAYOUT_KYOYO}円）"
+                f"・専門{r['senmon_count']}件（1件{GROUP_REVIEW_PAYOUT_SENMON}円）"
+            ),
             size="xxs", color="#64748b", wrap=True,
         ),
     ]
