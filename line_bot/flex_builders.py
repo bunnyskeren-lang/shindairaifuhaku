@@ -355,6 +355,16 @@ def _group_metric(label: str, value: str) -> FlexBox:
     )
 
 
+def _group_breakdown_row(label: str, count: int, unit_price: int, amount: int) -> FlexBox:
+    """内訳表の1行（区分・件数・単価・小計）。"""
+    cells = [(label, 2, "start", True), (f"{count}件", 2, "end", False),
+             (f"×{unit_price}円", 2, "end", False), (f"{amount:,}円", 3, "end", True)]
+    return FlexBox(layout="horizontal", contents=[
+        FlexText(text=text, size="xs", color="#1e293b", weight="bold" if bold else "regular", align=align, flex=flex)
+        for text, flex, align, bold in cells
+    ])
+
+
 def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
     """LINE botの「団体」への返信カード。全会員に団体全体の集計と本人の件数、
     団体の管理者（r["is_manager"]）にだけ、投稿した会員の氏名と件数の一覧（r["members"]）を付ける。"""
@@ -371,13 +381,10 @@ def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
             text=f"あと{r['bonus_remaining']}人が投稿すると、+{GROUP_CONTRIBUTOR_BONUS_AMOUNT:,}円",
             size="xs", color="#15803d", wrap=True, margin="md",
         ),
-        FlexText(
-            text=(
-                f"内訳：教養{r['kyoyo_count']}件（1件{GROUP_REVIEW_PAYOUT_KYOYO}円）"
-                f"・専門{r['senmon_count']}件（1件{GROUP_REVIEW_PAYOUT_SENMON}円）"
-            ),
-            size="xxs", color="#64748b", wrap=True,
-        ),
+        FlexBox(layout="vertical", spacing="xs", margin="md", padding_all="md", background_color="#f8fafc", corner_radius="md", contents=[
+            _group_breakdown_row("教養", r["kyoyo_count"], GROUP_REVIEW_PAYOUT_KYOYO, r["kyoyo_amount"]),
+            _group_breakdown_row("専門", r["senmon_count"], GROUP_REVIEW_PAYOUT_SENMON, r["senmon_amount"]),
+        ]),
     ]
     if r["is_manager"]:
         rows = r["members"][:_MAX_GROUP_MEMBER_ROWS]

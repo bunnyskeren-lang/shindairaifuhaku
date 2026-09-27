@@ -506,7 +506,7 @@ async def test_group_report_flex_shows_member_names_only_to_manager(test_session
     assert "管理者のみ表示" in manager_json and "会員 花子" in manager_json and "1件" in manager_json
     assert "会員 花子" not in member_json and "管理者のみ" not in member_json
     assert "起業部" in member_json and "あなたの投稿" in member_json
-    assert "教養3件（1件50円）" in member_json and "専門0件（1件30円）" in member_json
+    assert all(x in member_json for x in ("教養", "3件", "×50円", "150円", "専門", "0件", "×30円"))
     assert "1000001A" not in manager_json  # 学籍番号は出さない
     assert await group_report_for_user("U_NOBODY") is None
 
