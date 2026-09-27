@@ -6,13 +6,14 @@ from linebot.v3.messaging import (
     FlexButton,
     FlexMessage,
     FlexText,
+    MessageAction,
     PostbackAction,
     URIAction,
 )
 
 from core import cache
 from core.config import (
-    EASE_COLOR, EASE_LABEL, EASE_STARS, GROUP_CONTRIBUTOR_BONUS_AMOUNT, GROUP_REVIEW_PAYOUT_KYOYO,
+    EASE_COLOR, EASE_LABEL, EASE_STARS, GROUP_CONTRIBUTOR_BONUS_AMOUNT, GROUP_CONTRIBUTOR_BONUS_UNIT, GROUP_REVIEW_PAYOUT_KYOYO,
     GROUP_REVIEW_PAYOUT_SENMON, HP_URL, PRIVACY_URL, TERMS_URL,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
@@ -342,73 +343,117 @@ def make_operator_info_flex() -> FlexMessage:
     )
 
 
-_MAX_GROUP_MEMBER_ROWS = 40  # Flexの大きさ上限に収まる範囲。超えた分は「ほかN人」にまとめる
+_MAX_GROUP_MEMBER_ROWS = 40  # Flexの大きさ上限に収まる範囲（全員表示カード）。超えた分は「ほかN人」にまとめる
+_GROUP_MEMBER_PREVIEW_ROWS = 5  # 「団体」のカードに載せる会員数。全員は「団体会員」で別カードに出す
+GROUP_MEMBERS_TEXT = "団体会員"  # 「全員を見る」ボタンが送るテキスト（handlerが受ける）
 
 
-def _group_metric(label: str, value: str) -> FlexBox:
-    return FlexBox(
-        layout="vertical", flex=1, spacing="xs", padding_all="md", background_color="#f0fdf4", corner_radius="md",
-        contents=[
-            FlexText(text=label, size="xxs", color="#15803d", wrap=True),
-            FlexText(text=value, size="lg", weight="bold", color="#14532d", wrap=True),
-        ],
-    )
+def _group_tile(label: str, value: str) -> FlexBox:
+    return FlexBox(layout="vertical", flex=1, contents=[
+        FlexText(text=label, size="xxs", color="#64748b"),
+        FlexText(text=value, size="lg", weight="bold", color="#0f172a"),
+    ])
 
 
 def _group_breakdown_row(label: str, count: int, unit_price: int, amount: int) -> FlexBox:
-    """内訳表の1行（区分・件数・単価・小計）。"""
-    cells = [(label, 2, "start", True), (f"{count}件", 2, "end", False),
-             (f"×{unit_price}円", 2, "end", False), (f"{amount:,}円", 3, "end", True)]
+    """内訳の1行（区分・件数×単価・小計）。"""
     return FlexBox(layout="horizontal", contents=[
-        FlexText(text=text, size="xs", color="#1e293b", weight="bold" if bold else "regular", align=align, flex=flex)
-        for text, flex, align, bold in cells
+        FlexText(text=label, size="xs", weight="bold", color="#0f172a", flex=2),
+        FlexText(text=f"{count}件 × {unit_price}円", size="xs", color="#334155", flex=5),
+        FlexText(text=f"{amount:,}円", size="xs", weight="bold", color="#0f172a", align="end", flex=3),
     ])
+
+
+def _group_member_row(rank: int, name: str, grade: str, n: int) -> FlexBox:
+    top = rank <= 3
+    return FlexBox(layout="horizontal", spacing="md", align_items="center", contents=[
+        FlexBox(
+            layout="vertical", width="20px", height="20px", corner_radius="10px",
+            background_color="#dcfce7" if top else "#f1f5f9", justify_content="center", align_items="center",
+            contents=[FlexText(text=str(rank), size="xxs", weight="bold", color="#14532d" if top else "#475569", align="center")],
+        ),
+        FlexText(text=f"{name}（{grade}）" if grade else name, size="sm", color="#0f172a", flex=1, wrap=True),
+        FlexText(text=f"{n}件", size="sm", weight="bold", color="#0f172a", align="end", flex=0),
+    ])
+
+
+def _group_header(group_name: str, sub: str, big: str | None = None) -> FlexBox:
+    contents = [
+        FlexText(text=sub, size="xxs", color="#bbf7d0"),
+        FlexText(text=group_name, weight="bold", size="md", color="#ffffff", wrap=True),
+    ]
+    if big is not None:
+        contents += [
+            FlexText(text="謝礼の累計", size="xxs", color="#bbf7d0", margin="lg"),
+            FlexText(text=big, weight="bold", size="3xl", color="#ffffff"),
+        ]
+    return FlexBox(layout="vertical", background_color="#14532d", padding_all="lg", contents=contents)
 
 
 def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
     """LINE botの「団体」への返信カード。全会員に団体全体の集計と本人の件数、
-    団体の管理者（r["is_manager"]）にだけ、投稿した会員の氏名と件数の一覧（r["members"]）を付ける。"""
+    団体の管理者（r["is_manager"]）にだけ、投稿した会員の氏名と件数の一覧（r["members"]）を付ける
+    （上位だけ載せ、残りは「全員を見る」ボタン＝`GROUP_MEMBERS_TEXT`の送信で別カードに出す）。"""
+    unit = GROUP_CONTRIBUTOR_BONUS_UNIT
+    done = r["contributor_count"] % unit
+    progress = FlexBox(
+        layout="horizontal", height="8px", corner_radius="4px", background_color="#e2e8f0", margin="sm",
+        contents=[FlexBox(layout="vertical", width=f"{done * 100 // unit}%", background_color="#16a34a", corner_radius="4px", contents=[])] if done else [],
+    )
     body: list = [
-        FlexBox(layout="horizontal", spacing="sm", contents=[
-            _group_metric("承認されたレビュー", f"{r['kyoyo_count'] + r['senmon_count']}件"),
-            _group_metric("投稿した人数", f"{r['contributor_count']}人"),
+        FlexBox(layout="horizontal", spacing="md", contents=[
+            _group_tile("承認", f"{r['kyoyo_count'] + r['senmon_count']}件"),
+            _group_tile("人数", f"{r['contributor_count']}人"),
+            _group_tile("あなた", f"{r['my_count']}件"),
         ]),
-        FlexBox(layout="horizontal", spacing="sm", contents=[
-            _group_metric("謝礼の累計", f"{r['accrued']:,}円"),
-            _group_metric("あなたの投稿", f"{r['my_count']}件"),
+        FlexBox(layout="vertical", margin="lg", contents=[
+            FlexBox(layout="horizontal", contents=[
+                FlexText(text=f"投稿した人数 {done} / {unit}人", size="xs", color="#0f172a", flex=1),
+                FlexText(text=f"あと{r['bonus_remaining']}人で +{GROUP_CONTRIBUTOR_BONUS_AMOUNT:,}円", size="xs", weight="bold", color="#15803d", align="end", flex=0),
+            ]),
+            progress,
         ]),
-        FlexText(
-            text=f"あと{r['bonus_remaining']}人が投稿すると、+{GROUP_CONTRIBUTOR_BONUS_AMOUNT:,}円",
-            size="xs", color="#15803d", wrap=True, margin="md",
-        ),
-        FlexBox(layout="vertical", spacing="xs", margin="md", padding_all="md", background_color="#f8fafc", corner_radius="md", contents=[
+        FlexBox(layout="vertical", spacing="sm", margin="lg", contents=[
             _group_breakdown_row("教養", r["kyoyo_count"], GROUP_REVIEW_PAYOUT_KYOYO, r["kyoyo_amount"]),
             _group_breakdown_row("専門", r["senmon_count"], GROUP_REVIEW_PAYOUT_SENMON, r["senmon_amount"]),
         ]),
     ]
+    bubble_kwargs = {}
     if r["is_manager"]:
-        rows = r["members"][:_MAX_GROUP_MEMBER_ROWS]
-        body.append(FlexText(text="👥 投稿した会員（管理者のみ表示）", size="sm", weight="bold", color="#14532d", margin="lg"))
-        if not rows:
-            body.append(FlexText(text="まだいません", size="sm", color="#64748b"))
-        for name, grade, n in rows:
-            body.append(FlexBox(layout="horizontal", margin="sm", contents=[
-                FlexText(text=f"{name}（{grade}）" if grade else name, size="sm", color="#1e293b", flex=4, wrap=True),
-                FlexText(text=f"{n}件", size="sm", color="#1e293b", weight="bold", align="end", flex=1),
-            ]))
-        if len(r["members"]) > len(rows):
-            body.append(FlexText(text=f"ほか{len(r['members']) - len(rows)}人", size="xs", color="#64748b", margin="sm"))
+        members = r["members"]
+        rows = [_group_member_row(i, *m) for i, m in enumerate(members[:_GROUP_MEMBER_PREVIEW_ROWS], 1)]
+        section: list = [FlexBox(layout="horizontal", contents=[
+            FlexText(text="投稿した会員", size="xs", weight="bold", color="#0f172a", flex=1),
+            FlexText(text="管理者のみ表示", size="xxs", color="#64748b", align="end", flex=0),
+        ])]
+        section += rows or [FlexText(text="まだいません", size="sm", color="#64748b")]
+        bubble_kwargs["footer"] = FlexBox(layout="vertical", background_color="#f8fafc", padding_all="lg", spacing="md", contents=section + (
+            [FlexButton(
+                action=MessageAction(label=f"全員を見る（{len(members)}人）", text=GROUP_MEMBERS_TEXT),
+                style="link", height="sm", color="#15803d",
+            )] if len(members) > len(rows) else []
+        ))
     return FlexMessage(
         alt_text=f"{group_name} の成果",
         contents=FlexBubble(
-            header=FlexBox(
-                layout="vertical", background_color="#dcfce7", padding_all="lg",
-                contents=[
-                    FlexText(text="🤝 団体の成果", size="xs", color="#15803d"),
-                    FlexText(text=group_name, weight="bold", size="lg", color="#14532d", wrap=True),
-                ],
-            ),
-            body=FlexBox(layout="vertical", spacing="sm", padding_all="lg", contents=body),
+            header=_group_header(group_name, "団体の成果", f"{r['accrued']:,}円"),
+            body=FlexBox(layout="vertical", padding_all="lg", contents=body),
+            **bubble_kwargs,
+        ),
+    )
+
+
+def make_group_members_flex(group_name: str, members: list) -> FlexMessage:
+    """管理者向け「団体会員」の返信カード。投稿した会員を全員（上限`_MAX_GROUP_MEMBER_ROWS`人）順位付きで出す。"""
+    shown = members[:_MAX_GROUP_MEMBER_ROWS]
+    rows: list = [_group_member_row(i, *m) for i, m in enumerate(shown, 1)] or [FlexText(text="まだいません", size="sm", color="#64748b")]
+    if len(members) > len(shown):
+        rows.append(FlexText(text=f"ほか{len(members) - len(shown)}人", size="xs", color="#64748b"))
+    return FlexMessage(
+        alt_text=f"{group_name} の投稿した会員",
+        contents=FlexBubble(
+            header=_group_header(group_name, f"投稿した会員（{len(members)}人・管理者のみ表示）"),
+            body=FlexBox(layout="vertical", spacing="md", padding_all="lg", contents=rows),
         ),
     )
 

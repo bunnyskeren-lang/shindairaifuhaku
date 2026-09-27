@@ -53,6 +53,8 @@ from core.subject_variants import (
     variant_tag_in_suffix,
 )
 from line_bot.flex_builders import (
+    GROUP_MEMBERS_TEXT,
+    make_group_members_flex,
     make_group_report_flex,
     get_course_flex,
     make_category_entry_flex,
@@ -1241,6 +1243,14 @@ async def handle_message(text: str, user_id: str = "") -> list:
         if report is None:
             return [TextMessage(text=NO_GROUP_TEXT)]
         return [make_group_report_flex(*report)]
+
+    if t == GROUP_MEMBERS_TEXT:
+        report = await group_report_for_user(user_id)
+        if report is None:
+            return [TextMessage(text=NO_GROUP_TEXT)]
+        if not report[1]["is_manager"]:
+            return [TextMessage(text="団体の会員一覧は、団体の管理者だけが見られます。")]
+        return [make_group_members_flex(report[0], report[1]["members"])]
 
     if t in ["生協", "生協アプリ", "coop"]:
         return [FlexMessage(alt_text="🛒 生協アプリ", contents=FlexBubble(

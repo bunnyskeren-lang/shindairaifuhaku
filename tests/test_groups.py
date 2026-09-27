@@ -505,10 +505,24 @@ async def test_group_report_flex_shows_member_names_only_to_manager(test_session
     member_json = render(await group_report_for_user("U_M2"))
     assert "管理者のみ表示" in manager_json and "会員 花子" in manager_json and "1件" in manager_json
     assert "会員 花子" not in member_json and "管理者のみ" not in member_json
-    assert "起業部" in member_json and "あなたの投稿" in member_json
-    assert all(x in member_json for x in ("教養", "3件", "×50円", "150円", "専門", "0件", "×30円"))
+    assert "起業部" in member_json and "あなた" in member_json
+    assert all(x in member_json for x in ("教養", "3件 × 50円", "150円", "専門", "0件 × 30円"))
     assert "2412345A" not in manager_json  # 学籍番号は出さない
     assert await group_report_for_user("U_NOBODY") is None
+
+
+def test_group_members_flex_lists_everyone_and_report_links_to_it():
+    from line_bot.flex_builders import GROUP_MEMBERS_TEXT, make_group_members_flex, make_group_report_flex
+    members = [(f"会員{i}", "2回生", 10 - i) for i in range(8)]
+    r = dict(kyoyo_count=1, senmon_count=0, kyoyo_amount=50, senmon_amount=0, contributor_count=8, my_count=0,
+             accrued=50, bonus_remaining=2, is_manager=True, members=members)
+    dump = lambda m: json.dumps(json.loads(m.to_json()), ensure_ascii=False)  # noqa: E731
+    report = dump(make_group_report_flex("起業部", r))
+    assert "会員4" in report and "会員5" not in report  # 上位5人だけ
+    assert GROUP_MEMBERS_TEXT in report and "全員を見る（8人）" in report
+    assert GROUP_MEMBERS_TEXT not in dump(make_group_report_flex("起業部", {**r, "members": members[:5]}))
+    full = dump(make_group_members_flex("起業部", members))
+    assert all(f"会員{i}" in full for i in range(8))
 
 
 @pytest.mark.asyncio
