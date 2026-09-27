@@ -391,9 +391,9 @@ def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
         body.append(FlexText(text="👥 投稿した会員（管理者のみ表示）", size="sm", weight="bold", color="#14532d", margin="lg"))
         if not rows:
             body.append(FlexText(text="まだいません", size="sm", color="#64748b"))
-        for name, n in rows:
+        for name, grade, n in rows:
             body.append(FlexBox(layout="horizontal", margin="sm", contents=[
-                FlexText(text=name, size="sm", color="#1e293b", flex=4, wrap=True),
+                FlexText(text=f"{name}（{grade}）" if grade else name, size="sm", color="#1e293b", flex=4, wrap=True),
                 FlexText(text=f"{n}件", size="sm", color="#1e293b", weight="bold", align="end", flex=1),
             ]))
         if len(r["members"]) > len(rows):

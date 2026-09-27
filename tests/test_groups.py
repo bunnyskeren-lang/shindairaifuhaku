@@ -464,13 +464,13 @@ async def _seed_report(test_sessionmaker):
         g = Group(name="起業部", code=GROUP_CODE, manager_line_user_id="U_M1")
         s.add(g)
         await s.flush()
-        for uid, name, sid in (("U_M1", "管理者 太郎", "1000001A"), ("U_M2", "会員 花子", "1000002B"),
+        for uid, name, sid in (("U_M1", "管理者 太郎", "2412345A"), ("U_M2", "会員 花子", "2612345B"),
                                ("U_M3", "未投稿 次郎", "1000003C")):
             s.add(UserProfile(line_user_id=uid, name=name, student_id=sid, faculty="経営学部", group_id=g.id))
         kyoyo_cs, _ = await _seed_two_courses(s)
-        await _add_review(s, kyoyo_cs, "1000001A", g.id)
-        await _add_review(s, kyoyo_cs, "1000001A", g.id)
-        await _add_review(s, kyoyo_cs, "1000002B", g.id)
+        await _add_review(s, kyoyo_cs, "2412345A", g.id)
+        await _add_review(s, kyoyo_cs, "2412345A", g.id)
+        await _add_review(s, kyoyo_cs, "2612345B", g.id)
         await _add_review(s, kyoyo_cs, "1000003C", g.id, status=ReviewStatus.PENDING)
         await s.commit()
         return g.id
@@ -478,13 +478,13 @@ async def _seed_report(test_sessionmaker):
 
 @pytest.mark.asyncio
 async def test_group_report_lists_members_only_to_manager(test_sessionmaker):
-    from core.groups import group_of_user, group_report
+    from core.groups import grade_label, group_of_user, group_report
     await _seed_report(test_sessionmaker)
     async with test_sessionmaker() as s:
         g = await group_of_user(s, "U_M1")
         mgr = await group_report(s, g, "U_M1")
         mem = await group_report(s, g, "U_M2")
-    assert mgr["is_manager"] and mgr["members"] == [("管理者 太郎", 2), ("会員 花子", 1)]  # 承認済みのみ・多い順
+    assert mgr["is_manager"] and mgr["members"] == [("管理者 太郎", grade_label("2412345A"), 2), ("会員 花子", grade_label("2612345B"), 1)]  # 承認済みのみ・多い順
     assert (mgr["my_count"], mem["my_count"]) == (2, 1)
     assert mem["is_manager"] is False and mem["members"] == []
     assert mem["kyoyo_count"] == 3 and mem["contributor_count"] == 2
@@ -507,7 +507,7 @@ async def test_group_report_flex_shows_member_names_only_to_manager(test_session
     assert "会員 花子" not in member_json and "管理者のみ" not in member_json
     assert "起業部" in member_json and "あなたの投稿" in member_json
     assert all(x in member_json for x in ("教養", "3件", "×50円", "150円", "専門", "0件", "×30円"))
-    assert "1000001A" not in manager_json  # 学籍番号は出さない
+    assert "2412345A" not in manager_json  # 学籍番号は出さない
     assert await group_report_for_user("U_NOBODY") is None
 
 
@@ -524,3 +524,18 @@ async def test_admin_can_set_manager_only_from_group_members(http_client_factory
     await client.post(f"/admin/groups/{gid}/manager", data={"line_user_id": ""})  # 空欄で解除
     async with test_sessionmaker() as s:
         assert (await s.get(Group, gid)).manager_line_user_id is None
+
+
+def test_grade_label_from_student_id_and_academic_year():
+    from datetime import UTC, datetime
+
+    from core.groups import grade_label
+    sept_2026 = datetime(2026, 9, 27, tzinfo=UTC)
+    assert grade_label("2612345A", sept_2026) == "1回生"
+    assert grade_label("2412345A", sept_2026) == "3回生"
+    # 年度は4月始まり: 2027年3月はまだ2026年度なので26入学は1回生、4月から2回生
+    assert grade_label("2612345A", datetime(2027, 3, 31, tzinfo=UTC)) == "1回生"
+    assert grade_label("2612345A", datetime(2027, 4, 1, tzinfo=UTC)) == "2回生"
+    # 読み取れない・入学前・年数が不自然なものは空文字
+    for bad in ("", None, "X612345A", "2", "2712345A", "1012345A"):
+        assert grade_label(bad, sept_2026) == ""

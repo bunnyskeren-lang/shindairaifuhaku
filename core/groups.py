@@ -12,6 +12,7 @@
 """
 import secrets
 import unicodedata
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import distinct, func, select
 
@@ -145,6 +146,23 @@ async def group_stats(session) -> dict[int, dict]:
 
 # ── LINE botの「団体」（団体の成果の確認）────────────────────────────────
 
+_MAX_GRADE = 8  # 医学部6年＋留年の余裕。これを超える（＝入学年度として不自然な）学籍番号は学年を出さない
+
+
+def grade_label(student_id: str | None, now: datetime | None = None) -> str:
+    """学籍番号の上2桁（入学年度の下2桁）から「N回生」を返す。読み取れなければ空文字。
+
+    年度は4月始まり（JST）。2026年度（2026/4〜2027/3）に上2桁が26なら1回生。
+    """
+    head = (student_id or "")[:2]
+    if len(head) != 2 or not head.isdigit():
+        return ""
+    jst = (now or datetime.now(UTC)) + timedelta(hours=9)
+    academic_year = jst.year if jst.month >= 4 else jst.year - 1
+    grade = academic_year - (2000 + int(head)) + 1
+    return f"{grade}回生" if 1 <= grade <= _MAX_GRADE else ""
+
+
 async def group_of_user(session, line_user_id: str) -> Group | None:
     """この会員が所属する有効な団体（無ければNone）。"""
     if not line_user_id:
@@ -162,7 +180,7 @@ async def group_report(session, group: Group, line_user_id: str) -> dict:
     """団体の成果を返す。全会員向けは団体全体の集計と本人の件数、団体の管理者にだけ、
     承認済みレビューを投稿した会員の氏名と件数の一覧（members）を付ける。
 
-    氏名は`user_profiles.name`（同じ学籍番号に複数のプロフィールがあれば先頭）。学籍番号・学部は返さない。
+    氏名は`user_profiles.name`（同じ学籍番号に複数のプロフィールがあれば先頭）、学年は学籍番号の上2桁から求める（`grade_label`）。学籍番号そのもの・学部は返さない。
     件数の対象は支払額と同じ（団体コードを入力して投稿した承認済みレビュー）。
     """
     info = dict((await group_stats(session)).get(group.id) or group_payout_breakdown(0, 0, 0))
@@ -188,8 +206,8 @@ async def group_report(session, group: Group, line_user_id: str) -> dict:
             .group_by(UserProfile.student_id)
         )).all())
         info["members"] = sorted(
-            ((names.get(sid) or "（氏名不明）", n) for sid, n in counts.items()),
-            key=lambda x: (-x[1], x[0]),
+            ((names.get(sid) or "（氏名不明）", grade_label(sid), n) for sid, n in counts.items()),
+            key=lambda x: (-x[2], x[0]),
         )
     return info
 
