@@ -165,10 +165,13 @@ async def test_admin_funnel_stats_counts_events_sources_and_db_rows(test_session
         s.add_all([
             FunnelEvent(event="join_view", source="discord_0925"),
             FunnelEvent(event="join_view", source="discord_0925"),
+            FunnelEvent(event="join_view", source="hp"),
+            FunnelEvent(event="hp_view", source="linebot"),
+            FunnelEvent(event="hp_view", source=""),
+            FunnelEvent(event="hp_view", source="discord_0925"),
+            FunnelEvent(event="join_view", source="newsletter"),
+            FunnelEvent(event="join_view", source=""),
             FunnelEvent(event="register_view", visitor_id="a" * 32),
-            FunnelEvent(event="register_view", visitor_id="a" * 32),
-            FunnelEvent(event="register_view", visitor_id="b" * 32),
-            FunnelEvent(event="register_done", visitor_id="a" * 32),
         ])
         s.add(UserProfile(line_user_id="U" + "1" * 32, name="テスト", student_id="1234567S"))
         await s.commit()
@@ -176,19 +179,16 @@ async def test_admin_funnel_stats_counts_events_sources_and_db_rows(test_session
     async with test_sessionmaker() as s:
         stats = await admin_stats._funnel_stats(s)
 
-    totals = {t["event"]: t for t in stats["totals"]}
-    assert (totals["join_view"]["views"], totals["join_view"]["uniques"]) == (2, 0)
-    assert (totals["register_view"]["views"], totals["register_view"]["uniques"]) == (3, 2)
-    assert (totals["register_done"]["views"], totals["register_done"]["uniques"]) == (1, 1)
-    assert totals["review_form_view"]["views"] == 0
-    assert [t["event"] for t in stats["totals"]] == list(funnel.FUNNEL_EVENTS_IN_ORDER)
+    groups = {g["key"]: g["views"] for g in stats["source_groups"]}
+    assert groups == {"hp": 1, "discord": 2, "other": 1, "none": 1}
+    assert stats["sources"] == [
+        {"source": "discord_0925", "views": 2}, {"source": "hp", "views": 1}, {"source": "newsletter", "views": 1},
+    ]
 
-    assert stats["sources"] == [{"source": "discord_0925", "label": "友だち追加ページ", "views": 2}]
+    assert [h["views"] for h in stats["hp_views"]] == [1, 2]
 
     today = stats["daily_rows"][0]
-    assert today["join_view"] == 2
-    assert today["register_view"] == 3
-    assert today["register_done"] == 1
+    assert (today["hp"], today["discord"], today["other"], today["none"]) == (1, 2, 1, 1)
     assert today["profiles"] == 1
     assert len(stats["daily_rows"]) == admin_stats.FUNNEL_DAILY_DAYS
 
@@ -209,10 +209,9 @@ async def test_admin_usage_stats_page_renders_funnel_section(http_client_factory
     client.cookies.set(ADMIN_COOKIE, make_admin_token())
     resp = await client.get("/admin/usage-stats")
     assert resp.status_code == 200
-    assert "登録までの漏斗" in resp.text
-    assert "登録画面" in resp.text
-    assert "discord_0925" in resp.text  # 流入元別の表
-    assert "LINE友だち追加者の内訳" in resp.text
+    assert "友だち追加の漏斗" in resp.text
+    assert "ホームページ" in resp.text
+    assert "友だち追加した人の登録までの流れ" in resp.text
 
 
 # ── LINE友だち追加者の3グループ ─────────────────────────────────────────────

@@ -117,7 +117,7 @@ async def test_funnel_stats_and_taps_and_views_split_by_channel(test_sessionmake
         await s.commit()
     async with test_sessionmaker() as s:
         def views(stats):
-            return {t["event"]: t["views"] for t in stats["totals"]}["join_view"]
+            return sum(g["views"] for g in stats["source_groups"])
         assert views(await admin_stats._funnel_stats(s, "main")) == 2
         assert views(await admin_stats._funnel_stats(s, "guest")) == 1
         assert views(await admin_stats._funnel_stats(s, "all")) == 3

@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from core import cache
 from core.config import IS_DEV, JST, VAPID_PUBLIC_KEY
-from core.funnel import FUNNEL_EVENTS_IN_ORDER
+from core.funnel import EVENT_HP_VIEW, EVENT_JOIN_VIEW
 from core.security import check_admin
 from core.templates import templates
 from routers.admin._common import admin_channel, channel_conds
@@ -17,17 +17,24 @@ from models import (
 
 router = APIRouter()
 
-# 漏斗の表示名（core/funnel.py の EVENT_* と対応）
-FUNNEL_LABELS = {
-    "hp_view": "ホームページ",
-    "join_view": "友だち追加ページ",
-    "liff_review_view": "レビュー投稿リンクを開いた(入口)",
-    "review_form_view": "レビュー投稿フォーム",
-    "register_view": "会員登録フォーム",
-    "register_done": "会員登録完了(新規)",
-}
+# 友だち追加ページ（/join）の流入元。リンクの `?src=` で分類する（core/funnel.py）。
+# hp=ホームページのボタン（src=hp）、discord=Discordに貼ったリンク（src=discord_0925 等）
+FRIEND_SOURCE_GROUPS = (
+    ("hp", "ホームページ"),
+    ("discord", "Discord"),
+    ("other", "その他（?src=付き）"),
+    ("none", "流入元不明（?src=なし）"),
+)
 FUNNEL_TOTAL_DAYS = 30
 FUNNEL_DAILY_DAYS = 14
+
+
+def _friend_source_group(source: str) -> str:
+    if source == "hp":
+        return "hp"
+    if source.startswith("discord"):
+        return "discord"
+    return "other" if source else "none"
 
 
 def _aware(dt: datetime) -> datetime:
@@ -120,50 +127,28 @@ async def _friend_breakdown(session, ch: str = "all") -> dict:
 
 
 async def _funnel_stats(session, ch: str = "all") -> dict:
-    """funnel_events（core/funnel.py）と会員登録・レビュー投稿から、段階ごとの到達数を集計する。
+    """友だち追加ページ（/join）が開かれた回数を、流入元（HP / Discord / その他 / 不明）別に集計する。
 
-    日別はSQL側でJST日付に丸めず、直近14日分の行をPythonで丸める（SQLiteのテストでも動かすため。
-    行数は画面表示1回につき高々数万行で、ページ表示ごとの記録なので十分小さい）。
+    LINEの仕様で友だち追加した個人の流入元までは特定できないため、「友だち追加ページを開いた回数」
+    が流入元別に分かる最も近い指標になる。日別はSQL側でJST日付に丸めず、直近14日分の行をPythonで
+    丸める（SQLiteのテストでも動かすため。行数は高々数万行で十分小さい）。
     """
     now = datetime.now(JST)
     since_total = now - timedelta(days=FUNNEL_TOTAL_DAYS)
     since_daily = (now - timedelta(days=FUNNEL_DAILY_DAYS - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    total_rows = (await session.execute(
-        select(
-            FunnelEvent.event,
-            func.count(FunnelEvent.id).label("views"),
-            func.count(func.distinct(FunnelEvent.visitor_id)).label("uniques"),
-        )
-        .where(FunnelEvent.created_at >= since_total, *channel_conds(FunnelEvent.channel, ch))
-        .group_by(FunnelEvent.event)
-    )).all()
-    by_event = {r.event: r for r in total_rows}
-    totals = [
-        {
-            "event": e, "label": FUNNEL_LABELS.get(e, e),
-            "views": int(by_event[e].views) if e in by_event else 0,
-            "uniques": int(by_event[e].uniques) if e in by_event else 0,
-        }
-        for e in FUNNEL_EVENTS_IN_ORDER
-    ]
-
-    source_rows = (await session.execute(
-        select(FunnelEvent.source, FunnelEvent.event, func.count(FunnelEvent.id).label("views"))
-        .where(FunnelEvent.created_at >= since_total, FunnelEvent.source != "", *channel_conds(FunnelEvent.channel, ch))
-        .group_by(FunnelEvent.source, FunnelEvent.event)
-        .order_by(FunnelEvent.source, FunnelEvent.event)
-    )).all()
-    sources = [
-        {"source": r.source, "label": FUNNEL_LABELS.get(r.event, r.event), "views": int(r.views)}
-        for r in source_rows
-    ]
-
-    event_times = (await session.execute(
-        select(FunnelEvent.event, FunnelEvent.created_at).where(
-            FunnelEvent.created_at >= since_daily, *channel_conds(FunnelEvent.channel, ch)
+    join_rows = (await session.execute(
+        select(FunnelEvent.source, FunnelEvent.created_at).where(
+            FunnelEvent.event == EVENT_JOIN_VIEW, FunnelEvent.created_at >= since_total,
+            *channel_conds(FunnelEvent.channel, ch),
         )
     )).all()
+    hp_sources = (await session.execute(
+        select(FunnelEvent.source).where(
+            FunnelEvent.event == EVENT_HP_VIEW, FunnelEvent.created_at >= since_total,
+            *channel_conds(FunnelEvent.channel, ch),
+        )
+    )).scalars().all()
     profile_times = (await session.execute(
         select(UserProfile.created_at).where(UserProfile.created_at >= since_daily, *_profile_conds(ch))
     )).scalars().all()
@@ -178,12 +163,19 @@ async def _funnel_stats(session, ch: str = "all") -> dict:
             dt = dt.replace(tzinfo=UTC)
         return dt.astimezone(JST).strftime("%m/%d")
 
+    group_keys = [k for k, _ in FRIEND_SOURCE_GROUPS]
     days = [(now - timedelta(days=i)).strftime("%m/%d") for i in range(FUNNEL_DAILY_DAYS)]
-    daily = {d: {e: 0 for e in FUNNEL_EVENTS_IN_ORDER} | {"profiles": 0, "reviews": 0} for d in days}
-    for event, created in event_times:
+    daily = {d: dict.fromkeys(group_keys, 0) | {"profiles": 0, "reviews": 0} for d in days}
+    group_totals = dict.fromkeys(group_keys, 0)
+    source_totals: dict[str, int] = {}
+    for source, created in join_rows:
+        g = _friend_source_group(source)
+        group_totals[g] += 1
+        if source:
+            source_totals[source] = source_totals.get(source, 0) + 1
         d = _day(created)
-        if d in daily and event in daily[d]:
-            daily[d][event] += 1
+        if d in daily:
+            daily[d][g] += 1
     for created in profile_times:
         d = _day(created)
         if d in daily:
@@ -195,10 +187,14 @@ async def _funnel_stats(session, ch: str = "all") -> dict:
 
     return {
         "friends": await _friend_breakdown(session, ch),
-        "totals": totals,
-        "sources": sources,
+        "source_groups": [{"key": k, "label": label, "views": group_totals[k]} for k, label in FRIEND_SOURCE_GROUPS],
+        # HP閲覧: botの案内リンク（?src=linebot）からか、それ以外（Discord・直接アクセス等）か
+        "hp_views": [
+            {"label": "LINE botから", "views": sum(1 for x in hp_sources if x == "linebot")},
+            {"label": "その他（Discord・直接アクセス等）", "views": sum(1 for x in hp_sources if x != "linebot")},
+        ],
+        "sources": [{"source": k, "views": v} for k, v in sorted(source_totals.items())],
         "daily_rows": [{"day": d, **daily[d]} for d in days],
-        "events_in_order": [{"event": e, "label": FUNNEL_LABELS.get(e, e)} for e in FUNNEL_EVENTS_IN_ORDER],
         "total_days": FUNNEL_TOTAL_DAYS,
     }
 

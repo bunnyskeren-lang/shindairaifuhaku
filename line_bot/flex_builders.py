@@ -314,7 +314,7 @@ def _text_link(label: str, action) -> FlexBox:
 
 
 def _hp_link() -> FlexBox:
-    return _text_link("神大ライフハックHPを見る", URIAction(label="神大ライフハックHPを見る", uri=HP_URL))
+    return _text_link("神大ライフハックHPを見る", URIAction(label="神大ライフハックHPを見る", uri=HP_URL + "?src=linebot"))
 
 
 def make_operator_info_flex() -> FlexMessage:
