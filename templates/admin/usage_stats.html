@@ -28,6 +28,14 @@
     </table>
   </div>
   <p style="color:#9ca3af;font-size:12px;margin:4px 0 12px">「LINE botから」は、友だち追加カード等の「神大ライフハックHPを見る」ボタン（<code>/hp?src=linebot</code>）経由です。この案内の付与は2026-09-27以降で、それ以前のbot経由は「その他」に入ります。</p>
+  {% if funnel.hp_sources %}
+  <details style="margin-top:4px"><summary style="cursor:pointer;font-size:13px">HPの?src=の値ごとの内訳</summary>
+    <div class="table-wrap"><table>
+      <thead><tr><th>src</th><th style="text-align:right">回数</th></tr></thead>
+      <tbody>{% for s in funnel.hp_sources %}<tr><td>{{ s.source }}</td><td style="text-align:right">{{ s.views }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
   <div class="section-title" style="margin-top:8px;font-size:14px">どこから友だち追加ページに来たか（直近{{ funnel.total_days }}日）</div>
   <div class="table-wrap">
     <table>

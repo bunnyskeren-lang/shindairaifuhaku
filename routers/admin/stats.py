@@ -168,6 +168,10 @@ async def _funnel_stats(session, ch: str = "all") -> dict:
     daily = {d: dict.fromkeys(group_keys, 0) | {"profiles": 0, "reviews": 0} for d in days}
     group_totals = dict.fromkeys(group_keys, 0)
     source_totals: dict[str, int] = {}
+    hp_source_totals: dict[str, int] = {}
+    for source in hp_sources:
+        key = source or "(なし)"
+        hp_source_totals[key] = hp_source_totals.get(key, 0) + 1
     for source, created in join_rows:
         g = _friend_source_group(source)
         group_totals[g] += 1
@@ -193,6 +197,7 @@ async def _funnel_stats(session, ch: str = "all") -> dict:
             {"label": "LINE botから", "views": sum(1 for x in hp_sources if x == "linebot")},
             {"label": "その他（Discord・直接アクセス等）", "views": sum(1 for x in hp_sources if x != "linebot")},
         ],
+        "hp_sources": [{"source": k, "views": v} for k, v in sorted(hp_source_totals.items())],
         "sources": [{"source": k, "views": v} for k, v in sorted(source_totals.items())],
         "daily_rows": [{"day": d, **daily[d]} for d in days],
         "total_days": FUNNEL_TOTAL_DAYS,
