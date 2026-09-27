@@ -21,10 +21,10 @@ router = APIRouter()
 FUNNEL_LABELS = {
     "hp_view": "ホームページ",
     "join_view": "友だち追加ページ",
-    "liff_review_view": "投稿フォーム(LIFF中継)",
-    "review_form_view": "投稿フォーム",
-    "register_view": "登録画面",
-    "register_done": "登録完了(新規)",
+    "liff_review_view": "レビュー投稿リンクを開いた(入口)",
+    "review_form_view": "レビュー投稿フォーム",
+    "register_view": "会員登録フォーム",
+    "register_done": "会員登録完了(新規)",
 }
 FUNNEL_TOTAL_DAYS = 30
 FUNNEL_DAILY_DAYS = 14
