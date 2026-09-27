@@ -458,6 +458,20 @@ def make_group_members_flex(group_name: str, members: list) -> FlexMessage:
     )
 
 
+def make_no_group_flex() -> FlexMessage:
+    """「団体」を送ったが団体に所属していない会員への返信カード（見出し＋団体コードの入力方法）。"""
+    return FlexMessage(
+        alt_text="団体に所属していません",
+        contents=FlexBubble(body=FlexBox(layout="vertical", spacing="md", padding_all="lg", contents=[
+            FlexText(text="団体に所属していません", weight="bold", size="md", color="#0f172a"),
+            FlexText(
+                text="サークル等から案内された「団体コード」を、レビュー投稿フォームの団体コード欄に入力して投稿すると、その団体の成果をここで確認できます。",
+                size="sm", color="#475569", wrap=True,
+            ),
+        ])),
+    )
+
+
 def make_registration_flex(register_url: str) -> FlexMessage:
     return FlexMessage(
         alt_text="🎓 神大ライフハックへようこそ！会員登録をお願いします",

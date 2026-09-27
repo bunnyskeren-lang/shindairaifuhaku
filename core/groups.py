@@ -212,13 +212,6 @@ async def group_report(session, group: Group, line_user_id: str) -> dict:
     return info
 
 
-NO_GROUP_TEXT = (
-    "団体に所属していません。\n"
-    "サークル等から案内された「団体コード」を、レビュー投稿フォームの団体コード欄に入力して投稿すると、"
-    "その団体の成果をここで確認できます。"
-)
-
-
 async def group_report_for_user(line_user_id: str) -> tuple[str, dict] | None:
     """LINE botの「団体」用。所属団体の(団体名, group_report()の結果)を返す。所属団体が無ければNone。"""
     from database import AsyncSessionLocal  # モジュールimport時のDB接続を避けるため関数内で読む

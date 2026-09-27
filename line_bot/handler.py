@@ -37,7 +37,7 @@ from core.config import (
     make_review_liff_url,
     subject_sort_reading_key,
 )
-from core.groups import NO_GROUP_TEXT, group_report_for_user
+from core.groups import group_report_for_user
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
     LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS,
@@ -56,6 +56,7 @@ from line_bot.flex_builders import (
     GROUP_MEMBERS_TEXT,
     make_group_members_flex,
     make_group_report_flex,
+    make_no_group_flex,
     get_course_flex,
     make_category_entry_flex,
     make_classification_grid_flex,
@@ -1241,13 +1242,13 @@ async def handle_message(text: str, user_id: str = "") -> list:
     if t in ["団体", "団体の成果", "団体成果"]:
         report = await group_report_for_user(user_id)
         if report is None:
-            return [TextMessage(text=NO_GROUP_TEXT)]
+            return [make_no_group_flex()]
         return [make_group_report_flex(*report)]
 
     if t == GROUP_MEMBERS_TEXT:
         report = await group_report_for_user(user_id)
         if report is None:
-            return [TextMessage(text=NO_GROUP_TEXT)]
+            return [make_no_group_flex()]
         if not report[1]["is_manager"]:
             return [TextMessage(text="団体の会員一覧は、団体の管理者だけが見られます。")]
         return [make_group_members_flex(report[0], report[1]["members"])]
