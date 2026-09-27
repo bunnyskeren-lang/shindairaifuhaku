@@ -379,15 +379,15 @@ def _group_member_row(rank: int, name: str, grade: str, n: int) -> FlexBox:
 
 def _group_header(group_name: str, sub: str, big: str | None = None) -> FlexBox:
     contents = [
-        FlexText(text=sub, size="xxs", color="#bbf7d0"),
-        FlexText(text=group_name, weight="bold", size="md", color="#ffffff", wrap=True),
+        FlexText(text=sub, size="xxs", color="#15803d"),
+        FlexText(text=group_name, weight="bold", size="md", color="#14532d", wrap=True),
     ]
     if big is not None:
         contents += [
-            FlexText(text="謝礼の累計", size="xxs", color="#bbf7d0", margin="lg"),
-            FlexText(text=big, weight="bold", size="3xl", color="#ffffff"),
+            FlexText(text="謝礼の累計", size="xxs", color="#15803d", margin="lg"),
+            FlexText(text=big, weight="bold", size="3xl", color="#14532d"),
         ]
-    return FlexBox(layout="vertical", background_color="#14532d", padding_all="lg", contents=contents)
+    return FlexBox(layout="vertical", background_color="#ffffff", padding_all="lg", contents=contents)
 
 
 def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
