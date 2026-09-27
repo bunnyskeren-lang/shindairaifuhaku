@@ -2,12 +2,14 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="only light">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>神大ライフハック</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
 
   :root{
+    color-scheme:light;
     --bg:#F4F6EF;
     --surface:#FFFFFF;
     --surface-alt:#EAEEE1;
@@ -25,25 +27,6 @@
     --bubble-bot-text:#1B1F19;
     --shadow: 0 18px 40px -22px rgba(20,30,15,0.35);
   }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      color-scheme:dark;
-      --bg:#12150F; --surface:#1A1E15; --surface-alt:#20241A; --surface-sunk:#171B12;
-      --ink:#EDEFE4; --muted:#A3AA96; --muted-2:#7C8471; --border:#2B301F;
-      --line:#22D673; --line-deep:#1AB360; --line-ink:#EAFBF0;
-      --amber:#F0B85B; --amber-bg:#2C230F; --bubble-bot:#242A1B; --bubble-bot-text:#EDEFE4;
-      --shadow: 0 18px 40px -20px rgba(0,0,0,0.6);
-    }
-  }
-  :root[data-theme="dark"]{
-    color-scheme:dark;
-    --bg:#12150F; --surface:#1A1E15; --surface-alt:#20241A; --surface-sunk:#171B12;
-    --ink:#EDEFE4; --muted:#A3AA96; --muted-2:#7C8471; --border:#2B301F;
-    --line:#22D673; --line-deep:#1AB360; --line-ink:#EAFBF0;
-    --amber:#F0B85B; --amber-bg:#2C230F; --bubble-bot:#242A1B; --bubble-bot-text:#EDEFE4;
-    --shadow: 0 18px 40px -20px rgba(0,0,0,0.6);
-  }
-
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
   body{
@@ -318,11 +301,11 @@
   .biz-value h3{font-size:14.5px; font-weight:700;}
   .biz-value p{margin-top:7px; font-size:13px; color:var(--muted);}
   .biz-status{
-    margin-top:32px; background:var(--line-ink); color:#EAF7EE; border-radius:20px; padding:28px 30px;
+    margin-top:32px; background:#0A2E17; color:#EAF7EE; border-radius:20px; padding:28px 30px;
     display:flex; flex-wrap:wrap; gap:24px; align-items:center; justify-content:space-between;
   }
   .biz-status p{font-size:13.5px; color:#BFE7CC; max-width:52ch;}
-  .biz-status .btn-primary{background:#fff; color:var(--line-ink); box-shadow:none;}
+  .biz-status .btn-primary{background:#fff; color:#0A2E17; box-shadow:none;}
   .biz-status .btn-primary:hover{background:#EAF7EE;}
 
   /* ---------- group (団体協力) ---------- */
@@ -442,7 +425,6 @@
   .tk-row small{font-size:15px;}
   .tk-earn-s{font-size:12.5px; color:#78350F; margin-top:10px;}
   .tk-note{margin-top:-4px; font-size:12px; color:var(--muted-2);}
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .tk-earn-s{color:#FDE68A;} }
 
   /* ---------- mini faq ---------- */
   .faq-list{display:flex; flex-direction:column; gap:12px; margin-top:36px;}
