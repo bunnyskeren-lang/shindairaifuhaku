@@ -369,33 +369,29 @@
   /* ---------- walkthrough (スクショ＋吹き出し) ---------- */
   .walk-h{display:flex; align-items:center; gap:10px; margin:0 0 16px; font-size:17px; font-weight:900;}
   .walk-h .tag{background:var(--line); color:#fff; font-size:11.5px; letter-spacing:.08em; padding:4px 11px; border-radius:999px;}
-  .walk{display:grid; grid-template-columns:minmax(0,290px) 1fr; gap:34px; align-items:start; margin-bottom:52px;}
-  @media (max-width:760px){ .walk{grid-template-columns:1fr; gap:18px; margin-bottom:38px;} }
-  .shot{position:relative; width:min(290px,100%); margin-inline:auto; background:#0d0f0b; border-radius:30px; padding:10px; box-shadow:var(--shadow);}
+  .walks{display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:44px 96px; margin-bottom:52px;}
+  .walk{display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .walk .walk-h{margin:0;}
+  .shot{position:relative; width:290px; background:#0d0f0b; border-radius:30px; padding:10px; box-shadow:var(--shadow);}
   .shot img{display:block; width:100%; height:auto; border-radius:21px;}
-  .pin{
-    position:absolute; transform:translate(-50%,-50%); width:30px; height:30px; border-radius:50%;
-    background:var(--line); color:#fff; font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center;
-    font-family:"Zen Maru Gothic",sans-serif; box-shadow:0 0 0 3px #fff, 0 4px 10px rgba(0,0,0,.35);
+  /* 画像に重ねる吹き出し。位置は端末枠に対する%で指定し、しっぽ(::after)は--tで位置を決める */
+  .bub{
+    position:absolute; z-index:2; background:#058A3E; color:#fff; border-radius:16px; padding:8px 12px;
+    font-size:12px; font-weight:500; line-height:1.45; filter:drop-shadow(0 6px 8px rgba(0,0,0,.35));
   }
-  .says{display:flex; flex-direction:column; gap:14px; padding-top:6px;}
-  .say{display:flex; align-items:flex-start; gap:12px;}
-  .say .pin-n{
-    flex:none; width:30px; height:30px; border-radius:50%; background:var(--line); color:#fff; font-weight:900; font-size:15px;
-    display:flex; align-items:center; justify-content:center; font-family:"Zen Maru Gothic",sans-serif; margin-top:6px;
-  }
-  .talk{
-    position:relative; background:var(--surface); border:1.5px solid var(--border); border-radius:6px 20px 20px 20px;
-    padding:12px 16px; font-size:16px; font-weight:700; line-height:1.55; box-shadow:0 6px 16px -10px rgba(20,30,15,.35);
-  }
-  .talk small{display:block; margin-top:3px; font-size:12.5px; font-weight:500; color:var(--muted);}
-  .talk em{font-style:normal; color:var(--line-deep);}
-  .blur-note{margin-top:2px; font-size:12px; color:var(--muted-2);}
+  .bub b{font-size:14px; font-weight:900;}
+  .bub::after{content:""; position:absolute; width:14px; height:14px; background:inherit; transform:rotate(45deg);}
+  .bub.up::after{top:-6px; left:var(--t,30%);}
+  .bub.dn::after{bottom:-6px; left:var(--t,30%);}
+  .bub.lf::after{left:-6px; top:var(--t,16px);}
+  .blur-note{margin:0; font-size:12px; color:var(--muted-2);}
+  /* 狭い画面では端末を小さくして、はみ出す吹き出しが画面外に出ないようにする */
   @media (max-width:600px){
+    .walks{gap:38px 0; margin-bottom:38px;}
     .walk-h{font-size:16px;}
-    .talk{font-size:15px; padding:10px 14px;}
-    .say .pin-n, .pin{width:26px; height:26px; font-size:13px;}
-    .say .pin-n{margin-top:5px;}
+    .shot{width:min(230px,62vw);}
+    .bub{padding:6px 9px; font-size:11px;}
+    .bub b{font-size:12.5px;}
   }
 
   /* ---------- チケット（会員登録完了画面に準拠） ---------- */
@@ -743,34 +739,26 @@
     <p>受けた授業のレビューを書くと、ほかの人のレビューが読めるようになります。</p>
   </div>
 
-  <div class="walk">
-    <div>
+  <div class="walks">
+    <div class="walk">
       <div class="walk-h"><span class="tag">STEP 1</span>LINEのメニューから開く</div>
-      <div class="shot"><img src="/static/hp/menu.jpg" width="870" height="1711" alt="神大ライフハックのLINEトーク画面。楽単5選のランキングとリッチメニュー" loading="lazy">
-        <span class="pin" style="left:72%;top:72%">1</span><span class="pin" style="left:27%;top:84%">2</span><span class="pin" style="left:93%;top:22%">3</span>
+      <div class="shot"><img src="/static/hp/menu.jpg" width="870" height="1711" alt="神大ライフハックのLINEトーク画面。リッチメニューの「レビューを投稿」「レビューを閲覧」「楽単5選」" loading="lazy">
+        <div class="bub dn" style="left:-8.7%;top:57%;width:50%;--t:37%"><b>レビューを投稿</b><br>書くとチケットがもらえる</div>
+        <div class="bub dn" style="left:48.7%;top:57%;width:50%;--t:32%"><b>レビューを閲覧</b><br>先輩のホンネが読める</div>
+        <div class="bub up" style="left:-8.7%;top:92%;width:54.7%;--t:40%"><b>楽単5選</b><br>ワンタップでランキングが分かる</div>
       </div>
     </div>
-    <div class="says">
-      <div class="say"><span class="pin-n">1</span><div class="talk">「<em>レビューを閲覧</em>」をタップ<small>ここから科目を探せます</small></div></div>
-      <div class="say"><span class="pin-n">2</span><div class="talk">「<em>楽単5選</em>」もワンタップ<small>みんなが「楽だった」授業のランキング</small></div></div>
-      <div class="say"><span class="pin-n">3</span><div class="talk"><em>★の数</em>でひと目でわかる<small>タップすると科目の詳細へ</small></div></div>
-    </div>
-  </div>
 
-  <div class="walk">
-    <div>
+    <div class="walk">
       <div class="walk-h"><span class="tag">STEP 2</span>先輩のレビューを読む</div>
       <div class="shot"><img src="/static/hp/review.jpg" width="870" height="1768" alt="科目詳細画面。開講科目・担当教員の絞り込み、シラバスボタン、レビュー（内容はモザイク）" loading="lazy">
-        <span class="pin" style="left:94%;top:13%">1</span><span class="pin" style="left:90%;top:31%">2</span><span class="pin" style="left:60%;top:46%">3</span><span class="pin" style="left:50%;top:52%">4</span><span class="pin" style="left:50%;top:85%">5</span>
+        <div class="bub up" style="right:-10.7%;top:15.5%;width:56%;--t:65%"><b>先生ごと</b>に絞り込める</div>
+        <div class="bub up" style="left:-10.7%;top:36%;width:56%;--t:26%"><b>シラバス</b>にワンタップ</div>
+        <div class="bub lf" style="left:70%;top:42.8%;width:50%;--t:16px"><b>楽単度・充実度</b><br>が一目でわかる</div>
+        <div class="bub lf" style="left:65.3%;top:57.3%;width:56%;--t:18px"><b>成績評価方法</b>まで<br>くわしく</div>
+        <div class="bub lf" style="left:65.3%;top:84.3%;width:56%;--t:14px">先輩の<b>ホンネのコメント</b></div>
       </div>
-    </div>
-    <div class="says">
-      <div class="say"><span class="pin-n">1</span><div class="talk"><em>先生ごと</em>に絞り込める<small>同じ科目名でも先生で全然ちがう</small></div></div>
-      <div class="say"><span class="pin-n">2</span><div class="talk"><em>シラバス</em>にワンタップ<small>公式の授業計画もすぐ見られる</small></div></div>
-      <div class="say"><span class="pin-n">3</span><div class="talk"><em>楽単度・充実度</em>が★でわかる</div></div>
-      <div class="say"><span class="pin-n">4</span><div class="talk"><em>出席・評価方法</em>までくわしく<small>レポート？テスト？出席点？</small></div></div>
-      <div class="say"><span class="pin-n">5</span><div class="talk">先輩の<em>ホンネのコメント</em><small>単位の取りやすさ、授業の雰囲気など</small></div></div>
-      <div class="blur-note">※ 画像の投稿内容は、モザイクをかけています</div>
+      <p class="blur-note">※ 画像の投稿内容は、モザイクをかけています</p>
     </div>
   </div>
 
