@@ -12,7 +12,7 @@ from linebot.v3.messaging import (
 
 from core import cache
 from core.config import (
-    EASE_COLOR, EASE_LABEL, EASE_STARS, HP_URL, PRIVACY_URL, TERMS_URL,
+    EASE_COLOR, EASE_LABEL, EASE_STARS, GROUP_CONTRIBUTOR_BONUS_AMOUNT, HP_URL, PRIVACY_URL, TERMS_URL,
     REVIEW_APPROVAL_UNLOCK_CREDITS_KYOYO, REVIEW_APPROVAL_UNLOCK_CREDITS_SENMON,
     REVIEW_SUBMISSION_CATEGORY, REVIEW_SUBMISSION_RESTRICTED_MESSAGE,
     make_course_liff_url, make_review_liff_url,
@@ -337,6 +337,67 @@ def make_operator_info_flex() -> FlexMessage:
                 ],
             ),
             footer=FlexBox(layout="vertical", padding_all="md", contents=[_hp_link()]),
+        ),
+    )
+
+
+_MAX_GROUP_MEMBER_ROWS = 40  # Flexの大きさ上限に収まる範囲。超えた分は「ほかN人」にまとめる
+
+
+def _group_metric(label: str, value: str) -> FlexBox:
+    return FlexBox(
+        layout="vertical", flex=1, spacing="xs", padding_all="md", background_color="#f0fdf4", corner_radius="md",
+        contents=[
+            FlexText(text=label, size="xxs", color="#15803d", wrap=True),
+            FlexText(text=value, size="lg", weight="bold", color="#14532d", wrap=True),
+        ],
+    )
+
+
+def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
+    """LINE botの「団体」への返信カード。全会員に団体全体の集計と本人の件数、
+    団体の管理者（r["is_manager"]）にだけ、投稿した会員の氏名と件数の一覧（r["members"]）を付ける。"""
+    body: list = [
+        FlexBox(layout="horizontal", spacing="sm", contents=[
+            _group_metric("承認されたレビュー", f"{r['kyoyo_count'] + r['senmon_count']}件"),
+            _group_metric("投稿した人数", f"{r['contributor_count']}人"),
+        ]),
+        FlexBox(layout="horizontal", spacing="sm", contents=[
+            _group_metric("謝礼の累計", f"{r['accrued']:,}円"),
+            _group_metric("あなたの投稿", f"{r['my_count']}件"),
+        ]),
+        FlexText(
+            text=f"あと{r['bonus_remaining']}人が投稿すると、+{GROUP_CONTRIBUTOR_BONUS_AMOUNT:,}円",
+            size="xs", color="#15803d", wrap=True, margin="md",
+        ),
+        FlexText(
+            text=f"内訳：教養{r['kyoyo_count']}件・専門{r['senmon_count']}件",
+            size="xxs", color="#64748b", wrap=True,
+        ),
+    ]
+    if r["is_manager"]:
+        rows = r["members"][:_MAX_GROUP_MEMBER_ROWS]
+        body.append(FlexText(text="👥 投稿した会員（管理者のみ表示）", size="sm", weight="bold", color="#14532d", margin="lg"))
+        if not rows:
+            body.append(FlexText(text="まだいません", size="sm", color="#64748b"))
+        for name, n in rows:
+            body.append(FlexBox(layout="horizontal", margin="sm", contents=[
+                FlexText(text=name, size="sm", color="#1e293b", flex=4, wrap=True),
+                FlexText(text=f"{n}件", size="sm", color="#1e293b", weight="bold", align="end", flex=1),
+            ]))
+        if len(r["members"]) > len(rows):
+            body.append(FlexText(text=f"ほか{len(r['members']) - len(rows)}人", size="xs", color="#64748b", margin="sm"))
+    return FlexMessage(
+        alt_text=f"{group_name} の成果",
+        contents=FlexBubble(
+            header=FlexBox(
+                layout="vertical", background_color="#dcfce7", padding_all="lg",
+                contents=[
+                    FlexText(text="🤝 団体の成果", size="xs", color="#15803d"),
+                    FlexText(text=group_name, weight="bold", size="lg", color="#14532d", wrap=True),
+                ],
+            ),
+            body=FlexBox(layout="vertical", spacing="sm", padding_all="lg", contents=body),
         ),
     )
 

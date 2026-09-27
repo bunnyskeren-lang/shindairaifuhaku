@@ -194,8 +194,6 @@ async def group_report(session, group: Group, line_user_id: str) -> dict:
     return info
 
 
-_MAX_MEMBER_LINES = 60  # LINEのテキスト上限（5000字）に収まる範囲
-
 NO_GROUP_TEXT = (
     "団体に所属していません。\n"
     "サークル等から案内された「団体コード」を、レビュー投稿フォームの団体コード欄に入力して投稿すると、"
@@ -203,29 +201,12 @@ NO_GROUP_TEXT = (
 )
 
 
-async def group_report_text(line_user_id: str) -> str:
-    """LINE botの「団体」への返信本文。所属団体が無ければ案内文を返す。"""
+async def group_report_for_user(line_user_id: str) -> tuple[str, dict] | None:
+    """LINE botの「団体」用。所属団体の(団体名, group_report()の結果)を返す。所属団体が無ければNone。"""
     from database import AsyncSessionLocal  # モジュールimport時のDB接続を避けるため関数内で読む
 
     async with AsyncSessionLocal() as session:
         group = await group_of_user(session, line_user_id)
         if group is None:
-            return NO_GROUP_TEXT
-        r = await group_report(session, group, line_user_id)
-    lines = [
-        f"🤝 {group.name} の成果",
-        "",
-        f"承認されたレビュー：教養{r['kyoyo_count']}件・専門{r['senmon_count']}件",
-        f"投稿した人数：{r['contributor_count']}人（あと{r['bonus_remaining']}人で+{GROUP_CONTRIBUTOR_BONUS_AMOUNT}円）",
-        f"謝礼の累計：{r['accrued']}円",
-        f"あなたの投稿：{r['my_count']}件",
-    ]
-    if r["is_manager"]:
-        lines += ["", "👥 投稿した会員（管理者のみ表示）"]
-        if not r["members"]:
-            lines.append("まだいません")
-        for name, n in r["members"][:_MAX_MEMBER_LINES]:
-            lines.append(f"・{name}　{n}件")
-        if len(r["members"]) > _MAX_MEMBER_LINES:
-            lines.append(f"ほか{len(r['members']) - _MAX_MEMBER_LINES}人")
-    return "\n".join(lines)
+            return None
+        return group.name, await group_report(session, group, line_user_id)

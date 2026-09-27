@@ -1,4 +1,6 @@
 """団体（サークル等）経由のレビュー収集（core/groups.py・団体コード欄・/admin/groups）のテスト。"""
+import json
+
 import pytest
 from sqlalchemy import select
 
@@ -489,17 +491,23 @@ async def test_group_report_lists_members_only_to_manager(test_sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_group_report_text_hides_member_names_from_non_managers(test_sessionmaker, monkeypatch):
-    from core.groups import NO_GROUP_TEXT, group_report_text
+async def test_group_report_flex_shows_member_names_only_to_manager(test_sessionmaker, monkeypatch):
+    from core.groups import group_report_for_user
+    from line_bot.flex_builders import make_group_report_flex
     monkeypatch.setattr("database.AsyncSessionLocal", test_sessionmaker)
     await _seed_report(test_sessionmaker)
-    manager_text = await group_report_text("U_M1")
-    member_text = await group_report_text("U_M2")
-    assert "管理者のみ表示" in manager_text and "会員 花子　1件" in manager_text
-    assert "会員 花子" not in member_text and "管理者のみ" not in member_text
-    assert "あなたの投稿：1件" in member_text and "起業部 の成果" in member_text
-    assert "1000001A" not in manager_text  # 学籍番号は出さない
-    assert await group_report_text("U_NOBODY") == NO_GROUP_TEXT
+
+    def render(uid_report):
+        name, r = uid_report
+        return json.dumps(json.loads(make_group_report_flex(name, r).to_json()), ensure_ascii=False)
+
+    manager_json = render(await group_report_for_user("U_M1"))
+    member_json = render(await group_report_for_user("U_M2"))
+    assert "管理者のみ表示" in manager_json and "会員 花子" in manager_json and "1件" in manager_json
+    assert "会員 花子" not in member_json and "管理者のみ" not in member_json
+    assert "起業部" in member_json and "あなたの投稿" in member_json
+    assert "1000001A" not in manager_json  # 学籍番号は出さない
+    assert await group_report_for_user("U_NOBODY") is None
 
 
 @pytest.mark.asyncio

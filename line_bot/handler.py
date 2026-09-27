@@ -37,7 +37,7 @@ from core.config import (
     make_review_liff_url,
     subject_sort_reading_key,
 )
-from core.groups import group_report_text
+from core.groups import NO_GROUP_TEXT, group_report_for_user
 from core.subject_variants import (
     CLASSIFICATION_MERGE_EXCLUDED,
     LETTER_ONLY_MERGE_INCLUDED_CLASSIFICATIONS,
@@ -53,6 +53,7 @@ from core.subject_variants import (
     variant_tag_in_suffix,
 )
 from line_bot.flex_builders import (
+    make_group_report_flex,
     get_course_flex,
     make_category_entry_flex,
     make_classification_grid_flex,
@@ -1236,7 +1237,10 @@ async def handle_message(text: str, user_id: str = "") -> list:
         return [TextMessage(text=f"📝 以下のフォームからレビューを投稿できます！\n\n{url}")]
 
     if t in ["団体", "団体の成果", "団体成果"]:
-        return [TextMessage(text=await group_report_text(user_id))]
+        report = await group_report_for_user(user_id)
+        if report is None:
+            return [TextMessage(text=NO_GROUP_TEXT)]
+        return [make_group_report_flex(*report)]
 
     if t in ["生協", "生協アプリ", "coop"]:
         return [FlexMessage(alt_text="🛒 生協アプリ", contents=FlexBubble(
