@@ -981,17 +981,16 @@ def invalidate_ban_cache(line_user_id: str) -> None:
 #   （routers/liff_api.py /api/course/{id}/unlock）の直後に
 #   invalidate_linebot_user_state() でキャッシュを落とすため取りこぼさない
 _LINEBOT_USER_STATE_TTL = 60
+# TTL（60秒）を過ぎても、この秒数以内なら古い値を即返しつつ裏で更新する（stale-while-revalidate）。
+# TTL切れの最初の1回がDB往復（devはNullPoolで接続確立込み0.4〜2秒）を待たされ、DB不要な
+# 「使い方」等でもslow判定になっていたため（2026-09-27、dev debug_logs分析）。
+# banの反映遅延は最大でTTL+次の1操作ぶん。管理画面のBAN/解除は同一プロセスなら即invalidateされる
+_LINEBOT_USER_STATE_STALE_MAX = 1800
 _linebot_user_state_cache: dict[str, tuple[bool, bool, frozenset[int], float]] = {}
+_linebot_user_state_refreshing: set[str] = set()
 
 
-async def get_linebot_user_state_cached(line_user_id: str) -> tuple[bool, bool, frozenset[int]]:
-    """(banned, registration_complete, unlocked_subject_ids) を1回のDBセッションで取得し
-    _LINEBOT_USER_STATE_TTL 秒キャッシュする。line_user_id が空なら即デフォルトを返す。"""
-    if not line_user_id:
-        return False, False, frozenset()
-    cached = _linebot_user_state_cache.get(line_user_id)
-    if cached is not None and time.monotonic() - cached[3] < _LINEBOT_USER_STATE_TTL:
-        return cached[0], cached[1], cached[2]
+async def _fetch_linebot_user_state(line_user_id: str) -> tuple[bool, bool, frozenset[int]]:
     async with AsyncSessionLocal() as s:
         profile = await s.get(UserProfile, line_user_id)
         unlocked = frozenset((await s.execute(
@@ -1005,6 +1004,35 @@ async def get_linebot_user_state_cached(line_user_id: str) -> tuple[bool, bool, 
     if complete:
         set_registration_complete(line_user_id)
     return banned, complete, unlocked
+
+
+async def _refresh_linebot_user_state_bg(line_user_id: str) -> None:
+    try:
+        await _fetch_linebot_user_state(line_user_id)
+    except Exception as exc:
+        print(f"[user_state_refresh_failed] {type(exc).__name__}: {exc}", flush=True)
+    finally:
+        _linebot_user_state_refreshing.discard(line_user_id)
+
+
+async def get_linebot_user_state_cached(line_user_id: str) -> tuple[bool, bool, frozenset[int]]:
+    """(banned, registration_complete, unlocked_subject_ids) を1回のDBセッションで取得し
+    _LINEBOT_USER_STATE_TTL 秒キャッシュする。line_user_id が空なら即デフォルトを返す。
+    TTL切れでも_LINEBOT_USER_STATE_STALE_MAX秒以内なら古い値を返し、更新はバックグラウンドで行う。"""
+    if not line_user_id:
+        return False, False, frozenset()
+    cached = _linebot_user_state_cache.get(line_user_id)
+    if cached is not None:
+        age = time.monotonic() - cached[3]
+        if age < _LINEBOT_USER_STATE_TTL:
+            return cached[0], cached[1], cached[2]
+        if age < _LINEBOT_USER_STATE_STALE_MAX:
+            from core.background_tasks import fire_and_forget
+            if line_user_id not in _linebot_user_state_refreshing:
+                _linebot_user_state_refreshing.add(line_user_id)
+                fire_and_forget(_refresh_linebot_user_state_bg(line_user_id))
+            return cached[0], cached[1], cached[2]
+    return await _fetch_linebot_user_state(line_user_id)
 
 
 def invalidate_linebot_user_state(line_user_id: str) -> None:
