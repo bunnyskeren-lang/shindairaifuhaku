@@ -553,3 +553,66 @@ def test_grade_label_from_student_id_and_academic_year():
     # 読み取れない・入学前・年数が不自然なものは空文字
     for bad in ("", None, "X612345A", "2", "2712345A", "1012345A"):
         assert grade_label(bad, sept_2026) == ""
+
+
+# ── 2026-09-27 追加: 振込額・区分の検証・管理者の付け替え・入力エラー表示 ──────────────
+
+def test_transfer_amount_deducts_bank_fee():
+    from core.config import GROUP_BANK_FEE
+    from core.groups import _with_settlement, empty_group_stats
+    info = _with_settlement(group_payout_breakdown(100, 0, 0), paid=0, member_count=0)  # 5,000円
+    assert info["transfer_amount"] == 5000 - GROUP_BANK_FEE
+    # 残高が手数料以下なら振込額は0（マイナスにしない）
+    assert _with_settlement(group_payout_breakdown(2, 0, 0), paid=0, member_count=0)["transfer_amount"] == 0
+    assert empty_group_stats()["transfer_amount"] == 0
+    assert set(empty_group_stats()) >= {"accrued", "paid", "balance", "member_count", "bank_fee", "transfer_amount"}
+
+
+def test_subject_category_only_accepts_kyoyo_or_senmon():
+    Subject(name="A", faculty="経営学部", category="教養")
+    Subject(name="B", faculty="経営学部", category="専門")
+    Subject(name="C", faculty="経営学部")  # 未設定（NULL）は既存行との互換で許容
+    with pytest.raises(ValueError):
+        Subject(name="D", faculty="経営学部", category="その他")
+
+
+@pytest.mark.asyncio
+async def test_admin_course_create_rejects_invalid_category(http_client_factory, monkeypatch, test_sessionmaker):
+    import routers.admin.courses as admin_courses
+    monkeypatch.setattr(admin_courses.cache, "invalidate_courses_cache", lambda: None, raising=False)
+    client = http_client_factory(admin_courses, monkeypatch)
+    client.cookies.set(ADMIN_COOKIE, make_admin_token())
+    resp = await client.post(
+        "/admin/courses/create", data={"name": "謎科目", "category": "その他"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.json()["error"] == "invalid_category"
+    async with test_sessionmaker() as s:
+        assert (await s.execute(select(Subject).where(Subject.name == "謎科目"))).first() is None
+
+
+@pytest.mark.asyncio
+async def test_switching_group_clears_old_group_manager(http_client_factory, monkeypatch, test_sessionmaker):
+    client, gid = await _setup_submit(http_client_factory, monkeypatch, test_sessionmaker)
+    other_gid = await _seed_group(test_sessionmaker, code="OTHR2345", name="別の団体")
+    async with test_sessionmaker() as s:
+        (await s.get(UserProfile, UID)).group_id = gid
+        (await s.get(Group, gid)).manager_line_user_id = UID
+        await s.commit()
+    assert (await client.post("/submit", data={**VALID_FORM, "group_code": "OTHR2345"})).status_code == 303
+    async with test_sessionmaker() as s:
+        assert (await s.get(Group, gid)).manager_line_user_id is None  # 元団体の管理者指定は外れる
+        assert (await s.get(UserProfile, UID)).group_id == other_gid
+
+
+@pytest.mark.asyncio
+async def test_admin_manager_outsider_and_payout_range_show_error(http_client_factory, monkeypatch, test_sessionmaker):
+    client = _admin_client(http_client_factory, monkeypatch)
+    gid = await _seed_report(test_sessionmaker)
+    r = await client.post(f"/admin/groups/{gid}/manager", data={"line_user_id": "U_OUTSIDER"})
+    assert "error=" in r.headers["location"]
+    for bad in ("-5", "0", "10000001"):
+        r = await client.post(f"/admin/groups/{gid}/payout", data={"amount": bad})
+        assert "error=" in r.headers["location"]
+    async with test_sessionmaker() as s:
+        assert (await s.execute(select(GroupPayout))).scalars().all() == []

@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlalchemy import String, Text, DateTime, Integer, Numeric, BigInteger, Boolean, func, UniqueConstraint, ForeignKey, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, validates
 from database import Base
-from core.config import CHANNEL, normalize_instructor_name, normalize_subject_name
+from core.config import CHANNEL, SUBJECT_CATEGORIES, normalize_instructor_name, normalize_subject_name
 
 
 class TimestampMixin:
@@ -79,9 +79,10 @@ class UserProfile(TimestampMixin, Base):
     # 同じ値の登録が既に成功していれば新規のトークン再検証を経由せず1回目の成功ページへ流す。
     # 部分UNIQUEは上の __table_args__ で宣言。
     register_nonce: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 所属団体（サークル等。`groups`）。レビュー投稿フォームで有効な団体コードを最初に入力した時点で
-    # 固定し、以後は別の番号を入力しても変わらない（同じ学籍番号の二重計上防止、2026-09-26）。NULL＝無所属
-    group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("groups.id", ondelete="RESTRICT"), nullable=True)
+    # 所属団体（サークル等。`groups`）。レビュー投稿フォームで有効な団体コードを入力して投稿するたびに
+    # その団体へ書き換わる（同じ学籍番号の別プロフィールも揃える）。集計に使うのは投稿時点の
+    # reviews.group_id なので、書き換え前のレビューは元の団体のまま動かない。NULL＝無所属
+    group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("groups.id", ondelete="RESTRICT"), nullable=True, index=True)
     # ゲスト用LINEチャンネル(core.config.IS_GUEST)経由の会員登録かどうか（ゲスト用チャンネルで
     # 登録した時点の値。同一プロバイダーなので同じ人が本番でも使えば同じ行を共有する。
     # チャンネル別の実績は各ログの source 列で判別する）。
@@ -267,6 +268,15 @@ class Subject(Base):
     @validates("name")
     def _normalize_name(self, key, value):
         return normalize_subject_name(value)
+
+    @validates("category")
+    def _validate_category(self, key, value):
+        # 教養・専門以外の科目は団体への支払い額（core/groups.py）・閲覧権チケット・投稿可否の
+        # いずれにも入らず数字が食い違うため、そもそも登録できないようにする（2026-09-27）。
+        # NULLは未設定の既存行との互換のため許容する（管理画面の作成・編集は空を受け付けない）
+        if value is not None and value not in SUBJECT_CATEGORIES:
+            raise ValueError(f"科目の区分は{'/'.join(SUBJECT_CATEGORIES)}のいずれかにしてください: {value!r}")
+        return value
 
 
 class Instructor(Base):

@@ -15,12 +15,13 @@ from sqlalchemy.exc import IntegrityError
 
 from core import cache
 from core.config import (
+    GROUP_BANK_FEE,
     GROUP_CONTRIBUTOR_BONUS_AMOUNT,
     GROUP_CONTRIBUTOR_BONUS_UNIT,
     GROUP_REVIEW_PAYOUT_KYOYO,
     GROUP_REVIEW_PAYOUT_SENMON,
 )
-from core.groups import CODE_LENGTH, generate_group_code, group_payout_breakdown, group_stats, normalize_group_code
+from core.groups import CODE_LENGTH, empty_group_stats, generate_group_code, group_stats, normalize_group_code
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
@@ -28,7 +29,7 @@ from models import Group, GroupPayout, UserProfile
 
 router = APIRouter()
 
-_EMPTY_STATS = group_payout_breakdown(0, 0, 0) | {"paid": 0, "balance": 0, "member_count": 0}
+_MAX_PAYOUT_AMOUNT = 10_000_000  # 1回の精算記録の上限（入力ミスとInteger桁あふれの防止）
 
 
 @router.get("/admin/groups", response_class=HTMLResponse)
@@ -54,7 +55,7 @@ async def admin_groups(request: Request, error: str = "", _: str = Depends(check
         "nav_counts": await cache.get_admin_nav_counts_cached(),
         "error": error[:100],
         "groups": groups,
-        "stats": {g.id: stats.get(g.id, _EMPTY_STATS) for g in groups},
+        "stats": {g.id: stats.get(g.id) or empty_group_stats() for g in groups},
         "payouts_by_group": payouts_by_group,
         "members_by_group": members_by_group,
         "rules": {
@@ -62,6 +63,7 @@ async def admin_groups(request: Request, error: str = "", _: str = Depends(check
             "senmon": GROUP_REVIEW_PAYOUT_SENMON,
             "bonus_unit": GROUP_CONTRIBUTOR_BONUS_UNIT,
             "bonus_amount": GROUP_CONTRIBUTOR_BONUS_AMOUNT,
+            "bank_fee": GROUP_BANK_FEE,
         },
     })
 
@@ -95,10 +97,12 @@ async def admin_group_create(
             session.add(Group(name=name, code=generate_group_code(), note=note.strip()[:500] or None))
             try:
                 await session.commit()
-                break
+                return RedirectResponse("/admin/groups", status_code=303)
             except IntegrityError:
                 await session.rollback()
-    return RedirectResponse("/admin/groups", status_code=303)
+    return RedirectResponse(
+        "/admin/groups?error=" + quote("団体コードを自動発行できませんでした。もう一度お試しください"), status_code=303,
+    )
 
 
 @router.post("/admin/groups/{group_id}/update")
@@ -127,8 +131,11 @@ async def admin_group_manager(group_id: int, line_user_id: str = Form(""), _: st
                     select(UserProfile.line_user_id)
                     .where(UserProfile.line_user_id == line_user_id, UserProfile.group_id == group_id)
                 )).scalar_one_or_none()
-                if member:
-                    group.manager_line_user_id = member
+                if member is None:
+                    return RedirectResponse(
+                        "/admin/groups?error=" + quote("管理者に指定できるのは、その団体の所属会員だけです"), status_code=303,
+                    )
+                group.manager_line_user_id = member
             await session.commit()
     return RedirectResponse("/admin/groups", status_code=303)
 
@@ -147,14 +154,17 @@ async def admin_group_toggle(group_id: int, _: str = Depends(check_admin)):
 async def admin_group_payout(
     group_id: int, amount: int = Form(...), note: str = Form(""), _: str = Depends(check_admin),
 ):
-    if amount > 0:
-        async with AsyncSessionLocal() as session:
-            if await session.get(Group, group_id):
-                session.add(GroupPayout(
-                    group_id=group_id, amount=amount, paid_at=datetime.now(UTC),
-                    note=note.strip()[:500] or None,
-                ))
-                await session.commit()
+    if not 0 < amount <= _MAX_PAYOUT_AMOUNT:
+        return RedirectResponse(
+            "/admin/groups?error=" + quote(f"精算額は1〜{_MAX_PAYOUT_AMOUNT:,}円で入力してください"), status_code=303,
+        )
+    async with AsyncSessionLocal() as session:
+        if await session.get(Group, group_id):
+            session.add(GroupPayout(
+                group_id=group_id, amount=amount, paid_at=datetime.now(UTC),
+                note=note.strip()[:500] or None,
+            ))
+            await session.commit()
     return RedirectResponse("/admin/groups", status_code=303)
 
 

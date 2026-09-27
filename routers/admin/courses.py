@@ -8,6 +8,7 @@ from sqlalchemy import case, func, or_, select
 
 from core import cache, undo
 from core.config import (
+    SUBJECT_CATEGORIES,
     SYLLABUS_ACADEMIC_TERMS,
     escape_like,
     make_cls_sort,
@@ -701,6 +702,8 @@ async def admin_courses_create(
     インポート経由でしか科目を追加できなかった）。重複チェック・レビューコピーの挙動は
     admin_courses_update()の別分類への変更時と同じロジックを流用する。"""
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    if category not in SUBJECT_CATEGORIES:
+        return _invalid_category_response(is_ajax)
     new_name = normalize_subject_name(normalize_alnum(name.strip()))
     new_faculty = faculty.strip()
     new_department = department.strip()
@@ -758,6 +761,8 @@ async def admin_courses_update(
     force_duplicate: str = Form(""),
 ):
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    if category not in SUBJECT_CATEGORIES:
+        return _invalid_category_response(is_ajax)
     async with AsyncSessionLocal() as session:
         course = (await session.execute(select(Subject).where(Subject.id == course_id))).scalar_one_or_none()
         if course:
@@ -921,6 +926,14 @@ def _parse_group_ids(ids: str) -> list[int]:
     return [int(x) for x in ids.split(",") if x.strip().isdigit()]
 
 
+def _invalid_category_response(is_ajax: bool):
+    """区分が教養・専門以外の科目は登録・変更させない（Subject._validate_categoryと同じ規則）。"""
+    message = f"科目の区分は{'・'.join(SUBJECT_CATEGORIES)}のいずれかにしてください"
+    if is_ajax:
+        return JSONResponse({"ok": False, "error": "invalid_category", "message": message})
+    return RedirectResponse(url="/admin/courses?msg=invalid_category", status_code=303)
+
+
 def _group_response(is_ajax: bool, ok: bool = True, redirect_msg: str = "", **extra):
     """group系エンドポイント共通のレスポンス分岐（AJAX経由→JSON／通常フォーム送信→
     リダイレクト）。extraはJSON側にのみ追加され、リダイレクトのクエリはredirect_msgのみ
@@ -978,6 +991,8 @@ async def admin_courses_group_update(
     force_duplicate: str = Form(""),
 ):
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    if category not in SUBJECT_CATEGORIES:
+        return _invalid_category_response(is_ajax)
     # 統合表示（生物学各論A1/A2/C1/C2等）の編集モーダルはグループ内の全科目に同じ内容を
     # 一括適用する（科目名はバリアントごとに異なるためここでは変更しない）
     id_list = _parse_group_ids(ids)

@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import distinct, func, select
 
 from core.config import (
+    GROUP_BANK_FEE,
     GROUP_CONTRIBUTOR_BONUS_AMOUNT,
     GROUP_CONTRIBUTOR_BONUS_UNIT,
     GROUP_REVIEW_PAYOUT_KYOYO,
@@ -51,8 +52,9 @@ async def find_group_by_code(session, raw_code: str | None) -> Group | None:
     return (await session.execute(select(Group).where(Group.code == code))).scalar_one_or_none()
 
 
-async def locked_group_id(session, profile: UserProfile) -> int | None:
+async def current_group_id(session, profile: UserProfile) -> int | None:
     """この会員の現在の所属団体id（無ければNone）。フォームの団体コード欄の入力済み表示に使う。
+    （所属は固定ではなく、別の団体コードで投稿すれば書き換わる。2026-09-27に名前を実態へ合わせた）
 
     自分のプロフィールに加え、同じ学籍番号の別プロフィール（別のLINEアカウントで登録した場合）も見る。
     所属は投稿時に別の団体コードを入力すれば書き換わる（書き換え前のレビューは投稿時点の団体のまま）。
@@ -136,12 +138,30 @@ async def group_stats(session) -> dict[int, dict]:
     stats: dict[int, dict] = {}
     for gid in set(counts) | set(contributors) | set(paid) | set(members):
         c = counts.get(gid, {})
-        info = group_payout_breakdown(c.get("教養", 0), c.get("専門", 0), contributors.get(gid, 0))
-        info["paid"] = int(paid.get(gid, 0))
-        info["balance"] = info["accrued"] - info["paid"]
-        info["member_count"] = members.get(gid, 0)
-        stats[gid] = info
+        stats[gid] = _with_settlement(
+            group_payout_breakdown(c.get("教養", 0), c.get("専門", 0), contributors.get(gid, 0)),
+            paid=int(paid.get(gid, 0)), member_count=members.get(gid, 0),
+        )
     return stats
+
+
+def _with_settlement(info: dict, paid: int, member_count: int) -> dict:
+    """発生額の内訳に、精算済み額・未精算残高・所属会員数と、振込手数料控除後の振込額を足す。
+
+    振込手数料は一律GROUP_BANK_FEEで団体負担。残高が手数料以下なら振込額は0（振込めば赤字になるため）。
+    最低振込額と繰り越しは運営の手作業で、ここでは強制しない。
+    """
+    info["paid"] = paid
+    info["balance"] = info["accrued"] - paid
+    info["member_count"] = member_count
+    info["bank_fee"] = GROUP_BANK_FEE
+    info["transfer_amount"] = max(info["balance"] - GROUP_BANK_FEE, 0)
+    return info
+
+
+def empty_group_stats() -> dict:
+    """まだ何も無い団体の集計（group_stats()の各値と同じキー構成）。"""
+    return _with_settlement(group_payout_breakdown(0, 0, 0), paid=0, member_count=0)
 
 
 # ── LINE botの「団体」（団体の成果の確認）────────────────────────────────

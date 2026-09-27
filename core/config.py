@@ -163,6 +163,12 @@ GROUP_REVIEW_PAYOUT_KYOYO = 50
 GROUP_REVIEW_PAYOUT_SENMON = 30
 GROUP_CONTRIBUTOR_BONUS_UNIT = 10
 GROUP_CONTRIBUTOR_BONUS_AMOUNT = 500
+# 団体への振込手数料（一律・団体負担、2026-09-27）。団体管理画面で「振込額＝未精算残高−手数料」を見える化するのに使う。
+# 最低振込額（3,000円）と繰り越しは運営の手作業で、コードでは強制しない
+GROUP_BANK_FEE = 200
+
+# 科目の区分（subjects.category）。これ以外の値は登録できない（models.Subject._validate_category）
+SUBJECT_CATEGORIES = ("教養", "専門")
 
 # 会員登録（初回のUserProfile作成時）に全員へプレゼントするレビュー閲覧権チケット枚数
 REGISTRATION_WELCOME_UNLOCK_CREDITS = 1

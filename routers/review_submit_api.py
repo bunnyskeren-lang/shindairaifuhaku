@@ -28,7 +28,7 @@ from core.rate_limit import rate_limiter
 from core.subject_variants import is_hoken_gakka_senko
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import CourseSection, Instructor, Review, ReviewStatus, Subject, UserProfile
+from models import CourseSection, Group, Instructor, Review, ReviewStatus, Subject, UserProfile
 
 router = APIRouter()
 
@@ -327,12 +327,20 @@ async def submit(
             group_id=review_group_id,
         )
         session.add(review)
-        if new_group_id is not None:
+        if new_group_id is not None and existing.student_id:
             # 同じ学籍番号の別アカウントのプロフィールも同じ団体へ揃える（所属は学籍番号単位）。
-            # レビューと同じトランザクションで確定させるため、追加の直前に更新する
+            # レビューと同じトランザクションで確定させるため、追加の直前に更新する。
+            # student_idが空だとIS NULLで無関係なプロフィールまで巻き込むため、必ず値がある時だけ行う
+            same_student_uids = select(UserProfile.line_user_id).where(UserProfile.student_id == existing.student_id)
             await session.execute(
                 update(UserProfile).where(UserProfile.student_id == existing.student_id)
                 .values(group_id=new_group_id)
+            )
+            # 別の団体へ移った人が元の団体の管理者のまま残らないよう、元の団体の管理者指定を外す
+            await session.execute(
+                update(Group)
+                .where(Group.id != new_group_id, Group.manager_line_user_id.in_(same_student_uids))
+                .values(manager_line_user_id=None)
             )
         try:
             await session.commit()

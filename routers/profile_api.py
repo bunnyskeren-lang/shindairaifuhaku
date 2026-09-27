@@ -10,7 +10,7 @@ from core import cache, line_client, moderation
 from core.activity_log import save_debug_log, save_error_log
 from core.background_tasks import fire_and_forget
 from core.funnel import EVENT_REGISTER_DONE, track
-from core.groups import locked_group_id
+from core.groups import current_group_id
 from core.push import send_registration_push_notification
 from core.config import (
     BAN_MESSAGE_TEXT,
@@ -129,7 +129,7 @@ async def profile_prefill(request: Request):
             # 付け、未登録者のうち誰が登録画面を開いたかを数えられるようにする（core/funnel.py）
             return {"found": False, "uid": uid}
         # 所属団体（最後に入力した団体コードの団体。投稿時に別の番号を入力すれば書き換わる）。フォームは所属団体の番号を入力済みにする（消した状態で投稿したレビューは団体に数えない）
-        group_id = await locked_group_id(session, profile)
+        group_id = await current_group_id(session, profile)
         group = await session.get(Group, group_id) if group_id is not None else None
         # 同一学籍番号での「科目×担当教員」重複投稿をフォーム側でグレーアウト表示するため、
         # 既に投稿済み（待機中+承認済み）の組み合わせを合わせて返す。実際の受付可否は/submit側で再確認する。

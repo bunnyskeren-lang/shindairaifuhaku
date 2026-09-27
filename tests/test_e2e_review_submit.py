@@ -170,10 +170,10 @@ async def test_submit_kyotsu_senmon_kiso_course_creates_review(http_client_facto
 
 @pytest.mark.asyncio
 async def test_submit_non_review_category_returns_400(http_client_factory, monkeypatch, test_sessionmaker):
-    """教養・専門のいずれでもないcategoryの科目は投稿を拒否する。"""
+    """区分が未設定(NULL)の科目は投稿を拒否する。教養・専門以外の値はSubject自体が登録できない。"""
     _fake_verify(monkeypatch)
     _stub_push_notification(monkeypatch)
-    await _seed_course(test_sessionmaker, category="その他")
+    await _seed_course(test_sessionmaker, category=None)
     await _seed_profile(test_sessionmaker)
     client = http_client_factory(review_submit_api, monkeypatch)
 

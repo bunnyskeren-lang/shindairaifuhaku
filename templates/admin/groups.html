@@ -34,6 +34,7 @@
       <p class="rule-note" style="margin-top:8px">
         支払いルール：承認済みレビュー1件につき 教養{{ rules.kyoyo }}円・専門{{ rules.senmon }}円、
         承認済みレビューのある学籍番号が{{ rules.bonus_unit }}人に達するごとに+{{ rules.bonus_amount }}円（上限なし）。
+        振込手数料は一律{{ rules.bank_fee }}円（団体負担）を残高から差し引いた額が振込額です。
         承認後に却下・差し戻しされたレビューは自動で集計から外れます。学籍番号は表示しません。管理者は、その団体の所属会員の中から指定します（団体コードを入力して投稿した会員だけが候補）。
       </p>
     </div>
@@ -64,6 +65,8 @@
         <tr><td><b>発生額 合計</b></td><td></td><td class="num"><b>{{ s.accrued }}円</b></td></tr>
         <tr><td>精算済み</td><td></td><td class="num">{{ s.paid }}円</td></tr>
         <tr><td><b>未精算残高</b></td><td></td><td class="num balance">{{ s.balance }}円</td></tr>
+        <tr><td>振込手数料（一律・団体負担）</td><td></td><td class="num">−{{ s.bank_fee if s.balance > 0 else 0 }}円</td></tr>
+        <tr><td><b>今回の振込額</b>（最低振込額3,000円に満たなければ繰り越し）</td><td></td><td class="num balance">{{ s.transfer_amount }}円</td></tr>
       </tbody>
     </table>
     </div>
@@ -83,7 +86,7 @@
   </div>
   <div class="group-foot">
     <form method="post" action="/admin/groups/{{ g.id }}/payout" style="display:flex;gap:6px;flex-wrap:wrap;margin:0">
-      <input type="number" name="amount" min="1" placeholder="精算額（円）" required style="width:120px">
+      <input type="number" name="amount" min="1" max="10000000" placeholder="精算額（円）" required style="width:120px">
       <input type="text" name="note" placeholder="メモ（振込日など）" maxlength="500">
       <button class="btn btn-primary btn-xs">精算を記録</button>
     </form>
