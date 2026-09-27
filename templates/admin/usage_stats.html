@@ -6,15 +6,15 @@
 {% block content %}
 <style>
   /* スマホで注釈内の長いURL・codeが横にはみ出してカードが崩れないように折り返す */
-  .card p, .card summary { overflow-wrap: anywhere; }
-  .card code { word-break: break-all; }
-  .card .table-wrap th, .card .table-wrap td { overflow-wrap: anywhere; }
+  .funnel-card p, .funnel-card summary { overflow-wrap: anywhere; }
+  .funnel-card code { word-break: break-all; }
+  .funnel-card .table-wrap th, .funnel-card .table-wrap td { overflow-wrap: anywhere; }
   /* 日別表は列が多いので、横スクロールさせて各列の幅は保つ */
-  .daily-table th, .daily-table td { white-space: nowrap; overflow-wrap: normal; }
+  .funnel-card .daily-table th, .funnel-card .daily-table td { white-space: nowrap; overflow-wrap: normal; }
 </style>
 
 <!-- ⓪ 友だち追加の漏斗（core/funnel.py。ボット・連打は除外） -->
-<div class="card">
+<div class="card funnel-card">
   <div class="section-title">🚪 友だち追加の漏斗</div>
   <div class="section-title" style="margin-top:8px;font-size:14px">HPを開いた回数（直近{{ funnel.total_days }}日）</div>
   <div class="table-wrap">
@@ -116,7 +116,6 @@
     </table>
   </div>
   <p style="color:#9ca3af;font-size:12px;margin-top:8px">日別の流入元の列は「友だち追加ページを開いた回数」です。新規会員・レビュー投稿はDBの実数です。</p>
-</div>
 </div>
 
 <!-- ① 科目詳細 閲覧数 -->
