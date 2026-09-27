@@ -90,17 +90,22 @@ def group_payout_breakdown(kyoyo_count: int, senmon_count: int, contributor_coun
     }
 
 
+def _approved_conditions() -> tuple:
+    """団体の集計対象になるレビューの条件（団体経由・承認済み・複製でない）。"""
+    return (
+        Review.group_id.is_not(None),
+        Review.status == ReviewStatus.APPROVED,
+        Review.copied_from_review_id.is_(None),
+    )
+
+
 async def group_stats(session) -> dict[int, dict]:
     """団体ごとの集計（group_id → 内訳dict＋精算済み額・未精算残高・所属会員数）。個人は特定しない。
 
     対象は status='approved' のレビューのみ（承認後に却下・差し戻しされたものは自動で外れる）。
     別分類への複製レビュー（copied_from_review_id）は元の投稿の二重計上になるので除く。
     """
-    approved = (
-        Review.group_id.is_not(None),
-        Review.status == ReviewStatus.APPROVED,
-        Review.copied_from_review_id.is_(None),
-    )
+    approved = _approved_conditions()
     by_category = (await session.execute(
         select(Review.group_id, Subject.category, func.count(Review.id))
         .join(CourseSection, CourseSection.id == Review.course_section_id)
@@ -136,3 +141,91 @@ async def group_stats(session) -> dict[int, dict]:
         info["member_count"] = members.get(gid, 0)
         stats[gid] = info
     return stats
+
+
+# ── LINE botの「団体」（団体の成果の確認）────────────────────────────────
+
+async def group_of_user(session, line_user_id: str) -> Group | None:
+    """この会員が所属する有効な団体（無ければNone）。"""
+    if not line_user_id:
+        return None
+    group_id = (await session.execute(
+        select(UserProfile.group_id).where(UserProfile.line_user_id == line_user_id)
+    )).scalar_one_or_none()
+    if group_id is None:
+        return None
+    group = await session.get(Group, group_id)
+    return group if group and group.is_active else None
+
+
+async def group_report(session, group: Group, line_user_id: str) -> dict:
+    """団体の成果を返す。全会員向けは団体全体の集計と本人の件数、団体の管理者にだけ、
+    承認済みレビューを投稿した会員の氏名と件数の一覧（members）を付ける。
+
+    氏名は`user_profiles.name`（同じ学籍番号に複数のプロフィールがあれば先頭）。学籍番号・学部は返さない。
+    件数の対象は支払額と同じ（団体コードを入力して投稿した承認済みレビュー）。
+    """
+    info = dict((await group_stats(session)).get(group.id) or group_payout_breakdown(0, 0, 0))
+    info["is_manager"] = bool(group.manager_line_user_id) and group.manager_line_user_id == line_user_id
+    info["bonus_remaining"] = GROUP_CONTRIBUTOR_BONUS_UNIT - info["contributor_count"] % GROUP_CONTRIBUTOR_BONUS_UNIT
+
+    my_student_id = (await session.execute(
+        select(UserProfile.student_id).where(UserProfile.line_user_id == line_user_id)
+    )).scalar_one_or_none()
+    per_student = (await session.execute(
+        select(Review.student_id, func.count(Review.id))
+        .where(*_approved_conditions(), Review.group_id == group.id, Review.student_id.is_not(None))
+        .group_by(Review.student_id)
+    )).all()
+    counts = {sid: n for sid, n in per_student}
+    info["my_count"] = counts.get(my_student_id, 0)
+
+    info["members"] = []
+    if info["is_manager"] and counts:
+        names = dict((await session.execute(
+            select(UserProfile.student_id, func.min(UserProfile.name))
+            .where(UserProfile.student_id.in_(list(counts)))
+            .group_by(UserProfile.student_id)
+        )).all())
+        info["members"] = sorted(
+            ((names.get(sid) or "（氏名不明）", n) for sid, n in counts.items()),
+            key=lambda x: (-x[1], x[0]),
+        )
+    return info
+
+
+_MAX_MEMBER_LINES = 60  # LINEのテキスト上限（5000字）に収まる範囲
+
+NO_GROUP_TEXT = (
+    "団体に所属していません。\n"
+    "サークル等から案内された「団体コード」を、レビュー投稿フォームの団体コード欄に入力して投稿すると、"
+    "その団体の成果をここで確認できます。"
+)
+
+
+async def group_report_text(line_user_id: str) -> str:
+    """LINE botの「団体」への返信本文。所属団体が無ければ案内文を返す。"""
+    from database import AsyncSessionLocal  # モジュールimport時のDB接続を避けるため関数内で読む
+
+    async with AsyncSessionLocal() as session:
+        group = await group_of_user(session, line_user_id)
+        if group is None:
+            return NO_GROUP_TEXT
+        r = await group_report(session, group, line_user_id)
+    lines = [
+        f"🤝 {group.name} の成果",
+        "",
+        f"承認されたレビュー：教養{r['kyoyo_count']}件・専門{r['senmon_count']}件",
+        f"投稿した人数：{r['contributor_count']}人（あと{r['bonus_remaining']}人で+{GROUP_CONTRIBUTOR_BONUS_AMOUNT}円）",
+        f"謝礼の累計：{r['accrued']}円",
+        f"あなたの投稿：{r['my_count']}件",
+    ]
+    if r["is_manager"]:
+        lines += ["", "👥 投稿した会員（管理者のみ表示）"]
+        if not r["members"]:
+            lines.append("まだいません")
+        for name, n in r["members"][:_MAX_MEMBER_LINES]:
+            lines.append(f"・{name}　{n}件")
+        if len(r["members"]) > _MAX_MEMBER_LINES:
+            lines.append(f"ほか{len(r['members']) - _MAX_MEMBER_LINES}人")
+    return "\n".join(lines)

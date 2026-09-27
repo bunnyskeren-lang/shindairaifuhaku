@@ -440,6 +440,9 @@ class Group(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 団体の「管理者」（窓口担当者）のLINEユーザーID。管理画面（/admin/groups）で、所属会員の中から運営が指定する。
+    # 管理者はLINE botの「団体」で、投稿した会員の氏名と件数の一覧を見られる（core/groups.py）。NULL＝未指定
+    manager_line_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class GroupPayout(TimestampMixin, Base):

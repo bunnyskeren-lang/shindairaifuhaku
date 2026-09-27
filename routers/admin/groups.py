@@ -1,7 +1,8 @@
 """/admin/groups: 団体（サークル等）の管理と、団体への支払い額の集計（2026-09-26、core/groups.py）。
 
 団体は物理削除しない（紐づくレビュー・精算履歴を消さない）。無効化は is_active=False。
-画面に出すのは団体ごとの集計だけで、個人名・学籍番号は表示しない。
+団体ごとの集計に加え、団体の「管理者」を所属会員の中から指定できる（氏名のみ。学籍番号は表示しない）。
+管理者はLINE botの「団体」で、投稿した会員の氏名と件数の一覧を見られる。
 """
 import re
 from datetime import UTC, datetime
@@ -23,7 +24,7 @@ from core.groups import CODE_LENGTH, generate_group_code, group_payout_breakdown
 from core.security import check_admin
 from core.templates import templates
 from database import AsyncSessionLocal
-from models import Group, GroupPayout
+from models import Group, GroupPayout, UserProfile
 
 router = APIRouter()
 
@@ -38,6 +39,13 @@ async def admin_groups(request: Request, error: str = "", _: str = Depends(check
         payouts = (await session.execute(
             select(GroupPayout).order_by(GroupPayout.paid_at.desc(), GroupPayout.id.desc())
         )).scalars().all()
+        member_rows = (await session.execute(
+            select(UserProfile.group_id, UserProfile.line_user_id, UserProfile.name)
+            .where(UserProfile.group_id.is_not(None)).order_by(UserProfile.name)
+        )).all()
+    members_by_group: dict[int, list[tuple[str, str]]] = {}
+    for gid, uid, name in member_rows:
+        members_by_group.setdefault(gid, []).append((uid, name))
     payouts_by_group: dict[int, list[GroupPayout]] = {}
     for p in payouts:
         payouts_by_group.setdefault(p.group_id, []).append(p)
@@ -48,6 +56,7 @@ async def admin_groups(request: Request, error: str = "", _: str = Depends(check
         "groups": groups,
         "stats": {g.id: stats.get(g.id, _EMPTY_STATS) for g in groups},
         "payouts_by_group": payouts_by_group,
+        "members_by_group": members_by_group,
         "rules": {
             "kyoyo": GROUP_REVIEW_PAYOUT_KYOYO,
             "senmon": GROUP_REVIEW_PAYOUT_SENMON,
@@ -101,6 +110,25 @@ async def admin_group_update(
         if group and name.strip():
             group.name = name.strip()[:100]
             group.note = note.strip()[:500] or None
+            await session.commit()
+    return RedirectResponse("/admin/groups", status_code=303)
+
+
+@router.post("/admin/groups/{group_id}/manager")
+async def admin_group_manager(group_id: int, line_user_id: str = Form(""), _: str = Depends(check_admin)):
+    """団体の管理者を、その団体の所属会員の中から指定する（空欄で解除）。所属外のユーザーは指定できない。"""
+    async with AsyncSessionLocal() as session:
+        group = await session.get(Group, group_id)
+        if group:
+            if not line_user_id:
+                group.manager_line_user_id = None
+            else:
+                member = (await session.execute(
+                    select(UserProfile.line_user_id)
+                    .where(UserProfile.line_user_id == line_user_id, UserProfile.group_id == group_id)
+                )).scalar_one_or_none()
+                if member:
+                    group.manager_line_user_id = member
             await session.commit()
     return RedirectResponse("/admin/groups", status_code=303)
 

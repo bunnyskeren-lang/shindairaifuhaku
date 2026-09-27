@@ -150,6 +150,9 @@ async def init_db():
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_reviews_group_id ON reviews (group_id)"
         ))
+        await conn.execute(text(
+            "ALTER TABLE groups ADD COLUMN IF NOT EXISTS manager_line_user_id VARCHAR(64)"
+        ))
         # 管理画面から科目×教員単位でレビュー募集を手動終了する機能用（2026-09-25）
         await conn.execute(text(
             "ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS review_closed BOOLEAN NOT NULL DEFAULT false"

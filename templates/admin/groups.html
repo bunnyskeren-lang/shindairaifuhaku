@@ -34,7 +34,7 @@
       <p class="rule-note" style="margin-top:8px">
         支払いルール：承認済みレビュー1件につき 教養{{ rules.kyoyo }}円・専門{{ rules.senmon }}円、
         承認済みレビューのある学籍番号が{{ rules.bonus_unit }}人に達するごとに+{{ rules.bonus_amount }}円（上限なし）。
-        承認後に却下・差し戻しされたレビューは自動で集計から外れます。個人名・学籍番号はこの画面に表示しません。
+        承認後に却下・差し戻しされたレビューは自動で集計から外れます。学籍番号は表示しません。管理者は、その団体の所属会員の中から指定します（団体コードを入力して投稿した会員だけが候補）。
       </p>
     </div>
   </details>
@@ -91,6 +91,14 @@
       <input type="text" name="name" value="{{ g.name }}" maxlength="100" required>
       <input type="text" name="note" value="{{ g.note or '' }}" placeholder="メモ" maxlength="500">
       <button class="btn btn-icon">名称・メモを保存</button>
+    </form>
+    {% set ms = members_by_group.get(g.id, []) %}
+    <form method="post" action="/admin/groups/{{ g.id }}/manager" style="display:flex;gap:6px;flex-wrap:wrap;margin:0;align-items:center">
+      <select name="line_user_id" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px">
+        <option value="">管理者：未指定</option>
+        {% for uid, name in ms %}<option value="{{ uid }}"{{ ' selected' if uid == g.manager_line_user_id }}>{{ name }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-icon">管理者を保存</button>
     </form>
     <form method="post" action="/admin/groups/{{ g.id }}/toggle" style="margin:0">
       <button class="btn btn-icon">{{ '無効にする' if g.is_active else '有効に戻す' }}</button>

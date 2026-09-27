@@ -452,3 +452,66 @@ async def test_admin_reviews_page_shows_group_code(http_client_factory, monkeypa
     resp = await client.get("/admin/reviews")
     assert resp.status_code == 200
     assert resp.text.count(f"団体コード {GROUP_CODE}") >= 1
+
+
+# ── 団体の管理者とLINE botの「団体」（団体の成果の確認）──────────────────────────
+
+async def _seed_report(test_sessionmaker):
+    """管理者(M1)と会員(M2)と未投稿の会員(M3)がいる団体。M1が2件・M2が1件の承認済みレビューを投稿済み。"""
+    async with test_sessionmaker() as s:
+        g = Group(name="起業部", code=GROUP_CODE, manager_line_user_id="U_M1")
+        s.add(g)
+        await s.flush()
+        for uid, name, sid in (("U_M1", "管理者 太郎", "1000001A"), ("U_M2", "会員 花子", "1000002B"),
+                               ("U_M3", "未投稿 次郎", "1000003C")):
+            s.add(UserProfile(line_user_id=uid, name=name, student_id=sid, faculty="経営学部", group_id=g.id))
+        kyoyo_cs, _ = await _seed_two_courses(s)
+        await _add_review(s, kyoyo_cs, "1000001A", g.id)
+        await _add_review(s, kyoyo_cs, "1000001A", g.id)
+        await _add_review(s, kyoyo_cs, "1000002B", g.id)
+        await _add_review(s, kyoyo_cs, "1000003C", g.id, status=ReviewStatus.PENDING)
+        await s.commit()
+        return g.id
+
+
+@pytest.mark.asyncio
+async def test_group_report_lists_members_only_to_manager(test_sessionmaker):
+    from core.groups import group_of_user, group_report
+    await _seed_report(test_sessionmaker)
+    async with test_sessionmaker() as s:
+        g = await group_of_user(s, "U_M1")
+        mgr = await group_report(s, g, "U_M1")
+        mem = await group_report(s, g, "U_M2")
+    assert mgr["is_manager"] and mgr["members"] == [("管理者 太郎", 2), ("会員 花子", 1)]  # 承認済みのみ・多い順
+    assert (mgr["my_count"], mem["my_count"]) == (2, 1)
+    assert mem["is_manager"] is False and mem["members"] == []
+    assert mem["kyoyo_count"] == 3 and mem["contributor_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_group_report_text_hides_member_names_from_non_managers(test_sessionmaker, monkeypatch):
+    from core.groups import NO_GROUP_TEXT, group_report_text
+    monkeypatch.setattr("database.AsyncSessionLocal", test_sessionmaker)
+    await _seed_report(test_sessionmaker)
+    manager_text = await group_report_text("U_M1")
+    member_text = await group_report_text("U_M2")
+    assert "管理者のみ表示" in manager_text and "会員 花子　1件" in manager_text
+    assert "会員 花子" not in member_text and "管理者のみ" not in member_text
+    assert "あなたの投稿：1件" in member_text and "起業部 の成果" in member_text
+    assert "1000001A" not in manager_text  # 学籍番号は出さない
+    assert await group_report_text("U_NOBODY") == NO_GROUP_TEXT
+
+
+@pytest.mark.asyncio
+async def test_admin_can_set_manager_only_from_group_members(http_client_factory, monkeypatch, test_sessionmaker):
+    client = _admin_client(http_client_factory, monkeypatch)
+    gid = await _seed_report(test_sessionmaker)
+    await client.post(f"/admin/groups/{gid}/manager", data={"line_user_id": "U_M2"})
+    async with test_sessionmaker() as s:
+        assert (await s.get(Group, gid)).manager_line_user_id == "U_M2"
+    await client.post(f"/admin/groups/{gid}/manager", data={"line_user_id": "U_OUTSIDER"})  # 所属外は変わらない
+    async with test_sessionmaker() as s:
+        assert (await s.get(Group, gid)).manager_line_user_id == "U_M2"
+    await client.post(f"/admin/groups/{gid}/manager", data={"line_user_id": ""})  # 空欄で解除
+    async with test_sessionmaker() as s:
+        assert (await s.get(Group, gid)).manager_line_user_id is None
