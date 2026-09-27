@@ -92,11 +92,10 @@
   .hero h1{ font-size:clamp(24px,3.6vw,34px); font-weight:900; line-height:1.5; }
   .hero h1 .hl{ color:var(--line-deep); }
   .ph{display:inline-block;}
-  .hero p.lede{ margin:14px auto 0; max-width:56ch; text-wrap:balance; color:var(--muted); font-size:15px; }
+  .hero p.lede{ margin:14px 0 0; max-width:56ch; text-wrap:balance; color:var(--muted); font-size:15px; }
   /* PCのみ：ヒーローを左テキスト・右スクショの2列にする（狭い画面ではテキストの右に小さく表示） */
   .hero-grid{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center;}
   .hero-text{text-align:left;}
-  .hero p.lede{ margin-left:0; }
   /* スマホ端末の枠（.shotと同じ黒い枠）。小さい画面では枠も細く・角も小さくする */
   .hero-shot{display:block; margin:0; width:clamp(92px,26vw,150px); position:relative;
     padding:clamp(4px,1.2vw,9px); border-radius:clamp(15px,4.6vw,32px);
@@ -370,7 +369,7 @@
   .money-foot{margin-top:14px; font-size:13px; font-weight:700;}
   .calc{display:flex; align-items:stretch; gap:10px; margin-top:16px;}
   .calc-item{flex:1; background:var(--surface-alt); border-radius:16px; padding:16px 18px;}
-  .calc-item b{display:block; font-size:18px; font-weight:900; color:color-mix(in srgb, var(--line-deep) 55%, var(--line-ink));}
+  .calc-item b{display:block; font-size:18px; font-weight:900; color:var(--ink);}
   .calc-item span{display:block; margin-top:4px; font-size:12.5px; color:var(--muted);}
   /* 団体の方へ：説明文を濃く（--muted→--ink） */
   #panel-group .panel-head p, #panel-group .calc-item span{color:var(--ink);}
@@ -673,7 +672,7 @@
     <h1><span class="ph">履修選びを、</span><span class="hl"><span class="ph">もっと賢く、</span><span class="ph">もっとラクに。</span></span></h1>
     <p class="lede"><span class="ph">神大生のリアルな授業レビューや、</span><span class="ph">履修に役立つ情報をLINEに集約。</span></p>
     </div>
-    <div class="hero-shot"><img src="/static/hp/line-screen.jpg" alt="神大ライフハックのLINEトーク画面。楽単5選のランキングとリッチメニュー"></div>
+    <div class="hero-shot"><img src="/static/hp/line-screen.jpg" width="640" height="1259" alt="神大ライフハックのLINEトーク画面。楽単5選のランキングとリッチメニュー"></div>
   </div>
 </header>
 
@@ -765,7 +764,7 @@
   <div class="walk">
     <div>
       <div class="walk-h"><span class="tag">STEP 1</span>LINEのメニューから開く</div>
-      <div class="shot"><img src="/static/hp/menu.jpg" alt="神大ライフハックのLINEトーク画面。楽単5選のランキングとリッチメニュー" loading="lazy">
+      <div class="shot"><img src="/static/hp/menu.jpg" width="870" height="1711" alt="神大ライフハックのLINEトーク画面。楽単5選のランキングとリッチメニュー" loading="lazy">
         <span class="pin" style="left:72%;top:72%">1</span><span class="pin" style="left:27%;top:84%">2</span><span class="pin" style="left:93%;top:22%">3</span>
       </div>
     </div>
@@ -779,7 +778,7 @@
   <div class="walk">
     <div>
       <div class="walk-h"><span class="tag">STEP 2</span>先輩のレビューを読む</div>
-      <div class="shot"><img src="/static/hp/review.jpg" alt="科目詳細画面。開講科目・担当教員の絞り込み、シラバスボタン、レビュー（内容はモザイク）" loading="lazy">
+      <div class="shot"><img src="/static/hp/review.jpg" width="870" height="1768" alt="科目詳細画面。開講科目・担当教員の絞り込み、シラバスボタン、レビュー（内容はモザイク）" loading="lazy">
         <span class="pin" style="left:94%;top:13%">1</span><span class="pin" style="left:90%;top:31%">2</span><span class="pin" style="left:60%;top:46%">3</span><span class="pin" style="left:50%;top:52%">4</span><span class="pin" style="left:50%;top:85%">5</span>
       </div>
     </div>
@@ -850,9 +849,9 @@
   </div>
 
   <div class="calc" style="margin-top:0;">
-    <div class="calc-item"><b>1件 50円</b><span>承認レビュー1件ごと（教養科目）。専門科目は30円</span></div>
+    <div class="calc-item"><b>1件 [[KYOYO]]円</b><span>承認レビュー1件ごと（教養科目）。専門科目は[[SENMON]]円</span></div>
     <div class="calc-plus">＋</div>
-    <div class="calc-item"><b>10人ごとに +500円</b><span>投稿した会員が10人増えるたびにボーナス</span></div>
+    <div class="calc-item"><b>[[UNIT]]人ごとに +[[BONUS]]円</b><span>投稿した会員が[[UNIT]]人増えるたびにボーナス</span></div>
   </div>
 
   <div class="steps three" style="margin-top:36px;">
@@ -876,10 +875,10 @@
   <div class="money" style="margin-top:36px;">
     <div class="money-head">たとえば、会員が教養科目のレビューを1人3件ずつ書くと…</div>
     <div class="money-grid">
-      <div class="mn"><div class="who">10人が投稿</div><div class="yen">2,000<small>円</small></div></div>
-      <div class="mn"><div class="who">30人が投稿</div><div class="yen">6,000<small>円</small></div></div>
-      <div class="mn hot"><div class="who">50人が投稿</div><div class="yen">10,000<small>円</small></div></div>
-      <div class="mn"><div class="who">100人が投稿</div><div class="yen">20,000<small>円</small></div></div>
+      <div class="mn"><div class="who">10人が投稿</div><div class="yen">[[EX_10]]<small>円</small></div></div>
+      <div class="mn"><div class="who">30人が投稿</div><div class="yen">[[EX_30]]<small>円</small></div></div>
+      <div class="mn hot"><div class="who">50人が投稿</div><div class="yen">[[EX_50]]<small>円</small></div></div>
+      <div class="mn"><div class="who">100人が投稿</div><div class="yen">[[EX_100]]<small>円</small></div></div>
     </div>
     <p class="money-foot">団体ごとの上限はありません。書いてもらうほど、そのぶん増えます。</p>
   </div>

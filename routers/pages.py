@@ -12,6 +12,8 @@ from core.funnel import (
 from core.config import (
     APP_URL, FACULTY_DEPARTMENTS, IS_DEV, IS_GUEST, KAIYO_SEISAKU_FACULTY,
     GUEST_DEFAULT_NAME, GUEST_DEFAULT_STUDENT_ID, GUEST_DEFAULT_FACULTY,
+    GROUP_CONTRIBUTOR_BONUS_AMOUNT, GROUP_CONTRIBUTOR_BONUS_UNIT,
+    GROUP_REVIEW_PAYOUT_KYOYO, GROUP_REVIEW_PAYOUT_SENMON,
     GUEST_DEFAULT_DEPARTMENT, GUEST_DEFAULT_COOP_JOBSITE_KNOWN,
     KYOTSU_SENMON_KISO_FACULTY,
     LIFF_ID, LINE_FRIEND_URL, MAX_REVIEWS_PER_COURSE_SECTION,
@@ -109,14 +111,33 @@ async def liff_review(request: Request):
     return response
 
 
-# ホームページ。templates/hp.html は自己完結した静的HTMLなのでJinja2を通さず、そのまま返す
-# （2026-09-26にClaude Artifactへのリダイレクトから自前配信へ変更）。
+# ホームページ。templates/hp.html は自己完結した静的HTMLなのでJinja2を通さず返す
+# （2026-09-26にClaude Artifactへのリダイレクトから自前配信へ変更。HPの正本はこのファイルのみ。
+# mockups/hp.html等のコピーは作らないこと）。団体への支払額は core/config.py の GROUP_* 定数と
+# ずれないよう、[[KYOYO]]等のプレースホルダを配信時に置換する。
 _HOMEPAGE_PATH = Path(__file__).resolve().parent.parent / "templates" / "hp.html"
+
+
+def _homepage_html() -> str:
+    unit, bonus = GROUP_CONTRIBUTOR_BONUS_UNIT, GROUP_CONTRIBUTOR_BONUS_AMOUNT
+    values = {
+        "KYOYO": GROUP_REVIEW_PAYOUT_KYOYO,
+        "SENMON": GROUP_REVIEW_PAYOUT_SENMON,
+        "UNIT": unit,
+        "BONUS": bonus,
+    }
+    # 例示：会員が教養科目のレビューを1人3件ずつ書いた場合
+    for n in (10, 30, 50, 100):
+        values[f"EX_{n}"] = f"{n * 3 * GROUP_REVIEW_PAYOUT_KYOYO + (n // unit) * bonus:,}"
+    html = _HOMEPAGE_PATH.read_text(encoding="utf-8")
+    for key, value in values.items():
+        html = html.replace(f"[[{key}]]", str(value))
+    return html
 
 
 @router.get("/hp", response_class=HTMLResponse)
 async def homepage(request: Request):
-    response = HTMLResponse(_HOMEPAGE_PATH.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+    response = HTMLResponse(_homepage_html(), headers={"Cache-Control": "no-cache"})
     track(request, response, EVENT_HP_VIEW)
     return response
 
