@@ -7,8 +7,10 @@
 数えるのは「団体コードを入力して投稿したレビュー」だけ（`reviews.group_id`は投稿時に番号を入力した場合のみ入る。
 所属済みでも番号を入力しなかった投稿は数えない）。
 
-このモジュールは「番号の生成・正規化・照合」「所属の固定ルール」「支払額の集計」だけを持つ。
-支払いの名目（協賛金/成果報酬）や団体への案内文は事務上の未決事項なので、ここでは決めない。
+このモジュールは「番号の生成・正規化・照合」「所属の管理（投稿の都度、入力した団体コードへ更新。固定ではない）」
+「支払額の集計」だけを持つ。
+支払いの名目は成果報酬（紹介・広報協力の対価。覚書で定める）に決定済み（2026-09-27）。団体への案内文は
+事務上の未決事項なので、ここでは決めない。
 """
 import secrets
 import unicodedata
@@ -146,16 +148,17 @@ async def group_stats(session) -> dict[int, dict]:
 
 
 def _with_settlement(info: dict, paid: int, member_count: int) -> dict:
-    """発生額の内訳に、精算済み額・未精算残高・所属会員数と、振込手数料控除後の振込額を足す。
+    """発生額の内訳に、精算済み額・未精算残高・所属会員数と、振込額を足す。
 
-    振込手数料は一律GROUP_BANK_FEEで団体負担。残高が手数料以下なら振込額は0（振込めば赤字になるため）。
+    振込手数料GROUP_BANK_FEEは運営負担（団体からは差し引かない、2026-09-27に団体負担から再変更）。
+    振込額は未精算残高そのまま。bank_feeは運営側のコスト把握用に残す。
     最低振込額と繰り越しは運営の手作業で、ここでは強制しない。
     """
     info["paid"] = paid
     info["balance"] = info["accrued"] - paid
     info["member_count"] = member_count
     info["bank_fee"] = GROUP_BANK_FEE
-    info["transfer_amount"] = max(info["balance"] - GROUP_BANK_FEE, 0)
+    info["transfer_amount"] = info["balance"]
     return info
 
 

@@ -163,7 +163,8 @@ GROUP_REVIEW_PAYOUT_KYOYO = 50
 GROUP_REVIEW_PAYOUT_SENMON = 30
 GROUP_CONTRIBUTOR_BONUS_UNIT = 10
 GROUP_CONTRIBUTOR_BONUS_AMOUNT = 500
-# 団体への振込手数料（一律・団体負担、2026-09-27）。団体管理画面で「振込額＝未精算残高−手数料」を見える化するのに使う。
+# 団体への振込にかかる銀行振込手数料（一律・運営負担、2026-09-27に団体負担から再変更）。団体への振込額からは
+# 差し引かない。団体管理画面で運営側のコストとして表示するのに使う（core/groups.py の _with_settlement）。
 # 最低振込額（3,000円）と繰り越しは運営の手作業で、コードでは強制しない
 GROUP_BANK_FEE = 200
 

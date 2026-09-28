@@ -557,13 +557,15 @@ def test_grade_label_from_student_id_and_academic_year():
 
 # ── 2026-09-27 追加: 振込額・区分の検証・管理者の付け替え・入力エラー表示 ──────────────
 
-def test_transfer_amount_deducts_bank_fee():
+def test_transfer_amount_is_full_balance_bank_fee_not_deducted():
     from core.config import GROUP_BANK_FEE
     from core.groups import _with_settlement, empty_group_stats
+    # 振込手数料は運営負担なので、振込額は残高そのまま（差し引かない）
     info = _with_settlement(group_payout_breakdown(100, 0, 0), paid=0, member_count=0)  # 5,000円
-    assert info["transfer_amount"] == 5000 - GROUP_BANK_FEE
-    # 残高が手数料以下なら振込額は0（マイナスにしない）
-    assert _with_settlement(group_payout_breakdown(2, 0, 0), paid=0, member_count=0)["transfer_amount"] == 0
+    assert info["transfer_amount"] == 5000
+    assert info["bank_fee"] == GROUP_BANK_FEE  # 運営側のコスト把握用に残る
+    small = _with_settlement(group_payout_breakdown(2, 0, 0), paid=0, member_count=0)  # 100円
+    assert small["transfer_amount"] == 100
     assert empty_group_stats()["transfer_amount"] == 0
     assert set(empty_group_stats()) >= {"accrued", "paid", "balance", "member_count", "bank_fee", "transfer_amount"}
 
