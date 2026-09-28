@@ -663,3 +663,33 @@ async def test_admin_users_page_flags_reviews_posted_with_group_code(
     assert "🏫 起業部" in text  # breakdownの行に付くバッジ（団体経由の1件のみ）
     # 全体の合計は2件のまま（団体経由・非経由を合わせた件数）
     assert "2件<span" in text
+
+
+@pytest.mark.asyncio
+async def test_regenerate_code_replaces_code_but_keeps_group_and_links(
+    http_client_factory, monkeypatch, test_sessionmaker
+):
+    """コード再発行後は、団体idに紐づくreviews/user_profilesの所属は変わらず、新しいコードだけが照合に使える。"""
+    client = _admin_client(http_client_factory, monkeypatch)
+    gid = await _seed_group(test_sessionmaker, code="OLDCODE1", name="コード再発行テスト")
+    async with test_sessionmaker() as s:
+        s.add(UserProfile(
+            line_user_id=UID, name="太郎", student_id="2211111A",
+            faculty="経営学部", department="", coop_jobsite_known="はい", group_id=gid,
+        ))
+        await s.commit()
+
+    resp = await client.post(f"/admin/groups/{gid}/regenerate-code")
+    assert resp.status_code == 303
+
+    async with test_sessionmaker() as s:
+        g = await s.get(Group, gid)
+        assert g.code != "OLDCODE1"
+        assert len(g.code) == 8
+        # 所属（user_profiles.group_id）はコードが変わっても同じ団体idのまま動かない
+        profile = await s.get(UserProfile, UID)
+        assert profile.group_id == gid
+
+    lookup_client = http_client_factory(group_api, monkeypatch)
+    old = await lookup_client.post("/api/group/lookup", json={"code": "OLDCODE1"})
+    assert old.json()["ok"] is False  # 旧コードはもう照合に使えない

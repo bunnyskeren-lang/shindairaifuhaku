@@ -150,6 +150,28 @@ async def admin_group_toggle(group_id: int, _: str = Depends(check_admin)):
     return RedirectResponse("/admin/groups", status_code=303)
 
 
+@router.post("/admin/groups/{group_id}/regenerate-code")
+async def admin_group_regenerate_code(group_id: int, _: str = Depends(check_admin)):
+    """団体コードを新しく発行し直す（漏洩時の無効化用）。旧コードは以後照合に一致しなくなるが、
+    既存のGroup.idに紐づくreviews.group_id/user_profiles.group_idは変わらないため、
+    過去の集計・所属には影響しない。衝突（ほぼ無い）は発行し直す。"""
+    async with AsyncSessionLocal() as session:
+        group = await session.get(Group, group_id)
+        if not group:
+            return RedirectResponse("/admin/groups", status_code=303)
+        for _attempt in range(5):
+            group.code = generate_group_code()
+            try:
+                await session.commit()
+                return RedirectResponse("/admin/groups", status_code=303)
+            except IntegrityError:
+                await session.rollback()
+                group = await session.get(Group, group_id)
+    return RedirectResponse(
+        "/admin/groups?error=" + quote("団体コードを再発行できませんでした。もう一度お試しください"), status_code=303,
+    )
+
+
 @router.post("/admin/groups/{group_id}/payout")
 async def admin_group_payout(
     group_id: int, amount: int = Form(...), note: str = Form(""), _: str = Depends(check_admin),
