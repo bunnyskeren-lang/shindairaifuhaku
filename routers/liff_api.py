@@ -20,7 +20,12 @@ from core.config import (
 from core.grading_method import parse_grading_method
 from core.liff_auth import verify_liff_id_token
 from core.rate_limit import rate_limiter
-from core.subject_variants import hoken_gakka_senko_label, is_hoken_gakka_senko, is_remote_tagged
+from core.subject_variants import (
+    LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS,
+    hoken_gakka_senko_label,
+    is_hoken_gakka_senko,
+    is_remote_tagged,
+)
 from database import AsyncSessionLocal
 from models import (
     CourseSection, CourseSectionView, Instructor, Review, ReviewStatus,
@@ -549,8 +554,16 @@ async def api_course(
             # 詳細ページ（templates/liff/course.html）に「すべて / 科目名A / 科目名B …」の
             # 絞り込みチップ行を出すために使う。グループに属さない単独科目では空リストを返し、
             # フロント側はチップ行自体を描画しない。
+            # 「教養(外国語第1)」「教養(外国語第2)」（LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS）は
+            # A1/A2/B1/B2等のアルファベットが並行クラスではなく単なるクラス分け（同一内容）を
+            # 表すため、グループ全体を最初から1つの科目として統合表示する設計（募集枠も
+            # 実質同一科目として扱う）。この場合は「開講科目で絞り込み」チップを出すと逆に
+            # 別科目であるかのように見えてしまうため出さない（2026-09-28、ユーザー指摘）。
             variants_payload: list[dict] = []
-            if group_label and len(group_subject_ids) >= 2:
+            if (
+                group_label and len(group_subject_ids) >= 2
+                and (subject.classification or "") not in LETTER_SPLIT_EXCLUDED_CLASSIFICATIONS
+            ):
                 _, _all_courses_v = await cache.get_courses_cached()
                 _name_by_id = {c.id: c.name for c in _all_courses_v}
                 _remaining_map_v = await cache.get_review_remaining_cached()
