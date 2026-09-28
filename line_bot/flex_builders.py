@@ -387,7 +387,7 @@ def _group_header(group_name: str, sub: str, big: str | None = None) -> FlexBox:
             FlexText(text="謝礼の累計", size="xxs", color="#15803d", margin="lg"),
             FlexText(text=big, weight="bold", size="3xl", color="#14532d"),
         ]
-    return FlexBox(layout="vertical", background_color="#ffffff", padding_all="lg", contents=contents)
+    return FlexBox(layout="vertical", background_color="#dcfce7", padding_all="lg", contents=contents)
 
 
 def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
