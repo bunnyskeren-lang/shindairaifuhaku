@@ -666,10 +666,12 @@ async def test_admin_users_page_flags_reviews_posted_with_group_code(
 
 
 @pytest.mark.asyncio
-async def test_regenerate_code_replaces_code_but_keeps_group_and_links(
+async def test_regenerate_code_clears_membership_but_keeps_past_review_links(
     http_client_factory, monkeypatch, test_sessionmaker
 ):
-    """コード再発行後は、団体idに紐づくreviews/user_profilesの所属は変わらず、新しいコードだけが照合に使える。"""
+    """コード再発行後は、旧コードで所属登録済みだった会員の所属（user_profiles.group_id）・管理者指定は
+    解除され、次回投稿には新しいコードの再入力が必要になる。ただし過去のreviews.group_idは変わらない
+    （集計に影響しない）。旧コードはもう照合に使えない。"""
     client = _admin_client(http_client_factory, monkeypatch)
     gid = await _seed_group(test_sessionmaker, code="OLDCODE1", name="コード再発行テスト")
     async with test_sessionmaker() as s:
@@ -677,6 +679,9 @@ async def test_regenerate_code_replaces_code_but_keeps_group_and_links(
             line_user_id=UID, name="太郎", student_id="2211111A",
             faculty="経営学部", department="", coop_jobsite_known="はい", group_id=gid,
         ))
+        (await s.get(Group, gid)).manager_line_user_id = UID
+        kyoyo_cs, _ = await _seed_two_courses(s)
+        await _add_review(s, kyoyo_cs, "2211111A", gid)
         await s.commit()
 
     resp = await client.post(f"/admin/groups/{gid}/regenerate-code")
@@ -686,9 +691,13 @@ async def test_regenerate_code_replaces_code_but_keeps_group_and_links(
         g = await s.get(Group, gid)
         assert g.code != "OLDCODE1"
         assert len(g.code) == 8
-        # 所属（user_profiles.group_id）はコードが変わっても同じ団体idのまま動かない
+        assert g.manager_line_user_id is None  # 管理者指定も外れる
+        # 所属（user_profiles.group_id）は解除される。次回投稿はコードの再入力が要る
         profile = await s.get(UserProfile, UID)
-        assert profile.group_id == gid
+        assert profile.group_id is None
+        # 過去の投稿(reviews.group_id)は動かない＝既発生額は消えない
+        review = (await s.execute(select(Review).where(Review.student_id == "2211111A"))).scalar_one()
+        assert review.group_id == gid
 
     lookup_client = http_client_factory(group_api, monkeypatch)
     old = await lookup_client.post("/api/group/lookup", json={"code": "OLDCODE1"})

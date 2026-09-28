@@ -106,7 +106,7 @@
       <button class="btn btn-icon">{{ '無効にする' if g.is_active else '有効に戻す' }}</button>
     </form>
     <form method="post" action="/admin/groups/{{ g.id }}/regenerate-code" style="margin:0"
-          data-confirm="現在のコード「{{ g.code }}」は無効になり、新しいコードに置き換わります。旧コードを知っている人は投稿時に使えなくなります。よろしいですか？"
+          data-confirm="現在のコード「{{ g.code }}」は無効になり、新しいコードに置き換わります。旧コードを知っている人は投稿時に使えなくなり、既に所属登録済みの会員（管理者指定含む）も所属が解除され、次回投稿時に新しいコードの再入力が必要になります。よろしいですか？"
           data-confirm-ok="再発行する">
       <button class="btn btn-icon">コードを再発行</button>
     </form>

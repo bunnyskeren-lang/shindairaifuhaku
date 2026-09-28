@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from core import cache
@@ -152,9 +152,16 @@ async def admin_group_toggle(group_id: int, _: str = Depends(check_admin)):
 
 @router.post("/admin/groups/{group_id}/regenerate-code")
 async def admin_group_regenerate_code(group_id: int, _: str = Depends(check_admin)):
-    """団体コードを新しく発行し直す（漏洩時の無効化用）。旧コードは以後照合に一致しなくなるが、
-    既存のGroup.idに紐づくreviews.group_id/user_profiles.group_idは変わらないため、
-    過去の集計・所属には影響しない。衝突（ほぼ無い）は発行し直す。"""
+    """団体コードを新しく発行し直す（漏洩時の無効化用）。
+
+    旧コードを既に入力して所属登録済みだった会員（user_profiles.group_id）は、そのままだと
+    投稿フォームが所属先団体の現在のコードを自動で埋めてしまい、本人が新しいコードを知らなくても
+    団体経由の投稿が続いてしまう。それでは再発行の意味がないため、所属は一律で解除し、
+    次回投稿時は新しいコードの再入力を必須にする。管理者指定も、所属会員であることが前提の
+    ため合わせて外す（別の団体へ移った際に元の管理者指定を外すのと同じ扱い、
+    routers/review_submit_api.py参照）。
+    reviews.group_id（投稿時点の所属・過去の集計）は変えない。衝突（ほぼ無い）は発行し直す。
+    """
     async with AsyncSessionLocal() as session:
         group = await session.get(Group, group_id)
         if not group:
@@ -162,6 +169,10 @@ async def admin_group_regenerate_code(group_id: int, _: str = Depends(check_admi
         for _attempt in range(5):
             group.code = generate_group_code()
             try:
+                await session.execute(
+                    update(UserProfile).where(UserProfile.group_id == group_id).values(group_id=None)
+                )
+                group.manager_line_user_id = None
                 await session.commit()
                 return RedirectResponse("/admin/groups", status_code=303)
             except IntegrityError:
