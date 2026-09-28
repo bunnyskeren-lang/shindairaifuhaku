@@ -91,6 +91,18 @@ def _reset_courses_cache():
 
 
 @pytest.fixture(autouse=True)
+def _reset_group_cache():
+    """core.cache.get_group_stats_cached()/get_group_member_data_cached()(2026-09-28追加)は
+    TTL付きモジュールグローバルにキャッシュされる。テストごとに独立したSQLiteインメモリDBを
+    使うため、group_id はテストをまたいで1から採番され直し衝突しうる。前のテストの値が
+    残ったまま次のテストのDBに対する判定に混ざらないよう都度リセットする。"""
+    from core import cache
+    cache.invalidate_group_cache()
+    yield
+    cache.invalidate_group_cache()
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limit_buckets():
     """core.rate_limit._bucketsはIPアドレス単位のグローバル状態で、テストクライアントは
     毎回同一の疑似IPを使うため、レート制限テスト以外のE2Eテストが429で誤って

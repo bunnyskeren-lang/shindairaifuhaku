@@ -199,35 +199,57 @@ async def group_of_user(session, line_user_id: str) -> Group | None:
     return group if group and group.is_active else None
 
 
-async def group_report(session, group: Group, line_user_id: str) -> dict:
+async def group_member_data(session, group_id: int) -> tuple[dict[str, int], dict[str, str]]:
+    """団体の承認済みレビュー件数(student_id→件数)と氏名(student_id→氏名)。
+    group_report()とcore.cache.get_group_member_data_cached()の両方が使う共通クエリ。"""
+    per_student = (await session.execute(
+        select(Review.student_id, func.count(Review.id))
+        .where(*_approved_conditions(), Review.group_id == group_id, Review.student_id.is_not(None))
+        .group_by(Review.student_id)
+    )).all()
+    counts = {sid: n for sid, n in per_student}
+    names: dict[str, str] = {}
+    if counts:
+        names = dict((await session.execute(
+            select(UserProfile.student_id, func.min(UserProfile.name))
+            .where(UserProfile.student_id.in_(list(counts)))
+            .group_by(UserProfile.student_id)
+        )).all())
+    return counts, names
+
+
+async def group_report(
+    session, group: Group, line_user_id: str,
+    *, stats: dict[int, dict] | None = None, member_data: tuple[dict[str, int], dict[str, str]] | None = None,
+) -> dict:
     """団体の成果を返す。全会員向けは団体全体の集計と本人の件数、団体の管理者にだけ、
     承認済みレビューを投稿した会員の氏名と件数の一覧（members）を付ける。
 
     氏名は`user_profiles.name`（同じ学籍番号に複数のプロフィールがあれば先頭）、学年は学籍番号の上2桁から求める（`grade_label`）。学籍番号そのもの・学部は返さない。
     件数の対象は支払額と同じ（団体コードを入力して投稿した承認済みレビュー）。
+
+    stats/member_data を渡すとgroup_stats()/group_member_data()の呼び出しを省いてそれを使う
+    （LINE botの「団体」タップ経路 group_report_for_user() が core.cache のTTLキャッシュ値を渡す。
+    Render⇄Supabase間のラウンドトリップが重く、タップのたびに素で叩くと2〜8秒かかっていたため
+    2026-09-28に導入。省略時は常にsession上で最新値を取得する＝管理画面等、都度最新が必要な
+    呼び出し元向けのデフォルト）。
     """
-    info = dict((await group_stats(session)).get(group.id) or group_payout_breakdown(0, 0, 0))
+    if stats is None:
+        stats = await group_stats(session)
+    info = dict(stats.get(group.id) or group_payout_breakdown(0, 0, 0))
     info["is_manager"] = bool(group.manager_line_user_id) and group.manager_line_user_id == line_user_id
     info["bonus_remaining"] = GROUP_CONTRIBUTOR_BONUS_UNIT - info["contributor_count"] % GROUP_CONTRIBUTOR_BONUS_UNIT
 
     my_student_id = (await session.execute(
         select(UserProfile.student_id).where(UserProfile.line_user_id == line_user_id)
     )).scalar_one_or_none()
-    per_student = (await session.execute(
-        select(Review.student_id, func.count(Review.id))
-        .where(*_approved_conditions(), Review.group_id == group.id, Review.student_id.is_not(None))
-        .group_by(Review.student_id)
-    )).all()
-    counts = {sid: n for sid, n in per_student}
+    if member_data is None:
+        member_data = await group_member_data(session, group.id)
+    counts, names = member_data
     info["my_count"] = counts.get(my_student_id, 0)
 
     info["members"] = []
     if info["is_manager"] and counts:
-        names = dict((await session.execute(
-            select(UserProfile.student_id, func.min(UserProfile.name))
-            .where(UserProfile.student_id.in_(list(counts)))
-            .group_by(UserProfile.student_id)
-        )).all())
         info["members"] = sorted(
             ((names.get(sid) or "（氏名不明）", grade_label(sid), n) for sid, n in counts.items()),
             key=lambda x: (-x[2], x[0]),
@@ -236,11 +258,17 @@ async def group_report(session, group: Group, line_user_id: str) -> dict:
 
 
 async def group_report_for_user(line_user_id: str) -> tuple[str, dict] | None:
-    """LINE botの「団体」用。所属団体の(団体名, group_report()の結果)を返す。所属団体が無ければNone。"""
+    """LINE botの「団体」用。所属団体の(団体名, group_report()の結果)を返す。所属団体が無ければNone。
+
+    団体全体の集計・会員別件数は core.cache 経由でTTLキャッシュされたものを渡す
+    （group_report()のdocstring参照）。"""
     from database import AsyncSessionLocal  # モジュールimport時のDB接続を避けるため関数内で読む
+    from core import cache  # 循環import回避のため遅延import
 
     async with AsyncSessionLocal() as session:
         group = await group_of_user(session, line_user_id)
         if group is None:
             return None
-        return group.name, await group_report(session, group, line_user_id)
+        stats = await cache.get_group_stats_cached()
+        member_data = await cache.get_group_member_data_cached(group.id)
+        return group.name, await group_report(session, group, line_user_id, stats=stats, member_data=member_data)

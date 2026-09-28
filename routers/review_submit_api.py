@@ -355,6 +355,9 @@ async def submit(
                     return _success_redirect(display_name, rc)
             raise
         cache.invalidate_full_pairs_cache()
+        if new_group_id is not None:
+            # 所属会員数が変わるため（団体の成果集計、core/groups.py group_stats）
+            cache.invalidate_group_cache()
 
         review_count = await _review_count(session, sid)
 

@@ -137,6 +137,7 @@ async def admin_group_manager(group_id: int, line_user_id: str = Form(""), _: st
                     )
                 group.manager_line_user_id = member
             await session.commit()
+    cache.invalidate_group_cache()
     return RedirectResponse("/admin/groups", status_code=303)
 
 
@@ -147,6 +148,7 @@ async def admin_group_toggle(group_id: int, _: str = Depends(check_admin)):
         if group:
             group.is_active = not group.is_active
             await session.commit()
+    cache.invalidate_group_cache()
     return RedirectResponse("/admin/groups", status_code=303)
 
 
@@ -174,6 +176,7 @@ async def admin_group_regenerate_code(group_id: int, _: str = Depends(check_admi
                 )
                 group.manager_line_user_id = None
                 await session.commit()
+                cache.invalidate_group_cache()
                 return RedirectResponse("/admin/groups", status_code=303)
             except IntegrityError:
                 await session.rollback()
@@ -198,6 +201,7 @@ async def admin_group_payout(
                 note=note.strip()[:500] or None,
             ))
             await session.commit()
+    cache.invalidate_group_cache()
     return RedirectResponse("/admin/groups", status_code=303)
 
 
@@ -209,4 +213,5 @@ async def admin_group_payout_delete(payout_id: int, _: str = Depends(check_admin
         if payout:
             await session.delete(payout)
             await session.commit()
+    cache.invalidate_group_cache()
     return RedirectResponse("/admin/groups", status_code=303)

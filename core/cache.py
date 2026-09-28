@@ -521,6 +521,9 @@ def invalidate_review_cache():
     _course_list_cache = {}
     _ease_extremes.invalidate()
     invalidate_full_pairs_cache()
+    # レビューのstatus変更（承認/却下/差し戻し・科目付け替え）は団体の集計にも影響するため
+    # 一緒に無効化する（呼び出し元を個別に増やさず、このタイミングにまとめる）
+    invalidate_group_cache()
     _schedule_rewarm()
 
 
@@ -1095,6 +1098,61 @@ def invalidate_admin_nav_counts_cache() -> None:
     """承認・却下・支払い処理・お問い合わせ対応などバッジに影響する操作の直後に呼ぶ
     （呼び忘れても最大_NAV_COUNTS_TTL秒で自然に解消する）。"""
     _nav_counts.invalidate()
+
+
+# ── 団体（グループ）成果レポートキャッシュ ──────────────────────────
+# LINE bot「団体」「団体会員」タップのたびに core.groups.group_stats()（4クエリ）＋
+# group_report()内の追加クエリ（会員ごとの承認件数・氏名）が毎回別セッションでDB往復し、
+# Render⇄Supabase間のラウンドトリップが積み重なって2〜8秒（まれに8秒超）かかっていた
+# （2026-09-28、debug_logsのslow調査で判明。他のslow要因は2026-09-27のuser_state SWR化で
+# 解消済みで、団体機能だけがこのパターンに引っかかっていた）。
+# 団体の集計はレビュー承認/却下・精算記録・団体コード再発行/会員解除でしか変わらないため、
+# 短いTTLキャッシュで十分。
+_GROUP_STATS_TTL = 60
+_group_stats_cache: tuple[dict, float] | None = None
+
+_GROUP_MEMBER_DATA_TTL = 60
+# group_id → (student_id→承認済みレビュー件数, student_id→氏名, キャッシュ時刻)
+_group_member_data_cache: dict[int, tuple[dict, dict, float]] = {}
+
+
+async def get_group_stats_cached() -> dict[int, dict]:
+    global _group_stats_cache
+    if _group_stats_cache is not None:
+        stats, at = _group_stats_cache
+        if time.monotonic() - at < _GROUP_STATS_TTL:
+            return stats
+    # 遅延import（循環import回避に加え、テストのmonkeypatch.setattr("database.AsyncSessionLocal", ...)を
+    # 効かせるため。cache.py先頭のトップレベルimportはbind時点の参照を固定してしまい拾えない
+    # ——core.groups.group_report_for_user()と同じ理由、tests/test_groups.py参照）
+    from core.groups import group_stats
+    from database import AsyncSessionLocal
+    async with AsyncSessionLocal() as s:
+        stats = await group_stats(s)
+    _group_stats_cache = (stats, time.monotonic())
+    return stats
+
+
+async def get_group_member_data_cached(group_id: int) -> tuple[dict[str, int], dict[str, str]]:
+    cached = _group_member_data_cache.get(group_id)
+    if cached is not None:
+        counts, names, at = cached
+        if time.monotonic() - at < _GROUP_MEMBER_DATA_TTL:
+            return counts, names
+    from core.groups import group_member_data  # 遅延import理由はget_group_stats_cached()と同じ
+    from database import AsyncSessionLocal
+    async with AsyncSessionLocal() as s:
+        counts, names = await group_member_data(s, group_id)
+    _group_member_data_cache[group_id] = (counts, names, time.monotonic())
+    return counts, names
+
+
+def invalidate_group_cache() -> None:
+    """レビュー承認/却下・団体精算記録・団体コード再発行/会員解除の直後に呼ぶ
+    （呼び忘れても最大_GROUP_STATS_TTL秒で自然に反映される）。"""
+    global _group_stats_cache
+    _group_stats_cache = None
+    _group_member_data_cache.clear()
 
 
 async def warm_query_caches() -> None:
