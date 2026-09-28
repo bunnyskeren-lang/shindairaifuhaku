@@ -17,6 +17,7 @@
 .u-ticket-balance{font-size:13px;font-weight:700;color:var(--accent-text)}
 .u-ticket-meta{font-size:10px;color:var(--ink-faint)}
 .u-review-count{font-size:12px;font-weight:700;color:var(--accent-text);cursor:pointer}
+.u-group-badge{display:inline-block;margin-left:5px;font-size:10px;font-weight:700;color:var(--accent-text);background:var(--accent-soft);border-radius:999px;padding:1px 7px;white-space:nowrap}
 .u-review-zero{font-size:12px;color:var(--ink-faint)}
 .u-detail-list{margin:4px 0 0;padding-left:16px;font-size:11px;color:var(--ink-faint);list-style:disc}
 .u-paylimit-form{display:flex;align-items:center;gap:4px}
@@ -62,13 +63,14 @@
       <td>
         {% if rv %}
         <details>
-          <summary class="u-review-count">{{ rv.total }}件</summary>
+          <summary class="u-review-count">{{ rv.total }}件{% if rv.group_total %}<span class="u-group-badge">🏫団体コード{{ rv.group_total }}件</span>{% endif %}</summary>
           <ul class="u-detail-list">
-            {% for course_name, instructor, status, cnt in rv.breakdown %}
+            {% for course_name, instructor, status, group_name, cnt in rv.breakdown %}
             <li>{{ course_name }}{% if instructor %}（{{ instructor }}）{% endif %}: {{ cnt }}件
               {% if status == 'pending' %}<span style="color:var(--warning)">(待機中)</span>
               {% elif status == 'rejected' %}<span style="color:var(--ink-faint)">(却下)</span>
               {% endif %}
+              {% if group_name %}<span class="u-group-badge">🏫 {{ group_name }}</span>{% endif %}
             </li>
             {% endfor %}
           </ul>

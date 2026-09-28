@@ -616,3 +616,48 @@ async def test_admin_manager_outsider_and_payout_range_show_error(http_client_fa
         assert "error=" in r.headers["location"]
     async with test_sessionmaker() as s:
         assert (await s.execute(select(GroupPayout))).scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_admin_users_page_flags_reviews_posted_with_group_code(
+    http_client_factory, monkeypatch, test_sessionmaker
+):
+    """ユーザー設定画面のレビュー内訳に、団体コードを入力して投稿されたレビューだけ団体名バッジが付く。"""
+    import routers.admin.users_errors as users_errors
+
+    gid = await _seed_group(test_sessionmaker, name="起業部")
+    async with test_sessionmaker() as s:
+        s.add(UserProfile(
+            line_user_id=UID, name="団体太郎", student_id="2211111A",
+            faculty="経営学部", department="", coop_jobsite_known="はい",
+        ))
+        subj = Subject(name="経営管理", faculty="経営学部", category="専門")
+        s.add(subj)
+        await s.flush()
+        instr = Instructor(name="山田太郎")
+        s.add(instr)
+        await s.flush()
+        cs = CourseSection(subject_id=subj.id, instructor_id=instr.id)
+        s.add(cs)
+        await s.flush()
+        s.add_all([
+            Review(
+                course_section_id=cs.id, content="団体経由の投稿", rating=5, ease_rating="A",
+                student_id="2211111A", status=ReviewStatus.APPROVED, group_id=gid,
+            ),
+            Review(
+                course_section_id=cs.id, content="団体コードなしの投稿", rating=4, ease_rating="B",
+                student_id="2211111A", status=ReviewStatus.APPROVED, group_id=None,
+            ),
+        ])
+        await s.commit()
+
+    client = http_client_factory(users_errors, monkeypatch)
+    client.cookies.set(ADMIN_COOKIE, make_admin_token())
+    resp = await client.get("/admin/users")
+    text = resp.text
+    assert "団体太郎" in text
+    assert "🏫団体コード1件" in text  # summaryに付く合計バッジ
+    assert "🏫 起業部" in text  # breakdownの行に付くバッジ（団体経由の1件のみ）
+    # 全体の合計は2件のまま（団体経由・非経由を合わせた件数）
+    assert "2件<span" in text

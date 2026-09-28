@@ -12,7 +12,8 @@ from core.templates import templates
 from routers.admin._common import admin_channel, channel_conds
 from database import AsyncSessionLocal
 from models import (
-    CourseSection, DebugLog, ErrorLog, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserActivity, UserProfile,
+    CourseSection, DebugLog, ErrorLog, Group, LiffAuthEvent, MessageLog, Review, Subject, SubjectUnlock, UserActivity,
+    UserProfile,
 )
 
 router = APIRouter()
@@ -112,7 +113,9 @@ async def admin_users(
 
         # このページに表示するユーザーの学籍番号ぶんだけ、投稿レビューを
         # 科目×担当教員で集計する（reviews.student_id はフォーム手入力の
-        # テキストのため、user_profiles.student_id との完全一致でのみ紐づく）
+        # テキストのため、user_profiles.student_id との完全一致でのみ紐づく）。
+        # 団体コードを入力して投稿されたレビューかどうか（Review.group_id）も内訳に含める
+        # （group_idが同じでもgroup_by対象なのでグループ名単位で行が分かれる）
         student_ids = [u.student_id for u in users if u.student_id]
         review_map: dict[str, dict] = {}
         if student_ids:
@@ -122,18 +125,22 @@ async def admin_users(
                     Subject.name,
                     Review.selected_instructor,
                     Review.status,
+                    Group.name,
                     func.count(Review.id),
                 )
                 .join(CourseSection, CourseSection.id == Review.course_section_id)
                 .join(Subject, Subject.id == CourseSection.subject_id)
+                .outerjoin(Group, Group.id == Review.group_id)
                 .where(Review.student_id.in_(student_ids))
-                .group_by(Review.student_id, Subject.name, Review.selected_instructor, Review.status)
+                .group_by(Review.student_id, Subject.name, Review.selected_instructor, Review.status, Group.name)
                 .order_by(Subject.name)
             )).all()
-            for sid, course_name, instructor, status, cnt in review_rows:
-                entry = review_map.setdefault(sid, {"total": 0, "breakdown": []})
+            for sid, course_name, instructor, status, group_name, cnt in review_rows:
+                entry = review_map.setdefault(sid, {"total": 0, "breakdown": [], "group_total": 0})
                 entry["total"] += cnt
-                entry["breakdown"].append((course_name, instructor, status, cnt))
+                if group_name:
+                    entry["group_total"] += cnt
+                entry["breakdown"].append((course_name, instructor, status, group_name, cnt))
 
         # レビュー閲覧権チケットの「付与数」（実際に付与したレビューぶんの合計枚数）・
         # 使用数（付与総数 - 現在残数）・解除済み科目一覧を、このページに表示する分だけ集計する。
