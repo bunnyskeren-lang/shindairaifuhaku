@@ -6,7 +6,6 @@ from linebot.v3.messaging import (
     FlexButton,
     FlexMessage,
     FlexText,
-    MessageAction,
     PostbackAction,
     URIAction,
 )
@@ -345,7 +344,9 @@ def make_operator_info_flex() -> FlexMessage:
 
 _MAX_GROUP_MEMBER_ROWS = 40  # Flexの大きさ上限に収まる範囲（全員表示カード）。超えた分は「ほかN人」にまとめる
 _GROUP_MEMBER_PREVIEW_ROWS = 5  # 「団体」のカードに載せる会員数。全員は「団体会員」で別カードに出す
-GROUP_MEMBERS_TEXT = "団体会員"  # 「全員を見る」ボタンが送るテキスト（handlerが受ける）
+GROUP_MEMBERS_TEXT = "団体会員"  # 「全員を見る」ボタン（PostbackAction）のdata（handlerが受ける）。
+# MessageActionだとタップ時にこの文字列がチャット欄に発言として残ってしまうため、
+# 何も表示されないPostbackActionにしている（2026-09-28）
 
 
 def _group_tile(label: str, value: str) -> FlexBox:
@@ -429,7 +430,7 @@ def make_group_report_flex(group_name: str, r: dict) -> FlexMessage:
         section += rows or [FlexText(text="まだいません", size="sm", color="#64748b")]
         bubble_kwargs["footer"] = FlexBox(layout="vertical", background_color="#f8fafc", padding_all="lg", spacing="md", contents=section + (
             [FlexButton(
-                action=MessageAction(label=f"全員を見る（{len(members)}人）", text=GROUP_MEMBERS_TEXT),
+                action=PostbackAction(label=f"全員を見る（{len(members)}人）"[:20], data=GROUP_MEMBERS_TEXT),
                 style="link", height="sm", color="#15803d",
             )] if len(members) > len(rows) else []
         ))
